@@ -20,6 +20,9 @@ Rings (inner never imports outer):
 
 See `docs/decisions/` for the why behind these (ADRs).
 
+- Use RESTful API structure.
+- Use enums instead of stringed types.
+
 ## Project layout
 
 npm workspaces under `packages/*`: `core` (domain), `engine` (application + driven
@@ -57,14 +60,14 @@ Every change: **spec → red → green → refactor → check → commit**, one 
 4. **Refactor** — clean under green tests; abstract only on the second instance.
 5. **E2E** — every major feature gets a `*.e2e.test.ts` (poll → persist → process → assert) + its one critical failure mode.
 6. **Check** — `npm run check:full` green.
-7. **Commit** — one logical concern, Conventional Commits message.
+7. **Commit** — one logical concern, Conventional Commits message; bump the affected package's `version` (semver) when the change is user-visible/releasable.
 
 `/feature`, `/adr`, `/ship` automate this loop.
 
 ### Test tiers
 
-- **unit** (default) — pure domain + application vs fake adapters. Fast, deterministic. The TDD tier; bulk of tests.
-- **e2e** — full hexagon wired with real infra, one per major feature. Run in `check:full` / CI.
+- **unit** (default) — pure domain + application vs fake adapters. Fast, deterministic. The TDD tier; bulk of tests. Co-located in `src` beside the code (`*.test.ts`).
+- **e2e** — validate a feature from the **end-user / spec perspective**, driving real surfaces (HTTP, CLI) against real infra. Kept **separate** from `src`, in `packages/<pkg>/tests/e2e/*.e2e.test.ts` — one suite per major feature. Run in `check:full` / CI.
 - **live** — raw adapter vs real external API (`*.live.test.ts`). Flaky; manual only.
 - Port contracts = one shared suite, run against both the fake (unit) and the real adapter (live).
 
@@ -77,18 +80,18 @@ Every change: **spec → red → green → refactor → check → commit**, one 
 
 All routine actions go through these scripts — don't invoke `tsc`/`vitest`/`biome` directly.
 
-| Script | Does |
-| --- | --- |
-| `npm run build` | build all (project refs) |
-| `npm run typecheck` | type-check via project refs |
-| `npm run lint` / `lint:fix` | Biome check / auto-fix |
-| `npm test` / `test:watch` | unit tier |
-| `npm run test:e2e` | e2e tier |
-| `npm run test:live` | live tier (real APIs) |
-| `npm run coverage` | unit + coverage |
-| `npm run check` | typecheck + lint + unit (pre-commit + CI) |
-| `npm run check:full` | check + e2e (CI on PR) |
-| `npm run infra:up/down/logs/reset` | docker compose infra |
+| Script                             | Does                                      |
+| ---------------------------------- | ----------------------------------------- |
+| `npm run build`                    | build all (project refs)                  |
+| `npm run typecheck`                | type-check via project refs               |
+| `npm run lint` / `lint:fix`        | Biome check / auto-fix                    |
+| `npm test` / `test:watch`          | unit tier                                 |
+| `npm run test:e2e`                 | e2e tier                                  |
+| `npm run test:live`                | live tier (real APIs)                     |
+| `npm run coverage`                 | unit + coverage                           |
+| `npm run check`                    | typecheck + lint + unit (pre-commit + CI) |
+| `npm run check:full`               | check + e2e (CI on PR)                    |
+| `npm run infra:up/down/logs/reset` | docker compose infra                      |
 
 ## Conventions
 
@@ -99,16 +102,33 @@ Follow these by default, unprompted.
 - Assert the FULL payload: `expect(x).toEqual({...whole object})` — never `toMatchObject` or per-field.
 - Floats: `expect.closeTo(n, digits)` as an asymmetric matcher inside `toEqual`.
 - Two opt-in tiers beyond unit (`e2e`, `live`) via Vitest projects (`--project`). No env flags / `runIf`.
+- Unit tests sit beside the code in `src`; e2e tests live in `packages/<pkg>/tests/e2e/` and assert a feature from the end-user/spec perspective.
 - Never `.skip` a test to land a change.
 
 ### Types & docs
 
 - Strict TS: keep `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride` on. Handle cases, don't weaken.
 - Multi-line JSDoc (`/**\n * ... */`) on every interface, property, type, function, class, method, notable constant.
+- Type declarations (interfaces, type aliases, enums) live in a sibling `*.types.ts` module, separate from logic; public ones are re-exported from the package `index.ts`.
 
 ### Dependencies
 
 - Prefer well-established, non-commercial (open-source / freely licensed) industry-standard packages wherever they fit. Avoid commercial/paid or obscure unmaintained deps.
+
+### Runtime config
+
+- Resolve environment-derived settings via the common settings layer (`loadSettings`, with defaults). Never read `process.env` directly in feature modules.
+
+### API
+
+- Always RESTful — resource-oriented routes, correct verbs, correct status codes (200/201/204, 400/404, 500).
+- Separate controllers per resource (`src/controllers/<resource>.controller.ts`); `app.ts` only wires them.
+- Schema-based input validation at the boundary (Fastify JSON schema); cross-field/domain rules live in the domain and surface as 400.
+- Log through a common log library (Fastify's built-in Pino); never ad-hoc `console.log`.
+
+### Docs
+
+- Every package exposing a surface keeps a `README.md`. A change to a CLI command or API endpoint updates that package's README (usage + examples) in the same change.
 
 ## Definition of Done
 
@@ -119,5 +139,7 @@ A change is done only when:
 - [ ] A major feature has an e2e test covering it end-to-end.
 - [ ] `npm run check:full` is green; nothing `.skip`-ped.
 - [ ] It's one logical concern with a Conventional Commits message.
+- [ ] The affected package's `version` is bumped (semver) when the change is releasable.
+- [ ] CLI/API surface changes are reflected in the package `README.md`.
 - [ ] An ADR is written if a non-obvious decision was made.
 - [ ] Prefer deleting code to adding it.
