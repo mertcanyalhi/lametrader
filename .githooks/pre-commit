@@ -1,0 +1,5 @@
+#!/bin/sh
+# Pre-commit gate: typecheck + lint + unit tests must all pass before a commit lands.
+# This is the hard guardrail behind the workflow — a change is not committable until green.
+# Bypass with `git commit --no-verify` only when you have a deliberate reason.
+npm run check

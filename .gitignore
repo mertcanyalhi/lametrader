@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+.env
+.env.*
+!.env.example
+data/
+*.sqlite
+*.sqlite-journal
+coverage/
+.cache/
+
+# Claude Code machine-local settings (env, personal hooks); shared config/commands are committed
+.claude/settings.local.json

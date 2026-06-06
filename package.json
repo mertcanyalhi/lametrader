@@ -1,0 +1,38 @@
+{
+  "name": "lametrader",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Quant trading platform: ingest market data, analyze, generate signals, backtest.",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "if ls packages/*/tsconfig.json >/dev/null 2>&1; then tsc --build; else echo 'typecheck: no packages yet'; fi",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "test": "vitest run --project unit",
+    "test:watch": "vitest --project unit",
+    "test:e2e": "vitest run --project e2e",
+    "test:live": "vitest run --project live",
+    "coverage": "vitest run --project unit --coverage",
+    "check": "npm run typecheck && npm run lint && npm test",
+    "check:full": "npm run check && npm run test:e2e",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "infra:logs": "docker compose -f infra/docker-compose.yml logs -f",
+    "infra:reset": "docker compose -f infra/docker-compose.yml down -v"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.16",
+    "@types/node": "^25.9.2",
+    "@vitest/coverage-v8": "^4.1.8",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}
