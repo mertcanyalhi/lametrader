@@ -20,6 +20,33 @@ Rings (inner never imports outer):
 
 See `docs/decisions/` for the why behind these (ADRs).
 
+## Project layout
+
+npm workspaces under `packages/*`: `core` (domain), `engine` (application + driven
+adapters), `cli` (driving adapter), `web` (driving adapter, React + Vite). More
+packages (sources, api, logger) join the same way.
+
+**Adding a Node package** (`core`/`engine`/`cli`-style):
+
+1. `packages/<n>/package.json` — `@lametrader/<n>`, `"type": "module"`, `main`/`types`
+   → `dist/index.js`/`dist/index.d.ts`, `"build": "tsc --build"`. Internal deps as
+   `"@lametrader/<dep>": "0.0.0"`.
+2. `packages/<n>/tsconfig.json` — extends `../../tsconfig.base.json`, `rootDir: src`,
+   `outDir: dist`, `include: ["src"]`, `references` to each internal dep.
+3. Add `{ "path": "packages/<n>" }` to the root `tsconfig.json` `references`.
+4. `npm install` to link the workspace.
+
+**The `web` package is different** (browser, Vite-owned):
+
+- Its `tsconfig.json` extends base but overrides: `composite/declaration: false`,
+  `noEmit: true`, `lib: [ES2022, DOM, DOM.Iterable]`, `module: ESNext`,
+  `moduleResolution: Bundler`, `jsx: react-jsx`.
+- **Not** in the root project-refs graph — Vite builds it (`vite build`). Its
+  `typecheck` script (`tsc --noEmit`) is picked up by the root `typecheck`'s
+  `--workspaces --if-present` pass.
+- Component tests run in `jsdom`: add `// @vitest-environment jsdom` at the top of
+  the test file (keeps them in the default `unit` run without a node/DOM split).
+
 ## Development flow
 
 Every change: **spec → red → green → refactor → check → commit**, one concern at a time.
