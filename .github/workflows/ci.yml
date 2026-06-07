@@ -1,0 +1,44 @@
+name: CI
+
+# Mirrors the repo's gates (see CLAUDE.md):
+# - every push        -> `check`       (typecheck + lint + unit)
+# - every pull request -> `check:full`  (+ e2e, Testcontainers/Mongo)
+on:
+  push:
+  pull_request:
+
+# Cancel superseded runs on the same ref (saves minutes on rapid pushes).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: check (typecheck + lint + unit)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  check-full:
+    name: check:full (+ e2e)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Ubuntu runners ship Docker, so Testcontainers spins Mongo for the e2e tier.
+      - run: npm run check:full
