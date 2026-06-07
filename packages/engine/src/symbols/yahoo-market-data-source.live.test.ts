@@ -1,3 +1,4 @@
+import { Period } from '@lametrader/core';
 import { describe } from 'vitest';
 import { runMarketDataSourceContract } from './testing/market-data-source.contract.js';
 import { YahooMarketDataSource } from './yahoo-market-data-source.js';
@@ -11,5 +12,6 @@ describe('MarketDataSource contract: Yahoo (live)', () => {
     query: 'apple',
     knownId: 'stock:AAPL',
     bogusId: 'stock:NOPENOPE',
+    candlePeriod: Period.OneDay,
   });
 });

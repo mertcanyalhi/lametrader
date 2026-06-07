@@ -4,7 +4,13 @@
  *
  * Thin: connect to Mongo, dispatch the command, print the result, disconnect.
  */
-import { connectConfigService, connectSymbolService, loadSettings } from '@lametrader/engine';
+import {
+  connectBackfillService,
+  connectConfigService,
+  connectSymbolService,
+  loadSettings,
+} from '@lametrader/engine';
+import { runCandles } from './candles.js';
 import { runConfig } from './config.js';
 import { runSymbols } from './symbols.js';
 
@@ -26,6 +32,15 @@ try {
       const { service, close } = await connectSymbolService(mongoUri);
       try {
         console.log(await runSymbols(args, service));
+      } finally {
+        await close();
+      }
+      break;
+    }
+    case 'candles': {
+      const { service, close } = await connectBackfillService(mongoUri);
+      try {
+        console.log(await runCandles(args, service));
       } finally {
         await close();
       }

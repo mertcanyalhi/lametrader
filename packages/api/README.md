@@ -93,7 +93,7 @@ results (so a discovery hit may omit it; a watched symbol always has it).
 | `GET`    | `/symbols`            | —                       | List the watchlist.                                 |
 | `POST`   | `/symbols`            | `{ id, periods? }`      | Add (validates existence). **201** / 400 / 404 / 409. |
 | `PATCH`  | `/symbols/{id}`       | `{ periods }`           | Change a symbol's periods. 200 / 400 / 404.         |
-| `DELETE` | `/symbols/{id}`       | —                       | Remove a symbol. **204**.                           |
+| `DELETE` | `/symbols/{id}`       | —                       | Remove a symbol **and its stored candles**. **204**. |
 
 Errors use the uniform `{ "error": "<reason>" }` body — **400** for invalid input,
 **404** when the symbol doesn't exist at its source or isn't watched, **409** when
@@ -110,4 +110,52 @@ curl http://localhost:3000/symbols
 curl -X PATCH http://localhost:3000/symbols/crypto:BTCUSDT \
   -H 'content-type: application/json' -d '{ "periods": ["1h"] }'
 curl -X DELETE http://localhost:3000/symbols/crypto:BTCUSDT
+```
+
+## Candles resource
+
+Backfill historical OHLC candles for a **watched** symbol+period into MongoDB and
+read them back. A candle is the OHLC base `{ type, time, open, high, low, close }`
+plus per-asset-class fields — crypto adds `volume`/`quoteVolume`/`trades`, equities
+add `volume`/`adjClose`, FX adds none. `time` is the open time in epoch ms.
+
+`from`/`to` are epoch ms; omit both on a backfill to fetch the provider's deepest
+available history. The `period` must be one of the symbol's watched periods.
+
+### Endpoints
+
+| Method | Path                              | Body                    | Description                                  |
+| ------ | --------------------------------- | ----------------------- | -------------------------------------------- |
+| `POST` | `/symbols/{id}/backfill`          | `{ period, from?, to? }` | Backfill candles; returns the summary. 200 / 400 / 404. |
+| `GET`  | `/symbols/{id}/candles?period=&from=&to=&limit=` | —      | Read a page of stored candles (keyset-paginated by time). 200 / 400. |
+| `WS`   | `/symbols/{id}/backfill/progress` | —                       | Stream backfill progress frames (see below). |
+
+The backfill summary is `{ id, period, from, to, fetched, saved }` (`from`/`to` are
+the first/last persisted candle time, or `null` when nothing was fetched). Errors
+use the uniform `{ "error": "<reason>" }` body — **400** for an invalid range or a
+period the symbol does not watch, **404** when the symbol is not on the watchlist,
+**502** when the upstream market-data provider fails (the body carries the provider's
+reason).
+
+`GET …/candles` returns one **keyset-paginated** page: `{ candles, nextCursor }`, where
+`candles` is ascending by `time` and `nextCursor` is the `time` to pass as the next
+request's `from` (or `null` on the last page). `limit` defaults to 100, max 1000 (over
+the max → 400). Page forward by re-issuing with `from = nextCursor`.
+
+### Progress over WebSocket
+
+Subscribe to `/symbols/{id}/backfill/progress` *before* triggering a backfill; while
+one runs, the socket receives JSON frames:
+
+- `{ "type": "progress", "saved": <n>, "total": <n> }` — after each persisted chunk.
+- `{ "type": "summary", "summary": { … } }` — once, when the backfill completes.
+
+### Examples
+
+```sh
+curl -X POST http://localhost:3000/symbols/crypto:BTCUSDT/backfill \
+  -H 'content-type: application/json' -d '{ "period": "1h" }'
+curl 'http://localhost:3000/symbols/crypto:BTCUSDT/candles?period=1h&limit=500'
+# page forward using the returned nextCursor
+curl 'http://localhost:3000/symbols/crypto:BTCUSDT/candles?period=1h&from=<nextCursor>&limit=500'
 ```

@@ -1,4 +1,6 @@
 import { MongoClient } from 'mongodb';
+import { BackfillService } from './candles/backfill-service.js';
+import { MongoCandleRepository } from './candles/mongo-candle-repository.js';
 import { ConfigService } from './config/config-service.js';
 import { MongoConfigRepository } from './config/mongo-config-repository.js';
 import { BinanceMarketDataSource } from './symbols/binance-market-data-source.js';
@@ -15,21 +17,24 @@ import { YahooMarketDataSource } from './symbols/yahoo-market-data-source.js';
  * @param uri - the MongoDB connection string (database taken from the URI).
  * @returns the wired services plus a `close` to release the connection.
  */
-export async function connectServices(
-  uri: string,
-): Promise<{ config: ConfigService; symbols: SymbolService; close: () => Promise<void> }> {
+export async function connectServices(uri: string): Promise<{
+  config: ConfigService;
+  symbols: SymbolService;
+  backfill: BackfillService;
+  close: () => Promise<void>;
+}> {
   const client = new MongoClient(uri);
   await client.connect();
   const db = client.db();
+  const sources = [new BinanceMarketDataSource(), new YahooMarketDataSource()];
+  const watchlist = new MongoWatchlistRepository(db);
   const config = new ConfigService(new MongoConfigRepository(db));
-  const symbols = new SymbolService(
-    [new BinanceMarketDataSource(), new YahooMarketDataSource()],
-    new MongoWatchlistRepository(db),
-    config,
-  );
+  const symbols = new SymbolService(sources, watchlist, config);
+  const backfill = new BackfillService(sources, new MongoCandleRepository(db), watchlist);
   return {
     config,
     symbols,
+    backfill,
     close: async () => {
       await client.close();
     },

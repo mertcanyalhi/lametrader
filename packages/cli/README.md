@@ -66,7 +66,7 @@ Discover, add/remove, and tune watchlist symbols. Canonical ids are
 - **`add <id> [--periods <csv>]`** — validate the id exists, then add it. Periods
   default to the config's `periods` and must be a subset of them.
 - **`list`** — print the watchlist as JSON.
-- **`remove <id>`** — remove a symbol.
+- **`remove <id>`** — remove a symbol (also deletes its stored candles).
 - **`set-periods <id> --periods <csv>`** — change a watched symbol's periods.
 
 #### Examples
@@ -78,4 +78,31 @@ npm run cli -- symbols add stock:AAPL --periods 1h,1d
 npm run cli -- symbols list
 npm run cli -- symbols set-periods crypto:BTCUSDT --periods 1h
 npm run cli -- symbols remove crypto:BTCUSDT
+```
+
+### `candles`
+
+Backfill historical OHLC candles for a **watched** symbol+period into MongoDB and
+read them back. The `--period` must be one of the symbol's watched periods.
+`--from`/`--to` are epoch milliseconds; omit both to backfill the provider's
+deepest available history.
+
+#### Subcommands
+
+- **`backfill <id> --period <p> [--from <ms> --to <ms>]`** — fetch and persist
+  candles, streaming `progress: <saved>/<total>` lines, then echo the summary JSON
+  (`{ id, period, from, to, fetched, saved }`).
+- **`list <id> --period <p> [--from <ms> --to <ms>] [--limit N]`** — print one page
+  of stored candles as JSON: `{ candles, nextCursor }`. Candles are keyset-paginated
+  by `time`; pass the returned `nextCursor` as the next `--from` to page forward.
+  `--limit` defaults to 100 (max 1000).
+
+#### Examples
+
+```sh
+npm run cli -- candles backfill crypto:BTCUSDT --period 1h
+npm run cli -- candles backfill stock:AAPL --period 1d --from 1704067200000 --to 1706745600000
+npm run cli -- candles list crypto:BTCUSDT --period 1h --limit 500
+# page forward: feed the previous nextCursor back in as --from
+npm run cli -- candles list crypto:BTCUSDT --period 1h --from 1704153600000 --limit 500
 ```

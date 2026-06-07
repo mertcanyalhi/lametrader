@@ -4,5 +4,6 @@
  * Translates command-line input into `engine` use-case calls. The executable
  * entry point lives in `bin.ts`.
  */
+export { runCandles } from './candles.js';
 export { runConfig } from './config.js';
 export { runSymbols } from './symbols.js';

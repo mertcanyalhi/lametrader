@@ -1,10 +1,10 @@
-import type { MarketDataSource } from '@lametrader/core';
+import type { MarketDataSource, Period } from '@lametrader/core';
 import { expect, it } from 'vitest';
 
 /**
  * Inputs the contract needs to probe a concrete {@link MarketDataSource}: a query
- * expected to return results, an id known to exist, and one known to be bogus
- * (both of a type the source serves).
+ * expected to return results, an id known to exist, one known to be bogus (both
+ * of a type the source serves), and a period to fetch candles at.
  */
 export interface MarketDataSourceContractCase {
   /** A query expected to return at least one result. */
@@ -13,6 +13,8 @@ export interface MarketDataSourceContractCase {
   knownId: string;
   /** A canonical id (of a served type) that does not exist. */
   bogusId: string;
+  /** A period the source can return candles at for `knownId`. */
+  candlePeriod: Period;
 }
 
 /**
@@ -40,5 +42,14 @@ export function runMarketDataSourceContract(
     expect(found?.id).toBe(testCase.knownId);
     expect(found?.exchange).toBeTruthy();
     expect(await source.lookup(testCase.bogusId)).toBeNull();
+  });
+
+  it('fetchCandles returns typed candles ascending by time', async () => {
+    const source = await make();
+    const candles = await source.fetchCandles(testCase.knownId, testCase.candlePeriod);
+    expect(candles.length).toBeGreaterThan(0);
+    expect(candles.every((candle) => source.types.includes(candle.type))).toBe(true);
+    const times = candles.map((candle) => candle.time);
+    expect(times).toEqual([...times].sort((a, b) => a - b));
   });
 }

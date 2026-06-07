@@ -45,6 +45,24 @@ export class SymbolConflictError extends Error {
 }
 
 /**
+ * Raised when a {@link MarketDataSource} fails to serve a request because of an
+ * upstream/provider failure (network error, non-2xx, rejected range). Adapters
+ * wrap the provider's own error as the `cause`. Driving adapters map it to HTTP
+ * 502 (the upstream dependency failed) rather than a generic 500 — it is not an
+ * internal bug.
+ */
+export class MarketDataError extends Error {
+  /**
+   * @param message - what failed, including the upstream reason.
+   * @param options - standard error options; pass the provider error as `cause`.
+   */
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'MarketDataError';
+  }
+}
+
+/**
  * Every valid {@link SymbolType} value, for prefix membership checks.
  */
 const TYPE_VALUES = new Set<string>(Object.values(SymbolType));

@@ -5,8 +5,8 @@ import { connectServices, loadSettings } from '@lametrader/engine';
 import { createApp } from './app.js';
 
 const { mongoUri, apiPort } = loadSettings();
-const { config, symbols, close } = await connectServices(mongoUri);
-const app = createApp({ config, symbols }, { logger: true });
+const { config, symbols, backfill, close } = await connectServices(mongoUri);
+const app = createApp({ config, symbols, backfill }, { logger: true });
 
 /**
  * Close the HTTP server and database connection on a termination signal.

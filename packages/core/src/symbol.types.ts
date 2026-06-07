@@ -1,3 +1,4 @@
+import type { BackfillRange, Candle } from './candle.types.js';
 import type { Period } from './config.types.js';
 
 /**
@@ -59,6 +60,12 @@ export interface MarketDataSource {
    * Look a canonical id up at the provider; `null` if it does not exist.
    */
   lookup(id: string): Promise<Instrument | null>;
+  /**
+   * Fetch OHLC candles for a canonical id at a {@link Period}, ascending by
+   * `time` and typed for the source's asset class. With `range` omitted, returns
+   * the provider's deepest available history.
+   */
+  fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<Candle[]>;
 }
 
 /**

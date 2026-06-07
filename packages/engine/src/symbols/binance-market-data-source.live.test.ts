@@ -1,3 +1,4 @@
+import { Period } from '@lametrader/core';
 import { describe } from 'vitest';
 import { BinanceMarketDataSource } from './binance-market-data-source.js';
 import { runMarketDataSourceContract } from './testing/market-data-source.contract.js';
@@ -11,5 +12,6 @@ describe('MarketDataSource contract: Binance (live)', () => {
     query: 'BTC',
     knownId: 'crypto:BTCUSDT',
     bogusId: 'crypto:NOPEUSDT',
+    candlePeriod: Period.OneDay,
   });
 });

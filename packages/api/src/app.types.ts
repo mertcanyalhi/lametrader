@@ -1,4 +1,4 @@
-import type { ConfigService, SymbolService } from '@lametrader/engine';
+import type { BackfillService, ConfigService, SymbolService } from '@lametrader/engine';
 
 /**
  * The use-cases the REST app drives. `symbols` is optional so config-focused
@@ -13,6 +13,10 @@ export interface AppDependencies {
    * The symbols use-case (discovery / watchlist).
    */
   symbols?: SymbolService;
+  /**
+   * The backfill use-case (historical candles). Optional like `symbols`.
+   */
+  backfill?: BackfillService;
 }
 
 /**
