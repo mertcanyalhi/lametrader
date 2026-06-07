@@ -4,7 +4,12 @@ import {
   type WatchedSymbol,
   type WatchlistRepository,
 } from '@lametrader/core';
-import { ConfigService, InMemoryMarketDataSource, SymbolService } from '@lametrader/engine';
+import {
+  ConfigService,
+  InMemoryCandleRepository,
+  InMemoryMarketDataSource,
+  SymbolService,
+} from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../app';
 
@@ -31,7 +36,12 @@ function buildApp() {
   };
   const configRepo: ConfigRepository = { load: async () => null, save: async () => {} };
   const config = new ConfigService(configRepo);
-  const symbols = new SymbolService([new InMemoryMarketDataSource([BTC])], watchlist, config);
+  const symbols = new SymbolService(
+    [new InMemoryMarketDataSource([BTC])],
+    watchlist,
+    config,
+    new InMemoryCandleRepository(),
+  );
   return createApp({ config, symbols });
 }
 

@@ -1,5 +1,10 @@
 import { SymbolType, type WatchedSymbol, type WatchlistRepository } from '@lametrader/core';
-import { ConfigService, InMemoryMarketDataSource, SymbolService } from '@lametrader/engine';
+import {
+  ConfigService,
+  InMemoryCandleRepository,
+  InMemoryMarketDataSource,
+  SymbolService,
+} from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 import { runSymbols } from './symbols';
 
@@ -24,7 +29,12 @@ function buildService() {
     remove: async (id) => void items.delete(id),
   };
   const config = new ConfigService({ load: async () => null, save: async () => {} });
-  return new SymbolService([new InMemoryMarketDataSource([BTC])], watchlist, config);
+  return new SymbolService(
+    [new InMemoryMarketDataSource([BTC])],
+    watchlist,
+    config,
+    new InMemoryCandleRepository(),
+  );
 }
 
 describe('runSymbols discover', () => {

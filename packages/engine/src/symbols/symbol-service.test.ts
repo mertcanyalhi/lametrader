@@ -11,6 +11,7 @@ import {
   type WatchlistRepository,
 } from '@lametrader/core';
 import { describe, expect, it, vi } from 'vitest';
+import { InMemoryCandleRepository } from '../candles/in-memory-candle-repository.js';
 import { ConfigService } from '../config/config-service.js';
 import { SymbolService } from './symbol-service.js';
 
@@ -77,7 +78,12 @@ describe('SymbolService.discover', () => {
   it('fans out to every source and returns the merged results', async () => {
     const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
     const stock = new FakeSource([SymbolType.Stock], new Map([[AAPL.id, AAPL]]));
-    const service = new SymbolService([crypto, stock], new FakeWatchlist(), configService());
+    const service = new SymbolService(
+      [crypto, stock],
+      new FakeWatchlist(),
+      configService(),
+      new InMemoryCandleRepository(),
+    );
 
     expect(await service.discover('a')).toEqual([BTC, AAPL]);
   });
@@ -85,7 +91,12 @@ describe('SymbolService.discover', () => {
   it('queries only the source serving the requested type', async () => {
     const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
     const stock = new FakeSource([SymbolType.Stock], new Map([[AAPL.id, AAPL]]));
-    const service = new SymbolService([crypto, stock], new FakeWatchlist(), configService());
+    const service = new SymbolService(
+      [crypto, stock],
+      new FakeWatchlist(),
+      configService(),
+      new InMemoryCandleRepository(),
+    );
 
     expect(await service.discover('a', SymbolType.Stock)).toEqual([AAPL]);
     expect(crypto.search).not.toHaveBeenCalled();
@@ -93,7 +104,12 @@ describe('SymbolService.discover', () => {
 
   it('throws SymbolError when no source serves the type', async () => {
     const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
-    const service = new SymbolService([crypto], new FakeWatchlist(), configService());
+    const service = new SymbolService(
+      [crypto],
+      new FakeWatchlist(),
+      configService(),
+      new InMemoryCandleRepository(),
+    );
 
     await expect(service.discover('a', SymbolType.Fx)).rejects.toThrow(SymbolError);
   });
@@ -103,7 +119,12 @@ describe('SymbolService.add', () => {
   it('validates existence and persists with the config periods by default', async () => {
     const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
     const watchlist = new FakeWatchlist();
-    const service = new SymbolService([crypto], watchlist, configService());
+    const service = new SymbolService(
+      [crypto],
+      watchlist,
+      configService(),
+      new InMemoryCandleRepository(),
+    );
 
     const added = await service.add('crypto:BTCUSDT');
 
@@ -115,7 +136,12 @@ describe('SymbolService.add', () => {
   it('persists with the given periods when provided', async () => {
     const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
     const watchlist = new FakeWatchlist();
-    const service = new SymbolService([crypto], watchlist, configService());
+    const service = new SymbolService(
+      [crypto],
+      watchlist,
+      configService(),
+      new InMemoryCandleRepository(),
+    );
 
     expect(await service.add('crypto:BTCUSDT', ['1h'])).toEqual({
       ...BTC,
@@ -126,7 +152,12 @@ describe('SymbolService.add', () => {
   it('throws SymbolNotFoundError and persists nothing for an unknown id', async () => {
     const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
     const watchlist = new FakeWatchlist();
-    const service = new SymbolService([crypto], watchlist, configService());
+    const service = new SymbolService(
+      [crypto],
+      watchlist,
+      configService(),
+      new InMemoryCandleRepository(),
+    );
 
     await expect(service.add('crypto:NOPEUSDT')).rejects.toThrow(SymbolNotFoundError);
     expect(await watchlist.list()).toEqual([]);
@@ -135,7 +166,12 @@ describe('SymbolService.add', () => {
   it('throws SymbolError and persists nothing for a period not in the config', async () => {
     const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
     const watchlist = new FakeWatchlist();
-    const service = new SymbolService([crypto], watchlist, configService());
+    const service = new SymbolService(
+      [crypto],
+      watchlist,
+      configService(),
+      new InMemoryCandleRepository(),
+    );
 
     await expect(service.add('crypto:BTCUSDT', ['4h'])).rejects.toThrow(SymbolError);
     expect(await watchlist.list()).toEqual([]);
@@ -144,7 +180,12 @@ describe('SymbolService.add', () => {
   it('throws SymbolConflictError and leaves the existing entry unchanged when already watched', async () => {
     const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
     const watchlist = new FakeWatchlist();
-    const service = new SymbolService([crypto], watchlist, configService());
+    const service = new SymbolService(
+      [crypto],
+      watchlist,
+      configService(),
+      new InMemoryCandleRepository(),
+    );
     const existing: WatchedSymbol = { ...BTC, periods: [Period.OneHour] };
     await watchlist.add(existing);
 
@@ -158,7 +199,12 @@ describe('SymbolService watchlist management', () => {
     const watchlist = new FakeWatchlist();
     const watched: WatchedSymbol = { ...BTC, periods: [Period.OneDay] };
     await watchlist.add(watched);
-    const service = new SymbolService([], watchlist, configService());
+    const service = new SymbolService(
+      [],
+      watchlist,
+      configService(),
+      new InMemoryCandleRepository(),
+    );
 
     expect(await service.list()).toEqual([watched]);
   });
@@ -166,16 +212,51 @@ describe('SymbolService watchlist management', () => {
   it('removes a watched symbol', async () => {
     const watchlist = new FakeWatchlist();
     await watchlist.add({ ...BTC, periods: [Period.OneDay] });
-    const service = new SymbolService([], watchlist, configService());
+    const service = new SymbolService(
+      [],
+      watchlist,
+      configService(),
+      new InMemoryCandleRepository(),
+    );
 
     await service.remove('crypto:BTCUSDT');
     expect(await service.list()).toEqual([]);
   });
 
+  it('removing a symbol also deletes its stored candles (cascade)', async () => {
+    const watchlist = new FakeWatchlist();
+    await watchlist.add({ ...BTC, periods: [Period.OneHour] });
+    const candles = new InMemoryCandleRepository();
+    await candles.save('crypto:BTCUSDT', Period.OneHour, [
+      {
+        type: SymbolType.Crypto,
+        time: 1000,
+        open: 1,
+        high: 2,
+        low: 0.5,
+        close: 1.5,
+        volume: 10,
+        quoteVolume: 15,
+        trades: 3,
+      },
+    ]);
+    const service = new SymbolService([], watchlist, configService(), candles);
+
+    await service.remove('crypto:BTCUSDT');
+
+    expect(await service.list()).toEqual([]);
+    expect(await candles.range('crypto:BTCUSDT', Period.OneHour, 0, 4000)).toEqual([]);
+  });
+
   it('setPeriods updates a watched symbol and returns it', async () => {
     const watchlist = new FakeWatchlist();
     await watchlist.add({ ...BTC, periods: [Period.OneDay] });
-    const service = new SymbolService([], watchlist, configService());
+    const service = new SymbolService(
+      [],
+      watchlist,
+      configService(),
+      new InMemoryCandleRepository(),
+    );
 
     expect(await service.setPeriods('crypto:BTCUSDT', ['1h', '1d'])).toEqual({
       ...BTC,
@@ -184,7 +265,12 @@ describe('SymbolService watchlist management', () => {
   });
 
   it('setPeriods throws SymbolNotFoundError when the id is not watched', async () => {
-    const service = new SymbolService([], new FakeWatchlist(), configService());
+    const service = new SymbolService(
+      [],
+      new FakeWatchlist(),
+      configService(),
+      new InMemoryCandleRepository(),
+    );
     await expect(service.setPeriods('crypto:BTCUSDT', ['1h'])).rejects.toThrow(SymbolNotFoundError);
   });
 });

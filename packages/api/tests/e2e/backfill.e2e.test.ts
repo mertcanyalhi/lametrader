@@ -71,9 +71,10 @@ describe('backfill API (e2e)', () => {
       [{ id: BTC.id, period: Period.OneHour, candles: SERIES }],
     );
     const watchlist = new MongoWatchlistRepository(db);
+    const candleRepo = new MongoCandleRepository(db);
     const config = new ConfigService(new MongoConfigRepository(db));
-    const symbols = new SymbolService([stub], watchlist, config);
-    const backfill = new BackfillService([stub], new MongoCandleRepository(db), watchlist);
+    const symbols = new SymbolService([stub], watchlist, config, candleRepo);
+    const backfill = new BackfillService([stub], candleRepo, watchlist);
 
     app = createApp({ config, symbols, backfill });
     baseUrl = await app.listen({ port: 0, host: '127.0.0.1' });
@@ -198,5 +199,29 @@ describe('backfill API (e2e)', () => {
       error: 'Binance failed to fetch candles for crypto:BTCUSDT: 418',
     });
     await failApp.close();
+  });
+
+  it('deleting a symbol cascades to its stored candles', async () => {
+    // Ensure watched + backfilled (idempotent — 201 first time, else 409).
+    await app.inject({ method: 'POST', url: '/symbols', payload: { id: BTC.id } });
+    await app.inject({
+      method: 'POST',
+      url: `/symbols/${BTC.id}/backfill`,
+      payload: { period: '1h' },
+    });
+    const before = await app.inject({
+      method: 'GET',
+      url: `/symbols/${BTC.id}/candles?period=1h`,
+    });
+    expect((before.json() as { candles: unknown[] }).candles.length).toBeGreaterThan(0);
+
+    const del = await app.inject({ method: 'DELETE', url: `/symbols/${BTC.id}` });
+    expect(del.statusCode).toBe(204);
+
+    const after = await app.inject({
+      method: 'GET',
+      url: `/symbols/${BTC.id}/candles?period=1h`,
+    });
+    expect(after.json()).toEqual({ candles: [], nextCursor: null });
   });
 });

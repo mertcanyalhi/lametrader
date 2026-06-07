@@ -3,6 +3,7 @@ import { SymbolType } from '@lametrader/core';
 import {
   ConfigService,
   InMemoryMarketDataSource,
+  MongoCandleRepository,
   MongoConfigRepository,
   MongoWatchlistRepository,
   SymbolService,
@@ -44,6 +45,7 @@ describe('symbols API (e2e)', () => {
       [new InMemoryMarketDataSource([BTC])],
       new MongoWatchlistRepository(db),
       config,
+      new MongoCandleRepository(db),
     );
     app = createApp({ config, symbols });
     await app.ready();

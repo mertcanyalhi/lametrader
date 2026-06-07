@@ -1,4 +1,5 @@
 import { MongoClient } from 'mongodb';
+import { MongoCandleRepository } from '../candles/mongo-candle-repository.js';
 import { ConfigService } from '../config/config-service.js';
 import { MongoConfigRepository } from '../config/mongo-config-repository.js';
 import { BinanceMarketDataSource } from './binance-market-data-source.js';
@@ -25,6 +26,7 @@ export async function connectSymbolService(
     [new BinanceMarketDataSource(), new YahooMarketDataSource()],
     new MongoWatchlistRepository(db),
     new ConfigService(new MongoConfigRepository(db)),
+    new MongoCandleRepository(db),
   );
   return {
     service,

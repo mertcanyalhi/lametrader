@@ -28,9 +28,10 @@ export async function connectServices(uri: string): Promise<{
   const db = client.db();
   const sources = [new BinanceMarketDataSource(), new YahooMarketDataSource()];
   const watchlist = new MongoWatchlistRepository(db);
+  const candleRepo = new MongoCandleRepository(db);
   const config = new ConfigService(new MongoConfigRepository(db));
-  const symbols = new SymbolService(sources, watchlist, config);
-  const backfill = new BackfillService(sources, new MongoCandleRepository(db), watchlist);
+  const symbols = new SymbolService(sources, watchlist, config, candleRepo);
+  const backfill = new BackfillService(sources, candleRepo, watchlist);
   return {
     config,
     symbols,

@@ -1,4 +1,5 @@
 import {
+  type CandleRepository,
   type Instrument,
   type MarketDataSource,
   type Period,
@@ -26,11 +27,13 @@ export class SymbolService {
    * @param sources - market-data providers, one or more per asset class.
    * @param watchlist - the watchlist persistence port.
    * @param config - the configuration use-case (for supported/default periods).
+   * @param candles - the candle persistence port (cascaded on removal).
    */
   constructor(
     private readonly sources: MarketDataSource[],
     private readonly watchlist: WatchlistRepository,
     private readonly config: ConfigService,
+    private readonly candles: CandleRepository,
   ) {}
 
   /**
@@ -86,10 +89,12 @@ export class SymbolService {
   }
 
   /**
-   * Remove a symbol from the watchlist (idempotent).
+   * Remove a symbol from the watchlist and delete its stored candles (all
+   * periods). Idempotent.
    */
-  remove(id: string): Promise<void> {
-    return this.watchlist.remove(id);
+  async remove(id: string): Promise<void> {
+    await this.watchlist.remove(id);
+    await this.candles.deleteSymbol(id);
   }
 
   /**
