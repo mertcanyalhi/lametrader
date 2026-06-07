@@ -53,3 +53,29 @@ Set the supported periods and the default:
 ```sh
 npm run cli -- config set --periods 1h,1d --default-period 1d
 ```
+
+### `symbols`
+
+Discover, add/remove, and tune watchlist symbols. Canonical ids are
+`<type>:<ticker>` (`crypto`, `stock`, `fund`, `fx`), e.g. `crypto:BTCUSDT`,
+`stock:AAPL`, `fx:EURUSD`. Crypto is served by Binance; stocks/funds/FX by Yahoo.
+
+#### Subcommands
+
+- **`discover <query> [--type <type>]`** — search sources for matching instruments (JSON).
+- **`add <id> [--periods <csv>]`** — validate the id exists, then add it. Periods
+  default to the config's `periods` and must be a subset of them.
+- **`list`** — print the watchlist as JSON.
+- **`remove <id>`** — remove a symbol.
+- **`set-periods <id> --periods <csv>`** — change a watched symbol's periods.
+
+#### Examples
+
+```sh
+npm run cli -- symbols discover bitcoin --type crypto
+npm run cli -- symbols add crypto:BTCUSDT
+npm run cli -- symbols add stock:AAPL --periods 1h,1d
+npm run cli -- symbols list
+npm run cli -- symbols set-periods crypto:BTCUSDT --periods 1h
+npm run cli -- symbols remove crypto:BTCUSDT
+```

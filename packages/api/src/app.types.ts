@@ -1,3 +1,20 @@
+import type { ConfigService, SymbolService } from '@lametrader/engine';
+
+/**
+ * The use-cases the REST app drives. `symbols` is optional so config-focused
+ * tests can build a minimal app; the entry point provides both.
+ */
+export interface AppDependencies {
+  /**
+   * The configuration use-case.
+   */
+  config: ConfigService;
+  /**
+   * The symbols use-case (discovery / watchlist).
+   */
+  symbols?: SymbolService;
+}
+
 /**
  * Options for `createApp`.
  */

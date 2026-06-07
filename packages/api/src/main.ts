@@ -1,12 +1,12 @@
 /**
- * Entry point: wire a Mongo-backed config service and serve the REST API.
+ * Entry point: wire Mongo-backed config + symbol services and serve the REST API.
  */
-import { connectConfigService, loadSettings } from '@lametrader/engine';
+import { connectServices, loadSettings } from '@lametrader/engine';
 import { createApp } from './app.js';
 
 const { mongoUri, apiPort } = loadSettings();
-const { service, close } = await connectConfigService(mongoUri);
-const app = createApp(service, { logger: true });
+const { config, symbols, close } = await connectServices(mongoUri);
+const app = createApp({ config, symbols }, { logger: true });
 
 /**
  * Close the HTTP server and database connection on a termination signal.

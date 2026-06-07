@@ -16,7 +16,7 @@ function buildApp(initial: Config | null = null) {
       stored = config;
     },
   };
-  return createApp(new ConfigService(repo));
+  return createApp({ config: new ConfigService(repo) });
 }
 
 describe('GET /config', () => {

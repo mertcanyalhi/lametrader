@@ -5,3 +5,4 @@
  * entry point lives in `bin.ts`.
  */
 export { runConfig } from './config.js';
+export { runSymbols } from './symbols.js';

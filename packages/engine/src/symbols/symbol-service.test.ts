@@ -1,0 +1,190 @@
+import {
+  type Config,
+  type Instrument,
+  type MarketDataSource,
+  Period,
+  SymbolConflictError,
+  SymbolError,
+  SymbolNotFoundError,
+  SymbolType,
+  type WatchedSymbol,
+  type WatchlistRepository,
+} from '@lametrader/core';
+import { describe, expect, it, vi } from 'vitest';
+import { ConfigService } from '../config/config-service.js';
+import { SymbolService } from './symbol-service.js';
+
+/**
+ * A market-data source over a fixed catalog. `search` ignores the query and
+ * returns the catalog (so assertions are deterministic); the call is spied.
+ */
+class FakeSource implements MarketDataSource {
+  readonly search = vi.fn(
+    async (_query: string): Promise<Instrument[]> => [...this.catalog.values()],
+  );
+
+  constructor(
+    readonly types: SymbolType[],
+    private readonly catalog = new Map<string, Instrument>(),
+  ) {}
+
+  async lookup(id: string): Promise<Instrument | null> {
+    return this.catalog.get(id) ?? null;
+  }
+}
+
+/**
+ * In-memory watchlist for tests.
+ */
+class FakeWatchlist implements WatchlistRepository {
+  readonly items = new Map<string, WatchedSymbol>();
+  async list(): Promise<WatchedSymbol[]> {
+    return [...this.items.values()];
+  }
+  async get(id: string): Promise<WatchedSymbol | null> {
+    return this.items.get(id) ?? null;
+  }
+  async add(symbol: WatchedSymbol): Promise<void> {
+    this.items.set(symbol.id, symbol);
+  }
+  async remove(id: string): Promise<void> {
+    this.items.delete(id);
+  }
+}
+
+/**
+ * A ConfigService whose stored config is `stored` (default `[1h,1d]`).
+ */
+function configService(stored?: Config): ConfigService {
+  return new ConfigService({ load: async () => stored ?? null, save: async () => {} });
+}
+
+const BTC: Instrument = {
+  id: 'crypto:BTCUSDT',
+  type: SymbolType.Crypto,
+  description: 'Bitcoin / TetherUS',
+  exchange: 'Binance',
+  currency: 'USDT',
+};
+const AAPL: Instrument = {
+  id: 'stock:AAPL',
+  type: SymbolType.Stock,
+  description: 'Apple Inc.',
+  exchange: 'NMS',
+};
+
+describe('SymbolService.discover', () => {
+  it('fans out to every source and returns the merged results', async () => {
+    const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
+    const stock = new FakeSource([SymbolType.Stock], new Map([[AAPL.id, AAPL]]));
+    const service = new SymbolService([crypto, stock], new FakeWatchlist(), configService());
+
+    expect(await service.discover('a')).toEqual([BTC, AAPL]);
+  });
+
+  it('queries only the source serving the requested type', async () => {
+    const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
+    const stock = new FakeSource([SymbolType.Stock], new Map([[AAPL.id, AAPL]]));
+    const service = new SymbolService([crypto, stock], new FakeWatchlist(), configService());
+
+    expect(await service.discover('a', SymbolType.Stock)).toEqual([AAPL]);
+    expect(crypto.search).not.toHaveBeenCalled();
+  });
+
+  it('throws SymbolError when no source serves the type', async () => {
+    const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
+    const service = new SymbolService([crypto], new FakeWatchlist(), configService());
+
+    await expect(service.discover('a', SymbolType.Fx)).rejects.toThrow(SymbolError);
+  });
+});
+
+describe('SymbolService.add', () => {
+  it('validates existence and persists with the config periods by default', async () => {
+    const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
+    const watchlist = new FakeWatchlist();
+    const service = new SymbolService([crypto], watchlist, configService());
+
+    const added = await service.add('crypto:BTCUSDT');
+
+    const expected: WatchedSymbol = { ...BTC, periods: [Period.OneHour, Period.OneDay] };
+    expect(added).toEqual(expected);
+    expect(await watchlist.list()).toEqual([expected]);
+  });
+
+  it('persists with the given periods when provided', async () => {
+    const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
+    const watchlist = new FakeWatchlist();
+    const service = new SymbolService([crypto], watchlist, configService());
+
+    expect(await service.add('crypto:BTCUSDT', ['1h'])).toEqual({
+      ...BTC,
+      periods: [Period.OneHour],
+    });
+  });
+
+  it('throws SymbolNotFoundError and persists nothing for an unknown id', async () => {
+    const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
+    const watchlist = new FakeWatchlist();
+    const service = new SymbolService([crypto], watchlist, configService());
+
+    await expect(service.add('crypto:NOPEUSDT')).rejects.toThrow(SymbolNotFoundError);
+    expect(await watchlist.list()).toEqual([]);
+  });
+
+  it('throws SymbolError and persists nothing for a period not in the config', async () => {
+    const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
+    const watchlist = new FakeWatchlist();
+    const service = new SymbolService([crypto], watchlist, configService());
+
+    await expect(service.add('crypto:BTCUSDT', ['4h'])).rejects.toThrow(SymbolError);
+    expect(await watchlist.list()).toEqual([]);
+  });
+
+  it('throws SymbolConflictError and leaves the existing entry unchanged when already watched', async () => {
+    const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
+    const watchlist = new FakeWatchlist();
+    const service = new SymbolService([crypto], watchlist, configService());
+    const existing: WatchedSymbol = { ...BTC, periods: [Period.OneHour] };
+    await watchlist.add(existing);
+
+    await expect(service.add('crypto:BTCUSDT', ['1d'])).rejects.toThrow(SymbolConflictError);
+    expect(await watchlist.list()).toEqual([existing]); // periods unchanged
+  });
+});
+
+describe('SymbolService watchlist management', () => {
+  it('lists the persisted watched symbols', async () => {
+    const watchlist = new FakeWatchlist();
+    const watched: WatchedSymbol = { ...BTC, periods: [Period.OneDay] };
+    await watchlist.add(watched);
+    const service = new SymbolService([], watchlist, configService());
+
+    expect(await service.list()).toEqual([watched]);
+  });
+
+  it('removes a watched symbol', async () => {
+    const watchlist = new FakeWatchlist();
+    await watchlist.add({ ...BTC, periods: [Period.OneDay] });
+    const service = new SymbolService([], watchlist, configService());
+
+    await service.remove('crypto:BTCUSDT');
+    expect(await service.list()).toEqual([]);
+  });
+
+  it('setPeriods updates a watched symbol and returns it', async () => {
+    const watchlist = new FakeWatchlist();
+    await watchlist.add({ ...BTC, periods: [Period.OneDay] });
+    const service = new SymbolService([], watchlist, configService());
+
+    expect(await service.setPeriods('crypto:BTCUSDT', ['1h', '1d'])).toEqual({
+      ...BTC,
+      periods: [Period.OneHour, Period.OneDay],
+    });
+  });
+
+  it('setPeriods throws SymbolNotFoundError when the id is not watched', async () => {
+    const service = new SymbolService([], new FakeWatchlist(), configService());
+    await expect(service.setPeriods('crypto:BTCUSDT', ['1h'])).rejects.toThrow(SymbolNotFoundError);
+  });
+});

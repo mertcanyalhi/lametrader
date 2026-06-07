@@ -15,7 +15,7 @@ function buildApp() {
       stored = config;
     },
   };
-  return createApp(new ConfigService(repo));
+  return createApp({ config: new ConfigService(repo) });
 }
 
 describe('app', () => {

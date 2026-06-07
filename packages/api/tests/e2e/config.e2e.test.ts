@@ -20,7 +20,7 @@ describe('config API (e2e)', () => {
     uri = `${container.getConnectionString()}?directConnection=true`;
     const wired = await connectConfigService(uri);
     close = wired.close;
-    app = createApp(wired.service);
+    app = createApp({ config: wired.service });
     await app.ready();
   });
 
@@ -45,7 +45,7 @@ describe('config API (e2e)', () => {
     expect(put.statusCode).toBe(200);
 
     const second = await connectConfigService(uri);
-    const fresh = createApp(second.service);
+    const fresh = createApp({ config: second.service });
     const get = await fresh.inject({ method: 'GET', url: '/config' });
     expect(get.json()).toEqual({ periods: ['1h', '4h', '1d'], defaultPeriod: '4h' });
     await fresh.close();
