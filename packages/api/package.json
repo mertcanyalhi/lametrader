@@ -6,7 +6,9 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc --build"
+    "build": "tsc --build",
+    "start": "node dist/main.js",
+    "dev": "tsx watch src/main.ts"
   },
   "dependencies": {
     "@fastify/swagger": "^9.7.0",
@@ -16,5 +18,8 @@
     "@lametrader/engine": "0.2.0",
     "@sinclair/typebox": "^0.34.49",
     "fastify": "^5.8.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.22.4"
   }
 }
