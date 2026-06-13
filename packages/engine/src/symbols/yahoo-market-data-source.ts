@@ -91,7 +91,7 @@ export class YahooMarketDataSource implements MarketDataSource {
             currency?: string;
           }
         | undefined;
-      // No price → treat as non-existent (Yahoo also throws for unknown tickers).
+      // No price → Yahoo's shell-quote signal for an unknown symbol.
       if (!quote || quote.regularMarketPrice == null) return null;
       const instrument = toInstrument(
         native,
@@ -100,8 +100,14 @@ export class YahooMarketDataSource implements MarketDataSource {
         quote.exchange ?? '',
       );
       return quote.currency ? { ...instrument, currency: quote.currency } : instrument;
-    } catch {
-      return null;
+    } catch (cause) {
+      // A 4xx means Yahoo rejected the symbol (genuinely not found); a 5xx,
+      // rate-limit, or status-less error (network/timeout) is transient and must
+      // not be reported as "no such symbol".
+      if (isNotFound(cause)) return null;
+      throw new MarketDataError(`Yahoo failed to look up ${id}: ${(cause as Error).message}`, {
+        cause,
+      });
     }
   }
 
@@ -133,6 +139,17 @@ export class YahooMarketDataSource implements MarketDataSource {
       );
     }
   }
+}
+
+/**
+ * Whether a thrown `yahoo-finance2` error means "Yahoo rejected this symbol"
+ * (a 4xx client status) rather than a transient failure. `yahoo-finance2`'s
+ * `HTTPError` carries `code = response.status`; a 5xx, a rate-limit, or an error
+ * with no numeric HTTP status (network/timeout) is treated as transient.
+ */
+function isNotFound(error: unknown): boolean {
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'number' && code >= 400 && code < 500;
 }
 
 /**
