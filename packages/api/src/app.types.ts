@@ -1,4 +1,5 @@
 import type { BackfillService, ConfigService, SymbolService } from '@lametrader/engine';
+import type { CandleStreamHub } from './candle-stream-hub.js';
 
 /**
  * The use-cases the REST app drives. `symbols` is optional so config-focused
@@ -17,6 +18,12 @@ export interface AppDependencies {
    * The backfill use-case (historical candles). Optional like `symbols`.
    */
   backfill?: BackfillService;
+  /**
+   * The live-candle stream hub fed by the polling loop. When present, the
+   * multiplexed `GET /stream` WebSocket route is registered. Optional like
+   * `symbols`.
+   */
+  candleStream?: CandleStreamHub;
 }
 
 /**

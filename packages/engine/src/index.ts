@@ -12,10 +12,16 @@ export type {
 export { connectBackfillService } from './candles/connect.js';
 export { InMemoryCandleRepository } from './candles/in-memory-candle-repository.js';
 export { MongoCandleRepository } from './candles/mongo-candle-repository.js';
+export { PollingService } from './candles/polling-service.js';
+export type {
+  CandleEvent,
+  CandleListener,
+  PollingOptions,
+} from './candles/polling-service.types.js';
 export { ConfigService } from './config/config-service.js';
 export { connectConfigService } from './config/connect.js';
 export { MongoConfigRepository } from './config/mongo-config-repository.js';
-export { connectServices } from './connect.js';
+export { type ConnectOptions, connectServices } from './connect.js';
 export { loadSettings } from './settings.js';
 export type { Settings } from './settings.types.js';
 export { BinanceMarketDataSource } from './symbols/binance-market-data-source.js';
