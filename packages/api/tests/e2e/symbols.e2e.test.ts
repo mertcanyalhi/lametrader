@@ -1,5 +1,5 @@
 import { createApp } from '@lametrader/api';
-import { SymbolType } from '@lametrader/core';
+import { Period, SymbolType } from '@lametrader/core';
 import {
   BackfillService,
   ConfigService,
@@ -113,5 +113,49 @@ describe('symbols API (e2e)', () => {
     expect((await app.inject({ method: 'GET', url: '/symbols' })).json()).toEqual([
       { ...BTC, periods: ['1h'] }, // unchanged, not reset to default
     ]);
+  });
+
+  it('rejects watching a symbol at a period its source cannot serve, with 400', async () => {
+    // A crypto source that can only fetch 1h/1d (like Yahoo lacking a 4h bar),
+    // wired on its own database so it doesn't disturb the shared app's state.
+    const limitedDb = client.db('lametrader-limited');
+    const limitedSource = new InMemoryMarketDataSource(
+      [BTC],
+      [SymbolType.Crypto],
+      [],
+      [Period.OneHour, Period.OneDay],
+    );
+    const config = new ConfigService(new MongoConfigRepository(limitedDb));
+    const watchlist = new MongoWatchlistRepository(limitedDb);
+    const candles = new MongoCandleRepository(limitedDb);
+    const symbols = new SymbolService([limitedSource], watchlist, config, candles);
+    const backfill = new BackfillService([limitedSource], candles, watchlist);
+    const limitedApp = createApp({ config, symbols, backfill });
+    await limitedApp.ready();
+
+    try {
+      // Enable 4h globally, so the request clears config validation and the
+      // rejection can only come from the source's capability.
+      const put = await limitedApp.inject({
+        method: 'PUT',
+        url: '/config',
+        payload: { periods: ['1h', '4h', '1d'], defaultPeriod: '1h' },
+      });
+      expect(put.statusCode).toBe(200);
+
+      const res = await limitedApp.inject({
+        method: 'POST',
+        url: '/symbols',
+        payload: { id: 'crypto:BTCUSDT', periods: ['4h'] },
+      });
+      expect(res.statusCode).toBe(400);
+      expect((res.json() as { error: string }).error).toMatch(/source does not support/);
+
+      // Nothing persisted.
+      expect((await limitedApp.inject({ method: 'GET', url: '/symbols' })).json()).toEqual([]);
+    } finally {
+      await limitedApp.close();
+      await limitedDb.dropDatabase();
+    }
   });
 });

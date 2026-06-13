@@ -27,3 +27,6 @@ checked when the watch is established.
   the config and the source.
 - The shared `MarketDataSource` contract asserts the source declares a non-empty
   `periods` that includes the contract's probe `candlePeriod`.
+- E2E: over HTTP, `POST /symbols` for a period enabled in config but not served by
+  the owning source is rejected with **400** (`source does not support …`) and
+  persists nothing.
