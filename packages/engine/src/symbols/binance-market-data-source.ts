@@ -1,10 +1,11 @@
 import {
   type BackfillRange,
+  CandleError,
   type CryptoCandle,
   type Instrument,
   MarketDataError,
   type MarketDataSource,
-  type Period,
+  Period,
   SymbolType,
   symbolType,
 } from '@lametrader/core';
@@ -13,6 +14,22 @@ import {
  * Base URL for Binance's public REST API (keyless).
  */
 const BASE = 'https://api.binance.com';
+
+/**
+ * Map our {@link Period} to a Binance kline `interval`. Explicit (not a cast):
+ * the enum value happening to equal Binance's interval string is a coincidence,
+ * not a contract. A `Period` with no entry here is rejected before any request.
+ */
+const BINANCE_INTERVAL: Partial<Record<Period, string>> = {
+  [Period.OneMinute]: '1m',
+  [Period.FiveMinutes]: '5m',
+  [Period.FifteenMinutes]: '15m',
+  [Period.ThirtyMinutes]: '30m',
+  [Period.OneHour]: '1h',
+  [Period.FourHours]: '4h',
+  [Period.OneDay]: '1d',
+  [Period.OneWeek]: '1w',
+};
 
 /**
  * Max candles Binance returns per `klines` request.
@@ -69,9 +86,11 @@ export class BinanceMarketDataSource implements MarketDataSource {
 
   async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<CryptoCandle[]> {
     if (symbolType(id) !== SymbolType.Crypto) return [];
+    const interval = BINANCE_INTERVAL[period];
+    if (!interval) {
+      throw new CandleError(`Binance does not support period ${period}`);
+    }
     const ticker = id.slice(`${SymbolType.Crypto}:`.length);
-    // Our Period values are exactly Binance's kline intervals.
-    const interval = period as string;
     const out: CryptoCandle[] = [];
     let startTime = range?.from ?? 0;
     const endTime = range?.to;
