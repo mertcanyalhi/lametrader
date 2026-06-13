@@ -181,4 +181,19 @@ describe('polling + live streaming (e2e)', () => {
     const btc = await candleRepo.range(BTC.id, Period.OneHour, 0, Number.MAX_SAFE_INTEGER);
     expect(btc).toEqual([candle(0), candle(HOUR), candle(2 * HOUR)]);
   });
+
+  it('answers a malformed control message with an error frame instead of dropping it', async () => {
+    const socket = new WebSocket(`${baseUrl.replace('http', 'ws')}/stream`);
+    await new Promise<void>((resolve, reject) => {
+      socket.addEventListener('open', () => resolve());
+      socket.addEventListener('error', () => reject(new Error('ws failed to open')));
+    });
+    const frame = await new Promise<unknown>((resolve) => {
+      socket.addEventListener('message', (event) => resolve(JSON.parse(String(event.data))));
+      socket.send('not json');
+    });
+    socket.close();
+
+    expect(frame).toEqual({ error: 'invalid JSON message' });
+  });
 });
