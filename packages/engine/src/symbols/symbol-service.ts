@@ -1,4 +1,5 @@
 import {
+  assertInstrumentTypeMatchesId,
   type CandleRepository,
   type Instrument,
   type MarketDataSource,
@@ -75,6 +76,8 @@ export class SymbolService {
     if (!found) {
       throw new SymbolNotFoundError(`symbol not found: ${id}`);
     }
+    // Don't persist an instrument whose declared type contradicts its id.
+    assertInstrumentTypeMatchesId(found);
 
     const watched: WatchedSymbol = { ...found, periods: resolved };
     await this.watchlist.add(watched);

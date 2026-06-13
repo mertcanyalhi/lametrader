@@ -163,6 +163,22 @@ describe('SymbolService.add', () => {
     expect(await watchlist.list()).toEqual([]);
   });
 
+  it('throws SymbolError and persists nothing when a source returns a type/id mismatch', async () => {
+    // A crypto source whose lookup hands back an instrument typed Stock.
+    const mismatched: Instrument = { ...BTC, type: SymbolType.Stock };
+    const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, mismatched]]));
+    const watchlist = new FakeWatchlist();
+    const service = new SymbolService(
+      [crypto],
+      watchlist,
+      configService(),
+      new InMemoryCandleRepository(),
+    );
+
+    await expect(service.add('crypto:BTCUSDT')).rejects.toThrow(SymbolError);
+    expect(await watchlist.list()).toEqual([]);
+  });
+
   it('throws SymbolError and persists nothing for a period not in the config', async () => {
     const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
     const watchlist = new FakeWatchlist();

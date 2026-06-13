@@ -25,6 +25,7 @@ export type {
 export { ConfigError, defaultConfig, mergeConfig, parseConfig } from './config.js';
 export { type Config, type ConfigRepository, Period } from './config.types.js';
 export {
+  assertInstrumentTypeMatchesId,
   MarketDataError,
   parseSymbolPeriods,
   SymbolConflictError,
