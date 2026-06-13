@@ -5,7 +5,6 @@ import {
   type Period,
   parseSymbolPeriods,
   SymbolConflictError,
-  SymbolError,
   SymbolNotFoundError,
   type SymbolType,
   symbolType,
@@ -13,6 +12,7 @@ import {
   type WatchlistRepository,
 } from '@lametrader/core';
 import type { ConfigService } from '../config/config-service.js';
+import { sourceForType } from './source-registry.js';
 
 /**
  * Application use-case for discovering, watching, and tuning symbols.
@@ -45,7 +45,7 @@ export class SymbolService {
    */
   async discover(query: string, type?: SymbolType): Promise<Instrument[]> {
     if (type) {
-      const results = await this.sourceForType(type).search(query);
+      const results = await sourceForType(this.sources, type).search(query);
       return results.filter((symbol) => symbol.type === type);
     }
     const results = await Promise.all(this.sources.map((source) => source.search(query)));
@@ -63,7 +63,7 @@ export class SymbolService {
    * @throws {@link SymbolNotFoundError} when the id does not exist at its source.
    */
   async add(id: string, periods?: readonly string[]): Promise<WatchedSymbol> {
-    const source = this.sourceForType(symbolType(id));
+    const source = sourceForType(this.sources, symbolType(id));
     if (await this.watchlist.get(id)) {
       throw new SymbolConflictError(`symbol already watched: ${id}`);
     }
@@ -112,18 +112,5 @@ export class SymbolService {
     const updated: WatchedSymbol = { ...existing, periods: resolved };
     await this.watchlist.add(updated);
     return updated;
-  }
-
-  /**
-   * Resolve the source that serves a given asset type.
-   *
-   * @throws {@link SymbolError} when no registered source serves the type.
-   */
-  private sourceForType(type: SymbolType): MarketDataSource {
-    const source = this.sources.find((candidate) => candidate.types.includes(type));
-    if (!source) {
-      throw new SymbolError(`no market-data source for type: ${type}`);
-    }
-    return source;
   }
 }

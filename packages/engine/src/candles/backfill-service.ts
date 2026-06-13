@@ -5,12 +5,11 @@ import {
   type CandleRepository,
   type MarketDataSource,
   type Period,
-  SymbolError,
   SymbolNotFoundError,
-  type SymbolType,
   symbolType,
   type WatchlistRepository,
 } from '@lametrader/core';
+import { sourceForType } from '../symbols/source-registry.js';
 import type { BackfillProgressListener, BackfillSummary } from './backfill-service.types.js';
 
 /**
@@ -65,7 +64,7 @@ export class BackfillService {
       throw new CandleError(`period ${period} is not watched for ${id}`);
     }
 
-    const source = this.sourceForType(symbolType(id));
+    const source = sourceForType(this.sources, symbolType(id));
     const fetched = await source.fetchCandles(id, period, range);
 
     let saved = 0;
@@ -110,18 +109,5 @@ export class BackfillService {
       return { candles, nextCursor: rows[limit]?.time ?? null };
     }
     return { candles: rows, nextCursor: null };
-  }
-
-  /**
-   * Resolve the source that serves a given asset type.
-   *
-   * @throws {@link SymbolError} when no registered source serves the type.
-   */
-  private sourceForType(type: SymbolType): MarketDataSource {
-    const source = this.sources.find((candidate) => candidate.types.includes(type));
-    if (!source) {
-      throw new SymbolError(`no market-data source for type: ${type}`);
-    }
-    return source;
   }
 }
