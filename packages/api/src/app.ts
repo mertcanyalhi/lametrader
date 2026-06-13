@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
@@ -18,6 +19,14 @@ import { configController } from './controllers/config.controller.js';
 import { symbolsController } from './controllers/symbols.controller.js';
 
 /**
+ * The API's own package version, read from its `package.json` so the OpenAPI
+ * document reports the real release rather than a hard-coded literal that drifts.
+ */
+const { version: API_VERSION } = createRequire(import.meta.url)('../package.json') as {
+  version: string;
+};
+
+/**
  * Build the REST API over the application use-cases.
  *
  * Wires OpenAPI docs (`/docs`), the config + symbols controllers, and one error
@@ -33,7 +42,7 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
 
   app.register(fastifySwagger, {
     openapi: {
-      info: { title: 'lametrader API', version: '0.0.0' },
+      info: { title: 'lametrader API', version: API_VERSION },
       tags: [
         { name: 'config', description: 'Global configuration' },
         { name: 'symbols', description: 'Symbol discovery and watchlist' },

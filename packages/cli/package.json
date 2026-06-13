@@ -13,7 +13,7 @@
     "start": "node dist/bin.js"
   },
   "dependencies": {
-    "@lametrader/core": "0.4.0",
-    "@lametrader/engine": "0.4.0"
+    "@lametrader/core": "0.0.0",
+    "@lametrader/engine": "0.0.0"
   }
 }

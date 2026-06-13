@@ -33,4 +33,12 @@ describe('app', () => {
     expect(spec.openapi).toBeTruthy();
     expect(Object.keys(spec.paths)).toContain('/config');
   });
+
+  it('reports a real semver version in the OpenAPI document (not a stale literal)', async () => {
+    const app = buildApp();
+    await app.ready();
+    const spec = app.swagger();
+    expect(spec.info.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(spec.info.version).not.toBe('0.0.0');
+  });
 });

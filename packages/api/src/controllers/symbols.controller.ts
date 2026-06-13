@@ -87,10 +87,17 @@ export function symbolsController(service: SymbolService) {
 
     app.delete(
       '/symbols/:id',
-      { schema: { tags: ['symbols'], summary: 'Remove a symbol', params: SymbolIdParamSchema } },
+      {
+        schema: {
+          tags: ['symbols'],
+          summary: 'Remove a symbol',
+          params: SymbolIdParamSchema,
+          response: { 204: Type.Null(), 400: ErrorSchema },
+        },
+      },
       async (request, reply) => {
         await service.remove(request.params.id);
-        return reply.code(204).send();
+        return reply.code(204).send(null);
       },
     );
   };
