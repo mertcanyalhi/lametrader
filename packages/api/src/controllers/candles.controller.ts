@@ -1,11 +1,12 @@
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
-import { parseBackfillRange } from '@lametrader/core';
-import type { BackfillService } from '@lametrader/engine';
+import { parseBackfillRange, SymbolNotFoundError } from '@lametrader/core';
+import type { BackfillJobService, BackfillService } from '@lametrader/engine';
 import type { FastifyInstance } from 'fastify';
-import type { BackfillProgressHub } from '../backfill-progress-hub.js';
+import type { BackfillJobHub } from '../backfill-job-hub.js';
 import {
   BackfillBodySchema,
-  BackfillSummarySchema,
+  BackfillJobParamSchema,
+  BackfillJobSchema,
   CandlePageSchema,
   CandlesQuerySchema,
 } from '../schemas/candle.schema.js';
@@ -13,20 +14,27 @@ import { ErrorSchema } from '../schemas/common.schema.js';
 import { SymbolIdParamSchema } from '../schemas/symbol.schema.js';
 
 /**
- * Register the RESTful candle/backfill routes against a {@link BackfillService}.
+ * Register the RESTful candle/backfill routes.
  *
- * - `POST /symbols/:id/backfill` triggers a backfill and returns its summary;
- *   per-chunk progress is published to `hub` (and to any WebSocket subscriber).
  * - `GET /symbols/:id/candles` reads stored candles back.
- * - `GET /symbols/:id/backfill/progress` (WebSocket) streams progress frames.
+ * - `POST /symbols/:id/backfill` starts a backfill **job** and returns 202 with
+ *   the running job (validation errors stay synchronous: 404/400/409).
+ * - `GET /symbols/:id/backfill/jobs/:jobId` returns a job's current state.
+ * - `GET /symbols/:id/backfill/jobs/:jobId/progress` (WebSocket) streams the job's
+ *   snapshots, keyed by job id.
  *
  * Domain failures are mapped by the app's error handler (`SymbolNotFoundError`
- * → 404, `CandleError` → 400).
+ * → 404, `CandleError` → 400, `BackfillConflictError` → 409).
  *
- * @param service - the backfill use-case to drive.
- * @param hub - the progress pub/sub shared with the WebSocket route.
+ * @param candles - the (synchronous) backfill use-case, for reads.
+ * @param jobs - the asynchronous backfill-job use-case.
+ * @param hub - the per-job progress pub/sub shared with the WebSocket route.
  */
-export function candlesController(service: BackfillService, hub: BackfillProgressHub) {
+export function candlesController(
+  candles: BackfillService,
+  jobs: BackfillJobService,
+  hub: BackfillJobHub,
+) {
   return async (instance: FastifyInstance): Promise<void> => {
     const app = instance.withTypeProvider<TypeBoxTypeProvider>();
 
@@ -43,7 +51,7 @@ export function candlesController(service: BackfillService, hub: BackfillProgres
       },
       async (request) => {
         const { period, from, to, limit } = request.query;
-        return service.read(request.params.id, period, {
+        return candles.read(request.params.id, period, {
           from: from ?? 0,
           to: to ?? Number.MAX_SAFE_INTEGER,
           limit,
@@ -56,35 +64,62 @@ export function candlesController(service: BackfillService, hub: BackfillProgres
       {
         schema: {
           tags: ['candles'],
-          summary: 'Backfill historical candles',
+          summary: 'Start a backfill job',
           params: SymbolIdParamSchema,
           body: BackfillBodySchema,
           response: {
-            200: BackfillSummarySchema,
+            202: BackfillJobSchema,
             400: ErrorSchema,
             404: ErrorSchema,
-            502: ErrorSchema,
+            409: ErrorSchema,
           },
         },
       },
-      async (request) => {
+      async (request, reply) => {
         const { id } = request.params;
         const { period, from, to } = request.body;
         const range = parseBackfillRange(
           from !== undefined || to !== undefined ? { from, to } : undefined,
         );
-        const summary = await service.backfill(id, period, range, (progress) =>
-          hub.progress(id, progress),
-        );
-        hub.summary(id, summary);
-        return summary;
+        const job = await jobs.start(id, period, range);
+        reply.code(202);
+        return job;
       },
     );
 
-    app.get('/symbols/:id/backfill/progress', { websocket: true }, (socket, request) => {
-      const { id } = request.params as { id: string };
-      const unsubscribe = hub.subscribe(id, (frame) => socket.send(JSON.stringify(frame)));
-      socket.on('close', unsubscribe);
-    });
+    app.get(
+      '/symbols/:id/backfill/jobs/:jobId',
+      {
+        schema: {
+          tags: ['candles'],
+          summary: 'Get a backfill job',
+          params: BackfillJobParamSchema,
+          response: { 200: BackfillJobSchema, 404: ErrorSchema },
+        },
+      },
+      async (request) => {
+        const { id, jobId } = request.params;
+        const job = jobs.get(jobId);
+        if (!job || job.symbolId !== id) {
+          throw new SymbolNotFoundError(`backfill job not found: ${jobId}`);
+        }
+        return job;
+      },
+    );
+
+    app.get(
+      '/symbols/:id/backfill/jobs/:jobId/progress',
+      { websocket: true },
+      (socket, request) => {
+        const { jobId } = request.params as { jobId: string };
+        // Subscribe first, then send the current snapshot — so a terminal update
+        // firing in between is delivered (at worst as a duplicate frame) rather
+        // than missed. Intermediate progress is not replayed.
+        const unsubscribe = hub.subscribe(jobId, (job) => socket.send(JSON.stringify(job)));
+        socket.on('close', unsubscribe);
+        const current = jobs.get(jobId);
+        if (current) socket.send(JSON.stringify(current));
+      },
+    );
   };
 }

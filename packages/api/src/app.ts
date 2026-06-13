@@ -4,6 +4,7 @@ import fastifySwaggerUi from '@fastify/swagger-ui';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import fastifyWebsocket from '@fastify/websocket';
 import {
+  BackfillConflictError,
   CandleError,
   ConfigError,
   MarketDataError,
@@ -11,9 +12,10 @@ import {
   SymbolError,
   SymbolNotFoundError,
 } from '@lametrader/core';
+import { BackfillJobService } from '@lametrader/engine';
 import Fastify, { type FastifyError } from 'fastify';
 import type { AppDependencies, AppOptions } from './app.types.js';
-import { BackfillProgressHub } from './backfill-progress-hub.js';
+import { BackfillJobHub } from './backfill-job-hub.js';
 import { candlesController } from './controllers/candles.controller.js';
 import { configController } from './controllers/config.controller.js';
 import { symbolsController } from './controllers/symbols.controller.js';
@@ -58,7 +60,7 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
       reply.code(404).send({ error: error.message });
       return;
     }
-    if (error instanceof SymbolConflictError) {
+    if (error instanceof SymbolConflictError || error instanceof BackfillConflictError) {
       reply.code(409).send({ error: error.message });
       return;
     }
@@ -88,7 +90,13 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
 
   app.register(configController(deps.config));
   app.register(symbolsController(deps.symbols));
-  app.register(candlesController(deps.backfill, new BackfillProgressHub()));
+  // Wire the async backfill-job use-case to a per-job hub: the application pushes
+  // job updates via onUpdate, the hub fans them to WebSocket subscribers.
+  const backfillHub = new BackfillJobHub();
+  const backfillJobs = new BackfillJobService(deps.backfill, (job) =>
+    backfillHub.publish(job.id, job),
+  );
+  app.register(candlesController(deps.backfill, backfillJobs, backfillHub));
 
   return app;
 }

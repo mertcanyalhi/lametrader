@@ -26,6 +26,21 @@ export class CandleError extends Error {
 }
 
 /**
+ * Raised when a backfill is requested for a symbol+period that already has a
+ * running backfill job. Distinct type so driving adapters map it to HTTP 409
+ * (the resource is busy) rather than a generic error.
+ */
+export class BackfillConflictError extends Error {
+  /**
+   * @param message - the human-readable conflict reason.
+   */
+  constructor(message: string) {
+    super(message);
+    this.name = 'BackfillConflictError';
+  }
+}
+
+/**
  * Validate and normalize an optional backfill-range input into a
  * {@link BackfillRange}, or `undefined` to mean "the provider's deepest history".
  *

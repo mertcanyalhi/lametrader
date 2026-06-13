@@ -3,6 +3,13 @@
  *
  * Orchestrates use-cases by wiring `core` ports to driven adapters.
  */
+
+export {
+  type BackfillJob,
+  type BackfillJobListener,
+  BackfillJobStatus,
+} from './candles/backfill-job.types.js';
+export { BackfillJobService } from './candles/backfill-job-service.js';
 export { BackfillService } from './candles/backfill-service.js';
 export type {
   BackfillProgress,

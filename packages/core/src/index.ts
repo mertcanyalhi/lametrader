@@ -5,6 +5,7 @@
  */
 
 export {
+  BackfillConflictError,
   CandleError,
   DEFAULT_CANDLE_LIMIT,
   MAX_CANDLE_LIMIT,

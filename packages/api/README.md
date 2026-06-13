@@ -126,18 +126,25 @@ available history. The `period` must be one of the symbol's watched periods.
 
 | Method | Path                              | Body                    | Description                                  |
 | ------ | --------------------------------- | ----------------------- | -------------------------------------------- |
-| `POST` | `/symbols/{id}/backfill`          | `{ period, from?, to? }` | Backfill candles; returns the summary. 200 / 400 / 404. |
+| `POST` | `/symbols/{id}/backfill`          | `{ period, from?, to? }` | Start a backfill **job**; returns **202** with the running job. 202 / 400 / 404 / 409. |
+| `GET`  | `/symbols/{id}/backfill/jobs/{jobId}` | —                   | Get a backfill job's current state. 200 / 404. |
 | `GET`  | `/symbols/{id}/candles?period=&from=&to=&limit=` | —      | Read a page of stored candles (keyset-paginated by time). 200 / 400. |
-| `WS`   | `/symbols/{id}/backfill/progress` | —                       | Stream backfill progress frames (see below). |
+| `WS`   | `/symbols/{id}/backfill/jobs/{jobId}/progress` | —          | Stream a job's snapshots (see below). |
 
-The backfill summary is `{ id, period, from, to, fetched, saved, complete }`
-(`from`/`to` are the first/last persisted candle time, or `null` when nothing was
-fetched; `complete` is `false` when the provider capped the fetch and more history
-may exist). Errors
-use the uniform `{ "error": "<reason>" }` body — **400** for an invalid range or a
-period the symbol does not watch, **404** when the symbol is not on the watchlist,
-**502** when the upstream market-data provider fails (the body carries the provider's
-reason).
+A backfill runs **asynchronously**: the POST validates and returns 202 with a job
+`{ id, symbolId, period, status, progress, summary, error }` (`status` is
+`running` | `succeeded` | `failed`; `progress` is `{ saved, total }` once a chunk
+lands; `summary` is set on success; `error` on failure). Poll `GET …/jobs/{jobId}`
+or stream the WebSocket for updates.
+
+The summary is `{ id, period, from, to, fetched, saved, complete }` (`from`/`to`
+are the first/last persisted candle time, or `null` when nothing was fetched;
+`complete` is `false` when the provider capped the fetch and more history may
+exist). Errors use the uniform `{ "error": "<reason>" }` body — **400** for an
+invalid range or a period the symbol does not watch, **404** when the symbol is not
+on the watchlist, **409** when a backfill for that symbol+period is already running.
+An upstream provider failure does not fail the POST: the job goes `failed` with the
+provider's reason in `error`.
 
 `GET …/candles` returns one **keyset-paginated** page: `{ candles, nextCursor }`, where
 `candles` is ascending by `time` and `nextCursor` is the `time` to pass as the next
@@ -146,17 +153,20 @@ the max → 400). Page forward by re-issuing with `from = nextCursor`.
 
 ### Progress over WebSocket
 
-Subscribe to `/symbols/{id}/backfill/progress` *before* triggering a backfill; while
-one runs, the socket receives JSON frames:
-
-- `{ "type": "progress", "saved": <n>, "total": <n> }` — after each persisted chunk.
-- `{ "type": "summary", "summary": { … } }` — once, when the backfill completes.
+Connect to `/symbols/{id}/backfill/jobs/{jobId}/progress` with the `jobId` from the
+202 response. The socket immediately receives the job's current snapshot, then a
+frame on each state change (progress tick and the terminal `succeeded`/`failed`),
+each the full job object. Frames are keyed by job id, so concurrent jobs never
+interleave; intermediate progress is not replayed.
 
 ### Examples
 
 ```sh
+# start a job; note the returned job id
 curl -X POST http://localhost:3000/symbols/crypto:BTCUSDT/backfill \
   -H 'content-type: application/json' -d '{ "period": "1h" }'
+# poll the job
+curl 'http://localhost:3000/symbols/crypto:BTCUSDT/backfill/jobs/<jobId>'
 curl 'http://localhost:3000/symbols/crypto:BTCUSDT/candles?period=1h&limit=500'
 # page forward using the returned nextCursor
 curl 'http://localhost:3000/symbols/crypto:BTCUSDT/candles?period=1h&from=<nextCursor>&limit=500'

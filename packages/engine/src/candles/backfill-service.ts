@@ -50,12 +50,16 @@ export class BackfillService {
    * @throws {@link SymbolNotFoundError} when the symbol is not watched.
    * @throws {@link CandleError} when `period` is not among the symbol's periods.
    */
-  async backfill(
-    id: string,
-    period: Period,
-    range?: BackfillRange,
-    onProgress?: BackfillProgressListener,
-  ): Promise<BackfillSummary> {
+  /**
+   * Validate that `id` is watched and `period` is one of its watched periods —
+   * the synchronous preconditions of a backfill. Extracted so an async caller
+   * (the job service) can surface a not-watched/bad-period as a client error
+   * before starting background work; `backfill` calls it too.
+   *
+   * @throws {@link SymbolNotFoundError} when the symbol is not watched.
+   * @throws {@link CandleError} when `period` is not among the symbol's periods.
+   */
+  async assertBackfillable(id: string, period: Period): Promise<void> {
     const watched = await this.watchlist.get(id);
     if (!watched) {
       throw new SymbolNotFoundError(`symbol not watched: ${id}`);
@@ -63,6 +67,15 @@ export class BackfillService {
     if (!watched.periods.includes(period)) {
       throw new CandleError(`period ${period} is not watched for ${id}`);
     }
+  }
+
+  async backfill(
+    id: string,
+    period: Period,
+    range?: BackfillRange,
+    onProgress?: BackfillProgressListener,
+  ): Promise<BackfillSummary> {
+    await this.assertBackfillable(id, period);
 
     const source = sourceForType(this.sources, symbolType(id));
     const { candles: fetched, complete } = await source.fetchCandles(id, period, range);
