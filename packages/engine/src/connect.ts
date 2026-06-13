@@ -38,6 +38,7 @@ export async function connectServices(uri: string): Promise<ConnectedServices> {
   const sources = defaultMarketDataSources();
   const watchlist = new MongoWatchlistRepository(db);
   const candleRepo = new MongoCandleRepository(db);
+  await candleRepo.ensureIndexes();
   const config = new ConfigService(new MongoConfigRepository(db));
   const symbols = new SymbolService(sources, watchlist, config, candleRepo);
   const backfill = new BackfillService(sources, candleRepo, watchlist);

@@ -27,6 +27,18 @@ export class MongoCandleRepository implements CandleRepository {
     return this.db.collection<CandleDocument>('candles');
   }
 
+  /**
+   * Create the secondary index the reads need, and return. The compound `_id`'s
+   * automatic index keys the whole embedded document, so it does not serve the
+   * dotted-subfield predicates `range`/`latest`/`deleteSymbol` use — without this
+   * they collection-scan. The single index `{ _id.s, _id.p, _id.t }` covers all
+   * three (equality prefix + `t` range/sort). Idempotent: Mongo no-ops a
+   * createIndex for an index that already exists.
+   */
+  async ensureIndexes(): Promise<void> {
+    await this.collection.createIndex({ '_id.s': 1, '_id.p': 1, '_id.t': 1 });
+  }
+
   async save(symbolId: string, period: Period, candles: Candle[]): Promise<void> {
     if (candles.length === 0) return;
     await this.collection.bulkWrite(

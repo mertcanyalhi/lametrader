@@ -1,7 +1,7 @@
 import { MongoCandleRepository } from '@lametrader/engine';
 import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import { type Db, MongoClient } from 'mongodb';
-import { afterAll, beforeAll, describe } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runCandleRepositoryContract } from '../../src/candles/testing/candle-repository.contract.js';
 
 /**
@@ -30,6 +30,18 @@ describe('candle persistence (e2e)', () => {
   // The contract expects a fresh, empty store per case — clear the collection.
   runCandleRepositoryContract(async () => {
     await db.collection('candles').deleteMany({});
-    return new MongoCandleRepository(db);
+    const repo = new MongoCandleRepository(db);
+    await repo.ensureIndexes();
+    return repo;
+  });
+
+  it('ensureIndexes creates a compound index over (_id.s, _id.p, _id.t) and is idempotent', async () => {
+    const repo = new MongoCandleRepository(db);
+    await repo.ensureIndexes();
+    await repo.ensureIndexes();
+
+    const indexes = await db.collection('candles').indexes();
+    const keys = indexes.map((index) => index.key);
+    expect(keys).toContainEqual({ '_id.s': 1, '_id.p': 1, '_id.t': 1 });
   });
 });
