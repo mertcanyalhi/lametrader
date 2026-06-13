@@ -1,9 +1,12 @@
 import type { BackfillService, ConfigService, SymbolService } from '@lametrader/engine';
+import type { CandleStreamHub } from './candle-stream-hub.js';
 
 /**
- * The use-cases the REST app drives. All are required: the app exposes the same
- * routes however it is constructed (tests build the missing services from
- * in-memory adapters — see `testing/app-deps.ts`).
+ * The use-cases the REST app drives. `config` is always present; `symbols`,
+ * `backfill`, and `candleStream` are optional so an app can be composed with just
+ * the surface it needs — each controller is registered only when its dependency is
+ * given. The entry point provides all of them; tests use `buildAppDeps`
+ * (`testing/app-deps.ts`) to fill in-memory defaults for a focused app.
  */
 export interface AppDependencies {
   /**
@@ -13,11 +16,16 @@ export interface AppDependencies {
   /**
    * The symbols use-case (discovery / watchlist).
    */
-  symbols: SymbolService;
+  symbols?: SymbolService;
   /**
    * The backfill use-case (historical candles).
    */
-  backfill: BackfillService;
+  backfill?: BackfillService;
+  /**
+   * The live-candle stream hub fed by the polling loop. When present, the
+   * multiplexed `GET /stream` WebSocket route is registered.
+   */
+  candleStream?: CandleStreamHub;
 }
 
 /**

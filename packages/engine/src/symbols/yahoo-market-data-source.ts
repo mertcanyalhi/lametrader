@@ -37,6 +37,47 @@ const YAHOO_INTERVAL: Partial<Record<Period, '1m' | '5m' | '15m' | '30m' | '1h' 
   [Period.OneWeek]: '1wk',
 };
 
+/** One day in milliseconds. */
+const DAY_MS = 86_400_000;
+
+/**
+ * Maximum lookback Yahoo allows for an **intraday** interval with no explicit
+ * range. `new Date(0)` is rejected for these (only daily/weekly accept full
+ * history), so a no-range intraday fetch must start `now - this`.
+ */
+const YAHOO_MAX_LOOKBACK_MS: Partial<Record<Period, number>> = {
+  [Period.OneMinute]: 7 * DAY_MS,
+  [Period.FiveMinutes]: 60 * DAY_MS,
+  [Period.FifteenMinutes]: 60 * DAY_MS,
+  [Period.ThirtyMinutes]: 60 * DAY_MS,
+  [Period.OneHour]: 730 * DAY_MS,
+};
+
+/**
+ * Resolve the `period1`/`period2` dates for a Yahoo chart request. With an
+ * explicit `range`, uses its bounds. With no range, intraday intervals start a
+ * bounded lookback before `now` (Yahoo rejects `new Date(0)` for them); daily and
+ * weekly start at epoch 0 for the provider's deepest history.
+ *
+ * @param period - the period being fetched.
+ * @param range - the explicit `[from, to)` window, or `undefined` for max history.
+ * @param now - current epoch ms (injectable for tests; defaults to `Date.now`).
+ */
+export function resolveYahooChartRange(
+  period: Period,
+  range: BackfillRange | undefined,
+  now: number = Date.now(),
+): { period1: Date; period2: Date } {
+  if (range) {
+    return { period1: new Date(range.from), period2: new Date(range.to) };
+  }
+  const lookback = YAHOO_MAX_LOOKBACK_MS[period];
+  return {
+    period1: lookback ? new Date(now - lookback) : new Date(0),
+    period2: new Date(now),
+  };
+}
+
 /**
  * {@link MarketDataSource} for stocks, funds, and FX, backed by Yahoo Finance
  * (via the unofficial `yahoo-finance2`). FX ids map to Yahoo's `=X` tickers.
@@ -127,11 +168,8 @@ export class YahooMarketDataSource implements MarketDataSource {
     const ticker = id.slice(`${type}:`.length);
     const native = type === SymbolType.Fx ? `${ticker}=X` : ticker;
     try {
-      const chart = await this.yf.chart(native, {
-        period1: range ? new Date(range.from) : new Date(0),
-        period2: range ? new Date(range.to) : new Date(),
-        interval,
-      });
+      const { period1, period2 } = resolveYahooChartRange(period, range);
+      const chart = await this.yf.chart(native, { period1, period2, interval });
       const out: Candle[] = [];
       for (const bar of chart.quotes as YahooBar[]) {
         const candle = toCandle(type, bar);

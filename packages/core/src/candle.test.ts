@@ -5,7 +5,9 @@ import {
   MAX_CANDLE_LIMIT,
   parseBackfillRange,
   parseCandleLimit,
+  periodMillis,
 } from './candle.js';
+import { Period } from './config.types.js';
 
 describe('parseBackfillRange', () => {
   it('returns the range for a valid finite from < to', () => {
@@ -42,5 +44,13 @@ describe('parseCandleLimit', () => {
 
   it('throws CandleError above MAX_CANDLE_LIMIT (1000)', () => {
     expect(() => parseCandleLimit(MAX_CANDLE_LIMIT + 1)).toThrow(CandleError);
+  });
+});
+
+describe('periodMillis', () => {
+  it('returns the fixed duration of each period in milliseconds', () => {
+    expect(periodMillis(Period.OneMinute)).toBe(60_000);
+    expect(periodMillis(Period.OneDay)).toBe(86_400_000);
+    expect(periodMillis(Period.OneWeek)).toBe(604_800_000);
   });
 });

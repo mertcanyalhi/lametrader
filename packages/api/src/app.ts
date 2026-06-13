@@ -18,6 +18,7 @@ import type { AppDependencies, AppOptions } from './app.types.js';
 import { BackfillJobHub } from './backfill-job-hub.js';
 import { candlesController } from './controllers/candles.controller.js';
 import { configController } from './controllers/config.controller.js';
+import { streamController } from './controllers/stream.controller.js';
 import { symbolsController } from './controllers/symbols.controller.js';
 
 /**
@@ -89,14 +90,21 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
   });
 
   app.register(configController(deps.config));
-  app.register(symbolsController(deps.symbols));
-  // Wire the async backfill-job use-case to a per-job hub: the application pushes
-  // job updates via onUpdate, the hub fans them to WebSocket subscribers.
-  const backfillHub = new BackfillJobHub();
-  const backfillJobs = new BackfillJobService(deps.backfill, (job) =>
-    backfillHub.publish(job.id, job),
-  );
-  app.register(candlesController(deps.backfill, backfillJobs, backfillHub));
+  if (deps.symbols) {
+    app.register(symbolsController(deps.symbols));
+  }
+  if (deps.backfill) {
+    // Wire the async backfill-job use-case to a per-job hub: the application
+    // pushes job updates via onUpdate, the hub fans them to WebSocket subscribers.
+    const backfillHub = new BackfillJobHub();
+    const backfillJobs = new BackfillJobService(deps.backfill, (job) =>
+      backfillHub.publish(job.id, job),
+    );
+    app.register(candlesController(deps.backfill, backfillJobs, backfillHub));
+  }
+  if (deps.candleStream) {
+    app.register(streamController(deps.candleStream));
+  }
 
   return app;
 }

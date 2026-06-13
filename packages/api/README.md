@@ -14,10 +14,15 @@ npm run api        # serve on PORT (default 3000)
 
 Resolved from the environment (with defaults) via the engine settings layer:
 
-| Variable      | Default                                                                       |
-| ------------- | ----------------------------------------------------------------------------- |
-| `MONGODB_URI` | `mongodb://lametrader:lametrader@localhost:27017/lametrader?authSource=admin` |
-| `PORT`        | `3000`                                                                        |
+| Variable         | Default                                                                       |
+| ---------------- | ----------------------------------------------------------------------------- |
+| `MONGODB_URI`    | `mongodb://lametrader:lametrader@localhost:27017/lametrader?authSource=admin` |
+| `PORT`           | `3000`                                                                        |
+| `POLL_INTERVALS` | per-period poll cadence (ms) — see [Live candle stream](#live-candle-stream)  |
+
+On startup the API begins **continuously polling** new candles for every watched
+symbol+period and streaming them over WebSocket (see below). Polling resumes after a
+restart from the latest stored candle, so a backfill should run first.
 
 ## API documentation
 
@@ -171,3 +176,36 @@ curl 'http://localhost:3000/symbols/crypto:BTCUSDT/candles?period=1h&limit=500'
 # page forward using the returned nextCursor
 curl 'http://localhost:3000/symbols/crypto:BTCUSDT/candles?period=1h&from=<nextCursor>&limit=500'
 ```
+
+## Live candle stream
+
+Once the service is running it continuously polls each watched symbol+period and
+pushes new candles to clients over one **multiplexed** WebSocket — a single socket
+can watch many symbols.
+
+| Method | Path      | Description                                            |
+| ------ | --------- | ----------------------------------------------------- |
+| `WS`   | `/stream` | Subscribe/unsubscribe to symbols; receive candle frames. |
+
+After connecting, send control messages:
+
+- `{ "action": "subscribe", "id": "crypto:BTCUSDT" }` — start receiving that symbol.
+- `{ "action": "unsubscribe", "id": "crypto:BTCUSDT" }` — stop.
+
+For each polled candle of a subscribed symbol the socket receives a frame:
+
+```json
+{ "id": "crypto:BTCUSDT", "period": "1h", "candle": { … }, "final": false }
+```
+
+`final` is `true` once the bar has closed and `false` for the still-forming bar
+(re-emitted on later polls as it updates). The stream is live-only — it does not
+replay history; backfill + `GET …/candles` cover that.
+
+### Poll cadence
+
+Each period is polled on its own interval (short bars more often than long ones),
+with random jitter on top to spread provider load. Defaults (ms): `1m` 5 000, `5m`
+30 000, `15m` 60 000, `30m` 120 000, `1h` 300 000, `4h` 900 000, `1d` 1 800 000,
+`1w` 3 600 000. Override any subset with `POLL_INTERVALS` as a JSON object, e.g.
+`POLL_INTERVALS='{"1m":10000,"5m":60000}'`.

@@ -10,13 +10,15 @@ import { runConfig } from './config.js';
 import { runSymbols } from './symbols.js';
 
 const [, , command, ...args] = process.argv;
-const { mongoUri } = loadSettings();
+const { mongoUri, pollIntervals } = loadSettings();
 
 if (command !== 'config' && command !== 'symbols' && command !== 'candles') {
   console.error(`unknown command: ${command ?? '(none)'}`);
   process.exitCode = 1;
 } else {
-  const { config, symbols, backfill, close } = await connectServices(mongoUri);
+  // One-shot CLI: build the services (the polling loop is never started) and
+  // dispatch. connectServices requires poll intervals even though we don't poll.
+  const { config, symbols, backfill, close } = await connectServices(mongoUri, { pollIntervals });
   try {
     switch (command) {
       case 'config':
