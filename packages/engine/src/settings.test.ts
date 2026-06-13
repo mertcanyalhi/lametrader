@@ -15,4 +15,13 @@ describe('loadSettings', () => {
       apiPort: 8080,
     });
   });
+
+  it('throws on a non-numeric PORT instead of yielding NaN', () => {
+    expect(() => loadSettings({ PORT: 'not-a-port' })).toThrowError(/PORT/);
+  });
+
+  it('throws on a non-positive or non-integer PORT', () => {
+    expect(() => loadSettings({ PORT: '0' })).toThrowError(/PORT/);
+    expect(() => loadSettings({ PORT: '3000.5' })).toThrowError(/PORT/);
+  });
 });
