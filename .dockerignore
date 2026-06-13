@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+**/dist
+.git
+.github
+coverage
+**/.vitest-cache
+**/.turbo
+**/*.log
+**/.DS_Store
+.env
+.env.*
+!**/.env.example

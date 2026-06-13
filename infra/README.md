@@ -4,23 +4,41 @@ Local development infrastructure, run via Docker Compose.
 
 ## Services
 
-| Service | Image | Port | Notes |
-| --- | --- | --- | --- |
-| `mongo` | `mongo:8` | `27017` | Primary datastore. Data persists in the `lametrader-mongo-data` volume. |
-| `mongo-express` | `mongo-express:1.0.2` | `8081` | Web admin UI. Opt-in via the `tools` profile. |
+| Service         | Image                   | Profile   | Port    | Notes                                                                       |
+| --------------- | ----------------------- | --------- | ------- | --------------------------------------------------------------------------- |
+| `mongo`         | `mongo:8`               | (default) | `27017` | Primary datastore. Data persists in the `lametrader-mongo-data` volume.     |
+| `mongo-express` | `mongo-express:1.0.2`   | `tools`   | `8081`  | Web admin UI.                                                               |
+| `api`           | built from `packages/api/Dockerfile` | `app` | `3000` | Fastify API. Wired to the `mongo` service over the compose network.      |
+| `web`           | built from `packages/web/Dockerfile` | `app` | `8080` | Vite build served by nginx, with `/api/*` reverse-proxied to `api:3000`.   |
 
 ## Usage
 
-From the repo root:
+Two modes from the repo root:
 
 ```bash
-npm run infra:up        # start MongoDB (detached)
-npm run infra:logs      # tail logs
-npm run infra:down      # stop containers (keeps data)
+# --- infra only (the TDD loop) -----------------------------------------------
+npm run infra:up        # MongoDB only, detached. Use with `npm run api:dev` etc.
+npm run infra:logs
+npm run infra:down      # stop (keeps data)
 npm run infra:reset     # stop AND delete the data volume
+
+# --- full stack (api + web + mongo) ------------------------------------------
+npm run app:up          # build images if needed + start everything
+npm run app:logs
+npm run app:down        # stop the stack
+npm run app:build       # rebuild images without starting
 ```
 
-Start the optional admin UI too:
+After `npm run app:up`:
+
+- Web UI: <http://localhost:8080>
+- API (direct): <http://localhost:3000> — Swagger UI at `/docs`
+- API (via the web's reverse proxy): <http://localhost:8080/api/> — same routes, stripped of the prefix (`/api/config` → api's `/config`)
+
+The reverse proxy lets the browser stay same-origin, so the SPA can fetch
+relative URLs (`fetch('/api/config')`) without any CORS configuration.
+
+Start the optional Mongo admin UI alongside either mode:
 
 ```bash
 docker compose -f infra/docker-compose.yml --profile tools up -d
