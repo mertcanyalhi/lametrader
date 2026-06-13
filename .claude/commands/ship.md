@@ -11,8 +11,8 @@ Prepare and make a clean commit for the current change.
    decision was made.
 3. Show `git status` and `git diff --stat`. Confirm the change is ONE logical concern;
    if it spans several, propose splitting into multiple commits.
-4. Bump the affected package's `version` (semver) when the change is user-visible/releasable —
-   patch for fixes, minor for features, major for breaking changes.
-5. Stage and make the commit(s) with a Conventional Commits message
+4. Stage and make the commit(s) with a Conventional Commits message
    (`feat|fix|refactor|test|docs|chore: ...`). Use `$ARGUMENTS` as the subject if
    provided. Reference the spec and any ADR in the body.
+
+Do NOT bump package `version`s here — versioning is handled separately by `/release`.
