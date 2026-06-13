@@ -65,7 +65,7 @@ export class BackfillService {
     }
 
     const source = sourceForType(this.sources, symbolType(id));
-    const fetched = await source.fetchCandles(id, period, range);
+    const { candles: fetched, complete } = await source.fetchCandles(id, period, range);
 
     let saved = 0;
     for (let i = 0; i < fetched.length; i += CHUNK_SIZE) {
@@ -84,6 +84,7 @@ export class BackfillService {
       to: last?.time ?? null,
       fetched: fetched.length,
       saved,
+      complete,
     };
   }
 

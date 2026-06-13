@@ -1,4 +1,4 @@
-import type { BackfillRange, Candle } from './candle.types.js';
+import type { BackfillRange, CandleBatch } from './candle.types.js';
 import type { Period } from './config.types.js';
 
 /**
@@ -63,9 +63,10 @@ export interface MarketDataSource {
   /**
    * Fetch OHLC candles for a canonical id at a {@link Period}, ascending by
    * `time` and typed for the source's asset class. With `range` omitted, returns
-   * the provider's deepest available history.
+   * the provider's deepest available history. The {@link CandleBatch} reports
+   * whether the result is complete or was capped by a provider-side limit.
    */
-  fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<Candle[]>;
+  fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<CandleBatch>;
 }
 
 /**

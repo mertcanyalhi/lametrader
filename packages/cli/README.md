@@ -91,7 +91,8 @@ deepest available history.
 
 - **`backfill <id> --period <p> [--from <ms> --to <ms>]`** — fetch and persist
   candles, streaming `progress: <saved>/<total>` lines, then echo the summary JSON
-  (`{ id, period, from, to, fetched, saved }`).
+  (`{ id, period, from, to, fetched, saved, complete }`; `complete` is `false` when
+  the provider capped the fetch and more history may exist).
 - **`list <id> --period <p> [--from <ms> --to <ms>] [--limit N]`** — print one page
   of stored candles as JSON: `{ candles, nextCursor }`. Candles are keyset-paginated
   by `time`; pass the returned `nextCursor` as the next `--from` to page forward.

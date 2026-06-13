@@ -1,5 +1,6 @@
 import {
   type BackfillRange,
+  type CandleBatch,
   CandleError,
   type CryptoCandle,
   type Instrument,
@@ -84,8 +85,8 @@ export class BinanceMarketDataSource implements MarketDataSource {
     return match ? toInstrument(match) : null;
   }
 
-  async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<CryptoCandle[]> {
-    if (symbolType(id) !== SymbolType.Crypto) return [];
+  async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<CandleBatch> {
+    if (symbolType(id) !== SymbolType.Crypto) return { candles: [], complete: true };
     const interval = BINANCE_INTERVAL[period];
     if (!interval) {
       throw new CandleError(`Binance does not support period ${period}`);
@@ -94,6 +95,8 @@ export class BinanceMarketDataSource implements MarketDataSource {
     const out: CryptoCandle[] = [];
     let startTime = range?.from ?? 0;
     const endTime = range?.to;
+    // True unless we stop at MAX_PAGES with more history still available.
+    let complete = true;
 
     try {
       for (let page = 0; page < MAX_PAGES; page += 1) {
@@ -103,12 +106,23 @@ export class BinanceMarketDataSource implements MarketDataSource {
           (endTime !== undefined ? `&endTime=${endTime}` : '');
         const rows = await fetchJson<BinanceKline[]>(url);
         if (rows.length === 0) break;
+        let reachedEnd = false;
         for (const row of rows) {
           const candle = toCandle(row);
-          if (endTime !== undefined && candle.time >= endTime) break;
+          if (endTime !== undefined && candle.time >= endTime) {
+            reachedEnd = true;
+            break;
+          }
           out.push(candle);
         }
-        if (rows.length < KLINES_LIMIT) break;
+        // Reached the requested upper bound, or the provider ran out of data.
+        if (reachedEnd || rows.length < KLINES_LIMIT) break;
+        // A full final page means more rows remain that we won't fetch — the
+        // result is truncated, so report it as not complete.
+        if (page === MAX_PAGES - 1) {
+          complete = false;
+          break;
+        }
         const lastOpen = rows[rows.length - 1]?.[0] ?? startTime;
         startTime = lastOpen + 1;
       }
@@ -118,7 +132,7 @@ export class BinanceMarketDataSource implements MarketDataSource {
         { cause },
       );
     }
-    return out;
+    return { candles: out, complete };
   }
 }
 

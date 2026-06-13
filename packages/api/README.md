@@ -130,8 +130,10 @@ available history. The `period` must be one of the symbol's watched periods.
 | `GET`  | `/symbols/{id}/candles?period=&from=&to=&limit=` | —      | Read a page of stored candles (keyset-paginated by time). 200 / 400. |
 | `WS`   | `/symbols/{id}/backfill/progress` | —                       | Stream backfill progress frames (see below). |
 
-The backfill summary is `{ id, period, from, to, fetched, saved }` (`from`/`to` are
-the first/last persisted candle time, or `null` when nothing was fetched). Errors
+The backfill summary is `{ id, period, from, to, fetched, saved, complete }`
+(`from`/`to` are the first/last persisted candle time, or `null` when nothing was
+fetched; `complete` is `false` when the provider capped the fetch and more history
+may exist). Errors
 use the uniform `{ "error": "<reason>" }` body — **400** for an invalid range or a
 period the symbol does not watch, **404** when the symbol is not on the watchlist,
 **502** when the upstream market-data provider fails (the body carries the provider's

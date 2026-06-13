@@ -1,6 +1,7 @@
 import {
   type BackfillRange,
   type Candle,
+  type CandleBatch,
   CandleError,
   type EquityCandle,
   type FxCandle,
@@ -111,9 +112,9 @@ export class YahooMarketDataSource implements MarketDataSource {
     }
   }
 
-  async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<Candle[]> {
+  async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<CandleBatch> {
     const type = symbolType(id);
-    if (!this.types.includes(type)) return [];
+    if (!this.types.includes(type)) return { candles: [], complete: true };
     const interval = YAHOO_INTERVAL[period];
     if (!interval) {
       throw new CandleError(`Yahoo does not support period ${period}`);
@@ -131,7 +132,9 @@ export class YahooMarketDataSource implements MarketDataSource {
         const candle = toCandle(type, bar);
         if (candle) out.push(candle);
       }
-      return out;
+      // Yahoo's chart returns the whole requested window in one response — no
+      // paging cap of ours applies, so the batch is always complete.
+      return { candles: out, complete: true };
     } catch (cause) {
       throw new MarketDataError(
         `Yahoo failed to fetch candles for ${id}: ${(cause as Error).message}`,

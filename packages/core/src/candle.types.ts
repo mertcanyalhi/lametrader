@@ -72,6 +72,24 @@ export interface BackfillRange {
 }
 
 /**
+ * The result of fetching candles from a {@link MarketDataSource}: the candles
+ * (ascending by `time`) and whether they are the **complete** set the provider
+ * holds for the request. `complete` is `false` when the adapter stopped at a
+ * provider-side safety cap (e.g. a keyless paging limit) and more history may
+ * exist — so a backfill can report that it was truncated rather than appearing
+ * to have fetched everything.
+ */
+export interface CandleBatch {
+  /** The fetched candles, ascending by `time`. */
+  candles: Candle[];
+  /**
+   * `true` when these are all the candles the provider holds for the request;
+   * `false` when fetching stopped at a provider-side cap (more may exist).
+   */
+  complete: boolean;
+}
+
+/**
  * One page of stored candles: the candles (ascending by `time`) plus the keyset
  * cursor — the `time` to pass as the next page's `from`, or `null` when this is
  * the last page.

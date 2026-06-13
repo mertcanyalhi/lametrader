@@ -84,6 +84,7 @@ describe('POST /symbols/:id/backfill', () => {
       to: 3000,
       fetched: 3,
       saved: 3,
+      complete: true,
     });
   });
 

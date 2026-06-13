@@ -1,6 +1,7 @@
 import type {
   BackfillRange,
   Candle,
+  CandleBatch,
   Instrument,
   MarketDataSource,
   Period,
@@ -70,10 +71,13 @@ export class InMemoryMarketDataSource implements MarketDataSource {
     return this.catalog.get(id) ?? null;
   }
 
-  async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<Candle[]> {
+  async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<CandleBatch> {
     const series = this.candles.get(seriesKey(id, period)) ?? [];
-    if (!range) return [...series];
-    return series.filter((candle) => candle.time >= range.from && candle.time < range.to);
+    const candles = range
+      ? series.filter((candle) => candle.time >= range.from && candle.time < range.to)
+      : [...series];
+    // The in-memory catalog has no provider cap — it always returns everything.
+    return { candles, complete: true };
   }
 }
 

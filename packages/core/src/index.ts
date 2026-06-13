@@ -15,6 +15,7 @@ export type {
   BackfillRange,
   BaseCandle,
   Candle,
+  CandleBatch,
   CandlePage,
   CandleRepository,
   CryptoCandle,

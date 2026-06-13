@@ -31,4 +31,9 @@ export interface BackfillSummary {
   fetched: number;
   /** Number of candles persisted. */
   saved: number;
+  /**
+   * `false` when the source stopped at a provider-side cap and more history may
+   * exist (the backfill was truncated, not a full fetch); `true` otherwise.
+   */
+  complete: boolean;
 }

@@ -119,6 +119,7 @@ describe('backfill API (e2e)', () => {
       to: 3000,
       fetched: 3,
       saved: 3,
+      complete: true,
     });
 
     await gotSummary;
@@ -127,7 +128,15 @@ describe('backfill API (e2e)', () => {
       { type: 'progress', saved: 3, total: 3 },
       {
         type: 'summary',
-        summary: { id: BTC.id, period: '1h', from: 1000, to: 3000, fetched: 3, saved: 3 },
+        summary: {
+          id: BTC.id,
+          period: '1h',
+          from: 1000,
+          to: 3000,
+          fetched: 3,
+          saved: 3,
+          complete: true,
+        },
       },
     ]);
 

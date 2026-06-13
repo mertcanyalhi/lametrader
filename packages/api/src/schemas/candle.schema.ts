@@ -48,6 +48,7 @@ export const BackfillSummarySchema = Type.Object(
     to: Type.Union([Type.Number(), Type.Null()]),
     fetched: Type.Number(),
     saved: Type.Number(),
+    complete: Type.Boolean(),
   },
   { $id: 'BackfillSummary', additionalProperties: false },
 );
