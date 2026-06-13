@@ -13,7 +13,7 @@ import {
   type WatchlistRepository,
 } from '@lametrader/core';
 import type { ConfigService } from '../config/config-service.js';
-import { sourceForType } from './source-registry.js';
+import { assertSourceSupportsPeriods, sourceForType } from './source-registry.js';
 
 /**
  * Application use-case for discovering, watching, and tuning symbols.
@@ -71,6 +71,7 @@ export class SymbolService {
     const supported = (await this.config.get()).periods;
     const resolved: Period[] =
       periods === undefined ? supported : parseSymbolPeriods(periods, supported);
+    assertSourceSupportsPeriods(source, resolved);
 
     const found = await source.lookup(id);
     if (!found) {
@@ -112,6 +113,7 @@ export class SymbolService {
       throw new SymbolNotFoundError(`symbol not watched: ${id}`);
     }
     const resolved = parseSymbolPeriods(periods, (await this.config.get()).periods);
+    assertSourceSupportsPeriods(sourceForType(this.sources, symbolType(id)), resolved);
     const updated: WatchedSymbol = { ...existing, periods: resolved };
     await this.watchlist.add(updated);
     return updated;

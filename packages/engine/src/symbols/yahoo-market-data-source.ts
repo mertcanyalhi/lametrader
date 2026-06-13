@@ -48,6 +48,11 @@ export class YahooMarketDataSource implements MarketDataSource {
   readonly types = [SymbolType.Stock, SymbolType.Fund, SymbolType.Fx];
 
   /**
+   * The periods Yahoo can fetch — the keys of {@link YAHOO_INTERVAL} (no 4h bar).
+   */
+  readonly periods = Object.keys(YAHOO_INTERVAL) as Period[];
+
+  /**
    * The `yahoo-finance2` client (v3 default export is a class).
    */
   private readonly yf = new YahooFinance({ suppressNotices: ['yahooSurvey', 'ripHistorical'] });

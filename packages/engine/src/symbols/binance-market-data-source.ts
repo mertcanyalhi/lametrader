@@ -64,6 +64,11 @@ export class BinanceMarketDataSource implements MarketDataSource {
    */
   readonly types = [SymbolType.Crypto];
 
+  /**
+   * The periods Binance can fetch — exactly the keys of {@link BINANCE_INTERVAL}.
+   */
+  readonly periods = Object.keys(BINANCE_INTERVAL) as Period[];
+
   async search(query: string): Promise<Instrument[]> {
     const info = await fetchJson<{ symbols: ExchangeSymbol[] }>(`${BASE}/api/v3/exchangeInfo`);
     const needle = query.toUpperCase();

@@ -1,4 +1,4 @@
-import { type MarketDataSource, SymbolError, type SymbolType } from '@lametrader/core';
+import { type MarketDataSource, type Period, SymbolError, type SymbolType } from '@lametrader/core';
 
 /**
  * Resolve the {@link MarketDataSource} that serves a given asset {@link SymbolType}
@@ -17,4 +17,20 @@ export function sourceForType(sources: MarketDataSource[], type: SymbolType): Ma
     throw new SymbolError(`no market-data source for type: ${type}`);
   }
   return source;
+}
+
+/**
+ * Assert that every period in `periods` is one the `source` can fetch. A symbol
+ * may only be watched at periods its owning source supports — Yahoo, for
+ * instance, has no 4h bar — so this guards `add`/`setPeriods` before persisting.
+ *
+ * @param source - the owning market-data source.
+ * @param periods - the periods to validate against the source's capability.
+ * @throws {@link SymbolError} when any period is not in `source.periods`.
+ */
+export function assertSourceSupportsPeriods(source: MarketDataSource, periods: Period[]): void {
+  const unsupported = periods.filter((period) => !source.periods.includes(period));
+  if (unsupported.length > 0) {
+    throw new SymbolError(`source does not support period(s): ${unsupported.join(', ')}`);
+  }
 }

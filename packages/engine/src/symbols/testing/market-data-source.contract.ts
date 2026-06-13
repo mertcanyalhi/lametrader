@@ -36,6 +36,12 @@ export function runMarketDataSourceContract(
     expect(results.every((symbol) => source.types.includes(symbol.type))).toBe(true);
   });
 
+  it('declares a non-empty set of supported periods including the probe period', async () => {
+    const source = await make();
+    expect(source.periods.length).toBeGreaterThan(0);
+    expect(source.periods).toContain(testCase.candlePeriod);
+  });
+
   it('lookup resolves an existing id (with an exchange) and returns null for a bogus one', async () => {
     const source = await make();
     const found = await source.lookup(testCase.knownId);

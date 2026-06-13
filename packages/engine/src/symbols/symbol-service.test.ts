@@ -27,6 +27,7 @@ class FakeSource implements MarketDataSource {
   constructor(
     readonly types: SymbolType[],
     private readonly catalog = new Map<string, Instrument>(),
+    readonly periods: Period[] = Object.values(Period),
   ) {}
 
   async lookup(id: string): Promise<Instrument | null> {
@@ -179,6 +180,20 @@ describe('SymbolService.add', () => {
     expect(await watchlist.list()).toEqual([]);
   });
 
+  it('throws SymbolError and persists nothing when the source cannot serve a period', async () => {
+    // Config enables 4h, but this source (like Yahoo) cannot fetch it.
+    const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]), [Period.OneHour]);
+    const watchlist = new FakeWatchlist();
+    const config = configService({
+      periods: [Period.OneHour, Period.FourHours],
+      defaultPeriod: Period.OneHour,
+    });
+    const service = new SymbolService([crypto], watchlist, config, new InMemoryCandleRepository());
+
+    await expect(service.add('crypto:BTCUSDT', ['4h'])).rejects.toThrow(SymbolError);
+    expect(await watchlist.list()).toEqual([]);
+  });
+
   it('throws SymbolError and persists nothing for a period not in the config', async () => {
     const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
     const watchlist = new FakeWatchlist();
@@ -267,8 +282,9 @@ describe('SymbolService watchlist management', () => {
   it('setPeriods updates a watched symbol and returns it', async () => {
     const watchlist = new FakeWatchlist();
     await watchlist.add({ ...BTC, periods: [Period.OneDay] });
+    const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]));
     const service = new SymbolService(
-      [],
+      [crypto],
       watchlist,
       configService(),
       new InMemoryCandleRepository(),
@@ -278,6 +294,21 @@ describe('SymbolService watchlist management', () => {
       ...BTC,
       periods: [Period.OneHour, Period.OneDay],
     });
+  });
+
+  it('setPeriods throws SymbolError and persists nothing when the source cannot serve a period', async () => {
+    const watchlist = new FakeWatchlist();
+    const existing: WatchedSymbol = { ...BTC, periods: [Period.OneHour] };
+    await watchlist.add(existing);
+    const crypto = new FakeSource([SymbolType.Crypto], new Map([[BTC.id, BTC]]), [Period.OneHour]);
+    const config = configService({
+      periods: [Period.OneHour, Period.FourHours],
+      defaultPeriod: Period.OneHour,
+    });
+    const service = new SymbolService([crypto], watchlist, config, new InMemoryCandleRepository());
+
+    await expect(service.setPeriods('crypto:BTCUSDT', ['4h'])).rejects.toThrow(SymbolError);
+    expect(await watchlist.list()).toEqual([existing]);
   });
 
   it('setPeriods throws SymbolNotFoundError when the id is not watched', async () => {

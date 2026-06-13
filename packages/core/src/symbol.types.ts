@@ -53,6 +53,11 @@ export interface MarketDataSource {
   /** The asset classes this source serves. */
   readonly types: SymbolType[];
   /**
+   * The {@link Period}s this source can fetch candles at. A symbol may only be
+   * watched at periods its owning source supports (e.g. Yahoo has no 4h bar).
+   */
+  readonly periods: Period[];
+  /**
    * Search the provider for symbols matching a free-text query.
    */
   search(query: string): Promise<Instrument[]>;

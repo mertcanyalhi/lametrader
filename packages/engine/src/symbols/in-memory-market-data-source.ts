@@ -1,11 +1,11 @@
-import type {
-  BackfillRange,
-  Candle,
-  CandleBatch,
-  Instrument,
-  MarketDataSource,
+import {
+  type BackfillRange,
+  type Candle,
+  type CandleBatch,
+  type Instrument,
+  type MarketDataSource,
   Period,
-  SymbolType,
+  type SymbolType,
 } from '@lametrader/core';
 
 /**
@@ -33,6 +33,11 @@ export class InMemoryMarketDataSource implements MarketDataSource {
   readonly types: SymbolType[];
 
   /**
+   * The periods this source can fetch (defaults to every {@link Period}).
+   */
+  readonly periods: Period[];
+
+  /**
    * Catalog keyed by canonical id.
    */
   private readonly catalog: Map<string, Instrument>;
@@ -46,10 +51,17 @@ export class InMemoryMarketDataSource implements MarketDataSource {
    * @param symbols - the catalog of symbols this source knows.
    * @param types - the served types (defaults to the distinct types in `symbols`).
    * @param candles - optional seeded OHLC series for `fetchCandles`.
+   * @param periods - the supported periods (defaults to every {@link Period}).
    */
-  constructor(symbols: Instrument[], types?: SymbolType[], candles: CandleSeed[] = []) {
+  constructor(
+    symbols: Instrument[],
+    types?: SymbolType[],
+    candles: CandleSeed[] = [],
+    periods: Period[] = Object.values(Period),
+  ) {
     this.catalog = new Map(symbols.map((symbol) => [symbol.id, symbol]));
     this.types = types ?? [...new Set(symbols.map((symbol) => symbol.type))];
+    this.periods = periods;
     this.candles = new Map(
       candles.map((seed) => [
         seriesKey(seed.id, seed.period),
