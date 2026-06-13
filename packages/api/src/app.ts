@@ -15,6 +15,7 @@ import type { AppDependencies, AppOptions } from './app.types.js';
 import { BackfillProgressHub } from './backfill-progress-hub.js';
 import { candlesController } from './controllers/candles.controller.js';
 import { configController } from './controllers/config.controller.js';
+import { streamController } from './controllers/stream.controller.js';
 import { symbolsController } from './controllers/symbols.controller.js';
 
 /**
@@ -83,6 +84,9 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
   }
   if (deps.backfill) {
     app.register(candlesController(deps.backfill, new BackfillProgressHub()));
+  }
+  if (deps.candleStream) {
+    app.register(streamController(deps.candleStream));
   }
 
   return app;

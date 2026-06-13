@@ -10,6 +10,7 @@ export {
   MAX_CANDLE_LIMIT,
   parseBackfillRange,
   parseCandleLimit,
+  periodMillis,
 } from './candle.js';
 export type {
   BackfillRange,

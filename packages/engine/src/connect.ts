@@ -1,6 +1,9 @@
+import type { Period } from '@lametrader/core';
 import { MongoClient } from 'mongodb';
 import { BackfillService } from './candles/backfill-service.js';
 import { MongoCandleRepository } from './candles/mongo-candle-repository.js';
+import { PollingService } from './candles/polling-service.js';
+import type { CandleListener } from './candles/polling-service.types.js';
 import { ConfigService } from './config/config-service.js';
 import { MongoConfigRepository } from './config/mongo-config-repository.js';
 import { BinanceMarketDataSource } from './symbols/binance-market-data-source.js';
@@ -9,18 +12,35 @@ import { SymbolService } from './symbols/symbol-service.js';
 import { YahooMarketDataSource } from './symbols/yahoo-market-data-source.js';
 
 /**
+ * Options for {@link connectServices}: the live-candle sink and per-period poll
+ * cadence the {@link PollingService} is built with.
+ */
+export interface ConnectOptions {
+  /** Where the polling loop emits each observed candle (defaults to a no-op). */
+  onCandle?: CandleListener;
+  /** Per-period poll cadence in ms (required to enable a useful polling loop). */
+  pollIntervals: Record<Period, number>;
+}
+
+/**
  * Composition helper for a driving adapter that needs the whole platform: one
- * MongoDB connection wired into both the {@link ConfigService} and the
- * {@link SymbolService} (which share that config). Keeps the entry points free of
- * the Mongo driver and the concrete adapters.
+ * MongoDB connection wired into the {@link ConfigService}, {@link SymbolService}
+ * (which share that config), {@link BackfillService}, and the
+ * {@link PollingService} (continuous polling + live streaming). Keeps the entry
+ * points free of the Mongo driver and the concrete adapters.
  *
  * @param uri - the MongoDB connection string (database taken from the URI).
+ * @param options - the live-candle sink and poll cadence for the polling loop.
  * @returns the wired services plus a `close` to release the connection.
  */
-export async function connectServices(uri: string): Promise<{
+export async function connectServices(
+  uri: string,
+  options: ConnectOptions,
+): Promise<{
   config: ConfigService;
   symbols: SymbolService;
   backfill: BackfillService;
+  polling: PollingService;
   close: () => Promise<void>;
 }> {
   const client = new MongoClient(uri);
@@ -32,10 +52,15 @@ export async function connectServices(uri: string): Promise<{
   const config = new ConfigService(new MongoConfigRepository(db));
   const symbols = new SymbolService(sources, watchlist, config, candleRepo);
   const backfill = new BackfillService(sources, candleRepo, watchlist);
+  const polling = new PollingService(sources, candleRepo, watchlist, {
+    onCandle: options.onCandle ?? (() => {}),
+    intervals: options.pollIntervals,
+  });
   return {
     config,
     symbols,
     backfill,
+    polling,
     close: async () => {
       await client.close();
     },
