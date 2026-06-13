@@ -1,6 +1,6 @@
 import { createApp } from '@lametrader/api';
 import {
-  type Candle,
+  type CandleBatch,
   type CryptoCandle,
   type Instrument,
   MarketDataError,
@@ -183,19 +183,20 @@ describe('backfill API (e2e)', () => {
 
     const failing: MarketDataSource = {
       types: [SymbolType.Crypto],
+      periods: [Period.OneHour],
       search: async () => [],
       lookup: async () => BTC,
-      fetchCandles: async (): Promise<Candle[]> => {
+      fetchCandles: async (): Promise<CandleBatch> => {
         throw new MarketDataError('Binance failed to fetch candles for crypto:BTCUSDT: 418');
       },
     };
+    const failConfig = new ConfigService(new MongoConfigRepository(db));
+    const failCandles = new MongoCandleRepository(db);
+    const failWatchlist = new MongoWatchlistRepository(db);
     const failApp = createApp({
-      config: new ConfigService(new MongoConfigRepository(db)),
-      backfill: new BackfillService(
-        [failing],
-        new MongoCandleRepository(db),
-        new MongoWatchlistRepository(db),
-      ),
+      config: failConfig,
+      symbols: new SymbolService([failing], failWatchlist, failConfig, failCandles),
+      backfill: new BackfillService([failing], failCandles, failWatchlist),
     });
 
     const res = await failApp.inject({

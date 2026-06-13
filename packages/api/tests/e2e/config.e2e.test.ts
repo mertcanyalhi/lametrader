@@ -45,7 +45,11 @@ describe('config API (e2e)', () => {
     expect(put.statusCode).toBe(200);
 
     const second = await connectServices(uri);
-    const fresh = createApp({ config: second.config });
+    const fresh = createApp({
+      config: second.config,
+      symbols: second.symbols,
+      backfill: second.backfill,
+    });
     const get = await fresh.inject({ method: 'GET', url: '/config' });
     expect(get.json()).toEqual({ periods: ['1h', '4h', '1d'], defaultPeriod: '4h' });
     await fresh.close();

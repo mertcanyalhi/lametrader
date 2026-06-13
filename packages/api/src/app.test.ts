@@ -2,6 +2,7 @@ import type { Config, ConfigRepository } from '@lametrader/core';
 import { ConfigService } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 import { createApp } from './app';
+import { buildAppDeps } from './testing/app-deps';
 
 /**
  * App backed by a real `ConfigService` over an in-memory repository, for testing
@@ -15,7 +16,7 @@ function buildApp() {
       stored = config;
     },
   };
-  return createApp({ config: new ConfigService(repo) });
+  return createApp(buildAppDeps({ config: new ConfigService(repo) }));
 }
 
 describe('app', () => {

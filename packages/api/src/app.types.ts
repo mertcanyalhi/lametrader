@@ -1,8 +1,9 @@
 import type { BackfillService, ConfigService, SymbolService } from '@lametrader/engine';
 
 /**
- * The use-cases the REST app drives. `symbols` is optional so config-focused
- * tests can build a minimal app; the entry point provides both.
+ * The use-cases the REST app drives. All are required: the app exposes the same
+ * routes however it is constructed (tests build the missing services from
+ * in-memory adapters — see `testing/app-deps.ts`).
  */
 export interface AppDependencies {
   /**
@@ -12,11 +13,11 @@ export interface AppDependencies {
   /**
    * The symbols use-case (discovery / watchlist).
    */
-  symbols?: SymbolService;
+  symbols: SymbolService;
   /**
-   * The backfill use-case (historical candles). Optional like `symbols`.
+   * The backfill use-case (historical candles).
    */
-  backfill?: BackfillService;
+  backfill: BackfillService;
 }
 
 /**

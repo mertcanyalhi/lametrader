@@ -87,12 +87,8 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
   });
 
   app.register(configController(deps.config));
-  if (deps.symbols) {
-    app.register(symbolsController(deps.symbols));
-  }
-  if (deps.backfill) {
-    app.register(candlesController(deps.backfill, new BackfillProgressHub()));
-  }
+  app.register(symbolsController(deps.symbols));
+  app.register(candlesController(deps.backfill, new BackfillProgressHub()));
 
   return app;
 }

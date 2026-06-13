@@ -1,6 +1,7 @@
 import { createApp } from '@lametrader/api';
 import { SymbolType } from '@lametrader/core';
 import {
+  BackfillService,
   ConfigService,
   InMemoryMarketDataSource,
   MongoCandleRepository,
@@ -41,13 +42,12 @@ describe('symbols API (e2e)', () => {
     db = client.db('lametrader');
 
     const config = new ConfigService(new MongoConfigRepository(db));
-    const symbols = new SymbolService(
-      [new InMemoryMarketDataSource([BTC])],
-      new MongoWatchlistRepository(db),
-      config,
-      new MongoCandleRepository(db),
-    );
-    app = createApp({ config, symbols });
+    const sources = [new InMemoryMarketDataSource([BTC])];
+    const watchlist = new MongoWatchlistRepository(db);
+    const candles = new MongoCandleRepository(db);
+    const symbols = new SymbolService(sources, watchlist, config, candles);
+    const backfill = new BackfillService(sources, candles, watchlist);
+    app = createApp({ config, symbols, backfill });
     await app.ready();
   });
 

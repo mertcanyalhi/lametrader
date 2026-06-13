@@ -18,6 +18,7 @@ import {
 } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../app';
+import { buildAppDeps } from '../testing/app-deps';
 
 /** The stub instrument the catalog knows. */
 const BTC: Instrument = {
@@ -66,7 +67,7 @@ function buildApp() {
     new InMemoryWatchlistRepository([WATCHED]),
   );
   const configRepo: ConfigRepository = { load: async () => null, save: async () => {} };
-  return createApp({ config: new ConfigService(configRepo), backfill });
+  return createApp(buildAppDeps({ config: new ConfigService(configRepo), backfill }));
 }
 
 describe('POST /symbols/:id/backfill', () => {
