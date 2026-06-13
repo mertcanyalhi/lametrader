@@ -46,15 +46,17 @@ export interface WatchedSymbol extends Instrument {
 }
 
 /**
- * Driven port for a market-data provider: discover symbols and confirm one
- * exists. One implementation per provider (Binance, Yahoo, …).
+ * Driven port for **discovering** symbols at a provider and learning what is
+ * watchable there. Consumed by the symbols use-case; it never fetches candles.
+ * (Segregated from {@link CandleFeed} per ADR-0007.)
  */
-export interface MarketDataSource {
+export interface SymbolDiscovery {
   /** The asset classes this source serves. */
   readonly types: SymbolType[];
   /**
-   * The {@link Period}s this source can fetch candles at. A symbol may only be
-   * watched at periods its owning source supports (e.g. Yahoo has no 4h bar).
+   * The {@link Period}s this source can fetch candles at — i.e. the periods a
+   * symbol may be watched at here (e.g. Yahoo has no 4h bar). Advertised on
+   * discovery so a watch is validated before any candle is fetched.
    */
   readonly periods: Period[];
   /**
@@ -65,6 +67,16 @@ export interface MarketDataSource {
    * Look a canonical id up at the provider; `null` if it does not exist.
    */
   lookup(id: string): Promise<Instrument | null>;
+}
+
+/**
+ * Driven port for **fetching** OHLC candles from a provider. Consumed by the
+ * backfill use-case; it never searches or looks up. (Segregated from
+ * {@link SymbolDiscovery} per ADR-0007.)
+ */
+export interface CandleFeed {
+  /** The asset classes this source serves. */
+  readonly types: SymbolType[];
   /**
    * Fetch OHLC candles for a canonical id at a {@link Period}, ascending by
    * `time` and typed for the source's asset class. With `range` omitted, returns
@@ -73,6 +85,13 @@ export interface MarketDataSource {
    */
   fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<CandleBatch>;
 }
+
+/**
+ * A market-data provider that both discovers symbols and feeds candles — the
+ * shape every concrete adapter (Binance, Yahoo, …) implements. Consumers depend
+ * on the narrower {@link SymbolDiscovery} / {@link CandleFeed} they actually use.
+ */
+export type MarketDataSource = SymbolDiscovery & CandleFeed;
 
 /**
  * Driven port for persisting the watchlist (a per-id singleton set).

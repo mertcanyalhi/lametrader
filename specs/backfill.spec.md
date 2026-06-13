@@ -43,7 +43,8 @@ from.
   by `time`, typed for the source's class. The batch's `complete` flag reports whether the
   result was capped by a provider-side limit (see ADR-0006; the return type was originally
   a plain `Candle[]`).
-  (Same provider already owns discovery for the type; one adapter, ISP-acceptable.)
+  (Originally one fat `MarketDataSource` port — since segregated into
+  `SymbolDiscovery` + `CandleFeed`, with `fetchCandles` on the feed; see ADR-0007.)
 
 ## Errors
 

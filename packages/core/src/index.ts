@@ -34,8 +34,10 @@ export {
   symbolType,
 } from './symbol.js';
 export {
+  type CandleFeed,
   type Instrument,
   type MarketDataSource,
+  type SymbolDiscovery,
   SymbolType,
   type WatchedSymbol,
   type WatchlistRepository,

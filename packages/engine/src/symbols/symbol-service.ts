@@ -2,10 +2,10 @@ import {
   assertInstrumentTypeMatchesId,
   type CandleRepository,
   type Instrument,
-  type MarketDataSource,
   type Period,
   parseSymbolPeriods,
   SymbolConflictError,
+  type SymbolDiscovery,
   SymbolNotFoundError,
   type SymbolType,
   symbolType,
@@ -18,20 +18,20 @@ import { assertSourceSupportsPeriods, sourceForType } from './source-registry.js
 /**
  * Application use-case for discovering, watching, and tuning symbols.
  *
- * Depends only on ports — a set of {@link MarketDataSource}s (discovery +
+ * Depends only on ports — a set of {@link SymbolDiscovery} sources (discovery +
  * existence validation), a {@link WatchlistRepository} (persistence), and the
  * {@link ConfigService} (the global supported periods). Concrete adapters are
  * injected; fakes are used in unit tests.
  */
 export class SymbolService {
   /**
-   * @param sources - market-data providers, one or more per asset class.
+   * @param sources - market-data discovery providers, one or more per asset class.
    * @param watchlist - the watchlist persistence port.
    * @param config - the configuration use-case (for supported/default periods).
    * @param candles - the candle persistence port (cascaded on removal).
    */
   constructor(
-    private readonly sources: MarketDataSource[],
+    private readonly sources: SymbolDiscovery[],
     private readonly watchlist: WatchlistRepository,
     private readonly config: ConfigService,
     private readonly candles: CandleRepository,

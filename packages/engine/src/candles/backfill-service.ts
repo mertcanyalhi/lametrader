@@ -1,9 +1,9 @@
 import {
   type BackfillRange,
   CandleError,
+  type CandleFeed,
   type CandlePage,
   type CandleRepository,
-  type MarketDataSource,
   type Period,
   SymbolNotFoundError,
   symbolType,
@@ -21,7 +21,7 @@ const CHUNK_SIZE = 500;
  * Application use-case for backfilling historical OHLC candles for a watched
  * symbol+period.
  *
- * Depends only on ports — the {@link MarketDataSource}s (fetch candles), a
+ * Depends only on ports — the {@link CandleFeed}s (fetch candles), a
  * {@link CandleRepository} (persistence), and the {@link WatchlistRepository}
  * (a backfill targets a symbol the user already watches). Progress is surfaced
  * via an `onProgress` callback so transports (CLI stdout, API WebSocket) render
@@ -29,12 +29,12 @@ const CHUNK_SIZE = 500;
  */
 export class BackfillService {
   /**
-   * @param sources - market-data providers, one or more per asset class.
+   * @param sources - candle-feed providers, one or more per asset class.
    * @param candles - the candle persistence port.
    * @param watchlist - the watchlist persistence port.
    */
   constructor(
-    private readonly sources: MarketDataSource[],
+    private readonly sources: CandleFeed[],
     private readonly candles: CandleRepository,
     private readonly watchlist: WatchlistRepository,
   ) {}

@@ -1,17 +1,25 @@
-import { type MarketDataSource, type Period, SymbolError, type SymbolType } from '@lametrader/core';
+import { type Period, SymbolError, type SymbolType } from '@lametrader/core';
 
 /**
- * Resolve the {@link MarketDataSource} that serves a given asset {@link SymbolType}
- * from a set of registered sources. Shared by the application use-cases
- * ({@link import('./symbol-service.js').SymbolService},
- * {@link import('../candles/backfill-service.js').BackfillService}) so the
- * source-selection rule lives in one place.
+ * The minimum a registered source must expose to be resolved by asset class —
+ * both {@link import('@lametrader/core').SymbolDiscovery} and
+ * {@link import('@lametrader/core').CandleFeed} satisfy it.
+ */
+interface TypedSource {
+  /** The asset classes this source serves. */
+  readonly types: SymbolType[];
+}
+
+/**
+ * Resolve the source that serves a given asset {@link SymbolType} from a set of
+ * registered sources. Generic over the port: the symbols use-case resolves a
+ * `SymbolDiscovery`, the backfill use-case a `CandleFeed`, from the same rule.
  *
  * @param sources - the registered market-data providers.
  * @param type - the asset class to serve.
  * @throws {@link SymbolError} when no registered source serves the type.
  */
-export function sourceForType(sources: MarketDataSource[], type: SymbolType): MarketDataSource {
+export function sourceForType<T extends TypedSource>(sources: T[], type: SymbolType): T {
   const source = sources.find((candidate) => candidate.types.includes(type));
   if (!source) {
     throw new SymbolError(`no market-data source for type: ${type}`);
@@ -28,7 +36,10 @@ export function sourceForType(sources: MarketDataSource[], type: SymbolType): Ma
  * @param periods - the periods to validate against the source's capability.
  * @throws {@link SymbolError} when any period is not in `source.periods`.
  */
-export function assertSourceSupportsPeriods(source: MarketDataSource, periods: Period[]): void {
+export function assertSourceSupportsPeriods(
+  source: { readonly periods: Period[] },
+  periods: Period[],
+): void {
   const unsupported = periods.filter((period) => !source.periods.includes(period));
   if (unsupported.length > 0) {
     throw new SymbolError(`source does not support period(s): ${unsupported.join(', ')}`);
