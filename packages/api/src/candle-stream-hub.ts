@@ -9,8 +9,8 @@ export type CandleStreamSubscriber = (event: CandleEvent) => void;
  * A tiny in-process pub/sub fanning live candle events out to WebSocket
  * subscribers, keyed by symbol id. Lives in the API adapter so the application's
  * {@link PollingService} stays a plain `onCandle` callback with no transport
- * knowledge (see ADR-0005). A clone of `BackfillProgressHub`, but multiplexed:
- * one socket subscribes to many ids.
+ * knowledge (see ADR-0005). Like `BackfillJobHub`, but multiplexed: one socket
+ * subscribes to many ids.
  */
 export class CandleStreamHub {
   /**

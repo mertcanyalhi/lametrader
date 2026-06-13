@@ -38,10 +38,13 @@ from.
     `[from, to)`, ascending by `time`.
   - `latest(symbolId, period): Promise<Candle | null>` — highest-`time` stored candle
     (`null` if none). Sets up slice-3 resume.
-- **`MarketDataSource` gains** `fetchCandles(symbolId, period, range?): Promise<Candle[]>`
+- **`MarketDataSource` gains** `fetchCandles(symbolId, period, range?): Promise<CandleBatch>`
   — provider OHLC for the window (or deepest history when `range` is omitted), ascending
-  by `time`, typed for the source's class.
-  (Same provider already owns discovery for the type; one adapter, ISP-acceptable.)
+  by `time`, typed for the source's class. The batch's `complete` flag reports whether the
+  result was capped by a provider-side limit (see ADR-0006; the return type was originally
+  a plain `Candle[]`).
+  (Originally one fat `MarketDataSource` port — since segregated into
+  `SymbolDiscovery` + `CandleFeed`, with `fetchCandles` on the feed; see ADR-0007.)
 
 ## Errors
 

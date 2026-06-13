@@ -2,6 +2,7 @@ import { CandleStreamHub, createApp } from '@lametrader/api';
 import {
   type BackfillRange,
   type Candle,
+  type CandleBatch,
   type CryptoCandle,
   type Instrument,
   MarketDataError,
@@ -60,6 +61,7 @@ const allIntervals = (ms: number): Record<Period, number> =>
  */
 class GrowingStubSource implements MarketDataSource {
   readonly types = [SymbolType.Crypto];
+  readonly periods = Object.values(Period);
   constructor(
     private readonly series: Record<string, Candle[]>,
     private readonly failing: string[] = [],
@@ -70,13 +72,13 @@ class GrowingStubSource implements MarketDataSource {
   async lookup(id: string): Promise<Instrument | null> {
     return id === BTC.id ? BTC : id === ETH.id ? ETH : null;
   }
-  async fetchCandles(id: string, _period: Period, range?: BackfillRange): Promise<Candle[]> {
+  async fetchCandles(id: string, _period: Period, range?: BackfillRange): Promise<CandleBatch> {
     if (this.failing.includes(id)) {
       throw new MarketDataError(`source failed for ${id}`);
     }
     const all = this.series[id] ?? [];
-    if (!range) return [...all];
-    return all.filter((c) => c.time >= range.from && c.time < range.to);
+    const candles = range ? all.filter((c) => c.time >= range.from && c.time < range.to) : [...all];
+    return { candles, complete: true };
   }
 }
 

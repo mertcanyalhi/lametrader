@@ -1,11 +1,11 @@
 import {
+  assertInstrumentTypeMatchesId,
   type CandleRepository,
   type Instrument,
-  type MarketDataSource,
   type Period,
   parseSymbolPeriods,
   SymbolConflictError,
-  SymbolError,
+  type SymbolDiscovery,
   SymbolNotFoundError,
   type SymbolType,
   symbolType,
@@ -13,24 +13,25 @@ import {
   type WatchlistRepository,
 } from '@lametrader/core';
 import type { ConfigService } from '../config/config-service.js';
+import { assertSourceSupportsPeriods, sourceForType } from './source-registry.js';
 
 /**
  * Application use-case for discovering, watching, and tuning symbols.
  *
- * Depends only on ports — a set of {@link MarketDataSource}s (discovery +
+ * Depends only on ports — a set of {@link SymbolDiscovery} sources (discovery +
  * existence validation), a {@link WatchlistRepository} (persistence), and the
  * {@link ConfigService} (the global supported periods). Concrete adapters are
  * injected; fakes are used in unit tests.
  */
 export class SymbolService {
   /**
-   * @param sources - market-data providers, one or more per asset class.
+   * @param sources - market-data discovery providers, one or more per asset class.
    * @param watchlist - the watchlist persistence port.
    * @param config - the configuration use-case (for supported/default periods).
    * @param candles - the candle persistence port (cascaded on removal).
    */
   constructor(
-    private readonly sources: MarketDataSource[],
+    private readonly sources: SymbolDiscovery[],
     private readonly watchlist: WatchlistRepository,
     private readonly config: ConfigService,
     private readonly candles: CandleRepository,
@@ -45,7 +46,7 @@ export class SymbolService {
    */
   async discover(query: string, type?: SymbolType): Promise<Instrument[]> {
     if (type) {
-      const results = await this.sourceForType(type).search(query);
+      const results = await sourceForType(this.sources, type).search(query);
       return results.filter((symbol) => symbol.type === type);
     }
     const results = await Promise.all(this.sources.map((source) => source.search(query)));
@@ -63,18 +64,21 @@ export class SymbolService {
    * @throws {@link SymbolNotFoundError} when the id does not exist at its source.
    */
   async add(id: string, periods?: readonly string[]): Promise<WatchedSymbol> {
-    const source = this.sourceForType(symbolType(id));
+    const source = sourceForType(this.sources, symbolType(id));
     if (await this.watchlist.get(id)) {
       throw new SymbolConflictError(`symbol already watched: ${id}`);
     }
     const supported = (await this.config.get()).periods;
     const resolved: Period[] =
       periods === undefined ? supported : parseSymbolPeriods(periods, supported);
+    assertSourceSupportsPeriods(source, resolved);
 
     const found = await source.lookup(id);
     if (!found) {
       throw new SymbolNotFoundError(`symbol not found: ${id}`);
     }
+    // Don't persist an instrument whose declared type contradicts its id.
+    assertInstrumentTypeMatchesId(found);
 
     const watched: WatchedSymbol = { ...found, periods: resolved };
     await this.watchlist.add(watched);
@@ -109,21 +113,9 @@ export class SymbolService {
       throw new SymbolNotFoundError(`symbol not watched: ${id}`);
     }
     const resolved = parseSymbolPeriods(periods, (await this.config.get()).periods);
+    assertSourceSupportsPeriods(sourceForType(this.sources, symbolType(id)), resolved);
     const updated: WatchedSymbol = { ...existing, periods: resolved };
     await this.watchlist.add(updated);
     return updated;
-  }
-
-  /**
-   * Resolve the source that serves a given asset type.
-   *
-   * @throws {@link SymbolError} when no registered source serves the type.
-   */
-  private sourceForType(type: SymbolType): MarketDataSource {
-    const source = this.sources.find((candidate) => candidate.types.includes(type));
-    if (!source) {
-      throw new SymbolError(`no market-data source for type: ${type}`);
-    }
-    return source;
   }
 }

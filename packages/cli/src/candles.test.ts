@@ -62,6 +62,7 @@ describe('runCandles', () => {
       to: 2000,
       fetched: 2,
       saved: 2,
+      complete: true,
     });
   });
 

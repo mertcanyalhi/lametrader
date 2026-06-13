@@ -6,10 +6,9 @@ import { PollingService } from './candles/polling-service.js';
 import type { CandleListener } from './candles/polling-service.types.js';
 import { ConfigService } from './config/config-service.js';
 import { MongoConfigRepository } from './config/mongo-config-repository.js';
-import { BinanceMarketDataSource } from './symbols/binance-market-data-source.js';
+import { defaultMarketDataSources } from './symbols/default-sources.js';
 import { MongoWatchlistRepository } from './symbols/mongo-watchlist-repository.js';
 import { SymbolService } from './symbols/symbol-service.js';
-import { YahooMarketDataSource } from './symbols/yahoo-market-data-source.js';
 
 /**
  * Options for {@link connectServices}: the live-candle sink and per-period poll
@@ -23,11 +22,29 @@ export interface ConnectOptions {
 }
 
 /**
- * Composition helper for a driving adapter that needs the whole platform: one
- * MongoDB connection wired into the {@link ConfigService}, {@link SymbolService}
- * (which share that config), {@link BackfillService}, and the
- * {@link PollingService} (continuous polling + live streaming). Keeps the entry
- * points free of the Mongo driver and the concrete adapters.
+ * The platform's wired use-cases, sharing one MongoDB connection.
+ */
+export interface ConnectedServices {
+  /** The configuration use-case. */
+  config: ConfigService;
+  /** The symbols use-case (discovery / watchlist). */
+  symbols: SymbolService;
+  /** The backfill use-case (historical candles). */
+  backfill: BackfillService;
+  /** The continuous polling + live-streaming loop. */
+  polling: PollingService;
+  /** Release the shared MongoDB connection. */
+  close: () => Promise<void>;
+}
+
+/**
+ * The single composition root: open one MongoDB connection, register the default
+ * market-data sources once, and wire every use-case on top — the
+ * {@link ConfigService}, {@link SymbolService} (which share that config),
+ * {@link BackfillService}, and the {@link PollingService} (continuous polling +
+ * live streaming). Driving adapters (api, cli) build the whole platform from here,
+ * so neither depends on the Mongo driver or the concrete adapters, and a new
+ * source or store is added in exactly one place.
  *
  * @param uri - the MongoDB connection string (database taken from the URI).
  * @param options - the live-candle sink and poll cadence for the polling loop.
@@ -36,19 +53,14 @@ export interface ConnectOptions {
 export async function connectServices(
   uri: string,
   options: ConnectOptions,
-): Promise<{
-  config: ConfigService;
-  symbols: SymbolService;
-  backfill: BackfillService;
-  polling: PollingService;
-  close: () => Promise<void>;
-}> {
+): Promise<ConnectedServices> {
   const client = new MongoClient(uri);
   await client.connect();
   const db = client.db();
-  const sources = [new BinanceMarketDataSource(), new YahooMarketDataSource()];
+  const sources = defaultMarketDataSources();
   const watchlist = new MongoWatchlistRepository(db);
   const candleRepo = new MongoCandleRepository(db);
+  await candleRepo.ensureIndexes();
   const config = new ConfigService(new MongoConfigRepository(db));
   const symbols = new SymbolService(sources, watchlist, config, candleRepo);
   const backfill = new BackfillService(sources, candleRepo, watchlist);

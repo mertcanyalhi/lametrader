@@ -1,8 +1,10 @@
+import { createRequire } from 'node:module';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import fastifyWebsocket from '@fastify/websocket';
 import {
+  BackfillConflictError,
   CandleError,
   ConfigError,
   MarketDataError,
@@ -10,13 +12,22 @@ import {
   SymbolError,
   SymbolNotFoundError,
 } from '@lametrader/core';
+import { BackfillJobService } from '@lametrader/engine';
 import Fastify, { type FastifyError } from 'fastify';
 import type { AppDependencies, AppOptions } from './app.types.js';
-import { BackfillProgressHub } from './backfill-progress-hub.js';
+import { BackfillJobHub } from './backfill-job-hub.js';
 import { candlesController } from './controllers/candles.controller.js';
 import { configController } from './controllers/config.controller.js';
 import { streamController } from './controllers/stream.controller.js';
 import { symbolsController } from './controllers/symbols.controller.js';
+
+/**
+ * The API's own package version, read from its `package.json` so the OpenAPI
+ * document reports the real release rather than a hard-coded literal that drifts.
+ */
+const { version: API_VERSION } = createRequire(import.meta.url)('../package.json') as {
+  version: string;
+};
 
 /**
  * Build the REST API over the application use-cases.
@@ -34,7 +45,7 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
 
   app.register(fastifySwagger, {
     openapi: {
-      info: { title: 'lametrader API', version: '0.0.0' },
+      info: { title: 'lametrader API', version: API_VERSION },
       tags: [
         { name: 'config', description: 'Global configuration' },
         { name: 'symbols', description: 'Symbol discovery and watchlist' },
@@ -50,7 +61,7 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
       reply.code(404).send({ error: error.message });
       return;
     }
-    if (error instanceof SymbolConflictError) {
+    if (error instanceof SymbolConflictError || error instanceof BackfillConflictError) {
       reply.code(409).send({ error: error.message });
       return;
     }
@@ -83,7 +94,13 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
     app.register(symbolsController(deps.symbols));
   }
   if (deps.backfill) {
-    app.register(candlesController(deps.backfill, new BackfillProgressHub()));
+    // Wire the async backfill-job use-case to a per-job hub: the application
+    // pushes job updates via onUpdate, the hub fans them to WebSocket subscribers.
+    const backfillHub = new BackfillJobHub();
+    const backfillJobs = new BackfillJobService(deps.backfill, (job) =>
+      backfillHub.publish(job.id, job),
+    );
+    app.register(candlesController(deps.backfill, backfillJobs, backfillHub));
   }
   if (deps.candleStream) {
     app.register(streamController(deps.candleStream));

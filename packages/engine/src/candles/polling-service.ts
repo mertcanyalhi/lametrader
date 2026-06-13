@@ -134,11 +134,14 @@ export class PollingService {
       if (!latest) return;
       const source = this.sourceForType(symbolType(symbol.id));
       const now = this.now();
-      const fetched = await source.fetchCandles(symbol.id, period, { from: latest.time, to: now });
-      if (fetched.length === 0) return;
-      await this.candles.save(symbol.id, period, fetched);
+      const { candles } = await source.fetchCandles(symbol.id, period, {
+        from: latest.time,
+        to: now,
+      });
+      if (candles.length === 0) return;
+      await this.candles.save(symbol.id, period, candles);
       const span = periodMillis(period);
-      for (const candle of fetched) {
+      for (const candle of candles) {
         this.options.onCandle({ id: symbol.id, period, candle, final: candle.time + span <= now });
       }
     } catch (error) {

@@ -12,6 +12,7 @@ import {
 } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../app';
+import { buildAppDeps } from '../testing/app-deps';
 
 const BTC = {
   id: 'crypto:BTCUSDT',
@@ -42,7 +43,7 @@ function buildApp() {
     config,
     new InMemoryCandleRepository(),
   );
-  return createApp({ config, symbols });
+  return createApp(buildAppDeps({ config, symbols }));
 }
 
 describe('GET /instruments', () => {

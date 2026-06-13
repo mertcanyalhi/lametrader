@@ -1,6 +1,7 @@
 import {
   type BackfillRange,
   type Candle,
+  type CandleBatch,
   type CryptoCandle,
   type Instrument,
   MarketDataError,
@@ -50,6 +51,7 @@ const NOW = 8_000_000;
  */
 class RecordingSource implements MarketDataSource {
   readonly types = [SymbolType.Crypto];
+  readonly periods = Object.values(Period);
   readonly calls: Array<{ id: string; period: Period; range?: BackfillRange }> = [];
 
   constructor(
@@ -63,14 +65,14 @@ class RecordingSource implements MarketDataSource {
   async lookup(): Promise<Instrument | null> {
     return null;
   }
-  async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<Candle[]> {
+  async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<CandleBatch> {
     this.calls.push({ id, period, range });
     if (this.failing.includes(id)) {
       throw new MarketDataError(`source failed for ${id}`);
     }
     const all = this.series[id] ?? [];
-    if (!range) return [...all];
-    return all.filter((c) => c.time >= range.from && c.time < range.to);
+    const candles = range ? all.filter((c) => c.time >= range.from && c.time < range.to) : [...all];
+    return { candles, complete: true };
   }
 }
 

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { Period, parseSymbolPeriods, SymbolError, SymbolType, symbolType } from './index.js';
+import {
+  assertInstrumentTypeMatchesId,
+  type Instrument,
+  Period,
+  parseSymbolPeriods,
+  SymbolError,
+  SymbolType,
+  symbolType,
+} from './index.js';
 
 describe('symbolType', () => {
   it('returns the type for a canonical id', () => {
@@ -12,6 +20,22 @@ describe('symbolType', () => {
 
   it('throws on an unknown type prefix', () => {
     expect(() => symbolType('bond:US10Y')).toThrow(SymbolError);
+  });
+});
+
+describe('assertInstrumentTypeMatchesId', () => {
+  const base: Omit<Instrument, 'id' | 'type'> = { description: 'x', exchange: 'NMS' };
+
+  it('passes when the id prefix and type agree', () => {
+    expect(() =>
+      assertInstrumentTypeMatchesId({ ...base, id: 'crypto:BTCUSDT', type: SymbolType.Crypto }),
+    ).not.toThrow();
+  });
+
+  it('throws when the id prefix and type disagree', () => {
+    expect(() =>
+      assertInstrumentTypeMatchesId({ ...base, id: 'crypto:BTCUSDT', type: SymbolType.Stock }),
+    ).toThrow(SymbolError);
   });
 });
 

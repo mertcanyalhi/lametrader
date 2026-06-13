@@ -1,6 +1,7 @@
 import {
   type BackfillRange,
   type Candle,
+  type CandleBatch,
   CandleError,
   type EquityCandle,
   type FxCandle,
@@ -88,6 +89,11 @@ export class YahooMarketDataSource implements MarketDataSource {
   readonly types = [SymbolType.Stock, SymbolType.Fund, SymbolType.Fx];
 
   /**
+   * The periods Yahoo can fetch — the keys of {@link YAHOO_INTERVAL} (no 4h bar).
+   */
+  readonly periods = Object.keys(YAHOO_INTERVAL) as Period[];
+
+  /**
    * The `yahoo-finance2` client (v3 default export is a class).
    */
   private readonly yf = new YahooFinance({ suppressNotices: ['yahooSurvey', 'ripHistorical'] });
@@ -132,7 +138,7 @@ export class YahooMarketDataSource implements MarketDataSource {
             currency?: string;
           }
         | undefined;
-      // No price → treat as non-existent (Yahoo also throws for unknown tickers).
+      // No price → Yahoo's shell-quote signal for an unknown symbol.
       if (!quote || quote.regularMarketPrice == null) return null;
       const instrument = toInstrument(
         native,
@@ -141,14 +147,20 @@ export class YahooMarketDataSource implements MarketDataSource {
         quote.exchange ?? '',
       );
       return quote.currency ? { ...instrument, currency: quote.currency } : instrument;
-    } catch {
-      return null;
+    } catch (cause) {
+      // A 4xx means Yahoo rejected the symbol (genuinely not found); a 5xx,
+      // rate-limit, or status-less error (network/timeout) is transient and must
+      // not be reported as "no such symbol".
+      if (isNotFound(cause)) return null;
+      throw new MarketDataError(`Yahoo failed to look up ${id}: ${(cause as Error).message}`, {
+        cause,
+      });
     }
   }
 
-  async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<Candle[]> {
+  async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<CandleBatch> {
     const type = symbolType(id);
-    if (!this.types.includes(type)) return [];
+    if (!this.types.includes(type)) return { candles: [], complete: true };
     const interval = YAHOO_INTERVAL[period];
     if (!interval) {
       throw new CandleError(`Yahoo does not support period ${period}`);
@@ -163,7 +175,9 @@ export class YahooMarketDataSource implements MarketDataSource {
         const candle = toCandle(type, bar);
         if (candle) out.push(candle);
       }
-      return out;
+      // Yahoo's chart returns the whole requested window in one response — no
+      // paging cap of ours applies, so the batch is always complete.
+      return { candles: out, complete: true };
     } catch (cause) {
       throw new MarketDataError(
         `Yahoo failed to fetch candles for ${id}: ${(cause as Error).message}`,
@@ -171,6 +185,17 @@ export class YahooMarketDataSource implements MarketDataSource {
       );
     }
   }
+}
+
+/**
+ * Whether a thrown `yahoo-finance2` error means "Yahoo rejected this symbol"
+ * (a 4xx client status) rather than a transient failure. `yahoo-finance2`'s
+ * `HTTPError` carries `code = response.status`; a 5xx, a rate-limit, or an error
+ * with no numeric HTTP status (network/timeout) is treated as transient.
+ */
+function isNotFound(error: unknown): boolean {
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'number' && code >= 400 && code < 500;
 }
 
 /**

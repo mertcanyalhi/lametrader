@@ -36,9 +36,26 @@ const DEFAULT_POLL_INTERVALS: Record<Period, number> = {
 export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
   return {
     mongoUri: env.MONGODB_URI ?? DEFAULT_MONGO_URI,
-    apiPort: Number(env.PORT ?? DEFAULT_API_PORT),
+    apiPort: parsePort(env.PORT),
     pollIntervals: resolvePollIntervals(env.POLL_INTERVALS),
   };
+}
+
+/**
+ * Parse the `PORT` env value into a positive integer, falling back to the default
+ * when unset. Throws on a value that would otherwise become `NaN` (or a
+ * non-positive / non-integer port), so a typo fails fast at startup rather than
+ * silently listening on a bad port.
+ */
+function parsePort(value: string | undefined): number {
+  if (value === undefined) {
+    return DEFAULT_API_PORT;
+  }
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new Error(`PORT must be an integer in 1..65535: ${value}`);
+  }
+  return port;
 }
 
 /**

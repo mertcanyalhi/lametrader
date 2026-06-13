@@ -1,6 +1,6 @@
 import { createApp } from '@lametrader/api';
 import {
-  type Candle,
+  type CandleBatch,
   type CryptoCandle,
   type Instrument,
   MarketDataError,
@@ -48,6 +48,30 @@ const candle = (time: number): CryptoCandle => ({
 const SERIES: CryptoCandle[] = [candle(1000), candle(2000), candle(3000)];
 
 /**
+ * Start a backfill on `app` and poll its job to a terminal state, returning the
+ * final job. (The POST returns 202; the work runs in the background.)
+ */
+async function backfillAndWait(
+  app: FastifyInstance,
+  id = BTC.id,
+  period = '1h',
+): Promise<{ status: string; error: string | null }> {
+  const started = await app.inject({
+    method: 'POST',
+    url: `/symbols/${id}/backfill`,
+    payload: { period },
+  });
+  const { id: jobId } = started.json() as { id: string };
+  for (let i = 0; i < 100; i += 1) {
+    const res = await app.inject({ method: 'GET', url: `/symbols/${id}/backfill/jobs/${jobId}` });
+    const job = res.json() as { status: string; error: string | null };
+    if (job.status !== 'running') return job;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('backfill job did not settle');
+}
+
+/**
  * E2E for backfill from the API consumer's perspective: a real Fastify app over
  * real Mongo (Testcontainers) with a stub market-data source seeded with a fixed
  * candle series. Mirrors `specs/backfill.spec.md`.
@@ -86,50 +110,46 @@ describe('backfill API (e2e)', () => {
     await container?.stop();
   });
 
-  it('backfills a watched symbol, streams progress over WS, and reads the candles back', async () => {
+  it('runs a backfill as an async job, streams it over WS, and reads the candles back', async () => {
     const add = await app.inject({ method: 'POST', url: '/symbols', payload: { id: BTC.id } });
     expect(add.statusCode).toBe(201);
 
-    // Subscribe to progress before triggering the backfill.
-    const wsUrl = `${baseUrl.replace('http', 'ws')}/symbols/${BTC.id}/backfill/progress`;
-    const socket = new WebSocket(wsUrl);
-    const frames: unknown[] = [];
-    await new Promise<void>((resolve, reject) => {
-      socket.addEventListener('open', () => resolve());
-      socket.addEventListener('error', () => reject(new Error('ws failed to open')));
-    });
-    const gotSummary = new Promise<void>((resolve) => {
-      socket.addEventListener('message', (event) => {
-        const frame = JSON.parse(String(event.data));
-        frames.push(frame);
-        if (frame.type === 'summary') resolve();
-      });
-    });
-
+    // POST starts the job and returns 202 with the running job.
     const run = await app.inject({
       method: 'POST',
       url: `/symbols/${BTC.id}/backfill`,
       payload: { period: '1h' },
     });
-    expect(run.statusCode).toBe(200);
-    expect(run.json()).toEqual({
+    expect(run.statusCode).toBe(202);
+    const job = run.json() as { id: string; status: string };
+    expect(job.status).toBe('running');
+
+    // Stream the job over its per-job WebSocket until it reaches a terminal state.
+    const wsUrl = `${baseUrl.replace('http', 'ws')}/symbols/${BTC.id}/backfill/jobs/${job.id}/progress`;
+    const socket = new WebSocket(wsUrl);
+    const frames: Array<{ status: string; summary: unknown }> = [];
+    const gotTerminal = new Promise<void>((resolve, reject) => {
+      socket.addEventListener('error', () => reject(new Error('ws failed to open')));
+      socket.addEventListener('message', (event) => {
+        const frame = JSON.parse(String(event.data));
+        frames.push(frame);
+        if (frame.status === 'succeeded' || frame.status === 'failed') resolve();
+      });
+    });
+    await gotTerminal;
+    socket.close();
+
+    const terminal = frames.at(-1);
+    expect(terminal?.status).toBe('succeeded');
+    expect(terminal?.summary).toEqual({
       id: BTC.id,
       period: '1h',
       from: 1000,
       to: 3000,
       fetched: 3,
       saved: 3,
+      complete: true,
     });
-
-    await gotSummary;
-    socket.close();
-    expect(frames).toEqual([
-      { type: 'progress', saved: 3, total: 3 },
-      {
-        type: 'summary',
-        summary: { id: BTC.id, period: '1h', from: 1000, to: 3000, fetched: 3, saved: 3 },
-      },
-    ]);
 
     const read = await app.inject({
       method: 'GET',
@@ -168,47 +188,39 @@ describe('backfill API (e2e)', () => {
     expect(read.json()).toEqual({ candles: [], nextCursor: null });
   });
 
-  it('returns 502 with the upstream reason when the market-data source fails', async () => {
+  it('records an upstream failure as a failed job carrying the reason', async () => {
     const db = client.db();
     await new MongoWatchlistRepository(db).add({ ...BTC, periods: [Period.OneHour] });
 
     const failing: MarketDataSource = {
       types: [SymbolType.Crypto],
+      periods: [Period.OneHour],
       search: async () => [],
       lookup: async () => BTC,
-      fetchCandles: async (): Promise<Candle[]> => {
+      fetchCandles: async (): Promise<CandleBatch> => {
         throw new MarketDataError('Binance failed to fetch candles for crypto:BTCUSDT: 418');
       },
     };
+    const failConfig = new ConfigService(new MongoConfigRepository(db));
+    const failCandles = new MongoCandleRepository(db);
+    const failWatchlist = new MongoWatchlistRepository(db);
     const failApp = createApp({
-      config: new ConfigService(new MongoConfigRepository(db)),
-      backfill: new BackfillService(
-        [failing],
-        new MongoCandleRepository(db),
-        new MongoWatchlistRepository(db),
-      ),
+      config: failConfig,
+      symbols: new SymbolService([failing], failWatchlist, failConfig, failCandles),
+      backfill: new BackfillService([failing], failCandles, failWatchlist),
     });
 
-    const res = await failApp.inject({
-      method: 'POST',
-      url: `/symbols/${BTC.id}/backfill`,
-      payload: { period: '1h' },
-    });
-    expect(res.statusCode).toBe(502);
-    expect(res.json()).toEqual({
-      error: 'Binance failed to fetch candles for crypto:BTCUSDT: 418',
-    });
+    const job = await backfillAndWait(failApp);
+    expect(job.status).toBe('failed');
+    expect(job.error).toBe('Binance failed to fetch candles for crypto:BTCUSDT: 418');
     await failApp.close();
   });
 
   it('deleting a symbol cascades to its stored candles', async () => {
     // Ensure watched + backfilled (idempotent — 201 first time, else 409).
     await app.inject({ method: 'POST', url: '/symbols', payload: { id: BTC.id } });
-    await app.inject({
-      method: 'POST',
-      url: `/symbols/${BTC.id}/backfill`,
-      payload: { period: '1h' },
-    });
+    const job = await backfillAndWait(app);
+    expect(job.status).toBe('succeeded');
     const before = await app.inject({
       method: 'GET',
       url: `/symbols/${BTC.id}/candles?period=1h`,

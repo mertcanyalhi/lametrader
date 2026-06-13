@@ -1,4 +1,5 @@
 import { Period } from './config.types.js';
+import type { Instrument } from './symbol.types.js';
 import { SymbolType } from './symbol.types.js';
 
 /**
@@ -85,6 +86,23 @@ export function symbolType(id: string): SymbolType {
     throw new SymbolError(`unknown symbol type in id: ${id}`);
   }
   return prefix as SymbolType;
+}
+
+/**
+ * Assert that an {@link Instrument}'s `type` agrees with the prefix encoded in
+ * its canonical `id` — the two carry the same fact and must not disagree (an
+ * `{ id: "crypto:X", type: Stock }` is otherwise representable). Call this where
+ * an instrument crosses a trust boundary into persisted state.
+ *
+ * @param instrument - the instrument to validate.
+ * @throws {@link SymbolError} when the id prefix and `type` disagree (or the id
+ *   has no known type prefix).
+ */
+export function assertInstrumentTypeMatchesId(instrument: Instrument): void {
+  const derived = symbolType(instrument.id);
+  if (derived !== instrument.type) {
+    throw new SymbolError(`instrument type ${instrument.type} does not match id ${instrument.id}`);
+  }
 }
 
 /**

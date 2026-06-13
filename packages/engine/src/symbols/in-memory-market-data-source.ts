@@ -1,10 +1,11 @@
-import type {
-  BackfillRange,
-  Candle,
-  Instrument,
-  MarketDataSource,
+import {
+  type BackfillRange,
+  type Candle,
+  type CandleBatch,
+  type Instrument,
+  type MarketDataSource,
   Period,
-  SymbolType,
+  type SymbolType,
 } from '@lametrader/core';
 
 /**
@@ -32,6 +33,11 @@ export class InMemoryMarketDataSource implements MarketDataSource {
   readonly types: SymbolType[];
 
   /**
+   * The periods this source can fetch (defaults to every {@link Period}).
+   */
+  readonly periods: Period[];
+
+  /**
    * Catalog keyed by canonical id.
    */
   private readonly catalog: Map<string, Instrument>;
@@ -45,10 +51,17 @@ export class InMemoryMarketDataSource implements MarketDataSource {
    * @param symbols - the catalog of symbols this source knows.
    * @param types - the served types (defaults to the distinct types in `symbols`).
    * @param candles - optional seeded OHLC series for `fetchCandles`.
+   * @param periods - the supported periods (defaults to every {@link Period}).
    */
-  constructor(symbols: Instrument[], types?: SymbolType[], candles: CandleSeed[] = []) {
+  constructor(
+    symbols: Instrument[],
+    types?: SymbolType[],
+    candles: CandleSeed[] = [],
+    periods: Period[] = Object.values(Period),
+  ) {
     this.catalog = new Map(symbols.map((symbol) => [symbol.id, symbol]));
     this.types = types ?? [...new Set(symbols.map((symbol) => symbol.type))];
+    this.periods = periods;
     this.candles = new Map(
       candles.map((seed) => [
         seriesKey(seed.id, seed.period),
@@ -70,10 +83,13 @@ export class InMemoryMarketDataSource implements MarketDataSource {
     return this.catalog.get(id) ?? null;
   }
 
-  async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<Candle[]> {
+  async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<CandleBatch> {
     const series = this.candles.get(seriesKey(id, period)) ?? [];
-    if (!range) return [...series];
-    return series.filter((candle) => candle.time >= range.from && candle.time < range.to);
+    const candles = range
+      ? series.filter((candle) => candle.time >= range.from && candle.time < range.to)
+      : [...series];
+    // The in-memory catalog has no provider cap — it always returns everything.
+    return { candles, complete: true };
   }
 }
 

@@ -1,8 +1,11 @@
 import { createApp } from '@lametrader/api';
-import { connectConfigService } from '@lametrader/engine';
+import { connectServices, loadSettings } from '@lametrader/engine';
 import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+/** Default poll cadence; this suite never starts polling, so any value works. */
+const { pollIntervals } = loadSettings({});
 
 /**
  * E2E for the config feature from the API consumer's perspective: a real Fastify
@@ -18,9 +21,9 @@ describe('config API (e2e)', () => {
   beforeAll(async () => {
     container = await new MongoDBContainer('mongo:8').start();
     uri = `${container.getConnectionString()}?directConnection=true`;
-    const wired = await connectConfigService(uri);
+    const wired = await connectServices(uri, { pollIntervals });
     close = wired.close;
-    app = createApp({ config: wired.service });
+    app = createApp({ config: wired.config, symbols: wired.symbols, backfill: wired.backfill });
     await app.ready();
   });
 
@@ -44,8 +47,12 @@ describe('config API (e2e)', () => {
     });
     expect(put.statusCode).toBe(200);
 
-    const second = await connectConfigService(uri);
-    const fresh = createApp({ config: second.service });
+    const second = await connectServices(uri, { pollIntervals });
+    const fresh = createApp({
+      config: second.config,
+      symbols: second.symbols,
+      backfill: second.backfill,
+    });
     const get = await fresh.inject({ method: 'GET', url: '/config' });
     expect(get.json()).toEqual({ periods: ['1h', '4h', '1d'], defaultPeriod: '4h' });
     await fresh.close();

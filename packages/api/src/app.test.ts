@@ -2,6 +2,7 @@ import type { Config, ConfigRepository } from '@lametrader/core';
 import { ConfigService } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 import { createApp } from './app';
+import { buildAppDeps } from './testing/app-deps';
 
 /**
  * App backed by a real `ConfigService` over an in-memory repository, for testing
@@ -15,7 +16,7 @@ function buildApp() {
       stored = config;
     },
   };
-  return createApp({ config: new ConfigService(repo) });
+  return createApp(buildAppDeps({ config: new ConfigService(repo) }));
 }
 
 describe('app', () => {
@@ -32,5 +33,13 @@ describe('app', () => {
     const spec = app.swagger();
     expect(spec.openapi).toBeTruthy();
     expect(Object.keys(spec.paths)).toContain('/config');
+  });
+
+  it('reports a real semver version in the OpenAPI document (not a stale literal)', async () => {
+    const app = buildApp();
+    await app.ready();
+    const spec = app.swagger();
+    expect(spec.info.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(spec.info.version).not.toBe('0.0.0');
   });
 });

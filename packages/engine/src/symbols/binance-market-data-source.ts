@@ -1,10 +1,12 @@
 import {
   type BackfillRange,
+  type CandleBatch,
+  CandleError,
   type CryptoCandle,
   type Instrument,
   MarketDataError,
   type MarketDataSource,
-  type Period,
+  Period,
   SymbolType,
   symbolType,
 } from '@lametrader/core';
@@ -13,6 +15,22 @@ import {
  * Base URL for Binance's public REST API (keyless).
  */
 const BASE = 'https://api.binance.com';
+
+/**
+ * Map our {@link Period} to a Binance kline `interval`. Explicit (not a cast):
+ * the enum value happening to equal Binance's interval string is a coincidence,
+ * not a contract. A `Period` with no entry here is rejected before any request.
+ */
+const BINANCE_INTERVAL: Partial<Record<Period, string>> = {
+  [Period.OneMinute]: '1m',
+  [Period.FiveMinutes]: '5m',
+  [Period.FifteenMinutes]: '15m',
+  [Period.ThirtyMinutes]: '30m',
+  [Period.OneHour]: '1h',
+  [Period.FourHours]: '4h',
+  [Period.OneDay]: '1d',
+  [Period.OneWeek]: '1w',
+};
 
 /**
  * Max candles Binance returns per `klines` request.
@@ -46,6 +64,11 @@ export class BinanceMarketDataSource implements MarketDataSource {
    */
   readonly types = [SymbolType.Crypto];
 
+  /**
+   * The periods Binance can fetch — exactly the keys of {@link BINANCE_INTERVAL}.
+   */
+  readonly periods = Object.keys(BINANCE_INTERVAL) as Period[];
+
   async search(query: string): Promise<Instrument[]> {
     const info = await fetchJson<{ symbols: ExchangeSymbol[] }>(`${BASE}/api/v3/exchangeInfo`);
     const needle = query.toUpperCase();
@@ -67,14 +90,18 @@ export class BinanceMarketDataSource implements MarketDataSource {
     return match ? toInstrument(match) : null;
   }
 
-  async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<CryptoCandle[]> {
-    if (symbolType(id) !== SymbolType.Crypto) return [];
+  async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<CandleBatch> {
+    if (symbolType(id) !== SymbolType.Crypto) return { candles: [], complete: true };
+    const interval = BINANCE_INTERVAL[period];
+    if (!interval) {
+      throw new CandleError(`Binance does not support period ${period}`);
+    }
     const ticker = id.slice(`${SymbolType.Crypto}:`.length);
-    // Our Period values are exactly Binance's kline intervals.
-    const interval = period as string;
     const out: CryptoCandle[] = [];
     let startTime = range?.from ?? 0;
     const endTime = range?.to;
+    // True unless we stop at MAX_PAGES with more history still available.
+    let complete = true;
 
     try {
       for (let page = 0; page < MAX_PAGES; page += 1) {
@@ -84,12 +111,23 @@ export class BinanceMarketDataSource implements MarketDataSource {
           (endTime !== undefined ? `&endTime=${endTime}` : '');
         const rows = await fetchJson<BinanceKline[]>(url);
         if (rows.length === 0) break;
+        let reachedEnd = false;
         for (const row of rows) {
           const candle = toCandle(row);
-          if (endTime !== undefined && candle.time >= endTime) break;
+          if (endTime !== undefined && candle.time >= endTime) {
+            reachedEnd = true;
+            break;
+          }
           out.push(candle);
         }
-        if (rows.length < KLINES_LIMIT) break;
+        // Reached the requested upper bound, or the provider ran out of data.
+        if (reachedEnd || rows.length < KLINES_LIMIT) break;
+        // A full final page means more rows remain that we won't fetch — the
+        // result is truncated, so report it as not complete.
+        if (page === MAX_PAGES - 1) {
+          complete = false;
+          break;
+        }
         const lastOpen = rows[rows.length - 1]?.[0] ?? startTime;
         startTime = lastOpen + 1;
       }
@@ -99,7 +137,7 @@ export class BinanceMarketDataSource implements MarketDataSource {
         { cause },
       );
     }
-    return out;
+    return { candles: out, complete };
   }
 }
 

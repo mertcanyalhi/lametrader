@@ -2,8 +2,11 @@ import type { BackfillService, ConfigService, SymbolService } from '@lametrader/
 import type { CandleStreamHub } from './candle-stream-hub.js';
 
 /**
- * The use-cases the REST app drives. `symbols` is optional so config-focused
- * tests can build a minimal app; the entry point provides both.
+ * The use-cases the REST app drives. `config` is always present; `symbols`,
+ * `backfill`, and `candleStream` are optional so an app can be composed with just
+ * the surface it needs — each controller is registered only when its dependency is
+ * given. The entry point provides all of them; tests use `buildAppDeps`
+ * (`testing/app-deps.ts`) to fill in-memory defaults for a focused app.
  */
 export interface AppDependencies {
   /**
@@ -15,13 +18,12 @@ export interface AppDependencies {
    */
   symbols?: SymbolService;
   /**
-   * The backfill use-case (historical candles). Optional like `symbols`.
+   * The backfill use-case (historical candles).
    */
   backfill?: BackfillService;
   /**
    * The live-candle stream hub fed by the polling loop. When present, the
-   * multiplexed `GET /stream` WebSocket route is registered. Optional like
-   * `symbols`.
+   * multiplexed `GET /stream` WebSocket route is registered.
    */
   candleStream?: CandleStreamHub;
 }

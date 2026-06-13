@@ -32,8 +32,11 @@ packages (sources, api, logger) join the same way.
 **Adding a Node package** (`core`/`engine`/`cli`-style):
 
 1. `packages/<n>/package.json` — `@lametrader/<n>`, `"type": "module"`, `main`/`types`
-   → `dist/index.js`/`dist/index.d.ts`, `"build": "tsc --build"`. Internal deps as
-   `"@lametrader/<dep>": "0.0.0"`.
+   → `dist/index.js`/`dist/index.d.ts`, `"build": "tsc --build"`. Internal deps pin
+   the dependency's **current** `version` (e.g. `"@lametrader/<dep>": "0.4.0"`), so
+   npm workspace linking resolves them — `npm ci` 404s on a spec the workspace
+   version can't satisfy. Bumping a package's version means updating its dependents'
+   pins too.
 2. `packages/<n>/tsconfig.json` — extends `../../tsconfig.base.json`, `rootDir: src`,
    `outDir: dist`, `include: ["src"]`, `references` to each internal dep.
 3. Add `{ "path": "packages/<n>" }` to the root `tsconfig.json` `references`.
@@ -60,9 +63,10 @@ Every change: **spec → red → green → refactor → check → commit**, one 
 4. **Refactor** — clean under green tests; abstract only on the second instance.
 5. **E2E** — every major feature gets a `*.e2e.test.ts` (poll → persist → process → assert) + its one critical failure mode.
 6. **Check** — `npm run check:full` green.
-7. **Commit** — one logical concern, Conventional Commits message; bump the affected package's `version` (semver) when the change is user-visible/releasable.
+7. **Commit** — one logical concern, Conventional Commits message. Do **not** bump package `version`s here — versioning is a separate flow (`/release`), driven off the conventional-commit history.
 
-`/feature`, `/adr`, `/ship` automate this loop.
+`/feature`, `/adr`, `/ship` automate this loop. `/release` is the separate
+versioning flow — run it when cutting a release, not per change.
 
 ### Test tiers
 
@@ -139,7 +143,6 @@ A change is done only when:
 - [ ] A major feature has an e2e test covering it end-to-end.
 - [ ] `npm run check:full` is green; nothing `.skip`-ped.
 - [ ] It's one logical concern with a Conventional Commits message.
-- [ ] The affected package's `version` is bumped (semver) when the change is releasable.
 - [ ] CLI/API surface changes are reflected in the package `README.md`.
 - [ ] An ADR is written if a non-obvious decision was made.
 - [ ] Prefer deleting code to adding it.

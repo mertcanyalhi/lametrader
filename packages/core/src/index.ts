@@ -5,6 +5,7 @@
  */
 
 export {
+  BackfillConflictError,
   CandleError,
   DEFAULT_CANDLE_LIMIT,
   MAX_CANDLE_LIMIT,
@@ -16,6 +17,7 @@ export type {
   BackfillRange,
   BaseCandle,
   Candle,
+  CandleBatch,
   CandlePage,
   CandleRepository,
   CryptoCandle,
@@ -25,6 +27,7 @@ export type {
 export { ConfigError, defaultConfig, mergeConfig, parseConfig } from './config.js';
 export { type Config, type ConfigRepository, Period } from './config.types.js';
 export {
+  assertInstrumentTypeMatchesId,
   MarketDataError,
   parseSymbolPeriods,
   SymbolConflictError,
@@ -33,8 +36,10 @@ export {
   symbolType,
 } from './symbol.js';
 export {
+  type CandleFeed,
   type Instrument,
   type MarketDataSource,
+  type SymbolDiscovery,
   SymbolType,
   type WatchedSymbol,
   type WatchlistRepository,

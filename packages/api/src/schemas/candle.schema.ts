@@ -48,8 +48,46 @@ export const BackfillSummarySchema = Type.Object(
     to: Type.Union([Type.Number(), Type.Null()]),
     fetched: Type.Number(),
     saved: Type.Number(),
+    complete: Type.Boolean(),
   },
   { $id: 'BackfillSummary', additionalProperties: false },
+);
+
+/**
+ * Path params for a backfill job route: the symbol id and the job id.
+ */
+export const BackfillJobParamSchema = Type.Object(
+  { id: Type.String(), jobId: Type.String() },
+  { additionalProperties: false },
+);
+
+/**
+ * Per-chunk backfill progress.
+ */
+export const BackfillProgressSchema = Type.Object(
+  { saved: Type.Number(), total: Type.Number() },
+  { $id: 'BackfillProgress', additionalProperties: false },
+);
+
+/**
+ * An asynchronous backfill job resource: its id, target, lifecycle status, and
+ * (once available) latest progress, terminal summary, or failure message.
+ */
+export const BackfillJobSchema = Type.Object(
+  {
+    id: Type.String(),
+    symbolId: Type.String(),
+    period: PeriodSchema,
+    status: Type.Union([
+      Type.Literal('running'),
+      Type.Literal('succeeded'),
+      Type.Literal('failed'),
+    ]),
+    progress: Type.Union([BackfillProgressSchema, Type.Null()]),
+    summary: Type.Union([BackfillSummarySchema, Type.Null()]),
+    error: Type.Union([Type.String(), Type.Null()]),
+  },
+  { $id: 'BackfillJob', additionalProperties: false },
 );
 
 /**

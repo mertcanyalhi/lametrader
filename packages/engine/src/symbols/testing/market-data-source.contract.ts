@@ -36,6 +36,12 @@ export function runMarketDataSourceContract(
     expect(results.every((symbol) => source.types.includes(symbol.type))).toBe(true);
   });
 
+  it('declares a non-empty set of supported periods including the probe period', async () => {
+    const source = await make();
+    expect(source.periods.length).toBeGreaterThan(0);
+    expect(source.periods).toContain(testCase.candlePeriod);
+  });
+
   it('lookup resolves an existing id (with an exchange) and returns null for a bogus one', async () => {
     const source = await make();
     const found = await source.lookup(testCase.knownId);
@@ -44,12 +50,13 @@ export function runMarketDataSourceContract(
     expect(await source.lookup(testCase.bogusId)).toBeNull();
   });
 
-  it('fetchCandles returns typed candles ascending by time', async () => {
+  it('fetchCandles returns a batch of typed candles ascending by time, with a completeness flag', async () => {
     const source = await make();
-    const candles = await source.fetchCandles(testCase.knownId, testCase.candlePeriod);
-    expect(candles.length).toBeGreaterThan(0);
-    expect(candles.every((candle) => source.types.includes(candle.type))).toBe(true);
-    const times = candles.map((candle) => candle.time);
+    const batch = await source.fetchCandles(testCase.knownId, testCase.candlePeriod);
+    expect(batch.candles.length).toBeGreaterThan(0);
+    expect(typeof batch.complete).toBe('boolean');
+    expect(batch.candles.every((candle) => source.types.includes(candle.type))).toBe(true);
+    const times = batch.candles.map((candle) => candle.time);
     expect(times).toEqual([...times].sort((a, b) => a - b));
   });
 }

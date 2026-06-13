@@ -1,6 +1,7 @@
 import {
   CandleError,
   type CryptoCandle,
+  type MarketDataSource,
   Period,
   SymbolNotFoundError,
   SymbolType,
@@ -68,6 +69,7 @@ describe('BackfillService', () => {
       to: 3000,
       fetched: 3,
       saved: 3,
+      complete: true,
     });
     expect(await repo.range(BTC.id, Period.OneHour, 0, 4000)).toEqual([
       candle(1000),
@@ -88,6 +90,33 @@ describe('BackfillService', () => {
       to: 2000,
       fetched: 2,
       saved: 2,
+      complete: true,
+    });
+  });
+
+  it('propagates an incomplete batch to the summary when the source caps the fetch', async () => {
+    const cappedSource: MarketDataSource = {
+      types: [SymbolType.Crypto],
+      search: async () => [],
+      lookup: async () => null,
+      fetchCandles: async () => ({ candles: [candle(1000), candle(2000)], complete: false }),
+    };
+    const service = new BackfillService(
+      [cappedSource],
+      repo,
+      new InMemoryWatchlistRepository([BTC]),
+    );
+
+    const summary = await service.backfill(BTC.id, Period.OneHour);
+
+    expect(summary).toEqual({
+      id: BTC.id,
+      period: Period.OneHour,
+      from: 1000,
+      to: 2000,
+      fetched: 2,
+      saved: 2,
+      complete: false,
     });
   });
 

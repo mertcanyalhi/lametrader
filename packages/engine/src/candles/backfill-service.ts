@@ -1,16 +1,15 @@
 import {
   type BackfillRange,
   CandleError,
+  type CandleFeed,
   type CandlePage,
   type CandleRepository,
-  type MarketDataSource,
   type Period,
-  SymbolError,
   SymbolNotFoundError,
-  type SymbolType,
   symbolType,
   type WatchlistRepository,
 } from '@lametrader/core';
+import { sourceForType } from '../symbols/source-registry.js';
 import type { BackfillProgressListener, BackfillSummary } from './backfill-service.types.js';
 
 /**
@@ -22,7 +21,7 @@ const CHUNK_SIZE = 500;
  * Application use-case for backfilling historical OHLC candles for a watched
  * symbol+period.
  *
- * Depends only on ports — the {@link MarketDataSource}s (fetch candles), a
+ * Depends only on ports — the {@link CandleFeed}s (fetch candles), a
  * {@link CandleRepository} (persistence), and the {@link WatchlistRepository}
  * (a backfill targets a symbol the user already watches). Progress is surfaced
  * via an `onProgress` callback so transports (CLI stdout, API WebSocket) render
@@ -30,12 +29,12 @@ const CHUNK_SIZE = 500;
  */
 export class BackfillService {
   /**
-   * @param sources - market-data providers, one or more per asset class.
+   * @param sources - candle-feed providers, one or more per asset class.
    * @param candles - the candle persistence port.
    * @param watchlist - the watchlist persistence port.
    */
   constructor(
-    private readonly sources: MarketDataSource[],
+    private readonly sources: CandleFeed[],
     private readonly candles: CandleRepository,
     private readonly watchlist: WatchlistRepository,
   ) {}
@@ -51,12 +50,16 @@ export class BackfillService {
    * @throws {@link SymbolNotFoundError} when the symbol is not watched.
    * @throws {@link CandleError} when `period` is not among the symbol's periods.
    */
-  async backfill(
-    id: string,
-    period: Period,
-    range?: BackfillRange,
-    onProgress?: BackfillProgressListener,
-  ): Promise<BackfillSummary> {
+  /**
+   * Validate that `id` is watched and `period` is one of its watched periods —
+   * the synchronous preconditions of a backfill. Extracted so an async caller
+   * (the job service) can surface a not-watched/bad-period as a client error
+   * before starting background work; `backfill` calls it too.
+   *
+   * @throws {@link SymbolNotFoundError} when the symbol is not watched.
+   * @throws {@link CandleError} when `period` is not among the symbol's periods.
+   */
+  async assertBackfillable(id: string, period: Period): Promise<void> {
     const watched = await this.watchlist.get(id);
     if (!watched) {
       throw new SymbolNotFoundError(`symbol not watched: ${id}`);
@@ -64,9 +67,18 @@ export class BackfillService {
     if (!watched.periods.includes(period)) {
       throw new CandleError(`period ${period} is not watched for ${id}`);
     }
+  }
 
-    const source = this.sourceForType(symbolType(id));
-    const fetched = await source.fetchCandles(id, period, range);
+  async backfill(
+    id: string,
+    period: Period,
+    range?: BackfillRange,
+    onProgress?: BackfillProgressListener,
+  ): Promise<BackfillSummary> {
+    await this.assertBackfillable(id, period);
+
+    const source = sourceForType(this.sources, symbolType(id));
+    const { candles: fetched, complete } = await source.fetchCandles(id, period, range);
 
     let saved = 0;
     for (let i = 0; i < fetched.length; i += CHUNK_SIZE) {
@@ -85,6 +97,7 @@ export class BackfillService {
       to: last?.time ?? null,
       fetched: fetched.length,
       saved,
+      complete,
     };
   }
 
@@ -110,18 +123,5 @@ export class BackfillService {
       return { candles, nextCursor: rows[limit]?.time ?? null };
     }
     return { candles: rows, nextCursor: null };
-  }
-
-  /**
-   * Resolve the source that serves a given asset type.
-   *
-   * @throws {@link SymbolError} when no registered source serves the type.
-   */
-  private sourceForType(type: SymbolType): MarketDataSource {
-    const source = this.sources.find((candidate) => candidate.types.includes(type));
-    if (!source) {
-      throw new SymbolError(`no market-data source for type: ${type}`);
-    }
-    return source;
   }
 }
