@@ -32,8 +32,11 @@ packages (sources, api, logger) join the same way.
 **Adding a Node package** (`core`/`engine`/`cli`-style):
 
 1. `packages/<n>/package.json` — `@lametrader/<n>`, `"type": "module"`, `main`/`types`
-   → `dist/index.js`/`dist/index.d.ts`, `"build": "tsc --build"`. Internal deps as
-   `"@lametrader/<dep>": "0.0.0"`.
+   → `dist/index.js`/`dist/index.d.ts`, `"build": "tsc --build"`. Internal deps pin
+   the dependency's **current** `version` (e.g. `"@lametrader/<dep>": "0.4.0"`), so
+   npm workspace linking resolves them — `npm ci` 404s on a spec the workspace
+   version can't satisfy. Bumping a package's version means updating its dependents'
+   pins too.
 2. `packages/<n>/tsconfig.json` — extends `../../tsconfig.base.json`, `rootDir: src`,
    `outDir: dist`, `include: ["src"]`, `references` to each internal dep.
 3. Add `{ "path": "packages/<n>" }` to the root `tsconfig.json` `references`.
