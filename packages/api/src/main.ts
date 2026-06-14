@@ -11,11 +11,11 @@ const { mongoUri, apiPort, pollIntervals } = loadSettings();
 // The hub bridges the engine's transport-agnostic `onCandle` callback to the
 // `/stream` WebSocket route (see ADR-0005).
 const candleStream = new CandleStreamHub();
-const { config, symbols, backfill, polling, close } = await connectServices(mongoUri, {
+const { config, symbols, profiles, backfill, polling, close } = await connectServices(mongoUri, {
   onCandle: (event) => candleStream.publish(event),
   pollIntervals,
 });
-const app = createApp({ config, symbols, backfill, candleStream }, { logger: true });
+const app = createApp({ config, symbols, profiles, backfill, candleStream }, { logger: true });
 
 /**
  * Stop polling, close the HTTP server and database connection on a termination signal.

@@ -3,7 +3,9 @@ import {
   ConfigService,
   InMemoryCandleRepository,
   InMemoryMarketDataSource,
+  InMemoryProfileRepository,
   InMemoryWatchlistRepository,
+  ProfileService,
   SymbolService,
 } from '@lametrader/engine';
 import type { AppDependencies } from '../app.types.js';
@@ -22,9 +24,12 @@ export function buildAppDeps(overrides: Partial<AppDependencies> = {}): AppDepen
   const watchlist = new InMemoryWatchlistRepository();
   const candles = new InMemoryCandleRepository();
   const sources = [new InMemoryMarketDataSource([])];
+  const profiles =
+    overrides.profiles ?? new ProfileService(new InMemoryProfileRepository(), watchlist);
   return {
     config,
-    symbols: overrides.symbols ?? new SymbolService(sources, watchlist, config, candles),
+    symbols: overrides.symbols ?? new SymbolService(sources, watchlist, config, candles, profiles),
+    profiles,
     backfill: overrides.backfill ?? new BackfillService(sources, candles, watchlist),
   };
 }

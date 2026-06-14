@@ -13,6 +13,7 @@ import {
   type WatchlistRepository,
 } from '@lametrader/core';
 import type { ConfigService } from '../config/config-service.js';
+import type { ProfileService } from '../profiles/profile-service.js';
 import { assertSourceSupportsPeriods, sourceForType } from './source-registry.js';
 
 /**
@@ -29,12 +30,15 @@ export class SymbolService {
    * @param watchlist - the watchlist persistence port.
    * @param config - the configuration use-case (for supported/default periods).
    * @param candles - the candle persistence port (cascaded on removal).
+   * @param profiles - optional profiles use-case; when present, removing a symbol
+   *   prunes it from every profile's scope (cascaded on removal).
    */
   constructor(
     private readonly sources: SymbolDiscovery[],
     private readonly watchlist: WatchlistRepository,
     private readonly config: ConfigService,
     private readonly candles: CandleRepository,
+    private readonly profiles?: ProfileService,
   ) {}
 
   /**
@@ -93,12 +97,16 @@ export class SymbolService {
   }
 
   /**
-   * Remove a symbol from the watchlist and delete its stored candles (all
-   * periods). Idempotent.
+   * Remove a symbol from the watchlist, delete its stored candles (all periods),
+   * and prune it from every profile's scope (when a profiles use-case is wired).
+   * Idempotent.
    */
   async remove(id: string): Promise<void> {
     await this.watchlist.remove(id);
     await this.candles.deleteSymbol(id);
+    if (this.profiles) {
+      await this.profiles.pruneSymbol(id);
+    }
   }
 
   /**

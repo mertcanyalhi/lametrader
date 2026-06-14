@@ -1,4 +1,9 @@
-import type { BackfillService, ConfigService, SymbolService } from '@lametrader/engine';
+import type {
+  BackfillService,
+  ConfigService,
+  ProfileService,
+  SymbolService,
+} from '@lametrader/engine';
 import type { CandleStreamHub } from './candle-stream-hub.js';
 
 /**
@@ -17,6 +22,11 @@ export interface AppDependencies {
    * The symbols use-case (discovery / watchlist).
    */
   symbols?: SymbolService;
+  /**
+   * The profiles use-case (CRUD). When present, the `/profiles` routes are
+   * registered.
+   */
+  profiles?: ProfileService;
   /**
    * The backfill use-case (historical candles).
    */

@@ -6,4 +6,5 @@
  */
 export { runCandles } from './candles.js';
 export { runConfig } from './config.js';
+export { runProfiles } from './profile.js';
 export { runSymbols } from './symbols.js';

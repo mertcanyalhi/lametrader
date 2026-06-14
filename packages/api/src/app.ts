@@ -8,6 +8,9 @@ import {
   CandleError,
   ConfigError,
   MarketDataError,
+  ProfileConflictError,
+  ProfileError,
+  ProfileNotFoundError,
   SymbolConflictError,
   SymbolError,
   SymbolNotFoundError,
@@ -18,6 +21,7 @@ import type { AppDependencies, AppOptions } from './app.types.js';
 import { BackfillJobHub } from './backfill-job-hub.js';
 import { candlesController } from './controllers/candles.controller.js';
 import { configController } from './controllers/config.controller.js';
+import { profilesController } from './controllers/profiles.controller.js';
 import { streamController } from './controllers/stream.controller.js';
 import { symbolsController } from './controllers/symbols.controller.js';
 
@@ -49,6 +53,7 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
       tags: [
         { name: 'config', description: 'Global configuration' },
         { name: 'symbols', description: 'Symbol discovery and watchlist' },
+        { name: 'profiles', description: 'Profiles (selectable templates)' },
         { name: 'candles', description: 'Historical candle backfill and reads' },
       ],
     },
@@ -57,11 +62,15 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
   app.register(fastifyWebsocket);
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
-    if (error instanceof SymbolNotFoundError) {
+    if (error instanceof SymbolNotFoundError || error instanceof ProfileNotFoundError) {
       reply.code(404).send({ error: error.message });
       return;
     }
-    if (error instanceof SymbolConflictError || error instanceof BackfillConflictError) {
+    if (
+      error instanceof SymbolConflictError ||
+      error instanceof BackfillConflictError ||
+      error instanceof ProfileConflictError
+    ) {
       reply.code(409).send({ error: error.message });
       return;
     }
@@ -69,7 +78,8 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
       error.validation ||
       error instanceof ConfigError ||
       error instanceof SymbolError ||
-      error instanceof CandleError
+      error instanceof CandleError ||
+      error instanceof ProfileError
     ) {
       reply.code(400).send({ error: error.message });
       return;
@@ -92,6 +102,9 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
   app.register(configController(deps.config));
   if (deps.symbols) {
     app.register(symbolsController(deps.symbols));
+  }
+  if (deps.profiles) {
+    app.register(profilesController(deps.profiles));
   }
   if (deps.backfill) {
     // Wire the async backfill-job use-case to a per-job hub: the application
