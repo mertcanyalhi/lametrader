@@ -1,7 +1,12 @@
 # Local development infrastructure for lametrader.
 #
-#   docker compose -f infra/docker-compose.yml up -d           # MongoDB
+#   docker compose -f infra/docker-compose.yml up -d           # MongoDB only
 #   docker compose -f infra/docker-compose.yml --profile tools up -d   # + mongo-express UI
+#   docker compose -f infra/docker-compose.yml --profile app   up -d   # + api + web
+#
+# The default (no profile) brings up just MongoDB, keeping the unit-test +
+# `npm run api:dev` / `npm run web` loop unchanged. The `app` profile is the
+# full-stack one — api and web both built from the workspace Dockerfiles.
 #
 # All settings have sane defaults, so it runs without an .env file. Copy
 # .env.example to .env in this folder to override credentials/ports.
@@ -42,6 +47,39 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+
+  # Fastify API. Opt-in via `--profile app`. Build context is the repo root so
+  # the Dockerfile can `npm ci` the full workspace.
+  api:
+    profiles: ["app"]
+    container_name: lametrader-api
+    build:
+      context: ..
+      dockerfile: packages/api/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-3000}:3000"
+    environment:
+      MONGODB_URI: mongodb://${MONGO_USER:-lametrader}:${MONGO_PASSWORD:-lametrader}@mongo:27017/${MONGO_DB:-lametrader}?authSource=admin
+      PORT: "3000"
+      NODE_ENV: production
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  # Web SPA served by nginx, with `/api/*` reverse-proxied to the api service —
+  # the browser sees one origin, so no CORS is needed. Opt-in via `--profile app`.
+  web:
+    profiles: ["app"]
+    container_name: lametrader-web
+    build:
+      context: ..
+      dockerfile: packages/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    depends_on:
+      - api
 
 volumes:
   mongo-data:

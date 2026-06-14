@@ -27,7 +27,11 @@
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
     "infra:logs": "docker compose -f infra/docker-compose.yml logs -f",
-    "infra:reset": "docker compose -f infra/docker-compose.yml down -v"
+    "infra:reset": "docker compose -f infra/docker-compose.yml down -v",
+    "app:up": "docker compose -f infra/docker-compose.yml --profile app up -d --build",
+    "app:down": "docker compose -f infra/docker-compose.yml --profile app down",
+    "app:logs": "docker compose -f infra/docker-compose.yml --profile app logs -f",
+    "app:build": "docker compose -f infra/docker-compose.yml --profile app build"
   },
   "engines": {
     "node": ">=20"
