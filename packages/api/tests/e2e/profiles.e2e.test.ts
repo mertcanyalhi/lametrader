@@ -142,6 +142,7 @@ describe('profiles API (e2e)', () => {
       url: '/profiles',
       payload: { name: 'OnlyBtc', scope: { type: 'symbols', symbolIds: ['crypto:BTCUSDT'] } },
     });
+    expect(create.statusCode).toBe(201);
     const id = (create.json() as Profile).id;
 
     expect(
