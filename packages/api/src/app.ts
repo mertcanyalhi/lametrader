@@ -118,7 +118,7 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
     app.register(profilesController(deps.profiles));
   }
   if (deps.indicators) {
-    app.register(indicatorsController(deps.indicators));
+    app.register(indicatorsController(deps.indicators, deps.indicatorCompute));
   }
   if (deps.backfill) {
     // Wire the async backfill-job use-case to a per-job hub: the application

@@ -1,6 +1,7 @@
 import type {
   BackfillService,
   ConfigService,
+  IndicatorComputeService,
   IndicatorRegistry,
   ProfileService,
   SymbolService,
@@ -44,6 +45,12 @@ export interface AppDependencies {
    * When present, the `/indicators` routes are registered.
    */
   indicators?: IndicatorRegistry;
+  /**
+   * The indicator compute use-case (ad-hoc historical series).
+   *
+   * When present alongside `indicators`, `GET /symbols/:id/indicators/:key` is registered.
+   */
+  indicatorCompute?: IndicatorComputeService;
 }
 
 /**

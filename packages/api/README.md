@@ -261,10 +261,24 @@ The shipped reference modules are **`sma`** (simple moving average) and **`vwma`
 
 ### Endpoints
 
-| Method | Path                | Body | Description                                                                |
-| ------ | ------------------- | ---- | -------------------------------------------------------------------------- |
-| `GET`  | `/indicators`       | —    | List every registered definition.                                          |
-| `GET`  | `/indicators/{key}` | —    | Get one definition by key. **200** / 404 with `{ "error": "<reason>" }`.   |
+| Method | Path                                         | Body | Description                                                                |
+| ------ | -------------------------------------------- | ---- | -------------------------------------------------------------------------- |
+| `GET`  | `/indicators`                                | —    | List every registered definition.                                          |
+| `GET`  | `/indicators/{key}`                          | —    | Get one definition by key. **200** / 404 with `{ "error": "<reason>" }`.   |
+| `GET`  | `/symbols/{id}/indicators/{key}?period=…&…` | —    | Compute the indicator over the symbol's stored candles. **200** / 400 / 404. |
+
+### Compute query
+
+The compute route takes the indicator's scalar inputs as query parameters alongside `period`, optional `from` (epoch ms), and optional `to` (epoch ms):
+
+- `period` is required and must be one of `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`, `1w`.
+- Numeric inputs like `length` come in as query strings; the service coerces them to numbers before validating against the indicator's descriptors.
+- The compute service loads candles from the **earliest stored candle** and slices the result to `[from, to)` afterward — so the first row of a requested sub-range is already past warm-up.
+
+Errors map to `{ "error": "<reason>" }`:
+
+- **404** when the symbol isn't on the watchlist or the indicator key is unknown.
+- **400** on invalid inputs (out-of-range, wrong type) or an asset-class mismatch (e.g. an FX symbol with a volume-based indicator).
 
 ### Examples
 
@@ -272,6 +286,15 @@ The shipped reference modules are **`sma`** (simple moving average) and **`vwma`
 curl http://localhost:3000/indicators
 curl http://localhost:3000/indicators/sma
 curl http://localhost:3000/indicators/vwma
+
+# compute SMA(3) on a backfilled crypto symbol
+curl 'http://localhost:3000/symbols/crypto:BTCUSDT/indicators/sma?period=1h&length=3'
+
+# slice to a sub-range (the first row is already warm)
+curl 'http://localhost:3000/symbols/crypto:BTCUSDT/indicators/sma?period=1h&length=3&from=1704153600000'
+
+# VWMA with a deviation threshold and both buy/sell signals
+curl 'http://localhost:3000/symbols/crypto:BTCUSDT/indicators/vwma?period=1h&length=14&multiplier=1&direction=both'
 ```
 
 ## Live candle stream

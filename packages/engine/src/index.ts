@@ -29,6 +29,7 @@ export { MongoConfigRepository } from './config/mongo-config-repository.js';
 export { type ConnectedServices, type ConnectOptions, connectServices } from './connect.js';
 export { defaultIndicators } from './indicators/default-indicators.js';
 export { type DefineIndicatorSpec, defineIndicator } from './indicators/define-indicator.js';
+export { IndicatorComputeService } from './indicators/indicator-compute-service.js';
 export { IndicatorRegistry } from './indicators/indicator-registry.js';
 export { movingAverage } from './indicators/sma.js';
 export { volumeWeightedMovingAverage } from './indicators/vwma.js';

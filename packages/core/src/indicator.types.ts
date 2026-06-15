@@ -1,4 +1,5 @@
 import type { Candle } from './candle.types.js';
+import type { Period } from './config.types.js';
 import type { SymbolType } from './symbol.types.js';
 
 /**
@@ -221,6 +222,29 @@ export type InferStateRow<S extends readonly StateFieldDescriptor[]> = { time: n
  * The output series an indicator's `compute` returns — one row per input candle.
  */
 export type InferStateSeries<S extends readonly StateFieldDescriptor[]> = InferStateRow<S>[];
+
+/**
+ * One row of a computed indicator series, aligned to a candle by `time`.
+ *
+ * Each remaining key is a `state` descriptor's `key` carrying its per-bar value (or `null` during warm-up / non-firing bars).
+ */
+export type IndicatorStatePoint = { time: number } & Record<string, unknown>;
+
+/**
+ * The transport shape returned by the indicator compute service.
+ *
+ * Carries the indicator key, the definition's `version` at compute time, the period the candles were sampled at, and the aligned state series.
+ */
+export interface IndicatorComputeResult {
+  /** The indicator that produced the result. */
+  indicatorKey: string;
+  /** The `definition.version` at compute time. */
+  version: number;
+  /** The period the candles were sampled at. */
+  period: Period;
+  /** The aligned state series, one row per included candle. */
+  state: IndicatorStatePoint[];
+}
 
 /**
  * The JSON-serializable metadata declaring an indicator.
