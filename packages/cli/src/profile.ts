@@ -3,6 +3,36 @@ import { ProfileScope } from '@lametrader/core';
 import type { IndicatorInstanceInput, ProfileService } from '@lametrader/engine';
 
 /**
+ * The recognized subcommands of the `profile` CLI command.
+ */
+enum ProfileSubcommand {
+  /** List every profile. */
+  List = 'list',
+  /** Create a new profile. */
+  Create = 'create',
+  /** Patch an existing profile. */
+  Update = 'update',
+  /** Remove a profile. */
+  Delete = 'delete',
+  /** Sub-group for managing attached indicator instances. */
+  Indicators = 'indicators',
+}
+
+/**
+ * The recognized subcommands of the `profile indicators` sub-group.
+ */
+enum ProfileIndicatorsSubcommand {
+  /** List the profile's attached instances. */
+  List = 'list',
+  /** Attach a new instance. */
+  Add = 'add',
+  /** Full-replace an existing instance. */
+  Update = 'update',
+  /** Detach an instance. */
+  Remove = 'remove',
+}
+
+/**
  * Run the `profile` CLI command against a {@link ProfileService} and return the output to print.
  *
  * Subcommands:
@@ -19,9 +49,9 @@ import type { IndicatorInstanceInput, ProfileService } from '@lametrader/engine'
 export async function runProfiles(argv: string[], service: ProfileService): Promise<string> {
   const [subcommand, ...rest] = argv;
   switch (subcommand) {
-    case 'list':
+    case ProfileSubcommand.List:
       return json(await service.list());
-    case 'create': {
+    case ProfileSubcommand.Create: {
       const { values } = parseArgs({
         args: rest,
         options: {
@@ -43,7 +73,7 @@ export async function runProfiles(argv: string[], service: ProfileService): Prom
         }),
       );
     }
-    case 'update': {
+    case ProfileSubcommand.Update: {
       const { values, positionals } = parseArgs({
         args: rest,
         allowPositionals: true,
@@ -69,14 +99,14 @@ export async function runProfiles(argv: string[], service: ProfileService): Prom
       }
       return json(await service.update(id, patch));
     }
-    case 'delete': {
+    case ProfileSubcommand.Delete: {
       const { positionals } = parseArgs({ args: rest, allowPositionals: true });
       const id = positionals[0];
       if (!id) throw new Error('delete requires an id');
       await service.remove(id);
       return `deleted ${id}`;
     }
-    case 'indicators':
+    case ProfileSubcommand.Indicators:
       return runProfileIndicators(rest, service);
     default:
       throw new Error(`unknown profile subcommand: ${subcommand ?? '(none)'}`);
@@ -96,13 +126,13 @@ export async function runProfiles(argv: string[], service: ProfileService): Prom
 async function runProfileIndicators(argv: string[], service: ProfileService): Promise<string> {
   const [subcommand, ...rest] = argv;
   switch (subcommand) {
-    case 'list': {
+    case ProfileIndicatorsSubcommand.List: {
       const { positionals } = parseArgs({ args: rest, allowPositionals: true });
       const profileId = positionals[0];
       if (!profileId) throw new Error('list requires a profileId');
       return json(await service.listIndicators(profileId));
     }
-    case 'add': {
+    case ProfileIndicatorsSubcommand.Add: {
       const { values, positionals } = parseArgs({
         args: rest,
         allowPositionals: true,
@@ -116,7 +146,7 @@ async function runProfileIndicators(argv: string[], service: ProfileService): Pr
       if (!profileId) throw new Error('add requires a profileId');
       return json(await service.addIndicator(profileId, parseIndicatorInput(values)));
     }
-    case 'update': {
+    case ProfileIndicatorsSubcommand.Update: {
       const { values, positionals } = parseArgs({
         args: rest,
         allowPositionals: true,
@@ -133,7 +163,7 @@ async function runProfileIndicators(argv: string[], service: ProfileService): Pr
         await service.replaceIndicator(profileId, instanceId, parseIndicatorInput(values)),
       );
     }
-    case 'remove': {
+    case ProfileIndicatorsSubcommand.Remove: {
       const { positionals } = parseArgs({ args: rest, allowPositionals: true });
       const profileId = positionals[0];
       const instanceId = positionals[1];
