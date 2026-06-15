@@ -1,81 +1,178 @@
+import {
+  IndicatorError,
+  IndicatorNotFoundError,
+  type Period,
+  SymbolNotFoundError,
+} from '@lametrader/core';
 import type { FastifyInstance } from 'fastify';
-import type { CandleStreamHub } from '../candle-stream-hub.js';
+import type { LiveStream } from '../app.types.js';
 
 /**
- * A control message a `/stream` client sends to start or stop watching a symbol.
+ * Control messages a `/stream` client can send to start or stop watching live data.
+ *
+ * Two surfaces multiplexed on the same socket:
+ *
+ * 1. **Candle subscriptions** — keyed by symbol id.
+ * 2. **Indicator subscriptions** — keyed by a server-generated subscription id, scoped to `(id, period, indicator: { key, inputs })`.
  */
-interface StreamControlMessage {
-  /** Whether to start or stop streaming. */
-  action: 'subscribe' | 'unsubscribe';
-  /** The canonical symbol id to (un)watch. */
-  id: string;
-}
+type StreamControlMessage =
+  | { action: 'subscribe' | 'unsubscribe'; id: string }
+  | {
+      action: 'subscribe-indicator';
+      id: string;
+      period: Period;
+      indicator: { key: string; inputs?: Record<string, unknown> };
+    }
+  | { action: 'unsubscribe-indicator'; subscriptionId: string };
 
 /**
- * Register the multiplexed live-candle WebSocket route over a {@link CandleStreamHub}.
+ * Register the multiplexed live-stream WebSocket route over a {@link LiveStream}.
  *
- * `GET /stream` (WebSocket): a client sends `{ action: 'subscribe', id }` /
- * `{ action: 'unsubscribe', id }` messages so one socket can watch many symbols.
- * Each `CandleEvent` for a subscribed id is forwarded as a JSON frame; closing the
- * socket unsubscribes everything. The {@link PollingService} feeds the hub via its
- * `onCandle` callback, so the engine has no WebSocket dependency (ADR-0005).
+ * `GET /stream` (WebSocket): one socket can multiplex
  *
- * Connection lifecycle and (un)subscriptions are logged through the request's Pino
- * logger for traceability; a malformed or invalid control message is logged and
- * answered with an `{ error }` frame rather than being silently dropped.
+ * - candle subscriptions via `{ action: 'subscribe' | 'unsubscribe', id }` — each `CandleEvent` for a subscribed id is forwarded as a JSON frame.
+ * - indicator subscriptions via `{ action: 'subscribe-indicator', id, period, indicator: { key, inputs? } }` — the server validates, calls `IndicatorStreamService.subscribe(...)`, and replies with `{ action: 'subscribed-indicator', subscriptionId, id, period, indicatorKey }`.
+ *   Subsequent state events arrive as `IndicatorStateEvent` frames. The client unsubscribes via `{ action: 'unsubscribe-indicator', subscriptionId }`.
  *
- * @param hub - the live-candle pub/sub the polling loop publishes to.
+ * Closing the socket releases every subscription on it (both candle and indicator).
+ *
+ * Malformed or invalid control messages are logged and answered with an `{ error }` frame rather than being silently dropped.
+ *
+ * The engine has no WebSocket dependency (ADR-0005); the polling loop feeds the candle hub via `onCandle` and the indicator stream service via its own `onState`.
+ *
+ * @param liveStream - the bundle of streaming dependencies (see {@link LiveStream}).
  */
-export function streamController(hub: CandleStreamHub) {
+export function streamController(liveStream: LiveStream) {
+  const { candleStream, indicatorStream, indicatorStreamService } = liveStream;
   return async (app: FastifyInstance): Promise<void> => {
     app.get('/stream', { websocket: true }, (socket, request) => {
       const log = request.log;
-      const unsubscribes = new Map<string, () => void>();
-      log.info('candle stream client connected');
+      const candleUnsubscribes = new Map<string, () => void>();
+      const indicatorUnsubscribes = new Map<string, () => void>();
+      log.info('stream client connected');
 
       socket.on('message', (raw: Buffer) => {
         let message: StreamControlMessage;
         try {
-          message = JSON.parse(raw.toString());
+          message = JSON.parse(raw.toString()) as StreamControlMessage;
         } catch (error) {
-          log.warn({ err: error }, 'rejecting malformed candle stream message (invalid JSON)');
+          log.warn({ err: error }, 'rejecting malformed stream message (invalid JSON)');
           socket.send(JSON.stringify({ error: 'invalid JSON message' }));
           return;
         }
 
-        if (
-          !message ||
-          typeof message.id !== 'string' ||
-          (message.action !== 'subscribe' && message.action !== 'unsubscribe')
-        ) {
-          log.warn({ message }, 'rejecting invalid candle stream control message');
-          socket.send(
-            JSON.stringify({
-              error: 'message must be { action: "subscribe" | "unsubscribe", id: string }',
-            }),
-          );
-          return;
-        }
-
-        if (message.action === 'subscribe') {
-          if (unsubscribes.has(message.id)) return;
-          unsubscribes.set(
-            message.id,
-            hub.subscribe(message.id, (event) => socket.send(JSON.stringify(event))),
-          );
-          log.info({ id: message.id }, 'candle stream subscribed');
-        } else {
-          unsubscribes.get(message.id)?.();
-          unsubscribes.delete(message.id);
-          log.info({ id: message.id }, 'candle stream unsubscribed');
+        switch (message?.action) {
+          case 'subscribe':
+            handleCandleSubscribe(message.id);
+            return;
+          case 'unsubscribe':
+            handleCandleUnsubscribe(message.id);
+            return;
+          case 'subscribe-indicator':
+            void handleIndicatorSubscribe(message);
+            return;
+          case 'unsubscribe-indicator':
+            handleIndicatorUnsubscribe(message.subscriptionId);
+            return;
+          default:
+            log.warn({ message }, 'rejecting invalid stream control message');
+            socket.send(JSON.stringify({ error: 'unknown action' }));
         }
       });
 
       socket.on('close', () => {
-        for (const unsubscribe of unsubscribes.values()) unsubscribe();
-        unsubscribes.clear();
-        log.info('candle stream client disconnected');
+        for (const unsubscribe of candleUnsubscribes.values()) unsubscribe();
+        candleUnsubscribes.clear();
+        for (const [subscriptionId, unsubscribe] of indicatorUnsubscribes) {
+          unsubscribe();
+          indicatorStreamService.unsubscribe(subscriptionId);
+        }
+        indicatorUnsubscribes.clear();
+        log.info('stream client disconnected');
       });
+
+      function handleCandleSubscribe(id: string): void {
+        if (typeof id !== 'string') {
+          socket.send(JSON.stringify({ error: 'subscribe requires id: string' }));
+          return;
+        }
+        if (candleUnsubscribes.has(id)) return;
+        candleUnsubscribes.set(
+          id,
+          candleStream.subscribe(id, (event) => socket.send(JSON.stringify(event))),
+        );
+        log.info({ id }, 'candle stream subscribed');
+      }
+
+      function handleCandleUnsubscribe(id: string): void {
+        candleUnsubscribes.get(id)?.();
+        candleUnsubscribes.delete(id);
+        log.info({ id }, 'candle stream unsubscribed');
+      }
+
+      async function handleIndicatorSubscribe(
+        message: Extract<StreamControlMessage, { action: 'subscribe-indicator' }>,
+      ): Promise<void> {
+        if (
+          typeof message.id !== 'string' ||
+          typeof message.period !== 'string' ||
+          !message.indicator ||
+          typeof message.indicator.key !== 'string'
+        ) {
+          socket.send(JSON.stringify({ error: 'invalid subscribe-indicator message' }));
+          return;
+        }
+        let subscriptionId: string;
+        try {
+          subscriptionId = await indicatorStreamService.subscribe({
+            id: message.id,
+            period: message.period,
+            indicatorKey: message.indicator.key,
+            inputs: message.indicator.inputs ?? {},
+          });
+        } catch (error) {
+          const reason = (error as Error).message;
+          log.warn({ err: error }, 'rejecting indicator subscribe');
+          if (
+            error instanceof SymbolNotFoundError ||
+            error instanceof IndicatorNotFoundError ||
+            error instanceof IndicatorError
+          ) {
+            socket.send(JSON.stringify({ error: reason }));
+            return;
+          }
+          socket.send(JSON.stringify({ error: 'subscribe-indicator failed' }));
+          return;
+        }
+        indicatorUnsubscribes.set(
+          subscriptionId,
+          indicatorStream.subscribe(subscriptionId, (event) => socket.send(JSON.stringify(event))),
+        );
+        socket.send(
+          JSON.stringify({
+            action: 'subscribed-indicator',
+            subscriptionId,
+            id: message.id,
+            period: message.period,
+            indicatorKey: message.indicator.key,
+          }),
+        );
+        log.info(
+          { subscriptionId, id: message.id, period: message.period },
+          'indicator stream subscribed',
+        );
+      }
+
+      function handleIndicatorUnsubscribe(subscriptionId: string): void {
+        if (typeof subscriptionId !== 'string') {
+          socket.send(JSON.stringify({ error: 'unsubscribe-indicator requires subscriptionId' }));
+          return;
+        }
+        indicatorUnsubscribes.get(subscriptionId)?.();
+        indicatorUnsubscribes.delete(subscriptionId);
+        indicatorStreamService.unsubscribe(subscriptionId);
+        log.info({ subscriptionId }, 'indicator stream unsubscribed');
+      }
     });
   };
 }

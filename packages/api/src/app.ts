@@ -127,8 +127,8 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
     );
     app.register(candlesController(deps.backfill, backfillJobs, backfillHub));
   }
-  if (deps.candleStream) {
-    app.register(streamController(deps.candleStream));
+  if (deps.liveStream) {
+    app.register(streamController(deps.liveStream));
   }
 
   return app;

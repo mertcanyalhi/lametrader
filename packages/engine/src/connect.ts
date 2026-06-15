@@ -1,4 +1,4 @@
-import type { Period } from '@lametrader/core';
+import type { IndicatorStateListener, Period } from '@lametrader/core';
 import { MongoClient } from 'mongodb';
 import { BackfillService } from './candles/backfill-service.js';
 import { MongoCandleRepository } from './candles/mongo-candle-repository.js';
@@ -9,6 +9,7 @@ import { MongoConfigRepository } from './config/mongo-config-repository.js';
 import { defaultIndicators } from './indicators/default-indicators.js';
 import { IndicatorComputeService } from './indicators/indicator-compute-service.js';
 import type { IndicatorRegistry } from './indicators/indicator-registry.js';
+import { IndicatorStreamService } from './indicators/indicator-stream-service.js';
 import { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 import { ProfileService } from './profiles/profile-service.js';
 import { defaultMarketDataSources } from './symbols/default-sources.js';
@@ -22,6 +23,8 @@ import { SymbolService } from './symbols/symbol-service.js';
 export interface ConnectOptions {
   /** Where the polling loop emits each observed candle (defaults to a no-op). */
   onCandle?: CandleListener;
+  /** Where the indicator stream service emits each computed state event (defaults to a no-op). */
+  onIndicatorState?: IndicatorStateListener;
   /** Per-period poll cadence in ms (required to enable a useful polling loop). */
   pollIntervals: Record<Period, number>;
 }
@@ -40,6 +43,8 @@ export interface ConnectedServices {
   indicators: IndicatorRegistry;
   /** Ad-hoc indicator compute over a symbol's stored candles. */
   indicatorCompute: IndicatorComputeService;
+  /** Live indicator-state streaming (subscription registry + onCandle reaction). */
+  indicatorStream: IndicatorStreamService;
   /** The backfill use-case (historical candles). */
   backfill: BackfillService;
   /** The continuous polling + live-streaming loop. */
@@ -75,11 +80,22 @@ export async function connectServices(
   const config = new ConfigService(new MongoConfigRepository(db));
   const indicators = defaultIndicators();
   const indicatorCompute = new IndicatorComputeService(indicators, watchlist, candleRepo);
+  const indicatorStream = new IndicatorStreamService(indicators, watchlist, indicatorCompute, {
+    onState: options.onIndicatorState ?? (() => {}),
+  });
   const profiles = new ProfileService(new MongoProfileRepository(db), watchlist, indicators);
   const symbols = new SymbolService(sources, watchlist, config, candleRepo, profiles);
   const backfill = new BackfillService(sources, candleRepo, watchlist);
+
+  // Fan the polling loop's per-candle event to both sinks: the user-supplied
+  // `onCandle` (renders to the candle WS hub) and the indicator stream service
+  // (which recomputes for matching subscriptions and emits via its `onState`).
+  const candleListener = options.onCandle ?? (() => {});
   const polling = new PollingService(sources, candleRepo, watchlist, {
-    onCandle: options.onCandle ?? (() => {}),
+    onCandle: (event) => {
+      candleListener(event);
+      void indicatorStream.handleCandle(event);
+    },
     intervals: options.pollIntervals,
   });
   return {
@@ -88,6 +104,7 @@ export async function connectServices(
     profiles,
     indicators,
     indicatorCompute,
+    indicatorStream,
     backfill,
     polling,
     close: async () => {

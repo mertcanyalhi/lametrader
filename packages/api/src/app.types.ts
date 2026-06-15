@@ -3,10 +3,26 @@ import type {
   ConfigService,
   IndicatorComputeService,
   IndicatorRegistry,
+  IndicatorStreamService,
   ProfileService,
   SymbolService,
 } from '@lametrader/engine';
 import type { CandleStreamHub } from './candle-stream-hub.js';
+import type { IndicatorStreamHub } from './indicator-stream-hub.js';
+
+/**
+ * The live-stream surface — the candle hub the polling loop publishes to, plus the indicator-stream service + its WS-side hub.
+ *
+ * Paired so the `/stream` route registers all-or-nothing: when streaming is wired, it handles both candle subscriptions and indicator subscriptions; when absent, the route doesn't register.
+ */
+export interface LiveStream {
+  /** The live-candle pub/sub the polling loop publishes to. */
+  candleStream: CandleStreamHub;
+  /** The indicator-state pub/sub fed by the indicator stream service's `onState` callback. */
+  indicatorStream: IndicatorStreamHub;
+  /** The engine-side stream service; the route calls its `subscribe`/`unsubscribe`. */
+  indicatorStreamService: IndicatorStreamService;
+}
 
 /**
  * The use-cases the REST app drives. `config` is always present; `symbols`,
@@ -35,10 +51,13 @@ export interface AppDependencies {
    */
   backfill?: BackfillService;
   /**
-   * The live-candle stream hub fed by the polling loop. When present, the
-   * multiplexed `GET /stream` WebSocket route is registered.
+   * The live-stream surface.
+   *
+   * When present, the multiplexed `GET /stream` WebSocket route is registered with handlers for both candle subscriptions and indicator subscriptions.
+   *
+   * Optional at the app boundary (a tests-only "no streaming" app omits it), but the bundle itself is required — partial wiring would leave a route handling only half its surface.
    */
-  candleStream?: CandleStreamHub;
+  liveStream?: LiveStream;
   /**
    * The indicator surface — the catalog registry and the ad-hoc compute use-case, paired.
    *

@@ -4,6 +4,7 @@ import {
   defaultIndicators,
   IndicatorComputeService,
   type IndicatorRegistry,
+  IndicatorStreamService,
   InMemoryCandleRepository,
   InMemoryMarketDataSource,
   InMemoryProfileRepository,
@@ -12,6 +13,8 @@ import {
   SymbolService,
 } from '@lametrader/engine';
 import type { AppDependencies } from '../app.types.js';
+import { CandleStreamHub } from '../candle-stream-hub.js';
+import { IndicatorStreamHub } from '../indicator-stream-hub.js';
 
 /**
  * Override shape accepted by `buildAppDeps`.
@@ -43,11 +46,24 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
     overrides.indicators?.compute ?? new IndicatorComputeService(registry, watchlist, candles);
   const profiles =
     overrides.profiles ?? new ProfileService(new InMemoryProfileRepository(), watchlist, registry);
+
+  // Default live-stream wiring: the in-memory candle + indicator hubs and a stream
+  // service the controller talks to. Tests that don't exercise streaming get the
+  // route registered but inert (no candles flow through unless they publish).
+  const candleStream = overrides.liveStream?.candleStream ?? new CandleStreamHub();
+  const indicatorStream = overrides.liveStream?.indicatorStream ?? new IndicatorStreamHub();
+  const indicatorStreamService =
+    overrides.liveStream?.indicatorStreamService ??
+    new IndicatorStreamService(registry, watchlist, compute, {
+      onState: (event) => indicatorStream.publish(event),
+    });
+
   return {
     config,
     symbols: overrides.symbols ?? new SymbolService(sources, watchlist, config, candles, profiles),
     profiles,
     backfill: overrides.backfill ?? new BackfillService(sources, candles, watchlist),
     indicators: { registry, compute },
+    liveStream: { candleStream, indicatorStream, indicatorStreamService },
   };
 }
