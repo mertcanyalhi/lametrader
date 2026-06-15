@@ -1,5 +1,5 @@
 import { createApp } from '@lametrader/api';
-import { type Profile, SymbolType } from '@lametrader/core';
+import { Period, type Profile, SymbolType, type WatchedSymbol } from '@lametrader/core';
 import {
   ConfigService,
   InMemoryMarketDataSource,
@@ -29,11 +29,13 @@ describe('profiles API (e2e)', () => {
     exchange: 'Binance',
     currency: 'USDT',
   };
+  const WATCHED_BTC: WatchedSymbol = { ...BTC, periods: [Period.OneHour] };
 
   let container: StartedMongoDBContainer;
   let client: MongoClient;
   let db: Db;
   let app: FastifyInstance;
+  let watchlist: MongoWatchlistRepository;
 
   beforeAll(async () => {
     container = await new MongoDBContainer('mongo:8').start();
@@ -42,7 +44,7 @@ describe('profiles API (e2e)', () => {
     db = client.db('lametrader');
 
     const config = new ConfigService(new MongoConfigRepository(db));
-    const watchlist = new MongoWatchlistRepository(db);
+    watchlist = new MongoWatchlistRepository(db);
     const candles = new MongoCandleRepository(db);
     const profiles = new ProfileService(new MongoProfileRepository(db), watchlist);
     const sources = [new InMemoryMarketDataSource([BTC])];
@@ -54,8 +56,9 @@ describe('profiles API (e2e)', () => {
   beforeEach(async () => {
     await db.collection('profiles').deleteMany({});
     await db.collection('watchlist').deleteMany({});
-    // Watch BTC so scope validation + the removal cascade have a target.
-    await app.inject({ method: 'POST', url: '/symbols', payload: { id: 'crypto:BTCUSDT' } });
+    // Seed the watchlist directly so scope validation + the removal cascade have a
+    // target, without coupling this suite to the symbols HTTP flow.
+    await watchlist.add(WATCHED_BTC);
   });
 
   afterAll(async () => {
