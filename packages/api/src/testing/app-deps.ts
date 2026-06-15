@@ -1,6 +1,7 @@
 import {
   BackfillService,
   ConfigService,
+  defaultIndicators,
   InMemoryCandleRepository,
   InMemoryMarketDataSource,
   InMemoryProfileRepository,
@@ -31,5 +32,6 @@ export function buildAppDeps(overrides: Partial<AppDependencies> = {}): AppDepen
     symbols: overrides.symbols ?? new SymbolService(sources, watchlist, config, candles, profiles),
     profiles,
     backfill: overrides.backfill ?? new BackfillService(sources, candles, watchlist),
+    indicators: overrides.indicators ?? defaultIndicators(),
   };
 }

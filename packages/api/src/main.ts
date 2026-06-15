@@ -2,7 +2,7 @@
  * Entry point: wire Mongo-backed config + symbol services, start the continuous
  * polling + live-candle stream, and serve the REST API.
  */
-import { connectServices, loadSettings } from '@lametrader/engine';
+import { connectServices, defaultIndicators, loadSettings } from '@lametrader/engine';
 import { createApp } from './app.js';
 import { CandleStreamHub } from './candle-stream-hub.js';
 
@@ -15,7 +15,11 @@ const { config, symbols, profiles, backfill, polling, close } = await connectSer
   onCandle: (event) => candleStream.publish(event),
   pollIntervals,
 });
-const app = createApp({ config, symbols, profiles, backfill, candleStream }, { logger: true });
+const indicators = defaultIndicators();
+const app = createApp(
+  { config, symbols, profiles, backfill, candleStream, indicators },
+  { logger: true },
+);
 
 /**
  * Stop polling, close the HTTP server and database connection on a termination signal.

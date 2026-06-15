@@ -25,6 +25,23 @@ export class IndicatorError extends Error {
   }
 }
 
+/**
+ * Raised when an indicator key has no module registered.
+ *
+ * Driving adapters map it to HTTP 404 (consistent with `SymbolNotFoundError` / `ProfileNotFoundError`).
+ *
+ * Thrown by driving adapters (controllers, CLI) on a lookup miss — the registry's `get(key)` still returns `null` so callers in the application layer can opt out of the exception.
+ */
+export class IndicatorNotFoundError extends Error {
+  /**
+   * @param message - the human-readable not-found reason.
+   */
+  constructor(message: string) {
+    super(message);
+    this.name = 'IndicatorNotFoundError';
+  }
+}
+
 /** Every {@link PriceSource} value, for membership checks. */
 const PRICE_SOURCE_VALUES = new Set<string>(Object.values(PriceSource));
 

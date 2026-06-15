@@ -7,6 +7,8 @@ import {
   BackfillConflictError,
   CandleError,
   ConfigError,
+  IndicatorError,
+  IndicatorNotFoundError,
   MarketDataError,
   ProfileConflictError,
   ProfileError,
@@ -21,6 +23,7 @@ import type { AppDependencies, AppOptions } from './app.types.js';
 import { BackfillJobHub } from './backfill-job-hub.js';
 import { candlesController } from './controllers/candles.controller.js';
 import { configController } from './controllers/config.controller.js';
+import { indicatorsController } from './controllers/indicators.controller.js';
 import { profilesController } from './controllers/profiles.controller.js';
 import { streamController } from './controllers/stream.controller.js';
 import { symbolsController } from './controllers/symbols.controller.js';
@@ -55,6 +58,7 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
         { name: 'symbols', description: 'Symbol discovery and watchlist' },
         { name: 'profiles', description: 'Profiles (selectable templates)' },
         { name: 'candles', description: 'Historical candle backfill and reads' },
+        { name: 'indicators', description: 'Indicator catalog (descriptors only)' },
       ],
     },
   });
@@ -62,7 +66,11 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
   app.register(fastifyWebsocket);
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
-    if (error instanceof SymbolNotFoundError || error instanceof ProfileNotFoundError) {
+    if (
+      error instanceof SymbolNotFoundError ||
+      error instanceof ProfileNotFoundError ||
+      error instanceof IndicatorNotFoundError
+    ) {
       reply.code(404).send({ error: error.message });
       return;
     }
@@ -79,7 +87,8 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
       error instanceof ConfigError ||
       error instanceof SymbolError ||
       error instanceof CandleError ||
-      error instanceof ProfileError
+      error instanceof ProfileError ||
+      error instanceof IndicatorError
     ) {
       reply.code(400).send({ error: error.message });
       return;
@@ -105,6 +114,9 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
   }
   if (deps.profiles) {
     app.register(profilesController(deps.profiles));
+  }
+  if (deps.indicators) {
+    app.register(indicatorsController(deps.indicators));
   }
   if (deps.backfill) {
     // Wire the async backfill-job use-case to a per-job hub: the application

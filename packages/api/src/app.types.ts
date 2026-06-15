@@ -1,6 +1,7 @@
 import type {
   BackfillService,
   ConfigService,
+  IndicatorRegistry,
   ProfileService,
   SymbolService,
 } from '@lametrader/engine';
@@ -37,6 +38,12 @@ export interface AppDependencies {
    * multiplexed `GET /stream` WebSocket route is registered.
    */
   candleStream?: CandleStreamHub;
+  /**
+   * The indicator catalog registry.
+   *
+   * When present, the `/indicators` routes are registered.
+   */
+  indicators?: IndicatorRegistry;
 }
 
 /**
