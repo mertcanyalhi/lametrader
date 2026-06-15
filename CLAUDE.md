@@ -170,6 +170,11 @@ Follow these by default, unprompted.
 - Every package exposing a surface keeps a `README.md`.
   A change to a CLI command or API endpoint updates that package's README (usage + examples) in the same change.
 
+### GitHub workflow
+
+- **Always subscribe to PR activity on every PR you open** (via `subscribe_pr_activity`), so CI failures and review comments wake the session up.
+  Stop subscribing only when the user explicitly says to.
+
 ## Definition of Done
 
 A change is done only when:
