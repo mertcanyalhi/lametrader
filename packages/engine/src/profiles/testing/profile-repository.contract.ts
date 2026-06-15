@@ -10,6 +10,7 @@ const profile = (id: string, name = id): Profile => ({
   scope: { type: ProfileScope.All },
   createdAt: 1000,
   updatedAt: 1000,
+  indicators: [],
 });
 
 /** Sort by id so list assertions are order-independent across adapters. */
