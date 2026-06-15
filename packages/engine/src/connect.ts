@@ -6,6 +6,8 @@ import { PollingService } from './candles/polling-service.js';
 import type { CandleListener } from './candles/polling-service.types.js';
 import { ConfigService } from './config/config-service.js';
 import { MongoConfigRepository } from './config/mongo-config-repository.js';
+import { defaultIndicators } from './indicators/default-indicators.js';
+import type { IndicatorRegistry } from './indicators/indicator-registry.js';
 import { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 import { ProfileService } from './profiles/profile-service.js';
 import { defaultMarketDataSources } from './symbols/default-sources.js';
@@ -31,8 +33,10 @@ export interface ConnectedServices {
   config: ConfigService;
   /** The symbols use-case (discovery / watchlist). */
   symbols: SymbolService;
-  /** The profiles use-case (CRUD). */
+  /** The profiles use-case (CRUD + attached indicators). */
   profiles: ProfileService;
+  /** The shared indicator catalog registry (read-only at runtime). */
+  indicators: IndicatorRegistry;
   /** The backfill use-case (historical candles). */
   backfill: BackfillService;
   /** The continuous polling + live-streaming loop. */
@@ -66,7 +70,8 @@ export async function connectServices(
   const candleRepo = new MongoCandleRepository(db);
   await candleRepo.ensureIndexes();
   const config = new ConfigService(new MongoConfigRepository(db));
-  const profiles = new ProfileService(new MongoProfileRepository(db), watchlist);
+  const indicators = defaultIndicators();
+  const profiles = new ProfileService(new MongoProfileRepository(db), watchlist, indicators);
   const symbols = new SymbolService(sources, watchlist, config, candleRepo, profiles);
   const backfill = new BackfillService(sources, candleRepo, watchlist);
   const polling = new PollingService(sources, candleRepo, watchlist, {
@@ -77,6 +82,7 @@ export async function connectServices(
     config,
     symbols,
     profiles,
+    indicators,
     backfill,
     polling,
     close: async () => {

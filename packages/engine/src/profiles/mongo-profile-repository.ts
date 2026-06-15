@@ -58,6 +58,7 @@ function toProfile(doc: ProfileDocument): Profile {
     scope: doc.scope,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
+    indicators: doc.indicators ?? [],
   };
 }
 
@@ -73,5 +74,6 @@ function toDocument(profile: Profile): ProfileDocument {
     scope: profile.scope,
     createdAt: profile.createdAt,
     updatedAt: profile.updatedAt,
+    indicators: profile.indicators,
   };
 }

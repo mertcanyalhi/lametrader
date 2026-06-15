@@ -1,4 +1,7 @@
 import {
+  IndicatorError,
+  type IndicatorInstance,
+  IndicatorInstanceNotFoundError,
   mergeProfileFields,
   type Profile,
   ProfileConflictError,
@@ -8,17 +11,33 @@ import {
   ProfileScope,
   type ProfileScopeSpec,
   parseProfileFields,
+  validateIndicatorInputs,
   type WatchlistRepository,
 } from '@lametrader/core';
 import { nanoid } from 'nanoid';
+import type { IndicatorRegistry } from '../indicators/indicator-registry.js';
 import type { ProfileServiceOptions } from './profile-service.types.js';
+
+/**
+ * Raw input for attaching or replacing an indicator instance on a profile.
+ *
+ * `inputs` is typed as `Record<string, unknown>` here and validated against the indicator's descriptors by {@link validateIndicatorInputs} before storage.
+ */
+export interface IndicatorInstanceInput {
+  /** Which indicator definition (key) to attach. */
+  indicatorKey: string;
+  /** Raw input values (validated + defaulted against the definition). */
+  inputs?: Record<string, unknown>;
+  /** Optional alias. */
+  label?: string;
+}
 
 /**
  * Application use-case for managing {@link Profile}s.
  *
- * A profile is a named, enable/disable-able template scoped to watched symbols.
+ * A profile is a named, enable/disable-able template scoped to watched symbols, holding zero or more attached indicators.
  *
- * Depends only on ports: a {@link ProfileRepository} (persistence) and the {@link WatchlistRepository} (to validate that a `Symbols` scope references currently-watched ids).
+ * Depends only on ports: a {@link ProfileRepository} (persistence), a {@link WatchlistRepository} (to validate a `Symbols` scope), and an {@link IndicatorRegistry} (to validate attached-indicator inputs).
  *
  * Id generation and the clock are injectable so tests are deterministic.
  */
@@ -31,11 +50,13 @@ export class ProfileService {
   /**
    * @param profiles - the profile persistence port.
    * @param watchlist - the watchlist persistence port (for scope validation).
+   * @param indicators - the indicator registry (for attached-instance validation).
    * @param options - injectable id generator and clock.
    */
   constructor(
     private readonly profiles: ProfileRepository,
     private readonly watchlist: WatchlistRepository,
+    private readonly indicators: IndicatorRegistry,
     options: ProfileServiceOptions = {},
   ) {
     this.newId = options.newId ?? (() => nanoid());
@@ -65,7 +86,7 @@ export class ProfileService {
   /**
    * Create a profile from an input (validated + defaulted).
    *
-   * Generates the id and timestamps.
+   * Generates the id and timestamps; the embedded `indicators` array starts empty.
    *
    * @throws {@link ProfileError} on invalid fields or an unwatched scope id.
    * @throws {@link ProfileConflictError} when the name is already in use.
@@ -75,7 +96,13 @@ export class ProfileService {
     await this.assertNameAvailable(fields.name);
     await this.assertScopeWatched(fields.scope);
     const ts = this.now();
-    const profile: Profile = { id: this.newId(), ...fields, createdAt: ts, updatedAt: ts };
+    const profile: Profile = {
+      id: this.newId(),
+      ...fields,
+      createdAt: ts,
+      updatedAt: ts,
+      indicators: [],
+    };
     await this.profiles.save(profile);
     return profile;
   }
@@ -83,7 +110,7 @@ export class ProfileService {
   /**
    * Fully replace a profile's mutable fields (PUT).
    *
-   * Preserves `id` and `createdAt`, bumps `updatedAt`.
+   * Preserves `id`, `createdAt`, and the embedded `indicators` array; bumps `updatedAt`.
    *
    * @throws {@link ProfileNotFoundError} when the id is unknown.
    * @throws {@link ProfileError} / {@link ProfileConflictError} on invalid input.
@@ -101,7 +128,7 @@ export class ProfileService {
   /**
    * Partially update a profile (PATCH).
    *
-   * Merges the patch over the current fields, revalidates, and persists.
+   * Merges the patch over the current fields, revalidates, and persists; preserves `indicators`.
    *
    * @throws {@link ProfileNotFoundError} when the id is unknown.
    * @throws {@link ProfileError} / {@link ProfileConflictError} on invalid input.
@@ -152,6 +179,114 @@ export class ProfileService {
   }
 
   /**
+   * List the indicator instances attached to a profile.
+   *
+   * @throws {@link ProfileNotFoundError} when the profile is unknown.
+   */
+  async listIndicators(profileId: string): Promise<IndicatorInstance[]> {
+    const profile = await this.get(profileId);
+    return profile.indicators;
+  }
+
+  /**
+   * Get one attached indicator instance by id.
+   *
+   * @throws {@link ProfileNotFoundError} when the profile is unknown.
+   * @throws {@link IndicatorInstanceNotFoundError} when no instance has that id.
+   */
+  async getIndicator(profileId: string, instanceId: string): Promise<IndicatorInstance> {
+    const profile = await this.get(profileId);
+    return findInstance(profile, instanceId);
+  }
+
+  /**
+   * Attach a new indicator instance to a profile.
+   *
+   * Validates the input against the indicator's descriptors and records the definition's current `version`.
+   *
+   * @throws {@link ProfileNotFoundError} when the profile is unknown.
+   * @throws {@link IndicatorError} when `indicatorKey` is unknown or `inputs` are invalid.
+   */
+  async addIndicator(profileId: string, input: IndicatorInstanceInput): Promise<IndicatorInstance> {
+    const profile = await this.get(profileId);
+    const instance = this.buildInstance(this.newId(), input);
+    const updated: Profile = {
+      ...profile,
+      indicators: [...profile.indicators, instance],
+      updatedAt: this.now(),
+    };
+    await this.profiles.save(updated);
+    return instance;
+  }
+
+  /**
+   * Replace an attached indicator instance (PUT) — full-replace, preserves the id.
+   *
+   * @throws {@link ProfileNotFoundError} when the profile is unknown.
+   * @throws {@link IndicatorInstanceNotFoundError} when the instance is unknown.
+   * @throws {@link IndicatorError} when `indicatorKey` is unknown or `inputs` are invalid.
+   */
+  async replaceIndicator(
+    profileId: string,
+    instanceId: string,
+    input: IndicatorInstanceInput,
+  ): Promise<IndicatorInstance> {
+    const profile = await this.get(profileId);
+    findInstance(profile, instanceId);
+    const replacement = this.buildInstance(instanceId, input);
+    const updated: Profile = {
+      ...profile,
+      indicators: profile.indicators.map((existing) =>
+        existing.id === instanceId ? replacement : existing,
+      ),
+      updatedAt: this.now(),
+    };
+    await this.profiles.save(updated);
+    return replacement;
+  }
+
+  /**
+   * Detach an indicator instance from a profile.
+   *
+   * @throws {@link ProfileNotFoundError} when the profile is unknown.
+   * @throws {@link IndicatorInstanceNotFoundError} when the instance is unknown.
+   */
+  async removeIndicator(profileId: string, instanceId: string): Promise<void> {
+    const profile = await this.get(profileId);
+    findInstance(profile, instanceId);
+    const updated: Profile = {
+      ...profile,
+      indicators: profile.indicators.filter((existing) => existing.id !== instanceId),
+      updatedAt: this.now(),
+    };
+    await this.profiles.save(updated);
+  }
+
+  /**
+   * Look up the indicator module and validate the input, producing a stored instance shape.
+   */
+  private buildInstance(id: string, input: IndicatorInstanceInput): IndicatorInstance {
+    if (typeof input.indicatorKey !== 'string') {
+      throw new IndicatorError('indicatorKey must be a string');
+    }
+    const module = this.indicators.get(input.indicatorKey);
+    if (!module) {
+      throw new IndicatorError(`unknown indicator: ${input.indicatorKey}`);
+    }
+    if (input.label !== undefined && typeof input.label !== 'string') {
+      throw new IndicatorError('label must be a string');
+    }
+    const validated = validateIndicatorInputs(module.definition, input.inputs ?? {});
+    return {
+      id,
+      indicatorKey: input.indicatorKey,
+      version: module.definition.version,
+      inputs: validated,
+      ...(input.label !== undefined ? { label: input.label } : {}),
+    };
+  }
+
+  /**
    * Throw {@link ProfileConflictError} when `name` is used by a profile other than `exceptId`.
    */
   private async assertNameAvailable(name: string, exceptId?: string): Promise<void> {
@@ -172,4 +307,17 @@ export class ProfileService {
       }
     }
   }
+}
+
+/**
+ * Locate an indicator instance on a profile or throw {@link IndicatorInstanceNotFoundError}.
+ */
+function findInstance(profile: Profile, instanceId: string): IndicatorInstance {
+  const instance = profile.indicators.find((existing) => existing.id === instanceId);
+  if (!instance) {
+    throw new IndicatorInstanceNotFoundError(
+      `indicator instance not found: ${instanceId} (profile ${profile.id})`,
+    );
+  }
+  return instance;
 }

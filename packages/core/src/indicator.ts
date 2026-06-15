@@ -42,6 +42,23 @@ export class IndicatorNotFoundError extends Error {
   }
 }
 
+/**
+ * Raised when an attached-indicator instance id is unknown on a profile.
+ *
+ * Distinct from `IndicatorNotFoundError` (unknown definition key in the registry).
+ *
+ * Driving adapters map it to HTTP 404.
+ */
+export class IndicatorInstanceNotFoundError extends Error {
+  /**
+   * @param message - the human-readable not-found reason.
+   */
+  constructor(message: string) {
+    super(message);
+    this.name = 'IndicatorInstanceNotFoundError';
+  }
+}
+
 /** Every {@link PriceSource} value, for membership checks. */
 const PRICE_SOURCE_VALUES = new Set<string>(Object.values(PriceSource));
 

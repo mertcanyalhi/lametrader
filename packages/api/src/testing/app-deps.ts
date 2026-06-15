@@ -25,13 +25,15 @@ export function buildAppDeps(overrides: Partial<AppDependencies> = {}): AppDepen
   const watchlist = new InMemoryWatchlistRepository();
   const candles = new InMemoryCandleRepository();
   const sources = [new InMemoryMarketDataSource([])];
+  const indicators = overrides.indicators ?? defaultIndicators();
   const profiles =
-    overrides.profiles ?? new ProfileService(new InMemoryProfileRepository(), watchlist);
+    overrides.profiles ??
+    new ProfileService(new InMemoryProfileRepository(), watchlist, indicators);
   return {
     config,
     symbols: overrides.symbols ?? new SymbolService(sources, watchlist, config, candles, profiles),
     profiles,
     backfill: overrides.backfill ?? new BackfillService(sources, candles, watchlist),
-    indicators: overrides.indicators ?? defaultIndicators(),
+    indicators,
   };
 }

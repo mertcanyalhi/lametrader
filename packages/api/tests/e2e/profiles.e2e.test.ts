@@ -2,6 +2,7 @@ import { createApp } from '@lametrader/api';
 import { Period, type Profile, SymbolType, type WatchedSymbol } from '@lametrader/core';
 import {
   ConfigService,
+  defaultIndicators,
   InMemoryMarketDataSource,
   MongoCandleRepository,
   MongoConfigRepository,
@@ -46,10 +47,11 @@ describe('profiles API (e2e)', () => {
     const config = new ConfigService(new MongoConfigRepository(db));
     watchlist = new MongoWatchlistRepository(db);
     const candles = new MongoCandleRepository(db);
-    const profiles = new ProfileService(new MongoProfileRepository(db), watchlist);
+    const indicators = defaultIndicators();
+    const profiles = new ProfileService(new MongoProfileRepository(db), watchlist, indicators);
     const sources = [new InMemoryMarketDataSource([BTC])];
     const symbols = new SymbolService(sources, watchlist, config, candles, profiles);
-    app = createApp({ config, symbols, profiles });
+    app = createApp({ config, symbols, profiles, indicators });
     await app.ready();
   });
 
@@ -83,6 +85,7 @@ describe('profiles API (e2e)', () => {
       scope: { type: 'all' },
       createdAt: expect.any(Number),
       updatedAt: expect.any(Number),
+      indicators: [],
     });
 
     expect((await app.inject({ method: 'GET', url: '/profiles' })).json()).toEqual([created]);
@@ -152,5 +155,81 @@ describe('profiles API (e2e)', () => {
     const after = (await app.inject({ method: 'GET', url: `/profiles/${id}` })).json() as Profile;
     expect(after.enabled).toBe(false);
     expect(after.scope).toEqual({ type: 'symbols', symbolIds: [] });
+  });
+
+  it('attach → list → replace → detach an indicator instance over the sub-resource', async () => {
+    const create = await app.inject({
+      method: 'POST',
+      url: '/profiles',
+      payload: { name: 'WithIndicator' },
+    });
+    expect(create.statusCode).toBe(201);
+    const profileId = (create.json() as Profile).id;
+
+    const attach = await app.inject({
+      method: 'POST',
+      url: `/profiles/${profileId}/indicators`,
+      payload: { indicatorKey: 'sma', inputs: { length: 5 }, label: 'Fast' },
+    });
+    expect(attach.statusCode).toBe(201);
+    const instance = attach.json() as { id: string };
+
+    expect(
+      (await app.inject({ method: 'GET', url: `/profiles/${profileId}/indicators` })).json(),
+    ).toEqual([
+      {
+        id: instance.id,
+        indicatorKey: 'sma',
+        version: 1,
+        inputs: { length: 5, source: 'close' },
+        label: 'Fast',
+      },
+    ]);
+
+    const put = await app.inject({
+      method: 'PUT',
+      url: `/profiles/${profileId}/indicators/${instance.id}`,
+      payload: { indicatorKey: 'sma', inputs: { length: 21 } },
+    });
+    expect(put.statusCode).toBe(200);
+    expect(put.json()).toEqual({
+      id: instance.id,
+      indicatorKey: 'sma',
+      version: 1,
+      inputs: { length: 21, source: 'close' },
+    });
+
+    expect(
+      (
+        await app.inject({
+          method: 'DELETE',
+          url: `/profiles/${profileId}/indicators/${instance.id}`,
+        })
+      ).statusCode,
+    ).toBe(204);
+    expect(
+      (await app.inject({ method: 'GET', url: `/profiles/${profileId}/indicators` })).json(),
+    ).toEqual([]);
+  });
+
+  it('rejects attach with an unknown indicatorKey with 400; instances stay empty', async () => {
+    const create = await app.inject({
+      method: 'POST',
+      url: '/profiles',
+      payload: { name: 'NoAttach' },
+    });
+    expect(create.statusCode).toBe(201);
+    const profileId = (create.json() as Profile).id;
+
+    const attach = await app.inject({
+      method: 'POST',
+      url: `/profiles/${profileId}/indicators`,
+      payload: { indicatorKey: 'bogus' },
+    });
+    expect(attach.statusCode).toBe(400);
+
+    expect(
+      (await app.inject({ method: 'GET', url: `/profiles/${profileId}/indicators` })).json(),
+    ).toEqual([]);
   });
 });

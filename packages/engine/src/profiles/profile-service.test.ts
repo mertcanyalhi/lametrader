@@ -1,4 +1,6 @@
 import {
+  IndicatorError,
+  IndicatorInstanceNotFoundError,
   Period,
   type Profile,
   ProfileConflictError,
@@ -9,6 +11,8 @@ import {
   type WatchedSymbol,
 } from '@lametrader/core';
 import { describe, expect, it } from 'vitest';
+import { defaultIndicators } from '../indicators/default-indicators.js';
+import type { IndicatorRegistry } from '../indicators/indicator-registry.js';
 import { InMemoryWatchlistRepository } from '../symbols/in-memory-watchlist-repository.js';
 import { InMemoryProfileRepository } from './in-memory-profile-repository.js';
 import { ProfileService } from './profile-service.js';
@@ -28,11 +32,15 @@ function sequentialIds(): () => string {
   return () => `p${++n}`;
 }
 
-/** Build a service over fresh in-memory repos with injectable clock. */
-function build(clock = { value: 1000 }, seedWatched: string[] = []) {
+/** Build a service over fresh in-memory repos with injectable clock + the default registry. */
+function build(
+  clock = { value: 1000 },
+  seedWatched: string[] = [],
+  registry: IndicatorRegistry = defaultIndicators(),
+) {
   const profiles = new InMemoryProfileRepository();
   const watchlist = new InMemoryWatchlistRepository(seedWatched.map(watched));
-  const service = new ProfileService(profiles, watchlist, {
+  const service = new ProfileService(profiles, watchlist, registry, {
     newId: sequentialIds(),
     now: () => clock.value,
   });
@@ -40,7 +48,7 @@ function build(clock = { value: 1000 }, seedWatched: string[] = []) {
 }
 
 describe('ProfileService.create', () => {
-  it('builds a profile with generated id, timestamps, and defaults, and persists it', async () => {
+  it('builds a profile with generated id, timestamps, defaults, and an empty indicators array', async () => {
     const { service, profiles } = build();
     const created = await service.create({ name: 'Scalper' });
     expect(created).toEqual({
@@ -51,6 +59,7 @@ describe('ProfileService.create', () => {
       scope: { type: ProfileScope.All },
       createdAt: 1000,
       updatedAt: 1000,
+      indicators: [],
     });
     expect(await profiles.list()).toEqual([created]);
   });
@@ -84,12 +93,14 @@ describe('ProfileService.get', () => {
 });
 
 describe('ProfileService.replace', () => {
-  it('fully replaces mutable fields, preserving id+createdAt and bumping updatedAt', async () => {
+  it('fully replaces mutable fields, preserves id+createdAt and indicators, bumps updatedAt', async () => {
     const clock = { value: 1000 };
     const { service } = build(clock);
     await service.create({ name: 'Scalper', description: 'fast', enabled: true });
+    await service.addIndicator('p1', { indicatorKey: 'sma' });
     clock.value = 2000;
     const replaced = await service.replace('p1', { name: 'Swing' });
+    expect(replaced.indicators).toHaveLength(1);
     expect(replaced).toEqual({
       id: 'p1',
       name: 'Swing',
@@ -98,17 +109,20 @@ describe('ProfileService.replace', () => {
       scope: { type: ProfileScope.All },
       createdAt: 1000,
       updatedAt: 2000,
+      indicators: replaced.indicators,
     });
   });
 });
 
 describe('ProfileService.update', () => {
-  it('patches only the provided fields, keeping the rest', async () => {
+  it('patches only the provided fields, keeping the rest including indicators', async () => {
     const clock = { value: 1000 };
     const { service } = build(clock);
     await service.create({ name: 'Scalper', description: 'fast' });
+    await service.addIndicator('p1', { indicatorKey: 'sma' });
     clock.value = 2000;
     const updated = await service.update('p1', { enabled: false });
+    expect(updated.indicators).toHaveLength(1);
     expect(updated).toEqual({
       id: 'p1',
       name: 'Scalper',
@@ -117,6 +131,7 @@ describe('ProfileService.update', () => {
       scope: { type: ProfileScope.All },
       createdAt: 1000,
       updatedAt: 2000,
+      indicators: updated.indicators,
     });
   });
 });
@@ -156,6 +171,7 @@ describe('ProfileService.pruneSymbol', () => {
         scope: { type: ProfileScope.Symbols, symbolIds: ['crypto:ETHUSDT'] },
         createdAt: 1000,
         updatedAt: 2000,
+        indicators: [],
       },
       {
         id: 'p2',
@@ -165,7 +181,123 @@ describe('ProfileService.pruneSymbol', () => {
         scope: { type: ProfileScope.Symbols, symbolIds: [] },
         createdAt: 1000,
         updatedAt: 2000,
+        indicators: [],
       },
     ]);
+  });
+});
+
+describe('ProfileService.addIndicator', () => {
+  it('appends an instance with generated id, registry version, and defaulted inputs', async () => {
+    const { service } = build();
+    await service.create({ name: 'Scalper' });
+    const instance = await service.addIndicator('p1', { indicatorKey: 'sma' });
+    expect(instance).toEqual({
+      id: 'p2',
+      indicatorKey: 'sma',
+      version: 1,
+      inputs: { length: 14, source: 'close' },
+    });
+    const list = await service.listIndicators('p1');
+    expect(list).toEqual([instance]);
+  });
+
+  it('records explicit inputs and a label', async () => {
+    const { service } = build();
+    await service.create({ name: 'Scalper' });
+    const instance = await service.addIndicator('p1', {
+      indicatorKey: 'sma',
+      inputs: { length: 5 },
+      label: 'Fast',
+    });
+    expect(instance).toEqual({
+      id: 'p2',
+      indicatorKey: 'sma',
+      version: 1,
+      inputs: { length: 5, source: 'close' },
+      label: 'Fast',
+    });
+  });
+
+  it('throws IndicatorError on an unknown indicatorKey and persists nothing', async () => {
+    const { service, profiles } = build();
+    await service.create({ name: 'Scalper' });
+    await expect(service.addIndicator('p1', { indicatorKey: 'bogus' })).rejects.toBeInstanceOf(
+      IndicatorError,
+    );
+    expect((await profiles.get('p1'))?.indicators).toEqual([]);
+  });
+
+  it('throws IndicatorError on invalid inputs and persists nothing', async () => {
+    const { service, profiles } = build();
+    await service.create({ name: 'Scalper' });
+    await expect(
+      service.addIndicator('p1', { indicatorKey: 'sma', inputs: { length: 0 } }),
+    ).rejects.toBeInstanceOf(IndicatorError);
+    expect((await profiles.get('p1'))?.indicators).toEqual([]);
+  });
+
+  it('throws ProfileNotFoundError when the profile is unknown', async () => {
+    const { service } = build();
+    await expect(
+      service.addIndicator('unknown-profile', { indicatorKey: 'sma' }),
+    ).rejects.toBeInstanceOf(ProfileNotFoundError);
+  });
+});
+
+describe('ProfileService.getIndicator / listIndicators', () => {
+  it('returns the matching instance; an unknown instanceId throws IndicatorInstanceNotFoundError', async () => {
+    const { service } = build();
+    await service.create({ name: 'Scalper' });
+    const instance = await service.addIndicator('p1', { indicatorKey: 'sma' });
+    expect(await service.getIndicator('p1', instance.id)).toEqual(instance);
+    await expect(service.getIndicator('p1', 'unknown')).rejects.toBeInstanceOf(
+      IndicatorInstanceNotFoundError,
+    );
+  });
+});
+
+describe('ProfileService.replaceIndicator', () => {
+  it('overwrites the matching instance with new inputs, preserving id and array length', async () => {
+    const { service } = build();
+    await service.create({ name: 'Scalper' });
+    const first = await service.addIndicator('p1', { indicatorKey: 'sma' });
+    const replaced = await service.replaceIndicator('p1', first.id, {
+      indicatorKey: 'sma',
+      inputs: { length: 21 },
+    });
+    expect(replaced).toEqual({
+      id: first.id,
+      indicatorKey: 'sma',
+      version: 1,
+      inputs: { length: 21, source: 'close' },
+    });
+    expect(await service.listIndicators('p1')).toEqual([replaced]);
+  });
+
+  it('throws IndicatorInstanceNotFoundError when the instance is unknown', async () => {
+    const { service } = build();
+    await service.create({ name: 'Scalper' });
+    await expect(
+      service.replaceIndicator('p1', 'unknown', { indicatorKey: 'sma' }),
+    ).rejects.toBeInstanceOf(IndicatorInstanceNotFoundError);
+  });
+});
+
+describe('ProfileService.removeIndicator', () => {
+  it('removes the matching instance', async () => {
+    const { service } = build();
+    await service.create({ name: 'Scalper' });
+    const instance = await service.addIndicator('p1', { indicatorKey: 'sma' });
+    await service.removeIndicator('p1', instance.id);
+    expect(await service.listIndicators('p1')).toEqual([]);
+  });
+
+  it('throws IndicatorInstanceNotFoundError when the instance is unknown', async () => {
+    const { service } = build();
+    await service.create({ name: 'Scalper' });
+    await expect(service.removeIndicator('p1', 'unknown')).rejects.toBeInstanceOf(
+      IndicatorInstanceNotFoundError,
+    );
   });
 });

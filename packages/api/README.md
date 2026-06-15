@@ -156,6 +156,41 @@ curl -X PUT http://localhost:3000/profiles/<id> \
 curl -X DELETE http://localhost:3000/profiles/<id>
 ```
 
+### Attached indicators (sub-resource)
+
+A profile holds zero or more **attached indicator instances** — a configured indicator from the catalog with validated input values.
+Instances are addressed by a stable id (so actions can reference them later).
+The instance carries no period: at compute time the indicator runs at each of the symbol's watched periods.
+
+An instance is `{ id, indicatorKey, version, inputs, label? }`.
+`indicatorKey` refers to a definition from `GET /indicators` (#14); `inputs` is validated against that definition's descriptors.
+
+| Method   | Path                                          | Body                                       | Description                                 |
+| -------- | --------------------------------------------- | ------------------------------------------ | ------------------------------------------- |
+| `GET`    | `/profiles/{id}/indicators`                   | —                                          | List the profile's attached instances.      |
+| `POST`   | `/profiles/{id}/indicators`                   | `{ indicatorKey, inputs?, label? }`        | Attach. **201** / 400 (unknown key / bad inputs) / 404 (unknown profile). |
+| `GET`    | `/profiles/{id}/indicators/{instanceId}`      | —                                          | Get one instance. 200 / 404.                |
+| `PUT`    | `/profiles/{id}/indicators/{instanceId}`      | `{ indicatorKey, inputs?, label? }`        | Full-replace. 200 / 400 / 404.              |
+| `DELETE` | `/profiles/{id}/indicators/{instanceId}`      | —                                          | Detach. **204** / 404.                      |
+
+```sh
+# attach the SMA with length 5 and a label
+curl -X POST http://localhost:3000/profiles/<id>/indicators \
+  -H 'content-type: application/json' \
+  -d '{ "indicatorKey": "sma", "inputs": { "length": 5 }, "label": "Fast" }'
+
+# list attached instances
+curl http://localhost:3000/profiles/<id>/indicators
+
+# replace the configuration
+curl -X PUT http://localhost:3000/profiles/<id>/indicators/<instanceId> \
+  -H 'content-type: application/json' \
+  -d '{ "indicatorKey": "sma", "inputs": { "length": 21 } }'
+
+# detach
+curl -X DELETE http://localhost:3000/profiles/<id>/indicators/<instanceId>
+```
+
 ## Candles resource
 
 Backfill historical OHLC candles for a **watched** symbol+period into MongoDB and

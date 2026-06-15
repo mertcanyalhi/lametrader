@@ -50,9 +50,31 @@ export interface ProfileFields {
 }
 
 /**
- * A persisted profile: the mutable {@link ProfileFields} plus a generated id and creation/update timestamps.
+ * An indicator attached to a profile, with its inputs already validated against the definition.
  *
- * A named template that will later hold indicators and actions.
+ * `version` is the `IndicatorDefinition.version` recorded at attach/replace time so future migrations can run if the indicator's schema bumps.
+ *
+ * No period is stored: at compute time the indicator runs at each of the symbol's watched periods.
+ */
+export interface IndicatorInstance {
+  /** Generated, stable id (so actions can address this attachment). */
+  id: string;
+  /** Which indicator definition (key) from the {@link IndicatorRegistry}. */
+  indicatorKey: string;
+  /** Definition version the inputs were validated against. */
+  version: number;
+  /** Validated input values keyed by descriptor key. */
+  inputs: Record<string, unknown>;
+  /** Optional alias (e.g. to tell two attachments of the same indicator apart). */
+  label?: string;
+}
+
+/**
+ * A persisted profile: the mutable {@link ProfileFields} plus a generated id, creation/update timestamps, and the embedded `indicators` array.
+ *
+ * A named template holding attached indicators (and later actions).
+ *
+ * Sub-resource routes (`/profiles/:id/indicators/...`) are the only path that mutates the `indicators` array; profile-level `PUT` / `PATCH` preserve it.
  */
 export interface Profile extends ProfileFields {
   /** Generated, stable id. */
@@ -61,6 +83,8 @@ export interface Profile extends ProfileFields {
   createdAt: number;
   /** Last-update time, epoch milliseconds. */
   updatedAt: number;
+  /** Attached indicators, in attachment order. */
+  indicators: IndicatorInstance[];
 }
 
 /**

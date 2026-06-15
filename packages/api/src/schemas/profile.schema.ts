@@ -17,6 +17,22 @@ export const ProfileScopeSchema = Type.Object(
 );
 
 /**
+ * An attached indicator instance — the configured input values, the definition `version` at attach time, and an optional `label`.
+ *
+ * `inputs` is opaque at the transport boundary (each indicator has its own schema); the domain validates it against `IndicatorRegistry.get(indicatorKey).definition`.
+ */
+export const IndicatorInstanceSchema = Type.Object(
+  {
+    id: Type.String(),
+    indicatorKey: Type.String(),
+    version: Type.Number(),
+    inputs: Type.Record(Type.String(), Type.Unknown()),
+    label: Type.Optional(Type.String()),
+  },
+  { $id: 'IndicatorInstance', additionalProperties: false },
+);
+
+/**
  * A full profile.
  *
  * Used as the 200/201 response shape on every profile route.
@@ -30,9 +46,32 @@ export const ProfileSchema = Type.Object(
     scope: ProfileScopeSchema,
     createdAt: Type.Number(),
     updatedAt: Type.Number(),
+    indicators: Type.Array(IndicatorInstanceSchema),
   },
   { $id: 'Profile', additionalProperties: false },
 );
+
+/**
+ * Body for `POST /profiles/:id/indicators` (attach) and `PUT /profiles/:id/indicators/:instanceId` (replace).
+ *
+ * `inputs` is validated by the domain against the indicator's descriptors.
+ */
+export const IndicatorInstanceInputSchema = Type.Object(
+  {
+    indicatorKey: Type.String(),
+    inputs: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+    label: Type.Optional(Type.String()),
+  },
+  { additionalProperties: false },
+);
+
+/**
+ * Path params carrying a profile id + instance id.
+ */
+export const ProfileIndicatorParamsSchema = Type.Object({
+  id: Type.String(),
+  instanceId: Type.String(),
+});
 
 /**
  * Body for `POST /profiles` (create) and `PUT /profiles/:id` (replace).
