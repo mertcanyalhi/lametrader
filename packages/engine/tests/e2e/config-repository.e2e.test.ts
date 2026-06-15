@@ -3,11 +3,13 @@ import { ConfigService, MongoConfigRepository } from '@lametrader/engine';
 import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import { type Db, MongoClient } from 'mongodb';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { runConfigRepositoryContract } from '../../src/config/testing/config-repository.contract.js';
 
 /**
  * E2E: the config persistence adapter against an ephemeral Mongo (Testcontainers).
- * Validates that config durably round-trips and that rejected updates don't
- * mutate stored state.
+ * Runs the shared {@link runConfigRepositoryContract} suite on the real adapter
+ * (the same suite the in-memory fake passes in the unit tier), plus the
+ * service-level guarantee that a rejected update doesn't mutate stored state.
  */
 describe('config persistence (e2e)', () => {
   let container: StartedMongoDBContainer;
@@ -26,14 +28,10 @@ describe('config persistence (e2e)', () => {
     await container?.stop();
   });
 
-  it('round-trips a config through a fresh repository instance', async () => {
-    const config = {
-      periods: [Period.OneHour, Period.FourHours, Period.OneDay],
-      defaultPeriod: Period.FourHours,
-    };
-    await new MongoConfigRepository(db).save(config);
-
-    expect(await new MongoConfigRepository(db).load()).toEqual(config);
+  // The contract expects a fresh, empty store per case — clear the collection.
+  runConfigRepositoryContract(async () => {
+    await db.collection('config').deleteMany({});
+    return new MongoConfigRepository(db);
   });
 
   it('leaves the persisted value unchanged when an invalid update is rejected', async () => {

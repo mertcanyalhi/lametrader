@@ -25,6 +25,7 @@ export type {
   PollingOptions,
 } from './candles/polling-service.types.js';
 export { ConfigService } from './config/config-service.js';
+export { InMemoryConfigRepository } from './config/in-memory-config-repository.js';
 export { MongoConfigRepository } from './config/mongo-config-repository.js';
 export { type ConnectedServices, type ConnectOptions, connectServices } from './connect.js';
 export { defaultIndicators } from './indicators/default-indicators.js';

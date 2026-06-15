@@ -124,7 +124,7 @@ export function profilesController(service: ProfileService) {
           response: { 200: Type.Array(IndicatorInstanceSchema), 404: ErrorSchema },
         },
       },
-      async (request) => service.listIndicators(request.params.id) as never,
+      async (request) => service.listIndicators(request.params.id),
     );
 
     app.post(
@@ -141,7 +141,7 @@ export function profilesController(service: ProfileService) {
       async (request, reply) => {
         const instance = await service.addIndicator(request.params.id, request.body);
         reply.code(201);
-        return instance as never;
+        return instance;
       },
     );
 
@@ -155,8 +155,7 @@ export function profilesController(service: ProfileService) {
           response: { 200: IndicatorInstanceSchema, 404: ErrorSchema },
         },
       },
-      async (request) =>
-        service.getIndicator(request.params.id, request.params.instanceId) as never,
+      async (request) => service.getIndicator(request.params.id, request.params.instanceId),
     );
 
     app.put(
@@ -171,11 +170,7 @@ export function profilesController(service: ProfileService) {
         },
       },
       async (request) =>
-        service.replaceIndicator(
-          request.params.id,
-          request.params.instanceId,
-          request.body,
-        ) as never,
+        service.replaceIndicator(request.params.id, request.params.instanceId, request.body),
     );
 
     app.delete(
