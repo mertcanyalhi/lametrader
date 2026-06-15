@@ -1,5 +1,6 @@
 import { Period, SymbolType, type WatchedSymbol } from '@lametrader/core';
 import {
+  defaultIndicators,
   InMemoryProfileRepository,
   InMemoryWatchlistRepository,
   ProfileService,
@@ -28,6 +29,7 @@ function buildApp() {
   const profiles = new ProfileService(
     new InMemoryProfileRepository(),
     new InMemoryWatchlistRepository([WATCHED_BTC]),
+    defaultIndicators(),
     { newId: () => `p${++n}`, now: () => 1000 },
   );
   return createApp(buildAppDeps({ profiles }));
@@ -50,6 +52,7 @@ describe('POST /profiles', () => {
       scope: { type: 'all' },
       createdAt: 1000,
       updatedAt: 1000,
+      indicators: [],
     });
   });
 
@@ -85,6 +88,7 @@ describe('GET /profiles and /profiles/:id', () => {
         scope: { type: 'all' },
         createdAt: 1000,
         updatedAt: 1000,
+        indicators: [],
       },
     ]);
 
@@ -111,6 +115,7 @@ describe('PATCH /profiles/:id', () => {
       scope: { type: 'all' },
       createdAt: 1000,
       updatedAt: 1000,
+      indicators: [],
     });
   });
 });
@@ -136,7 +141,91 @@ describe('PUT /profiles/:id', () => {
       scope: { type: 'symbols', symbolIds: ['crypto:BTCUSDT'] },
       createdAt: 1000,
       updatedAt: 1000,
+      indicators: [],
     });
+  });
+});
+
+describe('profile indicator sub-resource', () => {
+  it('attach (POST) returns 201 with the instance', async () => {
+    const app = buildApp();
+    await app.inject({ method: 'POST', url: '/profiles', payload: { name: 'Scalper' } });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/profiles/p1/indicators',
+      payload: { indicatorKey: 'sma' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toEqual({
+      id: 'p2',
+      indicatorKey: 'sma',
+      version: 1,
+      inputs: { length: 14, source: 'close' },
+    });
+  });
+
+  it('list (GET) returns the attached instances', async () => {
+    const app = buildApp();
+    await app.inject({ method: 'POST', url: '/profiles', payload: { name: 'Scalper' } });
+    await app.inject({
+      method: 'POST',
+      url: '/profiles/p1/indicators',
+      payload: { indicatorKey: 'sma', inputs: { length: 5 } },
+    });
+    const res = await app.inject({ method: 'GET', url: '/profiles/p1/indicators' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([
+      { id: 'p2', indicatorKey: 'sma', version: 1, inputs: { length: 5, source: 'close' } },
+    ]);
+  });
+
+  it('attach (POST) returns 400 on an unknown indicatorKey', async () => {
+    const app = buildApp();
+    await app.inject({ method: 'POST', url: '/profiles', payload: { name: 'Scalper' } });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/profiles/p1/indicators',
+      payload: { indicatorKey: 'bogus' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('replace (PUT) overwrites the instance', async () => {
+    const app = buildApp();
+    await app.inject({ method: 'POST', url: '/profiles', payload: { name: 'Scalper' } });
+    await app.inject({
+      method: 'POST',
+      url: '/profiles/p1/indicators',
+      payload: { indicatorKey: 'sma' },
+    });
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/profiles/p1/indicators/p2',
+      payload: { indicatorKey: 'sma', inputs: { length: 21 } },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      id: 'p2',
+      indicatorKey: 'sma',
+      version: 1,
+      inputs: { length: 21, source: 'close' },
+    });
+  });
+
+  it('detach (DELETE) 204 then 404 on second delete', async () => {
+    const app = buildApp();
+    await app.inject({ method: 'POST', url: '/profiles', payload: { name: 'Scalper' } });
+    await app.inject({
+      method: 'POST',
+      url: '/profiles/p1/indicators',
+      payload: { indicatorKey: 'sma' },
+    });
+    expect(
+      (await app.inject({ method: 'DELETE', url: '/profiles/p1/indicators/p2' })).statusCode,
+    ).toBe(204);
+    expect(
+      (await app.inject({ method: 'DELETE', url: '/profiles/p1/indicators/p2' })).statusCode,
+    ).toBe(404);
   });
 });
 

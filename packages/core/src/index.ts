@@ -28,6 +28,7 @@ export { ConfigError, defaultConfig, mergeConfig, parseConfig } from './config.j
 export { type Config, type ConfigRepository, Period } from './config.types.js';
 export {
   IndicatorError,
+  IndicatorInstanceNotFoundError,
   IndicatorNotFoundError,
   resolveSource,
   validateIndicatorInputs,
@@ -63,6 +64,7 @@ export {
 } from './profile.js';
 export {
   type AllScope,
+  type IndicatorInstance,
   type Profile,
   type ProfileFields,
   type ProfileRepository,

@@ -34,7 +34,7 @@ export { movingAverage } from './indicators/sma.js';
 export { volumeWeightedMovingAverage } from './indicators/vwma.js';
 export { InMemoryProfileRepository } from './profiles/in-memory-profile-repository.js';
 export { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
-export { ProfileService } from './profiles/profile-service.js';
+export { type IndicatorInstanceInput, ProfileService } from './profiles/profile-service.js';
 export type { ProfileServiceOptions } from './profiles/profile-service.types.js';
 export { loadSettings } from './settings.js';
 export type { Settings } from './settings.types.js';

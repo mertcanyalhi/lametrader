@@ -107,6 +107,23 @@ npm run cli -- profile update <id> --symbols crypto:BTCUSDT,crypto:ETHUSDT
 npm run cli -- profile delete <id>
 ```
 
+#### Attached indicators (sub-group)
+
+Manage indicator instances attached to a profile.
+Each instance carries the indicator's key + validated inputs (a label is optional); the instance has no period — at compute time the indicator runs at every period the symbol is watched at.
+
+- **`profile indicators list <profileId>`** — print the embedded instances as JSON.
+- **`profile indicators add <profileId> --indicator-key <k> [--label <s>] [--inputs '<json>']`** — attach.
+- **`profile indicators update <profileId> <instanceId> --indicator-key <k> [--label <s>] [--inputs '<json>']`** — full-replace.
+- **`profile indicators remove <profileId> <instanceId>`** — detach.
+
+```sh
+npm run cli -- profile indicators add <profileId> --indicator-key sma --inputs '{"length":5}' --label Fast
+npm run cli -- profile indicators list <profileId>
+npm run cli -- profile indicators update <profileId> <instanceId> --indicator-key sma --inputs '{"length":21}'
+npm run cli -- profile indicators remove <profileId> <instanceId>
+```
+
 ### `candles`
 
 Backfill historical OHLC candles for a **watched** symbol+period into MongoDB and

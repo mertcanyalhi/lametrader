@@ -1,4 +1,4 @@
-import type { ProfileScopeSpec } from '@lametrader/core';
+import type { IndicatorInstance, ProfileScopeSpec } from '@lametrader/core';
 
 /**
  * The stored shape of a {@link Profile} in the `profiles` collection, keyed by id (`_id`).
@@ -18,4 +18,6 @@ export interface ProfileDocument {
   createdAt: number;
   /** Last-update time, epoch milliseconds. */
   updatedAt: number;
+  /** Attached indicator instances. */
+  indicators: IndicatorInstance[];
 }

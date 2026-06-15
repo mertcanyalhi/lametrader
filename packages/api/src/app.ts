@@ -8,6 +8,7 @@ import {
   CandleError,
   ConfigError,
   IndicatorError,
+  IndicatorInstanceNotFoundError,
   IndicatorNotFoundError,
   MarketDataError,
   ProfileConflictError,
@@ -69,7 +70,8 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
     if (
       error instanceof SymbolNotFoundError ||
       error instanceof ProfileNotFoundError ||
-      error instanceof IndicatorNotFoundError
+      error instanceof IndicatorNotFoundError ||
+      error instanceof IndicatorInstanceNotFoundError
     ) {
       reply.code(404).send({ error: error.message });
       return;

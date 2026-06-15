@@ -3,7 +3,10 @@ import type { ProfileService } from '@lametrader/engine';
 import type { FastifyInstance } from 'fastify';
 import { ErrorSchema } from '../schemas/common.schema.js';
 import {
+  IndicatorInstanceInputSchema,
+  IndicatorInstanceSchema,
   ProfileIdParamSchema,
+  ProfileIndicatorParamsSchema,
   ProfileInputSchema,
   ProfilePatchSchema,
   ProfileSchema,
@@ -106,6 +109,87 @@ export function profilesController(service: ProfileService) {
       },
       async (request, reply) => {
         await service.remove(request.params.id);
+        return reply.code(204).send(null);
+      },
+    );
+
+    // Sub-resource: attached indicator instances.
+    app.get(
+      '/profiles/:id/indicators',
+      {
+        schema: {
+          tags: ['profiles'],
+          summary: "List a profile's attached indicators",
+          params: ProfileIdParamSchema,
+          response: { 200: Type.Array(IndicatorInstanceSchema), 404: ErrorSchema },
+        },
+      },
+      async (request) => service.listIndicators(request.params.id) as never,
+    );
+
+    app.post(
+      '/profiles/:id/indicators',
+      {
+        schema: {
+          tags: ['profiles'],
+          summary: 'Attach an indicator to a profile',
+          params: ProfileIdParamSchema,
+          body: IndicatorInstanceInputSchema,
+          response: { 201: IndicatorInstanceSchema, 400: ErrorSchema, 404: ErrorSchema },
+        },
+      },
+      async (request, reply) => {
+        const instance = await service.addIndicator(request.params.id, request.body);
+        reply.code(201);
+        return instance as never;
+      },
+    );
+
+    app.get(
+      '/profiles/:id/indicators/:instanceId',
+      {
+        schema: {
+          tags: ['profiles'],
+          summary: 'Get one attached indicator instance',
+          params: ProfileIndicatorParamsSchema,
+          response: { 200: IndicatorInstanceSchema, 404: ErrorSchema },
+        },
+      },
+      async (request) =>
+        service.getIndicator(request.params.id, request.params.instanceId) as never,
+    );
+
+    app.put(
+      '/profiles/:id/indicators/:instanceId',
+      {
+        schema: {
+          tags: ['profiles'],
+          summary: 'Replace an attached indicator instance',
+          params: ProfileIndicatorParamsSchema,
+          body: IndicatorInstanceInputSchema,
+          response: { 200: IndicatorInstanceSchema, 400: ErrorSchema, 404: ErrorSchema },
+        },
+      },
+      async (request) =>
+        service.replaceIndicator(
+          request.params.id,
+          request.params.instanceId,
+          request.body,
+        ) as never,
+    );
+
+    app.delete(
+      '/profiles/:id/indicators/:instanceId',
+      {
+        schema: {
+          tags: ['profiles'],
+          summary: 'Detach an indicator instance from a profile',
+          params: ProfileIndicatorParamsSchema,
+          response: { 204: Type.Null(), 404: ErrorSchema },
+        },
+      },
+      async (request, reply) => {
+        await service.removeIndicator(request.params.id, request.params.instanceId);
         return reply.code(204).send(null);
       },
     );
