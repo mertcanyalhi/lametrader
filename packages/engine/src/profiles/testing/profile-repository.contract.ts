@@ -17,8 +17,8 @@ const byId = (a: Profile, b: Profile): number => a.id.localeCompare(b.id);
 
 /**
  * The shared behavioural contract every {@link ProfileRepository} must satisfy.
- * Run against the in-memory adapter in the unit tier and the Mongo adapter in the
- * e2e tier.
+ *
+ * Run against the in-memory adapter in the unit tier and the Mongo adapter in the e2e tier.
  *
  * @param make - builds a fresh, empty repository under test.
  */

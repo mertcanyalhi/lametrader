@@ -23,8 +23,9 @@ export interface AppDependencies {
    */
   symbols?: SymbolService;
   /**
-   * The profiles use-case (CRUD). When present, the `/profiles` routes are
-   * registered.
+   * The profiles use-case (CRUD).
+   *
+   * When present, the `/profiles` routes are registered.
    */
   profiles?: ProfileService;
   /**

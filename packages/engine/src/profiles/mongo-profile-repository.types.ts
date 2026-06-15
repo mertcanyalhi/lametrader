@@ -1,8 +1,7 @@
 import type { ProfileScopeSpec } from '@lametrader/core';
 
 /**
- * The stored shape of a {@link Profile} in the `profiles` collection, keyed by id
- * (`_id`).
+ * The stored shape of a {@link Profile} in the `profiles` collection, keyed by id (`_id`).
  */
 export interface ProfileDocument {
   /** Profile id (canonical key). */

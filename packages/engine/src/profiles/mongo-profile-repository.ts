@@ -3,8 +3,9 @@ import type { Collection, Db } from 'mongodb';
 import type { ProfileDocument } from './mongo-profile-repository.types.js';
 
 /**
- * MongoDB-backed {@link ProfileRepository}. Stores each profile as a document in
- * the `profiles` collection, keyed by id (`_id`).
+ * MongoDB-backed {@link ProfileRepository}.
+ *
+ * Stores each profile as a document in the `profiles` collection, keyed by id (`_id`).
  */
 export class MongoProfileRepository implements ProfileRepository {
   /**

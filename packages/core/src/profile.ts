@@ -2,8 +2,8 @@ import { type ProfileFields, ProfileScope, type ProfileScopeSpec } from './profi
 
 /**
  * Raised when a profile input fails validation (bad name, scope, or field type).
- * Distinct type so driving adapters map it to a client error (HTTP 400) rather than
- * a server fault.
+ *
+ * Distinct type so driving adapters map it to a client error (HTTP 400) rather than a server fault.
  */
 export class ProfileError extends Error {
   /**
@@ -16,8 +16,9 @@ export class ProfileError extends Error {
 }
 
 /**
- * Raised when a profile does not exist (on get/update/remove). Driving adapters map
- * it to HTTP 404.
+ * Raised when a profile does not exist (on get/update/remove).
+ *
+ * Driving adapters map it to HTTP 404.
  */
 export class ProfileNotFoundError extends Error {
   /**
@@ -30,8 +31,9 @@ export class ProfileNotFoundError extends Error {
 }
 
 /**
- * Raised when creating or renaming a profile to a name already in use. Driving
- * adapters map it to HTTP 409.
+ * Raised when creating or renaming a profile to a name already in use.
+ *
+ * Driving adapters map it to HTTP 409.
  */
 export class ProfileConflictError extends Error {
   /**
@@ -45,9 +47,10 @@ export class ProfileConflictError extends Error {
 
 /**
  * Validate and normalize an unknown scope input into a {@link ProfileScopeSpec}.
- * An explicit `Symbols` scope with an **empty** `symbolIds` normalizes to `All`
- * (an empty subset never persists). Throws {@link ProfileError} on an unknown
- * `type` or a non-string id.
+ *
+ * An explicit `Symbols` scope with an **empty** `symbolIds` normalizes to `All` — an empty subset never persists.
+ *
+ * @throws {@link ProfileError} on an unknown `type` or a non-string id.
  */
 export function parseProfileScope(input: unknown): ProfileScopeSpec {
   const obj = (input ?? {}) as { type?: unknown; symbolIds?: unknown };
@@ -74,9 +77,11 @@ export function parseProfileScope(input: unknown): ProfileScopeSpec {
 }
 
 /**
- * Validate and normalize an unknown input into the mutable {@link ProfileFields},
- * applying defaults (description `''`, enabled `true`, scope `All`). Throws
- * {@link ProfileError} on a blank `name` or a wrong-typed `description`/`enabled`.
+ * Validate and normalize an unknown input into the mutable {@link ProfileFields}.
+ *
+ * Applies defaults: description `''`, enabled `true`, scope `All`.
+ *
+ * @throws {@link ProfileError} on a blank `name` or a wrong-typed `description`/`enabled`.
  */
 export function parseProfileFields(input: unknown): ProfileFields {
   const obj = (input ?? {}) as {
@@ -103,8 +108,9 @@ export function parseProfileFields(input: unknown): ProfileFields {
 }
 
 /**
- * Apply a partial patch over current {@link ProfileFields} and revalidate the
- * result. Fields absent from `patch` are taken from `current`.
+ * Apply a partial patch over current {@link ProfileFields} and revalidate the result.
+ *
+ * Fields absent from `patch` are taken from `current`.
  */
 export function mergeProfileFields(current: ProfileFields, patch: unknown): ProfileFields {
   const obj = (patch ?? {}) as {

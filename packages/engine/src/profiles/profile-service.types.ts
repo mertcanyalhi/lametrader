@@ -1,6 +1,7 @@
 /**
- * Options for {@link ProfileService}: injectable id generator and clock, both
- * defaulted for production (nanoid / `Date.now`) and overridable in tests.
+ * Options for {@link ProfileService}: injectable id generator and clock.
+ *
+ * Both default for production (nanoid / `Date.now`) and are overridable in tests.
  */
 export interface ProfileServiceOptions {
   /** Generate a new profile id; defaults to nanoid. */

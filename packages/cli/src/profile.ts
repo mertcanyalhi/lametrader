@@ -3,15 +3,14 @@ import { ProfileScope } from '@lametrader/core';
 import type { ProfileService } from '@lametrader/engine';
 
 /**
- * Run the `profile` CLI command against a {@link ProfileService} and return the
- * output to print.
+ * Run the `profile` CLI command against a {@link ProfileService} and return the output to print.
  *
- * - `list` → all profiles as JSON.
- * - `create --name <n> [--description <d>] [--disabled] [--symbols a,b]` → create,
- *   echo the profile (omitting `--symbols` keeps the default `all` scope).
- * - `update <id> [--name <n>] [--description <d>] [--enable|--disable]
- *   [--all|--symbols a,b]` → patch the given fields, echo the profile.
- * - `delete <id>` → remove it.
+ * Subcommands:
+ *
+ * - `list` — all profiles as JSON.
+ * - `create --name <n> [--description <d>] [--disabled] [--symbols a,b]` — create, echo the profile (omitting `--symbols` keeps the default `all` scope).
+ * - `update <id> [--name <n>] [--description <d>] [--enable|--disable] [--all|--symbols a,b]` — patch the given fields, echo the profile.
+ * - `delete <id>` — remove it.
  *
  * @param argv - arguments after `profile`.
  * @param service - the profiles use-case to drive.

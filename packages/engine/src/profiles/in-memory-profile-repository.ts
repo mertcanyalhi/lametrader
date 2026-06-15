@@ -1,8 +1,9 @@
 import type { Profile, ProfileRepository } from '@lametrader/core';
 
 /**
- * A {@link ProfileRepository} backed by an in-memory map, keyed by id. Real (not a
- * test double): backs the unit tier and offline/demo wiring.
+ * A {@link ProfileRepository} backed by an in-memory map, keyed by id.
+ *
+ * Real (not a test double): backs the unit tier and offline/demo wiring.
  */
 export class InMemoryProfileRepository implements ProfileRepository {
   /**

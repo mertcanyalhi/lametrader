@@ -12,10 +12,11 @@ import {
 /**
  * Register the RESTful `/profiles` routes against a {@link ProfileService}.
  *
- * Schemas (TypeBox) validate input at the boundary and type the handlers; domain
- * failures (`ProfileError` → 400, `ProfileNotFoundError` → 404,
- * `ProfileConflictError` → 409) are mapped by the app's error handler. Response
- * schemas pin the output and feed OpenAPI.
+ * Schemas (TypeBox) validate input at the boundary and type the handlers.
+ *
+ * Domain failures are mapped by the app's error handler: `ProfileError` → 400, `ProfileNotFoundError` → 404, `ProfileConflictError` → 409.
+ *
+ * Response schemas pin the output and feed OpenAPI.
  *
  * @param service - the profiles use-case to drive.
  */

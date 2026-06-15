@@ -27,14 +27,16 @@ export interface SymbolsScope {
 }
 
 /**
- * A profile's scope, discriminated on `type`: all watched symbols, or an explicit
- * subset of them.
+ * A profile's scope, discriminated on `type`.
+ *
+ * Either every watched symbol, or an explicit subset of them.
  */
 export type ProfileScopeSpec = AllScope | SymbolsScope;
 
 /**
- * The mutable fields of a {@link Profile} — everything except its identity and
- * timestamps. Shared by the create/replace/patch validation helpers.
+ * The mutable fields of a {@link Profile} — everything except its identity and timestamps.
+ *
+ * Shared by the create/replace/patch validation helpers.
  */
 export interface ProfileFields {
   /** Human-readable, unique name. */
@@ -48,9 +50,9 @@ export interface ProfileFields {
 }
 
 /**
- * A persisted profile: the mutable {@link ProfileFields} plus a generated id and
- * creation/update timestamps. A named template that will later hold indicators and
- * actions.
+ * A persisted profile: the mutable {@link ProfileFields} plus a generated id and creation/update timestamps.
+ *
+ * A named template that will later hold indicators and actions.
  */
 export interface Profile extends ProfileFields {
   /** Generated, stable id. */
@@ -62,8 +64,9 @@ export interface Profile extends ProfileFields {
 }
 
 /**
- * Driven port for persisting {@link Profile}s, keyed by id. Implemented by driven
- * adapters (MongoDB); an in-memory adapter backs the unit tier.
+ * Driven port for persisting {@link Profile}s, keyed by id.
+ *
+ * Implemented by driven adapters (MongoDB); an in-memory adapter backs the unit tier.
  */
 export interface ProfileRepository {
   /**

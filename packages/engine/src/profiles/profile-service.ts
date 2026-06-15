@@ -14,13 +14,13 @@ import { nanoid } from 'nanoid';
 import type { ProfileServiceOptions } from './profile-service.types.js';
 
 /**
- * Application use-case for managing {@link Profile}s — named, enable/disable-able
- * templates scoped to watched symbols.
+ * Application use-case for managing {@link Profile}s.
  *
- * Depends only on ports: a {@link ProfileRepository} (persistence) and the
- * {@link WatchlistRepository} (to validate that a `Symbols` scope references
- * currently-watched ids). Id generation and the clock are injectable so tests are
- * deterministic.
+ * A profile is a named, enable/disable-able template scoped to watched symbols.
+ *
+ * Depends only on ports: a {@link ProfileRepository} (persistence) and the {@link WatchlistRepository} (to validate that a `Symbols` scope references currently-watched ids).
+ *
+ * Id generation and the clock are injectable so tests are deterministic.
  */
 export class ProfileService {
   /** Id generator (injectable; defaults to nanoid). */
@@ -63,8 +63,9 @@ export class ProfileService {
   }
 
   /**
-   * Create a profile from an input (validated + defaulted). Generates the id and
-   * timestamps.
+   * Create a profile from an input (validated + defaulted).
+   *
+   * Generates the id and timestamps.
    *
    * @throws {@link ProfileError} on invalid fields or an unwatched scope id.
    * @throws {@link ProfileConflictError} when the name is already in use.
@@ -80,8 +81,9 @@ export class ProfileService {
   }
 
   /**
-   * Fully replace a profile's mutable fields (PUT). Preserves `id` and `createdAt`,
-   * bumps `updatedAt`.
+   * Fully replace a profile's mutable fields (PUT).
+   *
+   * Preserves `id` and `createdAt`, bumps `updatedAt`.
    *
    * @throws {@link ProfileNotFoundError} when the id is unknown.
    * @throws {@link ProfileError} / {@link ProfileConflictError} on invalid input.
@@ -97,8 +99,9 @@ export class ProfileService {
   }
 
   /**
-   * Partially update a profile (PATCH) — merge the patch over the current fields,
-   * revalidate, and persist.
+   * Partially update a profile (PATCH).
+   *
+   * Merges the patch over the current fields, revalidates, and persists.
    *
    * @throws {@link ProfileNotFoundError} when the id is unknown.
    * @throws {@link ProfileError} / {@link ProfileConflictError} on invalid input.
@@ -124,9 +127,11 @@ export class ProfileService {
   }
 
   /**
-   * Remove a symbol id from every profile's `Symbols` scope (called when a symbol
-   * leaves the watchlist). A profile whose subset becomes empty is **disabled** and
-   * left `Symbols`-scoped, rather than silently widening to `All`.
+   * Remove a symbol id from every profile's `Symbols` scope.
+   *
+   * Called when a symbol leaves the watchlist.
+   *
+   * A profile whose subset becomes empty is **disabled** and left `Symbols`-scoped, rather than silently widening to `All`.
    */
   async pruneSymbol(symbolId: string): Promise<void> {
     for (const profile of await this.profiles.list()) {
@@ -147,8 +152,7 @@ export class ProfileService {
   }
 
   /**
-   * Throw {@link ProfileConflictError} when `name` is used by a profile other than
-   * `exceptId`.
+   * Throw {@link ProfileConflictError} when `name` is used by a profile other than `exceptId`.
    */
   private async assertNameAvailable(name: string, exceptId?: string): Promise<void> {
     const all = await this.profiles.list();
@@ -158,8 +162,7 @@ export class ProfileService {
   }
 
   /**
-   * Throw {@link ProfileError} when a `Symbols` scope references an id that is not
-   * currently watched.
+   * Throw {@link ProfileError} when a `Symbols` scope references an id that is not currently watched.
    */
   private async assertScopeWatched(scope: ProfileScopeSpec): Promise<void> {
     if (scope.type !== ProfileScope.Symbols) return;

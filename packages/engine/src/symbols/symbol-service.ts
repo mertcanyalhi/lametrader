@@ -30,8 +30,8 @@ export class SymbolService {
    * @param watchlist - the watchlist persistence port.
    * @param config - the configuration use-case (for supported/default periods).
    * @param candles - the candle persistence port (cascaded on removal).
-   * @param profiles - optional profiles use-case; when present, removing a symbol
-   *   prunes it from every profile's scope (cascaded on removal).
+   * @param profiles - optional profiles use-case.
+   *   When present, removing a symbol prunes it from every profile's scope (cascaded on removal).
    */
   constructor(
     private readonly sources: SymbolDiscovery[],
@@ -97,8 +97,10 @@ export class SymbolService {
   }
 
   /**
-   * Remove a symbol from the watchlist, delete its stored candles (all periods),
-   * and prune it from every profile's scope (when a profiles use-case is wired).
+   * Remove a symbol from the watchlist, delete its stored candles (all periods), and prune it from every profile's scope.
+   *
+   * The profile prune runs only when a profiles use-case is wired.
+   *
    * Idempotent.
    */
   async remove(id: string): Promise<void> {
