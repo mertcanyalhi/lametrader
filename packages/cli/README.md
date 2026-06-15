@@ -80,6 +80,33 @@ npm run cli -- symbols set-periods crypto:BTCUSDT --periods 1h
 npm run cli -- symbols remove crypto:BTCUSDT
 ```
 
+### `profile`
+
+Manage profiles — named, enable/disable-able templates scoped to watched symbols.
+A profile applies to **all** watched symbols by default, or to an explicit subset (`--symbols`).
+Every id in a subset must be currently watched, and an empty subset normalizes to "all".
+Names are unique.
+
+#### Subcommands
+
+- **`list`** — print all profiles as JSON.
+- **`create --name <n> [--description <d>] [--disabled] [--symbols <csv>]`** — create a profile.
+  `--symbols` scopes it to that subset (otherwise all); `--disabled` creates it disabled.
+- **`update <id> [--name <n>] [--description <d>] [--enable|--disable] [--all|--symbols <csv>]`** — patch the given fields.
+  `--all` resets the scope to all watched symbols.
+- **`delete <id>`** — remove a profile.
+
+#### Examples
+
+```sh
+npm run cli -- profile create --name Scalper
+npm run cli -- profile create --name BtcOnly --symbols crypto:BTCUSDT
+npm run cli -- profile list
+npm run cli -- profile update <id> --disable
+npm run cli -- profile update <id> --symbols crypto:BTCUSDT,crypto:ETHUSDT
+npm run cli -- profile delete <id>
+```
+
 ### `candles`
 
 Backfill historical OHLC candles for a **watched** symbol+period into MongoDB and

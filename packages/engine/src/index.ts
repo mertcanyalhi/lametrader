@@ -27,6 +27,10 @@ export type {
 export { ConfigService } from './config/config-service.js';
 export { MongoConfigRepository } from './config/mongo-config-repository.js';
 export { type ConnectedServices, type ConnectOptions, connectServices } from './connect.js';
+export { InMemoryProfileRepository } from './profiles/in-memory-profile-repository.js';
+export { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
+export { ProfileService } from './profiles/profile-service.js';
+export type { ProfileServiceOptions } from './profiles/profile-service.types.js';
 export { loadSettings } from './settings.js';
 export type { Settings } from './settings.types.js';
 export { BinanceMarketDataSource } from './symbols/binance-market-data-source.js';

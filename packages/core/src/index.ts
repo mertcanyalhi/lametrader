@@ -27,6 +27,23 @@ export type {
 export { ConfigError, defaultConfig, mergeConfig, parseConfig } from './config.js';
 export { type Config, type ConfigRepository, Period } from './config.types.js';
 export {
+  mergeProfileFields,
+  ProfileConflictError,
+  ProfileError,
+  ProfileNotFoundError,
+  parseProfileFields,
+  parseProfileScope,
+} from './profile.js';
+export {
+  type AllScope,
+  type Profile,
+  type ProfileFields,
+  type ProfileRepository,
+  ProfileScope,
+  type ProfileScopeSpec,
+  type SymbolsScope,
+} from './profile.types.js';
+export {
   assertInstrumentTypeMatchesId,
   MarketDataError,
   parseSymbolPeriods,

@@ -117,6 +117,45 @@ curl -X PATCH http://localhost:3000/symbols/crypto:BTCUSDT \
 curl -X DELETE http://localhost:3000/symbols/crypto:BTCUSDT
 ```
 
+## Profiles resource
+
+A **profile** is a named, enable/disable-able template scoped to watched symbols — either all of them (the default) or an explicit subset.
+It will later hold indicators and actions.
+
+A profile is `{ id, name, description, enabled, scope, createdAt, updatedAt }`, where `scope` is either `{ "type": "all" }` or `{ "type": "symbols", "symbolIds": [...] }`.
+Names are unique.
+Every id in a `symbols` scope must be currently watched, and an empty subset normalizes to `all`.
+
+### Endpoints
+
+| Method   | Path             | Body                                       | Description                          |
+| -------- | ---------------- | ------------------------------------------ | ------------------------------------ |
+| `GET`    | `/profiles`      | —                                          | List profiles.                       |
+| `POST`   | `/profiles`      | `{ name, description?, enabled?, scope? }` | Create. **201** / 400 / 409.         |
+| `GET`    | `/profiles/{id}` | —                                          | Get one. 200 / 404.                  |
+| `PUT`    | `/profiles/{id}` | `{ name, description?, enabled?, scope? }` | Full replace. 200 / 400 / 404 / 409. |
+| `PATCH`  | `/profiles/{id}` | `{ name?, description?, enabled?, scope? }` | Partial update. 200 / 400 / 404 / 409. |
+| `DELETE` | `/profiles/{id}` | —                                          | Delete. **204** / 404.               |
+
+Errors use the uniform `{ "error": "<reason>" }` body — **400** for invalid input or a scope referencing an unwatched symbol, **404** for an unknown profile, **409** for a duplicate name.
+
+Removing a watched symbol prunes it from every profile's subset.
+A profile left with an empty subset is **disabled** (kept symbols-scoped) rather than widened to `all`.
+
+### Examples
+
+```sh
+curl -X POST http://localhost:3000/profiles \
+  -H 'content-type: application/json' -d '{ "name": "Scalper" }'
+curl http://localhost:3000/profiles
+curl -X PATCH http://localhost:3000/profiles/<id> \
+  -H 'content-type: application/json' -d '{ "enabled": false }'
+curl -X PUT http://localhost:3000/profiles/<id> \
+  -H 'content-type: application/json' \
+  -d '{ "name": "Scalper", "scope": { "type": "symbols", "symbolIds": ["crypto:BTCUSDT"] } }'
+curl -X DELETE http://localhost:3000/profiles/<id>
+```
+
 ## Candles resource
 
 Backfill historical OHLC candles for a **watched** symbol+period into MongoDB and
