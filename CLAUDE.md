@@ -148,6 +148,17 @@ Follow these by default, unprompted.
   Each sentence on its own line; a blank line separates distinct thoughts.
   Markdown renders the same (lines within a paragraph are joined) but reads cleanly in source and gives single-line diffs on prose edits.
 
+### No hacky solutions
+
+- **Never reach for escape hatches** — `as never`, `as any`, `@ts-ignore`, `@ts-expect-error`, `// eslint-disable*`, `removeAdditional`-toggling, and similar tell the tooling "trust me, anything goes" instead of expressing the actual relationship.
+  They paper over a design mismatch and rot fast.
+- If you find yourself reaching for one, the right move is usually to **fix the underlying mismatch**: refine the type, split a domain shape from a transport shape, refactor the API, or define a precise utility type (`DeepMutable<T>`, a discriminated union, a tagged template).
+  A *structural* cast (`as DeepMutable<IndicatorDefinition>`) is fine — it asserts a checkable, narrow equivalence and is type-only at runtime.
+  An *opaque* cast (`as never`, `as any`) is not.
+- Optional controller dependencies that gate a route's registration are usually a smell — if a controller's surface isn't conditional in production, make the dependency required.
+  Test ergonomics aren't a reason to soften the production contract.
+- If the only path forward is a workaround (rare), document the exact constraint inline **and** open an issue with the proper fix; don't let it slide silently.
+
 ### Dependencies
 
 - Prefer well-established, non-commercial (open-source / freely licensed) industry-standard packages wherever they fit. Avoid commercial/paid or obscure unmaintained deps.
