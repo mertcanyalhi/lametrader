@@ -3,7 +3,7 @@
 - Status: approved
 - Touches:
   - `core` — `FieldType` / `PriceSource` enums, field-descriptor types (`NumberFieldDescriptor`, `SourceFieldDescriptor`, `NumberStateFieldDescriptor`), `IndicatorDefinition` + `IndicatorModule` types with `InferInputs<I>` / `InferStateSeries<S>` inference, `IndicatorError`, `resolveSource`, `validateIndicatorInputs`.
-  - `engine` — `IndicatorRegistry`, the `defineIndicator` helper that self-registers into the default singleton, and the first reference indicator (`movingAverage`) under `packages/engine/src/indicators/`.
+  - `engine` — `IndicatorRegistry`, the `defineIndicator` helper that constructs a module, `defaultIndicators()` factory mirroring `defaultMarketDataSources()`, and the first reference indicator (`movingAverage`) under `packages/engine/src/indicators/`.
 
 ## Goal
 
@@ -48,8 +48,9 @@ Field-descriptor vocabulary (grows on its second instance, per the anti-dogma ru
 Registry — `IndicatorRegistry` (in `engine`):
 
 - `register(module)`, `list(): IndicatorDefinition[]`, `get(key): IndicatorModule | null`.
-- A module-level singleton instance is exported from engine; `defineIndicator(spec)` constructs a module and registers it into that singleton.
-- `defineIndicator` defaults `appliesTo` to **all** `SymbolType`s when omitted, so authors only narrow when needed.
+- `defineIndicator(spec)` is a pure factory: it constructs an `IndicatorModule` (no side effects) and defaults `appliesTo` to **all** `SymbolType`s when omitted.
+- `defaultIndicators(): IndicatorRegistry` mirrors `defaultMarketDataSources()` — it instantiates an empty registry, calls `register` for each shipped module (just `movingAverage` here), and returns it.
+- Consumers (catalog API, compute service, etc.) receive the registry via dependency injection; no module-level mutable state.
 
 Reference indicator — `movingAverage` (under `packages/engine/src/indicators/sma.ts`):
 
@@ -79,9 +80,10 @@ Field descriptors and validation (`core`):
 
 Registry + `defineIndicator` (`engine`):
 
-- [ ] `defineIndicator` constructs an `IndicatorModule` and registers it into the default singleton; `indicatorRegistry.get(key)` returns it.
+- [ ] `defineIndicator(spec)` returns an `IndicatorModule` whose `definition` carries the supplied fields verbatim and whose `compute` is the supplied function (full-payload).
 - [ ] `defineIndicator` defaults `appliesTo` to every `SymbolType` when omitted; an explicit `appliesTo` is preserved.
-- [ ] `IndicatorRegistry.list()` returns the definitions of all registered modules; `get('unknown')` returns `null`.
+- [ ] `IndicatorRegistry.register` + `list`/`get` round-trip a module; `get('unknown')` returns `null`.
+- [ ] `defaultIndicators()` returns a registry whose `list()` includes the moving-average definition; `get('sma')` returns the moving-average module.
 
 Moving-average compute (`engine`):
 
@@ -94,7 +96,7 @@ Moving-average compute (`engine`):
 This issue is a domain-only contract — no API endpoint, no Mongo persistence, no streaming.
 The "end-to-end" smoke-test is the **reference module exercised through the public surface** (`@lametrader/engine` exports):
 
-- Happy path: import `indicatorRegistry` and `movingAverage` from `@lametrader/engine`; assert `indicatorRegistry.get('sma')` returns the registered module; call `validateIndicatorInputs(definition, { length: 3 })`; pass the validated inputs into `compute(...)` over a real-typed crypto candle series; assert the resulting series (full-payload, `closeTo` floats).
+- Happy path: import `defaultIndicators` from `@lametrader/engine`; assert the returned registry's `get('sma')` returns the moving-average module; call `validateIndicatorInputs(definition, { length: 3 })`; pass the validated inputs into `compute(...)` over a real-typed crypto candle series; assert the resulting series (full-payload, `closeTo` floats).
 - Critical failure mode: invalid inputs (e.g. `length: 0`) bubble up as `IndicatorError` and never reach `compute`.
 
 Placed as a standard unit test under `engine/src/indicators/sma.contract-smoke.test.ts` (not the e2e tier — there is no real-infra to stand up, and adding a Testcontainers run for a pure-domain contract would be over-engineering).
