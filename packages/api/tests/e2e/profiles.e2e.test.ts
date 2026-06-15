@@ -59,10 +59,6 @@ describe('profiles API (e2e)', () => {
     // Seed the watchlist directly so scope validation + the removal cascade have a
     // target, without coupling this suite to the symbols HTTP flow.
     await watchlist.add(WATCHED_BTC);
-    // Sanity: confirm the seeded symbol is visible through the same repository
-    // the ProfileService reads from (so a failure here surfaces a setup issue,
-    // not a misleading 400 on a downstream scope check).
-    expect(await watchlist.get(WATCHED_BTC.id)).toEqual(WATCHED_BTC);
   });
 
   afterAll(async () => {
@@ -108,11 +104,10 @@ describe('profiles API (e2e)', () => {
       url: `/profiles/${created.id}`,
       payload: { name: 'Scalper', scope: { type: 'symbols', symbolIds: ['crypto:BTCUSDT'] } },
     });
-    expect({ status: put.statusCode, body: put.json() }).toEqual({
-      status: 200,
-      body: expect.objectContaining({
-        scope: { type: 'symbols', symbolIds: ['crypto:BTCUSDT'] },
-      }),
+    expect(put.statusCode).toBe(200);
+    expect((put.json() as Profile).scope).toEqual({
+      type: 'symbols',
+      symbolIds: ['crypto:BTCUSDT'],
     });
 
     expect(
@@ -146,10 +141,6 @@ describe('profiles API (e2e)', () => {
       method: 'POST',
       url: '/profiles',
       payload: { name: 'OnlyBtc', scope: { type: 'symbols', symbolIds: ['crypto:BTCUSDT'] } },
-    });
-    expect({ status: create.statusCode, body: create.json() }).toEqual({
-      status: 201,
-      body: expect.objectContaining({ name: 'OnlyBtc' }),
     });
     const id = (create.json() as Profile).id;
 

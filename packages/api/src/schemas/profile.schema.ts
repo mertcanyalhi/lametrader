@@ -3,14 +3,19 @@ import { ProfileScope } from '@lametrader/core';
 
 /**
  * A profile's scope, discriminated on `type`: all watched symbols, or an explicit
- * subset of watched symbol ids.
+ * subset of watched symbol ids. The union branches deliberately omit
+ * `additionalProperties: false` — Fastify's AJV runs with `removeAdditional: true`,
+ * which strips properties from each branch before union evaluation; on a symbols
+ * payload the first branch would otherwise drop `symbolIds`, making the second
+ * branch's required-property check fail spuriously. Unknown keys in a scope
+ * payload are filtered by the domain validator (`parseProfileScope`).
  */
 export const ProfileScopeSchema = Type.Union([
-  Type.Object({ type: Type.Literal(ProfileScope.All) }, { additionalProperties: false }),
-  Type.Object(
-    { type: Type.Literal(ProfileScope.Symbols), symbolIds: Type.Array(Type.String()) },
-    { additionalProperties: false },
-  ),
+  Type.Object({ type: Type.Literal(ProfileScope.All) }),
+  Type.Object({
+    type: Type.Literal(ProfileScope.Symbols),
+    symbolIds: Type.Array(Type.String()),
+  }),
 ]);
 
 /**
