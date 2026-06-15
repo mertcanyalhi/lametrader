@@ -154,15 +154,14 @@ npm run cli -- candles list crypto:BTCUSDT --period 1h --from 1704153600000 --li
 
 ### `indicators`
 
-Read the **indicator catalog** — every registered indicator's serialized definition (`key`, `name`, `description`, `version`, `appliesTo`, `inputs`, `state`).
-Metadata only; computation isn't part of this command (that's for a later feature).
-
-This command reads in-process from the static registry — no Mongo connection needed.
+Read the **indicator catalog** and (with a connected Mongo) compute an indicator over a watched symbol's stored candles.
 
 #### Subcommands
 
 - **`list`** — print every registered definition as JSON.
 - **`show <key>`** — print the matching definition; an unknown key errors with `IndicatorNotFoundError`.
+- **`compute <symbolId> <key> --period <p> [--from <ms>] [--to <ms>] [--inputs '<json>']`** — compute the indicator over the symbol's stored candles and print the aligned series.
+  `--inputs` is a JSON literal; omitted inputs fall back to the indicator's defaults.
 
 #### Examples
 
@@ -170,4 +169,13 @@ This command reads in-process from the static registry — no Mongo connection n
 npm run cli -- indicators list
 npm run cli -- indicators show sma
 npm run cli -- indicators show vwma
+
+# compute SMA(3) on a backfilled crypto symbol
+npm run cli -- indicators compute crypto:BTCUSDT sma --period 1h --inputs '{"length":3}'
+
+# slice to a sub-range
+npm run cli -- indicators compute crypto:BTCUSDT sma --period 1h --inputs '{"length":3}' --from 1704153600000
+
+# VWMA with deviation threshold and both buy/sell signals
+npm run cli -- indicators compute crypto:BTCUSDT vwma --period 1h --inputs '{"length":14,"multiplier":1,"direction":"both"}'
 ```

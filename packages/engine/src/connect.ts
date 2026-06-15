@@ -7,6 +7,7 @@ import type { CandleListener } from './candles/polling-service.types.js';
 import { ConfigService } from './config/config-service.js';
 import { MongoConfigRepository } from './config/mongo-config-repository.js';
 import { defaultIndicators } from './indicators/default-indicators.js';
+import { IndicatorComputeService } from './indicators/indicator-compute-service.js';
 import type { IndicatorRegistry } from './indicators/indicator-registry.js';
 import { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 import { ProfileService } from './profiles/profile-service.js';
@@ -37,6 +38,8 @@ export interface ConnectedServices {
   profiles: ProfileService;
   /** The shared indicator catalog registry (read-only at runtime). */
   indicators: IndicatorRegistry;
+  /** Ad-hoc indicator compute over a symbol's stored candles. */
+  indicatorCompute: IndicatorComputeService;
   /** The backfill use-case (historical candles). */
   backfill: BackfillService;
   /** The continuous polling + live-streaming loop. */
@@ -71,6 +74,7 @@ export async function connectServices(
   await candleRepo.ensureIndexes();
   const config = new ConfigService(new MongoConfigRepository(db));
   const indicators = defaultIndicators();
+  const indicatorCompute = new IndicatorComputeService(indicators, watchlist, candleRepo);
   const profiles = new ProfileService(new MongoProfileRepository(db), watchlist, indicators);
   const symbols = new SymbolService(sources, watchlist, config, candleRepo, profiles);
   const backfill = new BackfillService(sources, candleRepo, watchlist);
@@ -83,6 +87,7 @@ export async function connectServices(
     symbols,
     profiles,
     indicators,
+    indicatorCompute,
     backfill,
     polling,
     close: async () => {

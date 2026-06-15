@@ -1,5 +1,5 @@
 import { Type } from '@fastify/type-provider-typebox';
-import { FieldType, Pane, PriceSource, RenderKind, SymbolType } from '@lametrader/core';
+import { FieldType, Pane, Period, PriceSource, RenderKind, SymbolType } from '@lametrader/core';
 
 /**
  * One option in an enum descriptor's closed set.
@@ -118,3 +118,48 @@ export const IndicatorDefinitionSchema = Type.Object(
  * Path params carrying an indicator key.
  */
 export const IndicatorKeyParamSchema = Type.Object({ key: Type.String() });
+
+/**
+ * Path params for the symbol-scoped compute route: `/symbols/:id/indicators/:key`.
+ */
+export const SymbolIndicatorParamsSchema = Type.Object({
+  id: Type.String(),
+  key: Type.String(),
+});
+
+/**
+ * Query for the compute route.
+ *
+ * `period` is required; `from`/`to` optional epoch-ms bounds.
+ *
+ * `additionalProperties: true` admits the indicator's own scalar inputs (e.g. `length`, `source`, `multiplier`) — they pass through as strings and the domain validates+coerces them against the indicator's descriptors.
+ */
+export const IndicatorComputeQuerySchema = Type.Object(
+  {
+    period: Type.Enum(Period),
+    from: Type.Optional(Type.Number()),
+    to: Type.Optional(Type.Number()),
+  },
+  { additionalProperties: true },
+);
+
+/**
+ * One row of a compute result: a `time` plus arbitrary state fields.
+ */
+const IndicatorStatePointSchema = Type.Object(
+  { time: Type.Number() },
+  { additionalProperties: true },
+);
+
+/**
+ * The compute route's 200 response shape.
+ */
+export const IndicatorComputeResultSchema = Type.Object(
+  {
+    indicatorKey: Type.String(),
+    version: Type.Number(),
+    period: Type.Enum(Period),
+    state: Type.Array(IndicatorStatePointSchema),
+  },
+  { $id: 'IndicatorComputeResult', additionalProperties: false },
+);

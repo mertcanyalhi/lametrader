@@ -13,6 +13,8 @@ import {
 import {
   type CandleEvent,
   ConfigService,
+  defaultIndicators,
+  IndicatorComputeService,
   MongoCandleRepository,
   MongoConfigRepository,
   MongoWatchlistRepository,
@@ -149,7 +151,9 @@ describe('polling + live streaming (e2e)', () => {
     await candleRepo.save(BTC.id, Period.OneHour, [candle(0)]);
     await candleRepo.save(ETH.id, Period.OneHour, [candle(0)]);
 
-    app = createApp({ config, candleStream: hub });
+    const registry = defaultIndicators();
+    const compute = new IndicatorComputeService(registry, watchlist, candleRepo);
+    app = createApp({ config, candleStream: hub, indicators: { registry, compute } });
     baseUrl = await app.listen({ port: 0, host: '127.0.0.1' });
   });
 

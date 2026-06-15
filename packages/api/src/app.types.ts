@@ -1,6 +1,7 @@
 import type {
   BackfillService,
   ConfigService,
+  IndicatorComputeService,
   IndicatorRegistry,
   ProfileService,
   SymbolService,
@@ -39,11 +40,16 @@ export interface AppDependencies {
    */
   candleStream?: CandleStreamHub;
   /**
-   * The indicator catalog registry.
+   * The indicator surface — the catalog registry and the ad-hoc compute use-case, paired.
    *
-   * When present, the `/indicators` routes are registered.
+   * Required: every app the API serves exposes indicators (`/indicators*` catalog routes and `GET /symbols/:id/indicators/:key`).
    */
-  indicators?: IndicatorRegistry;
+  indicators: {
+    /** The catalog registry (read at runtime for `/indicators[/:key]`). */
+    registry: IndicatorRegistry;
+    /** The compute use-case (drives `GET /symbols/:id/indicators/:key`). */
+    compute: IndicatorComputeService;
+  };
 }
 
 /**

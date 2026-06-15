@@ -148,6 +148,28 @@ Follow these by default, unprompted.
   Each sentence on its own line; a blank line separates distinct thoughts.
   Markdown renders the same (lines within a paragraph are joined) but reads cleanly in source and gives single-line diffs on prose edits.
 
+### No hacky solutions
+
+- A workaround that just makes a problem go away is a signal — the design isn't right yet.
+  Fix the underlying mismatch (refine the type, split a domain shape from a transport one, refactor the contract, change the API) instead of silencing the tooling that surfaced it.
+- Don't paper over problems with escape hatches.
+  Whether it's a type-system cast, an ignore/disable pragma, a permissive flag flipped on, an optional dependency gating behavior conditionally, or a silent fallback hiding a missing path — each tells the next reader "trust me, anything goes" and rots fast.
+- A **narrow, checkable** expression of the truth is fine — a precise type, an explicit interface, a required dependency, a documented invariant.
+  An **opaque** one (it could be anything, who knows, just trust me) is not.
+- If a workaround is genuinely the last resort, document the exact constraint inline **and** open an issue with the proper fix.
+  Don't let it slide silently.
+- The decision-level form of this same shortcut is the next rule: see **Confirm with the human, never guess**.
+
+### Confirm with the human, never guess
+
+- When a decision the request didn't settle comes up — a design call, an architectural trade-off, a choice between sensible options, the interpretation of an ambiguous spec — **surface it and ask** before implementing.
+  Reasoning to "the most plausible answer" and acting silently produces churn: the human reviews, pushes back, the work gets redone.
+- The bar isn't every micro-detail (variable names, file layout inside a package).
+  It's every spot two readers might reasonably disagree, or where a wrong call would cost more than a clarifying question.
+- A clear question with two-to-four labeled options is faster than a wrong-turn refactor.
+  Default to asking; the human will say "just go" when they want autonomy.
+- The code-level form of this same shortcut is the previous rule: see **No hacky solutions**.
+
 ### Dependencies
 
 - Prefer well-established, non-commercial (open-source / freely licensed) industry-standard packages wherever they fit. Avoid commercial/paid or obscure unmaintained deps.

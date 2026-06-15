@@ -11,6 +11,8 @@ import {
 import {
   BackfillService,
   ConfigService,
+  defaultIndicators,
+  IndicatorComputeService,
   InMemoryMarketDataSource,
   MongoCandleRepository,
   MongoConfigRepository,
@@ -99,8 +101,10 @@ describe('backfill API (e2e)', () => {
     const config = new ConfigService(new MongoConfigRepository(db));
     const symbols = new SymbolService([stub], watchlist, config, candleRepo);
     const backfill = new BackfillService([stub], candleRepo, watchlist);
+    const registry = defaultIndicators();
+    const compute = new IndicatorComputeService(registry, watchlist, candleRepo);
 
-    app = createApp({ config, symbols, backfill });
+    app = createApp({ config, symbols, backfill, indicators: { registry, compute } });
     baseUrl = await app.listen({ port: 0, host: '127.0.0.1' });
   });
 
@@ -204,10 +208,15 @@ describe('backfill API (e2e)', () => {
     const failConfig = new ConfigService(new MongoConfigRepository(db));
     const failCandles = new MongoCandleRepository(db);
     const failWatchlist = new MongoWatchlistRepository(db);
+    const failRegistry = defaultIndicators();
     const failApp = createApp({
       config: failConfig,
       symbols: new SymbolService([failing], failWatchlist, failConfig, failCandles),
       backfill: new BackfillService([failing], failCandles, failWatchlist),
+      indicators: {
+        registry: failRegistry,
+        compute: new IndicatorComputeService(failRegistry, failWatchlist, failCandles),
+      },
     });
 
     const job = await backfillAndWait(failApp);

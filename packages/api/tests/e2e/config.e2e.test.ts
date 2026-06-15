@@ -23,7 +23,12 @@ describe('config API (e2e)', () => {
     uri = `${container.getConnectionString()}?directConnection=true`;
     const wired = await connectServices(uri, { pollIntervals });
     close = wired.close;
-    app = createApp({ config: wired.config, symbols: wired.symbols, backfill: wired.backfill });
+    app = createApp({
+      config: wired.config,
+      symbols: wired.symbols,
+      backfill: wired.backfill,
+      indicators: { registry: wired.indicators, compute: wired.indicatorCompute },
+    });
     await app.ready();
   });
 
@@ -52,6 +57,7 @@ describe('config API (e2e)', () => {
       config: second.config,
       symbols: second.symbols,
       backfill: second.backfill,
+      indicators: { registry: second.indicators, compute: second.indicatorCompute },
     });
     const get = await fresh.inject({ method: 'GET', url: '/config' });
     expect(get.json()).toEqual({ periods: ['1h', '4h', '1d'], defaultPeriod: '4h' });

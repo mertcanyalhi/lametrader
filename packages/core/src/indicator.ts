@@ -120,9 +120,17 @@ export function validateIndicatorInputs<I extends readonly FieldDescriptor[]>(
 
 /**
  * Validate a single number input, applying its `default` when the raw value is undefined.
+ *
+ * Accepts a numeric string and coerces it to a number (a convenience for HTTP query-string boundaries — non-numeric strings still fail the type check).
  */
 function validateNumberInput(descriptor: NumberFieldDescriptor, raw: unknown): number {
-  const value = raw === undefined ? descriptor.default : raw;
+  let value = raw === undefined ? descriptor.default : raw;
+  if (typeof value === 'string' && value !== '') {
+    const coerced = Number(value);
+    if (!Number.isNaN(coerced)) {
+      value = coerced;
+    }
+  }
   if (value === undefined) {
     throw new IndicatorError(`input "${descriptor.key}" is required`);
   }
