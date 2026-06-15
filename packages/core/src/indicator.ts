@@ -1,0 +1,127 @@
+import type { Candle } from './candle.types.js';
+import {
+  type FieldDescriptor,
+  FieldType,
+  type InferInputs,
+  type NumberFieldDescriptor,
+  PriceSource,
+  type SourceFieldDescriptor,
+} from './indicator.types.js';
+import { SymbolType } from './symbol.types.js';
+
+/**
+ * Raised when an indicator input fails validation, or when a price-source selector is unsupported on the given candle's asset class.
+ *
+ * Distinct type so driving adapters map it to a client error (HTTP 400) rather than a server fault.
+ */
+export class IndicatorError extends Error {
+  /**
+   * @param message - the human-readable validation failure reason.
+   */
+  constructor(message: string) {
+    super(message);
+    this.name = 'IndicatorError';
+  }
+}
+
+/** Every {@link PriceSource} value, for membership checks. */
+const PRICE_SOURCE_VALUES = new Set<string>(Object.values(PriceSource));
+
+/**
+ * Resolve a {@link PriceSource} selector against a candle.
+ *
+ * Averaged sources are computed from the candle's OHLC.
+ *
+ * `Volume` requires the candle's asset class to carry volume — invalid for FX.
+ *
+ * @throws {@link IndicatorError} when `Volume` is requested on a candle class that has no volume (FX).
+ */
+export function resolveSource(candle: Candle, source: PriceSource): number {
+  switch (source) {
+    case PriceSource.Open:
+      return candle.open;
+    case PriceSource.High:
+      return candle.high;
+    case PriceSource.Low:
+      return candle.low;
+    case PriceSource.Close:
+      return candle.close;
+    case PriceSource.HL2:
+      return (candle.high + candle.low) / 2;
+    case PriceSource.HLC3:
+      return (candle.high + candle.low + candle.close) / 3;
+    case PriceSource.OHLC4:
+      return (candle.open + candle.high + candle.low + candle.close) / 4;
+    case PriceSource.Volume:
+      if (candle.type === SymbolType.Fx) {
+        throw new IndicatorError('source "volume" is not available for FX candles');
+      }
+      return candle.volume;
+  }
+}
+
+/**
+ * Validate an unknown input payload against a definition's input descriptors, applying defaults and returning a typed inputs object.
+ *
+ * @throws {@link IndicatorError} on a wrong-typed value, an out-of-range number, a non-`PriceSource` source, or a required value with no default.
+ */
+export function validateIndicatorInputs<I extends readonly FieldDescriptor[]>(
+  definition: { inputs: I },
+  values: Record<string, unknown>,
+): InferInputs<I> {
+  const result: Record<string, unknown> = {};
+  for (const descriptor of definition.inputs) {
+    const raw = values[descriptor.key];
+    if (descriptor.type === FieldType.Number) {
+      result[descriptor.key] = validateNumberInput(descriptor, raw);
+    } else {
+      result[descriptor.key] = validateSourceInput(descriptor, raw);
+    }
+  }
+  return result as InferInputs<I>;
+}
+
+/**
+ * Validate a single number input, applying its `default` when the raw value is undefined.
+ */
+function validateNumberInput(descriptor: NumberFieldDescriptor, raw: unknown): number {
+  const value = raw === undefined ? descriptor.default : raw;
+  if (value === undefined) {
+    throw new IndicatorError(`input "${descriptor.key}" is required`);
+  }
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    throw new IndicatorError(`input "${descriptor.key}" must be a number`);
+  }
+  if (descriptor.integer && !Number.isInteger(value)) {
+    throw new IndicatorError(`input "${descriptor.key}" must be an integer`);
+  }
+  if (descriptor.min !== undefined && value < descriptor.min) {
+    throw new IndicatorError(`input "${descriptor.key}" must be >= ${descriptor.min}`);
+  }
+  if (descriptor.max !== undefined && value > descriptor.max) {
+    throw new IndicatorError(`input "${descriptor.key}" must be <= ${descriptor.max}`);
+  }
+  return value;
+}
+
+/**
+ * Validate a single source input, applying its `default` when the raw value is undefined.
+ */
+function validateSourceInput(descriptor: SourceFieldDescriptor, raw: unknown): PriceSource {
+  const value = raw === undefined ? descriptor.default : raw;
+  if (value === undefined) {
+    throw new IndicatorError(`input "${descriptor.key}" is required`);
+  }
+  if (typeof value !== 'string' || !PRICE_SOURCE_VALUES.has(value)) {
+    throw new IndicatorError(`input "${descriptor.key}" must be one of PriceSource`);
+  }
+  return value as PriceSource;
+}
+
+export {
+  type FieldDescriptor,
+  FieldType,
+  type NumberFieldDescriptor,
+  PriceSource,
+  type SourceFieldDescriptor,
+} from './indicator.types.js';

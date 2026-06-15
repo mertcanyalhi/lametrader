@@ -26,6 +26,25 @@ export type {
 } from './candle.types.js';
 export { ConfigError, defaultConfig, mergeConfig, parseConfig } from './config.js';
 export { type Config, type ConfigRepository, Period } from './config.types.js';
+export { IndicatorError, resolveSource, validateIndicatorInputs } from './indicator.js';
+export {
+  type FieldDescriptor,
+  FieldType,
+  type IndicatorDefinition,
+  type IndicatorModule,
+  type InferFieldValue,
+  type InferInputs,
+  type InferStateRow,
+  type InferStateSeries,
+  type InferStateValue,
+  type NumberFieldDescriptor,
+  type NumberStateFieldDescriptor,
+  Pane,
+  PriceSource,
+  RenderKind,
+  type SourceFieldDescriptor,
+  type StateFieldDescriptor,
+} from './indicator.types.js';
 export {
   mergeProfileFields,
   ProfileConflictError,
