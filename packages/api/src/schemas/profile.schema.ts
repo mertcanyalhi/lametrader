@@ -2,16 +2,24 @@ import { Type } from '@fastify/type-provider-typebox';
 import { ProfileScope } from '@lametrader/core';
 
 /**
- * A profile's scope, discriminated on `type`: all watched symbols, or an explicit
- * subset of watched symbol ids.
+ * A profile's scope. `type` is the discriminator (`all` | `symbols`); `symbolIds`
+ * is required when `type` is `symbols` and ignored otherwise.
+ *
+ * Modeled as a single object rather than a discriminated `Type.Union`: Fastify
+ * runs AJV with `removeAdditional: true`, which strips properties from each union
+ * branch in turn before evaluating them — on a symbols payload the all-branch
+ * would drop `symbolIds`, then the symbols-branch's required-property check
+ * fails. A flat schema sidesteps the gotcha while keeping
+ * `additionalProperties: false`; the cross-field "symbolIds only with symbols"
+ * rule is enforced by `parseProfileScope` in the domain.
  */
-export const ProfileScopeSchema = Type.Union([
-  Type.Object({ type: Type.Literal(ProfileScope.All) }, { additionalProperties: false }),
-  Type.Object(
-    { type: Type.Literal(ProfileScope.Symbols), symbolIds: Type.Array(Type.String()) },
-    { additionalProperties: false },
-  ),
-]);
+export const ProfileScopeSchema = Type.Object(
+  {
+    type: Type.Enum(ProfileScope),
+    symbolIds: Type.Optional(Type.Array(Type.String())),
+  },
+  { additionalProperties: false },
+);
 
 /**
  * A full profile — used for 200/201 responses.
