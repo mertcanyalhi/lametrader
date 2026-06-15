@@ -61,6 +61,19 @@ Every change: **spec → red → green → refactor → check → commit**, one 
 `/feature`, `/adr`, `/ship` automate this loop.
 `/release` is the separate versioning flow — run it when cutting a release, not per change.
 
+### Fast-track (bug fixes, trivial changes)
+
+When a change doesn't alter any spec's described behaviour, the full ceremony is overkill.
+Use a streamlined flow:
+
+1. **Reproduce** — write a failing test (unit or e2e) that demonstrates the bug.
+2. **Fix** — minimal code to make it pass.
+3. **Check** — `npm run check:full` green.
+4. **Commit** — one logical concern, Conventional Commits message; no spec or ADR update.
+
+The fast track applies when there's no behaviour change: typo fixes, flaky-test stabilization, dependency bumps, format-only edits, internal refactors covered by existing tests.
+Anything that adds, removes, or changes documented behaviour goes through the full spec-driven flow.
+
 ### Test tiers
 
 - **unit** (default) — pure domain + application vs fake adapters.
@@ -109,6 +122,20 @@ Follow these by default, unprompted.
 - Unit tests sit beside the code in `src`.
   E2e tests live in `packages/<pkg>/tests/e2e/` and assert a feature from the end-user/spec perspective.
 - Never `.skip` a test to land a change.
+- **One action per test.**
+  Arrange the setup, perform a single action, assert the full outcome.
+  Different actions = different tests.
+- **Test names are full sentences describing behaviour** — `'<unit> does <something> when/given <condition>'`, not `'test1'` or `'works'`.
+- **DAMP over DRY in tests.**
+  Repeating setup inline is fine if it keeps each test self-contained and readable.
+  Only extract a helper when the abstraction earns its keep.
+- **No logic in test bodies** — no `if`/loops/ternaries/conditional assertions.
+  Branching cases get separate tests.
+- **Prefer real implementations over mocks.**
+  Use a fake adapter (e.g. `InMemoryWatchlistRepository`) over a stub, a stub over a mock.
+  Only mock external systems we don't own.
+- **Each test is hermetic** — sets up everything it needs and runs in isolation.
+  Never `sleep()` to wait for something; poll a condition or use an event hook.
 
 ### Types & docs
 
