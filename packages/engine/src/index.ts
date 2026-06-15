@@ -31,6 +31,7 @@ export { defaultIndicators } from './indicators/default-indicators.js';
 export { type DefineIndicatorSpec, defineIndicator } from './indicators/define-indicator.js';
 export { IndicatorRegistry } from './indicators/indicator-registry.js';
 export { movingAverage } from './indicators/sma.js';
+export { volumeWeightedMovingAverage } from './indicators/vwma.js';
 export { InMemoryProfileRepository } from './profiles/in-memory-profile-repository.js';
 export { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 export { ProfileService } from './profiles/profile-service.js';
