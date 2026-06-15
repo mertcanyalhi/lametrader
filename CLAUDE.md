@@ -150,14 +150,14 @@ Follow these by default, unprompted.
 
 ### No hacky solutions
 
-- **Never reach for escape hatches** — `as never`, `as any`, `@ts-ignore`, `@ts-expect-error`, `// eslint-disable*`, `removeAdditional`-toggling, and similar tell the tooling "trust me, anything goes" instead of expressing the actual relationship.
-  They paper over a design mismatch and rot fast.
-- If you find yourself reaching for one, the right move is usually to **fix the underlying mismatch**: refine the type, split a domain shape from a transport shape, refactor the API, or define a precise utility type (`DeepMutable<T>`, a discriminated union, a tagged template).
-  A *structural* cast (`as DeepMutable<IndicatorDefinition>`) is fine — it asserts a checkable, narrow equivalence and is type-only at runtime.
-  An *opaque* cast (`as never`, `as any`) is not.
-- Optional controller dependencies that gate a route's registration are usually a smell — if a controller's surface isn't conditional in production, make the dependency required.
-  Test ergonomics aren't a reason to soften the production contract.
-- If the only path forward is a workaround (rare), document the exact constraint inline **and** open an issue with the proper fix; don't let it slide silently.
+- A workaround that just makes a problem go away is a signal — the design isn't right yet.
+  Fix the underlying mismatch (refine the type, split a domain shape from a transport one, refactor the contract, change the API) instead of silencing the tooling that surfaced it.
+- Don't paper over problems with escape hatches.
+  Whether it's a type-system cast, an ignore/disable pragma, a permissive flag flipped on, an optional dependency gating behavior conditionally, or a silent fallback hiding a missing path — each tells the next reader "trust me, anything goes" and rots fast.
+- A **narrow, checkable** expression of the truth is fine — a precise type, an explicit interface, a required dependency, a documented invariant.
+  An **opaque** one (it could be anything, who knows, just trust me) is not.
+- If a workaround is genuinely the last resort, document the exact constraint inline **and** open an issue with the proper fix.
+  Don't let it slide silently.
 
 ### Dependencies
 
