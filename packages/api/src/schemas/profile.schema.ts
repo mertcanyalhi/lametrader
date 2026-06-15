@@ -2,16 +2,11 @@ import { Type } from '@fastify/type-provider-typebox';
 import { ProfileScope } from '@lametrader/core';
 
 /**
- * A profile's scope. `type` is the discriminator (`all` | `symbols`); `symbolIds`
- * is required when `type` is `symbols` and ignored otherwise.
- *
- * Modeled as a single object rather than a discriminated `Type.Union`: Fastify
- * runs AJV with `removeAdditional: true`, which strips properties from each union
- * branch in turn before evaluating them — on a symbols payload the all-branch
- * would drop `symbolIds`, then the symbols-branch's required-property check
- * fails. A flat schema sidesteps the gotcha while keeping
- * `additionalProperties: false`; the cross-field "symbolIds only with symbols"
- * rule is enforced by `parseProfileScope` in the domain.
+ * A profile's scope: a discriminator `type` (`all` | `symbols`) and an optional
+ * `symbolIds`. The cross-field rule (`symbolIds` only matters when `type` is
+ * `symbols`) is enforced by `parseProfileScope` in the domain — modeling this as
+ * a `Type.Union` instead trips a Fastify-AJV `removeAdditional` gotcha that
+ * strips properties before union evaluation.
  */
 export const ProfileScopeSchema = Type.Object(
   {
