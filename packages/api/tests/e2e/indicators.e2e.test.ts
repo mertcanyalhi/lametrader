@@ -82,13 +82,14 @@ describe('indicators API (e2e)', () => {
     await candles.ensureIndexes();
     const indicatorCompute = new IndicatorComputeService(indicators, watchlist, candles);
 
-    // Seed: watch BTC and EURUSD; store five crypto candles for the compute path.
+    // Seed: watch BTC and EURUSD; store a V-shape close series so VWMA fires a
+    // buy signal at bar 3 (a monotonic series never crosses the line back up).
     await watchlist.add(BTC);
     await watchlist.add(EURUSD);
     await candles.save(
       BTC.id,
       Period.OneHour,
-      [10, 20, 30, 40, 50].map((c, i) => cryptoCandle(i, c, 10)),
+      [10, 8, 6, 10, 14].map((c, i) => cryptoCandle(i, c, 10)),
     );
 
     app = createApp({ config, indicators, indicatorCompute });
@@ -143,9 +144,9 @@ describe('indicators API (e2e)', () => {
       state: [
         { time: 0, value: null },
         { time: 1, value: null },
-        { time: 2, value: expect.closeTo(20, 6) },
-        { time: 3, value: expect.closeTo(30, 6) },
-        { time: 4, value: expect.closeTo(40, 6) },
+        { time: 2, value: expect.closeTo(8, 6) },
+        { time: 3, value: expect.closeTo(8, 6) },
+        { time: 4, value: expect.closeTo(10, 6) },
       ],
     });
   });
@@ -158,8 +159,8 @@ describe('indicators API (e2e)', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as IndicatorComputeResult;
     expect(body.indicatorKey).toBe('vwma');
-    // The seeded series rises monotonically 10→50; the first up-cross past warm-up
-    // emits a buy signal.
+    // The V-shape seed (10→8→6→10→14) dips below the VWMA line then crosses
+    // back up at bar 3, firing a buy signal there.
     const buySignals = body.state.filter((row) => row.signal === 'buy');
     expect(buySignals.length).toBeGreaterThanOrEqual(1);
   });
