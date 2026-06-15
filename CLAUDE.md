@@ -158,6 +158,7 @@ Follow these by default, unprompted.
   An **opaque** one (it could be anything, who knows, just trust me) is not.
 - If a workaround is genuinely the last resort, document the exact constraint inline **and** open an issue with the proper fix.
   Don't let it slide silently.
+- The decision-level form of this same shortcut is the next rule: see **Confirm with the human, never guess**.
 
 ### Confirm with the human, never guess
 
@@ -167,6 +168,7 @@ Follow these by default, unprompted.
   It's every spot two readers might reasonably disagree, or where a wrong call would cost more than a clarifying question.
 - A clear question with two-to-four labeled options is faster than a wrong-turn refactor.
   Default to asking; the human will say "just go" when they want autonomy.
+- The code-level form of this same shortcut is the previous rule: see **No hacky solutions**.
 
 ### Dependencies
 
