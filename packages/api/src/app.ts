@@ -117,9 +117,7 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
   if (deps.profiles) {
     app.register(profilesController(deps.profiles));
   }
-  if (deps.indicators) {
-    app.register(indicatorsController(deps.indicators, deps.indicatorCompute));
-  }
+  app.register(indicatorsController(deps.indicators.registry, deps.indicators.compute));
   if (deps.backfill) {
     // Wire the async backfill-job use-case to a per-job hub: the application
     // pushes job updates via onUpdate, the hub fans them to WebSocket subscribers.

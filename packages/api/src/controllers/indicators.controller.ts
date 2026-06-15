@@ -12,18 +12,18 @@ import {
 } from '../schemas/indicator.schema.js';
 
 /**
- * Register the RESTful indicator routes — the catalog (`/indicators[/:key]`) and, when a compute service is provided, the ad-hoc compute route (`GET /symbols/:id/indicators/:key`).
+ * Register the RESTful indicator routes — the catalog (`/indicators[/:key]`) and the ad-hoc compute route (`GET /symbols/:id/indicators/:key`).
  *
  * Catalog responses serialize registered `IndicatorDefinition`s only — never the `compute` function.
  *
  * Unknown indicator keys throw `IndicatorNotFoundError`; the app's error handler maps it to HTTP 404.
  *
  * @param registry - the indicator registry to read from.
- * @param compute - optional compute use-case; when present the symbol-scoped compute route is registered.
+ * @param compute - the compute use-case driving the symbol-scoped route.
  */
 export function indicatorsController(
   registry: IndicatorRegistry,
-  compute?: IndicatorComputeService,
+  compute: IndicatorComputeService,
 ) {
   return async (instance: FastifyInstance): Promise<void> => {
     const app = instance.withTypeProvider<TypeBoxTypeProvider>();
@@ -63,32 +63,30 @@ export function indicatorsController(
       },
     );
 
-    if (compute) {
-      app.get(
-        '/symbols/:id/indicators/:key',
-        {
-          schema: {
-            tags: ['indicators'],
-            summary: "Compute an indicator over a symbol's stored candles",
-            params: SymbolIndicatorParamsSchema,
-            querystring: IndicatorComputeQuerySchema,
-            response: {
-              200: IndicatorComputeResultSchema,
-              400: ErrorSchema,
-              404: ErrorSchema,
-            },
+    app.get(
+      '/symbols/:id/indicators/:key',
+      {
+        schema: {
+          tags: ['indicators'],
+          summary: "Compute an indicator over a symbol's stored candles",
+          params: SymbolIndicatorParamsSchema,
+          querystring: IndicatorComputeQuerySchema,
+          response: {
+            200: IndicatorComputeResultSchema,
+            400: ErrorSchema,
+            404: ErrorSchema,
           },
         },
-        async (request) => {
-          const { id, key } = request.params;
-          const { period, from, to, ...inputs } = request.query as {
-            period: Parameters<IndicatorComputeService['compute']>[3];
-            from?: number;
-            to?: number;
-          } & Record<string, unknown>;
-          return (await compute.compute(id, key, inputs, period, { from, to })) as never;
-        },
-      );
-    }
+      },
+      async (request) => {
+        const { id, key } = request.params;
+        const { period, from, to, ...inputs } = request.query as {
+          period: Parameters<IndicatorComputeService['compute']>[3];
+          from?: number;
+          to?: number;
+        } & Record<string, unknown>;
+        return (await compute.compute(id, key, inputs, period, { from, to })) as never;
+      },
+    );
   };
 }

@@ -3,6 +3,8 @@ import { Period, SymbolType } from '@lametrader/core';
 import {
   BackfillService,
   ConfigService,
+  defaultIndicators,
+  IndicatorComputeService,
   InMemoryMarketDataSource,
   MongoCandleRepository,
   MongoConfigRepository,
@@ -47,7 +49,9 @@ describe('symbols API (e2e)', () => {
     const candles = new MongoCandleRepository(db);
     const symbols = new SymbolService(sources, watchlist, config, candles);
     const backfill = new BackfillService(sources, candles, watchlist);
-    app = createApp({ config, symbols, backfill });
+    const registry = defaultIndicators();
+    const compute = new IndicatorComputeService(registry, watchlist, candles);
+    app = createApp({ config, symbols, backfill, indicators: { registry, compute } });
     await app.ready();
   });
 
@@ -130,7 +134,14 @@ describe('symbols API (e2e)', () => {
     const candles = new MongoCandleRepository(limitedDb);
     const symbols = new SymbolService([limitedSource], watchlist, config, candles);
     const backfill = new BackfillService([limitedSource], candles, watchlist);
-    const limitedApp = createApp({ config, symbols, backfill });
+    const registry = defaultIndicators();
+    const compute = new IndicatorComputeService(registry, watchlist, candles);
+    const limitedApp = createApp({
+      config,
+      symbols,
+      backfill,
+      indicators: { registry, compute },
+    });
     await limitedApp.ready();
 
     try {

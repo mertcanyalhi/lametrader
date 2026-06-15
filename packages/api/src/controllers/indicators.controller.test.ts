@@ -12,9 +12,11 @@ import { buildAppDeps } from '../testing/app-deps';
 
 /**
  * Build an app whose indicator catalog is the real `defaultIndicators()` registry, so the controller is exercised against the shipped reference modules (`sma`, `vwma`).
+ *
+ * The compute service is built by `buildAppDeps` from the registry; the catalog-side tests here don't exercise compute, so its default wiring is fine.
  */
 function buildApp(registry: IndicatorRegistry = defaultIndicators()) {
-  return createApp(buildAppDeps({ indicators: registry }));
+  return createApp(buildAppDeps({ indicators: { registry } }));
 }
 
 const BTC: WatchedSymbol = {
@@ -57,8 +59,8 @@ async function buildAppWithCompute() {
     Period.OneHour,
     [10, 20, 30, 40, 50].map((c, i) => cryptoCandle(i, c)),
   );
-  const indicatorCompute = new IndicatorComputeService(registry, watchlist, candles);
-  return createApp(buildAppDeps({ indicators: registry, indicatorCompute }));
+  const compute = new IndicatorComputeService(registry, watchlist, candles);
+  return createApp(buildAppDeps({ indicators: { registry, compute } }));
 }
 
 describe('GET /indicators', () => {

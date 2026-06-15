@@ -17,7 +17,14 @@ const { config, symbols, profiles, backfill, polling, indicators, indicatorCompu
     pollIntervals,
   });
 const app = createApp(
-  { config, symbols, profiles, backfill, candleStream, indicators, indicatorCompute },
+  {
+    config,
+    symbols,
+    profiles,
+    backfill,
+    candleStream,
+    indicators: { registry: indicators, compute: indicatorCompute },
+  },
   { logger: true },
 );
 

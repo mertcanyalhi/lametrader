@@ -76,11 +76,11 @@ describe('indicators API (e2e)', () => {
         /* unused */
       },
     });
-    const indicators = defaultIndicators();
+    const registry = defaultIndicators();
     const watchlist = new MongoWatchlistRepository(db);
     const candles = new MongoCandleRepository(db);
     await candles.ensureIndexes();
-    const indicatorCompute = new IndicatorComputeService(indicators, watchlist, candles);
+    const compute = new IndicatorComputeService(registry, watchlist, candles);
 
     // Seed: watch BTC and EURUSD; store a V-shape close series so VWMA fires a
     // buy signal at bar 3 (a monotonic series never crosses the line back up).
@@ -92,7 +92,7 @@ describe('indicators API (e2e)', () => {
       [10, 8, 6, 10, 14].map((c, i) => cryptoCandle(i, c, 10)),
     );
 
-    app = createApp({ config, indicators, indicatorCompute });
+    app = createApp({ config, indicators: { registry, compute } });
     await app.ready();
   });
 
