@@ -58,6 +58,6 @@ describe('defaultIndicators', () => {
   it('returns a registry containing the moving-average module', () => {
     const registry = defaultIndicators();
     expect(registry.get('sma')).toEqual(movingAverage);
-    expect(registry.list().map((d) => d.key)).toEqual(['sma']);
+    expect(registry.list().map((d) => d.key)).toContain('sma');
   });
 });

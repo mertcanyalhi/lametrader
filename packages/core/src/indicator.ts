@@ -1,5 +1,6 @@
 import type { Candle } from './candle.types.js';
 import {
+  type EnumFieldDescriptor,
   type FieldDescriptor,
   FieldType,
   type InferInputs,
@@ -74,8 +75,10 @@ export function validateIndicatorInputs<I extends readonly FieldDescriptor[]>(
     const raw = values[descriptor.key];
     if (descriptor.type === FieldType.Number) {
       result[descriptor.key] = validateNumberInput(descriptor, raw);
-    } else {
+    } else if (descriptor.type === FieldType.Source) {
       result[descriptor.key] = validateSourceInput(descriptor, raw);
+    } else {
+      result[descriptor.key] = validateEnumInput(descriptor, raw);
     }
   }
   return result as InferInputs<I>;
@@ -118,7 +121,27 @@ function validateSourceInput(descriptor: SourceFieldDescriptor, raw: unknown): P
   return value as PriceSource;
 }
 
+/**
+ * Validate a single enum input, applying its `default` when the raw value is undefined.
+ */
+function validateEnumInput(descriptor: EnumFieldDescriptor, raw: unknown): string {
+  const value = raw === undefined ? descriptor.default : raw;
+  if (value === undefined) {
+    throw new IndicatorError(`input "${descriptor.key}" is required`);
+  }
+  if (typeof value !== 'string' || !descriptor.options.some((option) => option.value === value)) {
+    throw new IndicatorError(
+      `input "${descriptor.key}" must be one of ${descriptor.options
+        .map((o) => o.value)
+        .join(', ')}`,
+    );
+  }
+  return value;
+}
+
 export {
+  type EnumFieldDescriptor,
+  type EnumOption,
   type FieldDescriptor,
   FieldType,
   type NumberFieldDescriptor,

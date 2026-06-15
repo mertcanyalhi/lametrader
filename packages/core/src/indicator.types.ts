@@ -11,6 +11,8 @@ export enum FieldType {
   Number = 'number',
   /** A price-source selector (where to pull the value from on a candle). */
   Source = 'source',
+  /** A choice from a closed set of string options. */
+  Enum = 'enum',
 }
 
 /**
@@ -76,9 +78,39 @@ export interface SourceFieldDescriptor {
 }
 
 /**
+ * One option in an {@link EnumFieldDescriptor}'s closed set.
+ *
+ * `value` is the string used in the input/state object; `label` is the human-readable form for UI option lists.
+ */
+export interface EnumOption {
+  /** The actual value used in inputs/state. */
+  value: string;
+  /** Human-readable label for UI forms / chart legends. */
+  label: string;
+}
+
+/**
+ * An enum input — a choice from a closed set of string options.
+ *
+ * The generic `O` preserves the literal-union of option values for type-level inference (authors declare `options: [...] as const`).
+ */
+export interface EnumFieldDescriptor<O extends readonly EnumOption[] = readonly EnumOption[]> {
+  /** Discriminator: enum input. */
+  type: FieldType.Enum;
+  /** Stable key. */
+  key: string;
+  /** Human-readable label for UI forms. */
+  label: string;
+  /** The closed set of allowed options. */
+  options: O;
+  /** Default applied when the value is omitted at validation; must be one of `options`. */
+  default?: O[number]['value'];
+}
+
+/**
  * An input field descriptor — a union of the supported input types.
  */
-export type FieldDescriptor = NumberFieldDescriptor | SourceFieldDescriptor;
+export type FieldDescriptor = NumberFieldDescriptor | SourceFieldDescriptor | EnumFieldDescriptor;
 
 /**
  * Chart render kinds carried as a hint on state fields.
@@ -88,6 +120,8 @@ export type FieldDescriptor = NumberFieldDescriptor | SourceFieldDescriptor;
 export enum RenderKind {
   /** Plot the state value as a line. */
   Line = 'line',
+  /** Discrete per-bar markers (e.g. buy/sell shapes). */
+  Markers = 'markers',
 }
 
 /**
@@ -96,6 +130,8 @@ export enum RenderKind {
 export enum Pane {
   /** Overlay on the price chart. */
   Overlay = 'overlay',
+  /** In a separate pane below the price chart. */
+  Separate = 'separate',
 }
 
 /**
@@ -117,9 +153,31 @@ export interface NumberStateFieldDescriptor {
 }
 
 /**
- * A state field descriptor — currently only numeric; the vocabulary grows on its second instance.
+ * An enum state field — emits one of a closed set of string values per bar (or `null`).
+ *
+ * Like its input cousin, the generic preserves the literal-union of option values for type-level inference.
  */
-export type StateFieldDescriptor = NumberStateFieldDescriptor;
+export interface EnumStateFieldDescriptor<O extends readonly EnumOption[] = readonly EnumOption[]> {
+  /** Discriminator: enum state. */
+  type: FieldType.Enum;
+  /** Stable key. */
+  key: string;
+  /** Human-readable label. */
+  label: string;
+  /** The closed set of allowed output values. */
+  options: O;
+  /** Render hint for a future chart view (typically `Markers` for buy/sell). */
+  render?: RenderKind;
+  /** Pane hint for a future chart view. */
+  pane?: Pane;
+  /** Default colour hint for a future chart view (CSS string). */
+  color?: string;
+}
+
+/**
+ * A state field descriptor — a union of the supported state types.
+ */
+export type StateFieldDescriptor = NumberStateFieldDescriptor | EnumStateFieldDescriptor;
 
 /**
  * Map an input descriptor to the value type it produces.
@@ -130,7 +188,9 @@ export type InferFieldValue<D extends FieldDescriptor> = D extends NumberFieldDe
   ? number
   : D extends SourceFieldDescriptor
     ? PriceSource
-    : never;
+    : D extends EnumFieldDescriptor<infer O>
+      ? O[number]['value']
+      : never;
 
 /**
  * Map an array of input descriptors to the typed inputs object an indicator's `compute` receives.
@@ -146,7 +206,9 @@ export type InferInputs<I extends readonly FieldDescriptor[]> = {
  */
 export type InferStateValue<D extends StateFieldDescriptor> = D extends NumberStateFieldDescriptor
   ? number | null
-  : never;
+  : D extends EnumStateFieldDescriptor<infer O>
+    ? O[number]['value'] | null
+    : never;
 
 /**
  * One row of an indicator's output, aligned to a single candle by `time`.

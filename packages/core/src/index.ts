@@ -28,6 +28,9 @@ export { ConfigError, defaultConfig, mergeConfig, parseConfig } from './config.j
 export { type Config, type ConfigRepository, Period } from './config.types.js';
 export { IndicatorError, resolveSource, validateIndicatorInputs } from './indicator.js';
 export {
+  type EnumFieldDescriptor,
+  type EnumOption,
+  type EnumStateFieldDescriptor,
   type FieldDescriptor,
   FieldType,
   type IndicatorDefinition,
