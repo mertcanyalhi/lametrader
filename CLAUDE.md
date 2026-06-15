@@ -25,54 +25,53 @@ See `docs/decisions/` for the why behind these (ADRs).
 
 ## Project layout
 
-npm workspaces under `packages/*`: `core` (domain), `engine` (application + driven
-adapters), `cli` (driving adapter), `web` (driving adapter, React + Vite). More
-packages (sources, api, logger) join the same way.
+npm workspaces under `packages/*`: `core` (domain), `engine` (application + driven adapters), `cli` (driving adapter), `web` (driving adapter, React + Vite).
+More packages (sources, api, logger) join the same way.
 
 **Adding a Node package** (`core`/`engine`/`cli`-style):
 
-1. `packages/<n>/package.json` — `@lametrader/<n>`, `"type": "module"`, `main`/`types`
-   → `dist/index.js`/`dist/index.d.ts`, `"build": "tsc --build"`. Internal deps pin
-   the dependency's **current** `version` (e.g. `"@lametrader/<dep>": "0.4.0"`), so
-   npm workspace linking resolves them — `npm ci` 404s on a spec the workspace
-   version can't satisfy. Bumping a package's version means updating its dependents'
-   pins too.
-2. `packages/<n>/tsconfig.json` — extends `../../tsconfig.base.json`, `rootDir: src`,
-   `outDir: dist`, `include: ["src"]`, `references` to each internal dep.
+1. `packages/<n>/package.json` — `@lametrader/<n>`, `"type": "module"`, `main`/`types` → `dist/index.js`/`dist/index.d.ts`, `"build": "tsc --build"`.
+   Internal deps pin the dependency's **current** `version` (e.g. `"@lametrader/<dep>": "0.4.0"`), so npm workspace linking resolves them — `npm ci` 404s on a spec the workspace version can't satisfy.
+   Bumping a package's version means updating its dependents' pins too.
+2. `packages/<n>/tsconfig.json` — extends `../../tsconfig.base.json`, `rootDir: src`, `outDir: dist`, `include: ["src"]`, `references` to each internal dep.
 3. Add `{ "path": "packages/<n>" }` to the root `tsconfig.json` `references`.
 4. `npm install` to link the workspace.
 
 **The `web` package is different** (browser, Vite-owned):
 
-- Its `tsconfig.json` extends base but overrides: `composite/declaration: false`,
-  `noEmit: true`, `lib: [ES2022, DOM, DOM.Iterable]`, `module: ESNext`,
-  `moduleResolution: Bundler`, `jsx: react-jsx`.
-- **Not** in the root project-refs graph — Vite builds it (`vite build`). Its
-  `typecheck` script (`tsc --noEmit`) is picked up by the root `typecheck`'s
-  `--workspaces --if-present` pass.
-- Component tests run in `jsdom`: add `// @vitest-environment jsdom` at the top of
-  the test file (keeps them in the default `unit` run without a node/DOM split).
+- Its `tsconfig.json` extends base but overrides: `composite/declaration: false`, `noEmit: true`, `lib: [ES2022, DOM, DOM.Iterable]`, `module: ESNext`, `moduleResolution: Bundler`, `jsx: react-jsx`.
+- **Not** in the root project-refs graph — Vite builds it (`vite build`).
+  Its `typecheck` script (`tsc --noEmit`) is picked up by the root `typecheck`'s `--workspaces --if-present` pass.
+- Component tests run in `jsdom`: add `// @vitest-environment jsdom` at the top of the test file (keeps them in the default `unit` run without a node/DOM split).
 
 ## Development flow
 
 Every change: **spec → red → green → refactor → check → commit**, one concern at a time.
 
-1. **Spec** — write `specs/<name>.spec.md`; acceptance criteria as a bullet list. Each bullet = one test; code mapping to no bullet isn't written.
+1. **Spec** — write `specs/<name>.spec.md`; acceptance criteria as a bullet list.
+   Each bullet = one test; code mapping to no bullet isn't written.
 2. **Red** — turn each criterion into a failing unit test (full-payload `toEqual`).
 3. **Green** — minimal code to pass; respect the dependency rule.
 4. **Refactor** — clean under green tests; abstract only on the second instance.
 5. **E2E** — every major feature gets a `*.e2e.test.ts` (poll → persist → process → assert) + its one critical failure mode.
 6. **Check** — `npm run check:full` green.
-7. **Commit** — one logical concern, Conventional Commits message. Do **not** bump package `version`s here — versioning is a separate flow (`/release`), driven off the conventional-commit history.
+7. **Commit** — one logical concern, Conventional Commits message.
+   Do **not** bump package `version`s here — versioning is a separate flow (`/release`), driven off the conventional-commit history.
 
-`/feature`, `/adr`, `/ship` automate this loop. `/release` is the separate
-versioning flow — run it when cutting a release, not per change.
+`/feature`, `/adr`, `/ship` automate this loop.
+`/release` is the separate versioning flow — run it when cutting a release, not per change.
 
 ### Test tiers
 
-- **unit** (default) — pure domain + application vs fake adapters. Fast, deterministic. The TDD tier; bulk of tests. Co-located in `src` beside the code (`*.test.ts`).
-- **e2e** — validate a feature from the **end-user / spec perspective**, driving real surfaces (HTTP, CLI) against real infra. Kept **separate** from `src`, in `packages/<pkg>/tests/e2e/*.e2e.test.ts` — one suite per major feature. Run in `check:full` / CI.
-- **live** — raw adapter vs real external API (`*.live.test.ts`). Flaky; manual only.
+- **unit** (default) — pure domain + application vs fake adapters.
+  Fast, deterministic.
+  The TDD tier; bulk of tests.
+  Co-located in `src` beside the code (`*.test.ts`).
+- **e2e** — validate a feature from the **end-user / spec perspective**, driving real surfaces (HTTP, CLI) against real infra.
+  Kept **separate** from `src`, in `packages/<pkg>/tests/e2e/*.e2e.test.ts` — one suite per major feature.
+  Run in `check:full` / CI.
+- **live** — raw adapter vs real external API (`*.live.test.ts`).
+  Flaky; manual only.
 - Port contracts = one shared suite, run against both the fake (unit) and the real adapter (live).
 
 ### Gates
@@ -105,15 +104,22 @@ Follow these by default, unprompted.
 
 - Assert the FULL payload: `expect(x).toEqual({...whole object})` — never `toMatchObject` or per-field.
 - Floats: `expect.closeTo(n, digits)` as an asymmetric matcher inside `toEqual`.
-- Two opt-in tiers beyond unit (`e2e`, `live`) via Vitest projects (`--project`). No env flags / `runIf`.
-- Unit tests sit beside the code in `src`; e2e tests live in `packages/<pkg>/tests/e2e/` and assert a feature from the end-user/spec perspective.
+- Two opt-in tiers beyond unit (`e2e`, `live`) via Vitest projects (`--project`).
+  No env flags / `runIf`.
+- Unit tests sit beside the code in `src`.
+  E2e tests live in `packages/<pkg>/tests/e2e/` and assert a feature from the end-user/spec perspective.
 - Never `.skip` a test to land a change.
 
 ### Types & docs
 
-- Strict TS: keep `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride` on. Handle cases, don't weaken.
+- Strict TS: keep `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride` on.
+  Handle cases, don't weaken.
 - Multi-line JSDoc (`/**\n * ... */`) on every interface, property, type, function, class, method, notable constant.
-- Type declarations (interfaces, type aliases, enums) live in a sibling `*.types.ts` module, separate from logic; public ones are re-exported from the package `index.ts`.
+- Type declarations (interfaces, type aliases, enums) live in a sibling `*.types.ts` module, separate from logic.
+  Public ones are re-exported from the package `index.ts`.
+- **Comments and prose break at sentence ends, not line-length wraps** — one sentence per line in JSDoc and in markdown (specs, ADRs, READMEs, this file).
+  Each sentence on its own line; a blank line separates distinct thoughts.
+  Markdown renders the same (lines within a paragraph are joined) but reads cleanly in source and gives single-line diffs on prose edits.
 
 ### Dependencies
 
@@ -126,13 +132,16 @@ Follow these by default, unprompted.
 ### API
 
 - Always RESTful — resource-oriented routes, correct verbs, correct status codes (200/201/204, 400/404, 500).
-- Separate controllers per resource (`src/controllers/<resource>.controller.ts`); `app.ts` only wires them.
-- Schema-based input validation at the boundary (Fastify JSON schema); cross-field/domain rules live in the domain and surface as 400.
+- Separate controllers per resource (`src/controllers/<resource>.controller.ts`).
+  `app.ts` only wires them.
+- Schema-based input validation at the boundary (Fastify JSON schema).
+  Cross-field/domain rules live in the domain and surface as 400.
 - Log through a common log library (Fastify's built-in Pino); never ad-hoc `console.log`.
 
 ### Docs
 
-- Every package exposing a surface keeps a `README.md`. A change to a CLI command or API endpoint updates that package's README (usage + examples) in the same change.
+- Every package exposing a surface keeps a `README.md`.
+  A change to a CLI command or API endpoint updates that package's README (usage + examples) in the same change.
 
 ## Definition of Done
 
