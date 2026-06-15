@@ -85,6 +85,7 @@ describe('profiles API (e2e)', () => {
       scope: { type: 'all' },
       createdAt: expect.any(Number),
       updatedAt: expect.any(Number),
+      indicators: [],
     });
 
     expect((await app.inject({ method: 'GET', url: '/profiles' })).json()).toEqual([created]);
