@@ -216,6 +216,29 @@ curl 'http://localhost:3000/symbols/crypto:BTCUSDT/candles?period=1h&limit=500'
 curl 'http://localhost:3000/symbols/crypto:BTCUSDT/candles?period=1h&from=<nextCursor>&limit=500'
 ```
 
+## Indicators resource
+
+The **indicator catalog**: every registered indicator module's serialized `IndicatorDefinition` — the input/state schema a UI form renderer or action condition-builder reads.
+Metadata only; the `compute` function never leaves the server.
+
+A definition is `{ key, name, description, version, appliesTo, inputs, state }`, where each `inputs`/`state` entry is a typed descriptor (`number` / `source` / `enum`).
+The shipped reference modules are **`sma`** (simple moving average) and **`vwma`** (volume-weighted moving average with crossover signal).
+
+### Endpoints
+
+| Method | Path                | Body | Description                                                                |
+| ------ | ------------------- | ---- | -------------------------------------------------------------------------- |
+| `GET`  | `/indicators`       | —    | List every registered definition.                                          |
+| `GET`  | `/indicators/{key}` | —    | Get one definition by key. **200** / 404 with `{ "error": "<reason>" }`.   |
+
+### Examples
+
+```sh
+curl http://localhost:3000/indicators
+curl http://localhost:3000/indicators/sma
+curl http://localhost:3000/indicators/vwma
+```
+
 ## Live candle stream
 
 Once the service is running it continuously polls each watched symbol+period and

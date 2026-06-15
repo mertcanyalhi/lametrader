@@ -134,3 +134,23 @@ npm run cli -- candles list crypto:BTCUSDT --period 1h --limit 500
 # page forward: feed the previous nextCursor back in as --from
 npm run cli -- candles list crypto:BTCUSDT --period 1h --from 1704153600000 --limit 500
 ```
+
+### `indicators`
+
+Read the **indicator catalog** — every registered indicator's serialized definition (`key`, `name`, `description`, `version`, `appliesTo`, `inputs`, `state`).
+Metadata only; computation isn't part of this command (that's for a later feature).
+
+This command reads in-process from the static registry — no Mongo connection needed.
+
+#### Subcommands
+
+- **`list`** — print every registered definition as JSON.
+- **`show <key>`** — print the matching definition; an unknown key errors with `IndicatorNotFoundError`.
+
+#### Examples
+
+```sh
+npm run cli -- indicators list
+npm run cli -- indicators show sma
+npm run cli -- indicators show vwma
+```

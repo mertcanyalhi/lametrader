@@ -26,7 +26,12 @@ export type {
 } from './candle.types.js';
 export { ConfigError, defaultConfig, mergeConfig, parseConfig } from './config.js';
 export { type Config, type ConfigRepository, Period } from './config.types.js';
-export { IndicatorError, resolveSource, validateIndicatorInputs } from './indicator.js';
+export {
+  IndicatorError,
+  IndicatorNotFoundError,
+  resolveSource,
+  validateIndicatorInputs,
+} from './indicator.js';
 export {
   type EnumFieldDescriptor,
   type EnumOption,

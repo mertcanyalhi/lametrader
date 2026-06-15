@@ -4,9 +4,10 @@
  *
  * Thin: connect to Mongo, dispatch the command, print the result, disconnect.
  */
-import { connectServices, loadSettings } from '@lametrader/engine';
+import { connectServices, defaultIndicators, loadSettings } from '@lametrader/engine';
 import { runCandles } from './candles.js';
 import { runConfig } from './config.js';
+import { runIndicators } from './indicators.js';
 import { runProfiles } from './profile.js';
 import { runSymbols } from './symbols.js';
 
@@ -17,10 +18,20 @@ if (
   command !== 'config' &&
   command !== 'symbols' &&
   command !== 'profile' &&
-  command !== 'candles'
+  command !== 'candles' &&
+  command !== 'indicators'
 ) {
   console.error(`unknown command: ${command ?? '(none)'}`);
   process.exitCode = 1;
+} else if (command === 'indicators') {
+  // The indicator catalog is read entirely in-process from the static registry —
+  // no Mongo connection needed for this command.
+  try {
+    console.log(await runIndicators(args, defaultIndicators()));
+  } catch (error) {
+    console.error(`error: ${(error as Error).message}`);
+    process.exitCode = 1;
+  }
 } else {
   // One-shot CLI: build the services (the polling loop is never started) and
   // dispatch. connectServices requires poll intervals even though we don't poll.
