@@ -159,6 +159,15 @@ Follow these by default, unprompted.
 - If a workaround is genuinely the last resort, document the exact constraint inline **and** open an issue with the proper fix.
   Don't let it slide silently.
 
+### Confirm with the human, never guess
+
+- When a decision the request didn't settle comes up — a design call, an architectural trade-off, a choice between sensible options, the interpretation of an ambiguous spec — **surface it and ask** before implementing.
+  Reasoning to "the most plausible answer" and acting silently produces churn: the human reviews, pushes back, the work gets redone.
+- The bar isn't every micro-detail (variable names, file layout inside a package).
+  It's every spot two readers might reasonably disagree, or where a wrong call would cost more than a clarifying question.
+- A clear question with two-to-four labeled options is faster than a wrong-turn refactor.
+  Default to asking; the human will say "just go" when they want autonomy.
+
 ### Dependencies
 
 - Prefer well-established, non-commercial (open-source / freely licensed) industry-standard packages wherever they fit. Avoid commercial/paid or obscure unmaintained deps.
