@@ -42,6 +42,8 @@ export {
   type IndicatorComputeResult,
   type IndicatorDefinition,
   type IndicatorModule,
+  type IndicatorStateEvent,
+  type IndicatorStateListener,
   type IndicatorStatePoint,
   type InferFieldValue,
   type InferInputs,

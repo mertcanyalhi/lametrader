@@ -1,4 +1,4 @@
-import { CandleStreamHub, createApp } from '@lametrader/api';
+import { CandleStreamHub, createApp, IndicatorStreamHub } from '@lametrader/api';
 import {
   type BackfillRange,
   type Candle,
@@ -15,6 +15,7 @@ import {
   ConfigService,
   defaultIndicators,
   IndicatorComputeService,
+  IndicatorStreamService,
   MongoCandleRepository,
   MongoConfigRepository,
   MongoWatchlistRepository,
@@ -138,9 +139,18 @@ describe('polling + live streaming (e2e)', () => {
     const watchlist = new MongoWatchlistRepository(db);
     candleRepo = new MongoCandleRepository(db);
     const config = new ConfigService(new MongoConfigRepository(db));
-    const hub = new CandleStreamHub();
+    const candleStream = new CandleStreamHub();
+    const indicatorStream = new IndicatorStreamHub();
+    const registry = defaultIndicators();
+    const compute = new IndicatorComputeService(registry, watchlist, candleRepo);
+    const indicatorStreamService = new IndicatorStreamService(registry, watchlist, compute, {
+      onState: (event) => indicatorStream.publish(event),
+    });
     polling = new PollingService([stub], candleRepo, watchlist, {
-      onCandle: (event) => hub.publish(event),
+      onCandle: (event) => {
+        candleStream.publish(event);
+        void indicatorStreamService.handleCandle(event);
+      },
       intervals: allIntervals(1000),
       now: () => NOW,
     });
@@ -151,9 +161,11 @@ describe('polling + live streaming (e2e)', () => {
     await candleRepo.save(BTC.id, Period.OneHour, [candle(0)]);
     await candleRepo.save(ETH.id, Period.OneHour, [candle(0)]);
 
-    const registry = defaultIndicators();
-    const compute = new IndicatorComputeService(registry, watchlist, candleRepo);
-    app = createApp({ config, candleStream: hub, indicators: { registry, compute } });
+    app = createApp({
+      config,
+      indicators: { registry, compute },
+      liveStream: { candleStream, indicatorStream, indicatorStreamService },
+    });
     baseUrl = await app.listen({ port: 0, host: '127.0.0.1' });
   });
 

@@ -18,7 +18,7 @@ Resolved from the environment (with defaults) via the engine settings layer:
 | ---------------- | ----------------------------------------------------------------------------- |
 | `MONGODB_URI`    | `mongodb://lametrader:lametrader@localhost:27017/lametrader?authSource=admin` |
 | `PORT`           | `3000`                                                                        |
-| `POLL_INTERVALS` | per-period poll cadence (ms) — see [Live candle stream](#live-candle-stream)  |
+| `POLL_INTERVALS` | per-period poll cadence (ms) — see [Live stream](#live-stream)                |
 
 On startup the API begins **continuously polling** new candles for every watched
 symbol+period and streaming them over WebSocket (see below). Polling resumes after a
@@ -297,17 +297,22 @@ curl 'http://localhost:3000/symbols/crypto:BTCUSDT/indicators/sma?period=1h&leng
 curl 'http://localhost:3000/symbols/crypto:BTCUSDT/indicators/vwma?period=1h&length=14&multiplier=1&direction=both'
 ```
 
-## Live candle stream
+## Live stream
 
 Once the service is running it continuously polls each watched symbol+period and
-pushes new candles to clients over one **multiplexed** WebSocket — a single socket
-can watch many symbols.
+pushes new candles — and any subscribed indicator's recomputed state — to clients
+over one **multiplexed** WebSocket. A single socket can watch many symbols and
+hold many indicator subscriptions in parallel.
 
-| Method | Path      | Description                                            |
-| ------ | --------- | ----------------------------------------------------- |
-| `WS`   | `/stream` | Subscribe/unsubscribe to symbols; receive candle frames. |
+| Method | Path      | Description                                                           |
+| ------ | --------- | --------------------------------------------------------------------- |
+| `WS`   | `/stream` | Subscribe/unsubscribe to candles and indicators; receive live frames. |
 
-After connecting, send control messages:
+After connecting, send JSON control messages. The route multiplexes two surfaces:
+
+### Candle subscriptions
+
+Keyed by symbol id.
 
 - `{ "action": "subscribe", "id": "crypto:BTCUSDT" }` — start receiving that symbol.
 - `{ "action": "unsubscribe", "id": "crypto:BTCUSDT" }` — stop.
@@ -321,6 +326,47 @@ For each polled candle of a subscribed symbol the socket receives a frame:
 `final` is `true` once the bar has closed and `false` for the still-forming bar
 (re-emitted on later polls as it updates). The stream is live-only — it does not
 replay history; backfill + `GET …/candles` cover that.
+
+### Indicator subscriptions
+
+Keyed by a server-generated `subscriptionId`, scoped to `(id, period, indicator: { key, inputs })`.
+
+- `{ "action": "subscribe-indicator", "id": "crypto:BTCUSDT", "period": "1h", "indicator": { "key": "sma", "inputs": { "length": 3 } } }` — register interest.
+  The server validates (symbol watched, indicator known, asset-class match, inputs valid) and replies with an ack frame:
+
+  ```json
+  {
+    "action": "subscribed-indicator",
+    "subscriptionId": "8X4f…",
+    "id": "crypto:BTCUSDT",
+    "period": "1h",
+    "indicatorKey": "sma"
+  }
+  ```
+
+  Validation failure replies with `{ "error": "<reason>" }` and no subscription is opened.
+
+- `{ "action": "unsubscribe-indicator", "subscriptionId": "8X4f…" }` — stop frames for that subscription.
+
+For each polled candle on the subscribed `(id, period)`, the indicator is recomputed
+and a state frame is delivered to the owning socket:
+
+```json
+{
+  "subscriptionId": "8X4f…",
+  "id": "crypto:BTCUSDT",
+  "period": "1h",
+  "indicatorKey": "sma",
+  "state": { "time": 1704153600000, "value": 42.5 },
+  "final": false
+}
+```
+
+`state` carries only the latest point (one row per frame); `final` mirrors the
+underlying candle's `final` (forming bars stream provisional state, closed bars
+stream confirmed state). Closing the socket releases every subscription on it
+(both candle and indicator), and a malformed control message is answered with an
+`{ "error": "<reason>" }` frame instead of being silently dropped.
 
 ### Poll cadence
 

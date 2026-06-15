@@ -31,6 +31,11 @@ export { defaultIndicators } from './indicators/default-indicators.js';
 export { type DefineIndicatorSpec, defineIndicator } from './indicators/define-indicator.js';
 export { IndicatorComputeService } from './indicators/indicator-compute-service.js';
 export { IndicatorRegistry } from './indicators/indicator-registry.js';
+export {
+  IndicatorStreamService,
+  type IndicatorStreamServiceOptions,
+  type IndicatorSubscribeInput,
+} from './indicators/indicator-stream-service.js';
 export { movingAverage } from './indicators/sma.js';
 export { volumeWeightedMovingAverage } from './indicators/vwma.js';
 export { InMemoryProfileRepository } from './profiles/in-memory-profile-repository.js';
