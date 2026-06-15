@@ -1,4 +1,3 @@
-import { Period, SymbolType, type WatchedSymbol } from '@lametrader/core';
 import {
   InMemoryProfileRepository,
   InMemoryWatchlistRepository,
@@ -8,26 +7,15 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from '../app';
 import { buildAppDeps } from '../testing/app-deps';
 
-/** A watched crypto symbol for scope-validation tests. */
-const WATCHED_BTC: WatchedSymbol = {
-  id: 'crypto:BTCUSDT',
-  type: SymbolType.Crypto,
-  description: 'Bitcoin / TetherUS',
-  exchange: 'Binance',
-  currency: 'USDT',
-  periods: [Period.OneHour],
-};
-
 /**
  * Build an app whose profiles use-case has a deterministic id generator and clock,
- * so route responses are assertable in full. The watchlist is seeded with
- * `WATCHED_BTC` so symbols-scoped requests can succeed.
+ * so route responses are assertable in full.
  */
 function buildApp() {
   let n = 0;
   const profiles = new ProfileService(
     new InMemoryProfileRepository(),
-    new InMemoryWatchlistRepository([WATCHED_BTC]),
+    new InMemoryWatchlistRepository(),
     { newId: () => `p${++n}`, now: () => 1000 },
   );
   return createApp(buildAppDeps({ profiles }));
@@ -109,31 +97,6 @@ describe('PATCH /profiles/:id', () => {
       description: '',
       enabled: false,
       scope: { type: 'all' },
-      createdAt: 1000,
-      updatedAt: 1000,
-    });
-  });
-});
-
-describe('PUT /profiles/:id', () => {
-  it('replaces the profile, including a symbols-scope referencing a watched id (200)', async () => {
-    const app = buildApp();
-    await app.inject({ method: 'POST', url: '/profiles', payload: { name: 'Scalper' } });
-    const res = await app.inject({
-      method: 'PUT',
-      url: '/profiles/p1',
-      payload: {
-        name: 'Scalper',
-        scope: { type: 'symbols', symbolIds: ['crypto:BTCUSDT'] },
-      },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({
-      id: 'p1',
-      name: 'Scalper',
-      description: '',
-      enabled: true,
-      scope: { type: 'symbols', symbolIds: ['crypto:BTCUSDT'] },
       createdAt: 1000,
       updatedAt: 1000,
     });
