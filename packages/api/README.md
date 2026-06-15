@@ -119,13 +119,12 @@ curl -X DELETE http://localhost:3000/symbols/crypto:BTCUSDT
 
 ## Profiles resource
 
-A **profile** is a named, enable/disable-able template scoped to watched symbols —
-either all of them (the default) or an explicit subset. It will later hold
-indicators and actions. A profile is
-`{ id, name, description, enabled, scope, createdAt, updatedAt }`, where `scope` is
-either `{ "type": "all" }` or `{ "type": "symbols", "symbolIds": [...] }`. Names are
-unique; every id in a `symbols` scope must be currently watched, and an empty subset
-normalizes to `all`.
+A **profile** is a named, enable/disable-able template scoped to watched symbols — either all of them (the default) or an explicit subset.
+It will later hold indicators and actions.
+
+A profile is `{ id, name, description, enabled, scope, createdAt, updatedAt }`, where `scope` is either `{ "type": "all" }` or `{ "type": "symbols", "symbolIds": [...] }`.
+Names are unique.
+Every id in a `symbols` scope must be currently watched, and an empty subset normalizes to `all`.
 
 ### Endpoints
 
@@ -138,11 +137,10 @@ normalizes to `all`.
 | `PATCH`  | `/profiles/{id}` | `{ name?, description?, enabled?, scope? }` | Partial update. 200 / 400 / 404 / 409. |
 | `DELETE` | `/profiles/{id}` | —                                          | Delete. **204** / 404.               |
 
-Errors use the uniform `{ "error": "<reason>" }` body — **400** for invalid input
-or a scope referencing an unwatched symbol, **404** for an unknown profile, **409**
-for a duplicate name. Removing a watched symbol prunes it from every profile's
-subset; a profile left with an empty subset is **disabled** (kept symbols-scoped)
-rather than widened to `all`.
+Errors use the uniform `{ "error": "<reason>" }` body — **400** for invalid input or a scope referencing an unwatched symbol, **404** for an unknown profile, **409** for a duplicate name.
+
+Removing a watched symbol prunes it from every profile's subset.
+A profile left with an empty subset is **disabled** (kept symbols-scoped) rather than widened to `all`.
 
 ### Examples
 

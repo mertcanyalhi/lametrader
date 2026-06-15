@@ -83,18 +83,17 @@ npm run cli -- symbols remove crypto:BTCUSDT
 ### `profile`
 
 Manage profiles — named, enable/disable-able templates scoped to watched symbols.
-A profile applies to **all** watched symbols by default, or to an explicit subset
-(`--symbols`); every id in a subset must be currently watched, and an empty subset
-normalizes to "all". Names are unique.
+A profile applies to **all** watched symbols by default, or to an explicit subset (`--symbols`).
+Every id in a subset must be currently watched, and an empty subset normalizes to "all".
+Names are unique.
 
 #### Subcommands
 
 - **`list`** — print all profiles as JSON.
-- **`create --name <n> [--description <d>] [--disabled] [--symbols <csv>]`** —
-  create a profile. `--symbols` scopes it to that subset (otherwise all);
-  `--disabled` creates it disabled.
-- **`update <id> [--name <n>] [--description <d>] [--enable|--disable] [--all|--symbols <csv>]`**
-  — patch the given fields (`--all` resets the scope to all watched symbols).
+- **`create --name <n> [--description <d>] [--disabled] [--symbols <csv>]`** — create a profile.
+  `--symbols` scopes it to that subset (otherwise all); `--disabled` creates it disabled.
+- **`update <id> [--name <n>] [--description <d>] [--enable|--disable] [--all|--symbols <csv>]`** — patch the given fields.
+  `--all` resets the scope to all watched symbols.
 - **`delete <id>`** — remove a profile.
 
 #### Examples
