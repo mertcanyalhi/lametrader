@@ -251,7 +251,7 @@ describe('SettingsPage', () => {
     await user.click(oneDayToggle);
 
     await waitFor(() => {
-      expect(screen.getByText('Select a default period.')).toBeInTheDocument();
+      expect(screen.getByText('Default period is required.')).toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: /save/i })).toBeDisabled();
   });

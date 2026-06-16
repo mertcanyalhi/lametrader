@@ -6,19 +6,11 @@ import { type Config, Period } from './config.types.js';
  */
 export class ConfigError extends Error {
   /**
-   * The config field the failure concerns (e.g. `'periods'`, `'defaultPeriod'`),
-   * when one can be attributed. A free-form string so new fields can be tagged
-   * without widening a union here; consumers match the values they care about.
-   */
-  readonly field?: string;
-  /**
    * @param message - the human-readable validation failure reason.
-   * @param field - the offending config field, when attributable.
    */
-  constructor(message: string, field?: string) {
+  constructor(message: string) {
     super(message);
     this.name = 'ConfigError';
-    this.field = field;
   }
 }
 
@@ -36,43 +28,38 @@ export function defaultConfig(): Config {
 
 /**
  * Narrow an unknown value to a {@link Period}, throwing if it is not supported.
- * The thrown error is tagged with {@link field} so callers can attribute it.
  */
-function toPeriod(value: unknown, field: string): Period {
+function toPeriod(value: unknown): Period {
   if (typeof value !== 'string' || !PERIOD_VALUES.has(value)) {
-    throw new ConfigError(`unsupported period: ${String(value)}`, field);
+    throw new ConfigError(`unsupported period: ${String(value)}`);
   }
   return value as Period;
 }
 
 /**
  * Validate and normalize an unknown input into a {@link Config}. Throws on an
- * empty list, an unsupported or duplicate period, a missing/empty
- * `defaultPeriod`, or a `defaultPeriod` that is not among `periods`. Every
- * {@link ConfigError} carries the `field` it concerns.
+ * empty list, an unsupported or duplicate period, or a `defaultPeriod` that is
+ * not among `periods`.
  */
 export function parseConfig(input: unknown): Config {
   const obj = (input ?? {}) as { periods?: unknown; defaultPeriod?: unknown };
   if (!Array.isArray(obj.periods)) {
-    throw new ConfigError('periods must be an array', 'periods');
+    throw new ConfigError('periods must be an array');
   }
   if (obj.periods.length === 0) {
-    throw new ConfigError('periods must not be empty', 'periods');
+    throw new ConfigError('periods must not be empty');
   }
   const periods: Period[] = [];
   for (const raw of obj.periods) {
-    const period = toPeriod(raw, 'periods');
+    const period = toPeriod(raw);
     if (periods.includes(period)) {
-      throw new ConfigError(`duplicate period: ${period}`, 'periods');
+      throw new ConfigError(`duplicate period: ${period}`);
     }
     periods.push(period);
   }
-  if (typeof obj.defaultPeriod !== 'string' || obj.defaultPeriod === '') {
-    throw new ConfigError('defaultPeriod must not be empty', 'defaultPeriod');
-  }
-  const defaultPeriod = toPeriod(obj.defaultPeriod, 'defaultPeriod');
+  const defaultPeriod = toPeriod(obj.defaultPeriod);
   if (!periods.includes(defaultPeriod)) {
-    throw new ConfigError(`defaultPeriod ${defaultPeriod} is not in periods`, 'defaultPeriod');
+    throw new ConfigError(`defaultPeriod ${defaultPeriod} is not in periods`);
   }
   return { periods, defaultPeriod };
 }

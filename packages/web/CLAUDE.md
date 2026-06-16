@@ -93,9 +93,12 @@ If a Tailwind class string repeats often enough to be worth a name, extract it a
 
 ### Forms
 
-- Validate at the boundary by parsing the form payload through the corresponding `@lametrader/core` parser (`parseConfig`, `parseProfileFields`, …).
-  No client-side validation duplicates: the domain validator is the single source of truth.
-- For complex forms, use `react-hook-form` with a custom resolver that wraps the core parser.
+- Use `react-hook-form` with a **Yup** schema via `yupResolver` (`@hookform/resolvers/yup`).
+  Schemas live in `lib/*-schema.ts` and use `.label(...)` so messages are label-aware and per-field (e.g. "Default period is required.").
+  For `${label}` interpolation, use Yup's **function-message** form (`({ label }) => \`${label} is required.\``) — a real template literal — not a `'${label}'` string (which trips Biome's `noTemplateCurlyInString`).
+- The schema is the UI validation layer; the **server** re-validates every write via the domain validator (`@lametrader/core`), which stays the authority.
+  This client/server split is intentional and scoped to user-facing schemas — see `docs/decisions/0011-web-form-validation-with-yup.md`.
+  Don't pull a schema library into `core`/`engine`/`api`.
 
 ### Logging
 

@@ -1,3 +1,4 @@
+import { yupResolver } from '@hookform/resolvers/yup';
 import { type Config, Period } from '@lametrader/core';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
 import {
@@ -17,9 +18,9 @@ import { type SubmitHandler, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { ApiError } from '../../lib/api-fetch.js';
 import { cn } from '../../lib/cn.js';
+import { configSchema, FIELD_LABELS } from '../../lib/config-schema.js';
 import { useConfig, useUpdateConfig } from '../../lib/hooks/use-config.js';
 import { getLogger } from '../../lib/log.js';
-import { FIELD_LABELS, parseConfigResolver } from '../../lib/parse-config-resolver.js';
 
 /**
  * Scoped logger for the settings page — form/save lifecycle events.
@@ -140,7 +141,7 @@ function FieldLabel({
 function SettingsForm({ initial }: { initial: Config }): ReactNode {
   const update = useUpdateConfig();
   const { handleSubmit, watch, setValue, setError, reset, formState } = useForm<Config>({
-    resolver: parseConfigResolver,
+    resolver: yupResolver(configSchema),
     defaultValues: initial,
     // Validate on every change so field errors appear live and `isValid` can
     // gate the Save button rather than waiting for a submit attempt.
