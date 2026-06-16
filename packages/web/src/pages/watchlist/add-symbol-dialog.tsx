@@ -17,6 +17,7 @@ import { ApiError } from '../../lib/api-fetch.js';
 import { useAddSymbol, useSearchInstruments } from '../../lib/hooks/symbols.js';
 import { getLogger } from '../../lib/log.js';
 import { useDebouncedValue } from '../../lib/use-debounced-value.js';
+import { BackfillDialog } from './backfill-dialog.js';
 import { SymbolIdCode, SymbolTypeBadge } from './symbol-type-badge.js';
 
 /** Scoped logger for the add-symbol flow. */
@@ -61,6 +62,8 @@ export function AddSymbolDialog({
   const [query, setQuery] = useState('');
   const [typeValue, setTypeValue] = useState<string>(ANY_TYPE);
   const [selectedId, setSelectedId] = useState<string>('');
+  // The just-added symbol whose backfill modal should auto-open (the add → backfill flow).
+  const [backfillFor, setBackfillFor] = useState<{ id: string; periods: Period[] } | null>(null);
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
   const typeFilter = typeValue === ANY_TYPE ? undefined : (typeValue as SymbolType);
   const search = useSearchInstruments(debouncedQuery, typeFilter);
@@ -80,12 +83,14 @@ export function AddSymbolDialog({
   async function handleAdd(): Promise<void> {
     if (!selectedId) return;
     try {
-      await add.mutateAsync({
+      const saved = await add.mutateAsync({
         id: selectedId,
         periods: defaultPeriods.length > 0 ? defaultPeriods : undefined,
       });
       toast.success(`Now watching ${selectedId}`);
       handleOpenChange(false);
+      // Hand off into the backfill flow for the new symbol (add → backfill).
+      setBackfillFor({ id: saved.id, periods: saved.periods });
     } catch (cause) {
       const message = cause instanceof ApiError ? cause.message : 'failed to add symbol';
       log.warn({ err: cause, id: selectedId }, 'add symbol failed');
@@ -96,66 +101,78 @@ export function AddSymbolDialog({
   const results = search.data ?? [];
 
   return (
-    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
-      <Dialog.Trigger>
-        <Button>{triggerLabel}</Button>
-      </Dialog.Trigger>
-      <Dialog.Content maxWidth="540px">
-        <Dialog.Title>Watch a symbol</Dialog.Title>
-        <Dialog.Description size="2" color="gray">
-          Search an instrument by name or id, then add it to your watchlist.
-        </Dialog.Description>
+    <>
+      <Dialog.Root open={open} onOpenChange={handleOpenChange}>
+        <Dialog.Trigger>
+          <Button>{triggerLabel}</Button>
+        </Dialog.Trigger>
+        <Dialog.Content maxWidth="540px">
+          <Dialog.Title>Watch a symbol</Dialog.Title>
+          <Dialog.Description size="2" color="gray">
+            Search an instrument by name or id, then add it to your watchlist.
+          </Dialog.Description>
 
-        <Flex gap="2" mt="4">
-          <TextField.Root
-            placeholder="Search instruments…"
-            aria-label="Search instruments"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            className="flex-1"
-          >
-            <TextField.Slot>
-              <Search className="h-4 w-4" aria-hidden="true" />
-            </TextField.Slot>
-          </TextField.Root>
-          <Select.Root value={typeValue} onValueChange={setTypeValue}>
-            <Select.Trigger aria-label="Filter by type" />
-            <Select.Content>
-              {TYPE_OPTIONS.map((option) => (
-                <Select.Item key={option.value} value={option.value}>
-                  {option.label}
-                </Select.Item>
-              ))}
-            </Select.Content>
-          </Select.Root>
-        </Flex>
+          <Flex gap="2" mt="4">
+            <TextField.Root
+              placeholder="Search instruments…"
+              aria-label="Search instruments"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="flex-1"
+            >
+              <TextField.Slot>
+                <Search className="h-4 w-4" aria-hidden="true" />
+              </TextField.Slot>
+            </TextField.Root>
+            <Select.Root value={typeValue} onValueChange={setTypeValue}>
+              <Select.Trigger aria-label="Filter by type" />
+              <Select.Content>
+                {TYPE_OPTIONS.map((option) => (
+                  <Select.Item key={option.value} value={option.value}>
+                    {option.label}
+                  </Select.Item>
+                ))}
+              </Select.Content>
+            </Select.Root>
+          </Flex>
 
-        <div className="mt-3">
-          <SearchResults
-            isPending={search.isFetching && results.length === 0}
-            query={debouncedQuery}
-            instruments={results}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-          />
-        </div>
+          <div className="mt-3">
+            <SearchResults
+              isPending={search.isFetching && results.length === 0}
+              query={debouncedQuery}
+              instruments={results}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          </div>
 
-        <Flex gap="3" mt="4" justify="end">
-          <Dialog.Close>
-            <Button variant="soft" color="gray">
-              Cancel
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">
+                Cancel
+              </Button>
+            </Dialog.Close>
+            <Button
+              onClick={handleAdd}
+              disabled={!selectedId || add.isPending}
+              loading={add.isPending}
+            >
+              Add
             </Button>
-          </Dialog.Close>
-          <Button
-            onClick={handleAdd}
-            disabled={!selectedId || add.isPending}
-            loading={add.isPending}
-          >
-            Add
-          </Button>
-        </Flex>
-      </Dialog.Content>
-    </Dialog.Root>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+      {backfillFor ? (
+        <BackfillDialog
+          id={backfillFor.id}
+          periods={backfillFor.periods}
+          open={true}
+          onOpenChange={(next) => {
+            if (!next) setBackfillFor(null);
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 

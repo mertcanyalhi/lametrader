@@ -289,7 +289,12 @@ describe('WatchlistPage', () => {
       await user.click(screen.getByRole('button', { name: 'Add' }));
     });
 
-    await screen.findByText('crypto:ETHUSDT');
+    // Add resolves (toast fires) and hands off to the auto-opened backfill modal.
+    await waitFor(() =>
+      expect(toast.success as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(
+        'Now watching crypto:ETHUSDT',
+      ),
+    );
     const postCall = fetchSpy.mock.calls.find(
       (call) => (call[1] as RequestInit | undefined)?.method === 'POST',
     );
@@ -302,6 +307,68 @@ describe('WatchlistPage', () => {
       body: JSON.stringify({ id: 'crypto:ETHUSDT', periods: ['1m', '1h', '1d'] }),
       toasted: 'Now watching crypto:ETHUSDT',
     });
+  });
+
+  it('opens the backfill modal from a row’s actions, listing the symbol’s watched periods', async () => {
+    onRequest('GET', '/symbols?enrich=true', () => [BTC]);
+    onRequest('GET', '/config', () => CONFIG);
+    renderPage();
+    const user = userEvent.setup();
+
+    await screen.findByText('crypto:BTCUSDT');
+    await user.click(screen.getByRole('button', { name: 'Open actions for crypto:BTCUSDT' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Backfill' }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect({
+      title: within(dialog).getByText('Backfill history').textContent,
+      oneHour: within(dialog).getByRole('checkbox', { name: '1h' }).getAttribute('aria-checked'),
+      oneDay: within(dialog).getByRole('checkbox', { name: '1d' }).getAttribute('aria-checked'),
+    }).toEqual({ title: 'Backfill history', oneHour: 'true', oneDay: 'true' });
+  });
+
+  it('auto-opens the backfill modal for a newly added symbol with its periods preselected', async () => {
+    const ethInstrument: Instrument = {
+      id: 'crypto:ETHUSDT',
+      type: SymbolType.Crypto,
+      description: 'Ethereum / TetherUS',
+      exchange: 'Binance',
+      currency: 'USDT',
+    };
+    let watchlist: EnrichedSymbol[] = [BTC];
+    onRequest('GET', '/symbols?enrich=true', () => watchlist);
+    onRequest('GET', '/config', () => CONFIG);
+    onRequest('GET', '/instruments', () => [ethInstrument]);
+    onRequest(
+      'POST',
+      '/symbols',
+      () => {
+        watchlist = [...watchlist, ETH];
+        return { ...ethInstrument, periods: CONFIG.periods };
+      },
+      201,
+    );
+    renderPage();
+    const user = userEvent.setup();
+
+    await screen.findByText('crypto:BTCUSDT');
+    await user.click(screen.getByRole('button', { name: 'Add symbol' }));
+    await user.type(screen.getByRole('textbox', { name: 'Search instruments' }), 'eth');
+    const result = await screen.findByRole('radio', { name: /crypto:ETHUSDT/ });
+    await act(async () => {
+      await user.click(result);
+    });
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+    });
+
+    const dialog = await screen.findByRole('dialog');
+    expect({
+      title: within(dialog).getByText('Backfill history').textContent,
+      oneMinute: within(dialog).getByRole('checkbox', { name: '1m' }).getAttribute('aria-checked'),
+      oneHour: within(dialog).getByRole('checkbox', { name: '1h' }).getAttribute('aria-checked'),
+      oneDay: within(dialog).getByRole('checkbox', { name: '1d' }).getAttribute('aria-checked'),
+    }).toEqual({ title: 'Backfill history', oneMinute: 'true', oneHour: 'true', oneDay: 'true' });
   });
 
   it('edits a symbol’s periods via the edit dialog’s Periods section, sending the sorted selection', async () => {

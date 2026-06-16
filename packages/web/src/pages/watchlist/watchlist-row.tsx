@@ -3,6 +3,7 @@ import { Badge, DropdownMenu, Flex, IconButton, Table, Text } from '@radix-ui/th
 import { MoreHorizontal } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { sortPeriods } from '../../lib/periods.js';
+import { BackfillDialog } from './backfill-dialog.js';
 import { EditSymbolDialog } from './edit-symbol-dialog.js';
 import { PriceCells } from './price-cell.js';
 import { RemoveSymbolDialog } from './remove-symbol-dialog.js';
@@ -27,6 +28,7 @@ export function WatchlistRow({
   availablePeriods: Period[];
 }): ReactNode {
   const [editOpen, setEditOpen] = useState(false);
+  const [backfillOpen, setBackfillOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
 
   return (
@@ -61,6 +63,7 @@ export function WatchlistRow({
           </DropdownMenu.Trigger>
           <DropdownMenu.Content>
             <DropdownMenu.Item onSelect={() => setEditOpen(true)}>Edit</DropdownMenu.Item>
+            <DropdownMenu.Item onSelect={() => setBackfillOpen(true)}>Backfill</DropdownMenu.Item>
             <DropdownMenu.Item color="red" onSelect={() => setRemoveOpen(true)}>
               Remove
             </DropdownMenu.Item>
@@ -74,6 +77,12 @@ export function WatchlistRow({
         availablePeriods={availablePeriods}
         open={editOpen}
         onOpenChange={setEditOpen}
+      />
+      <BackfillDialog
+        id={symbol.id}
+        periods={symbol.periods}
+        open={backfillOpen}
+        onOpenChange={setBackfillOpen}
       />
       <RemoveSymbolDialog
         id={symbol.id}
