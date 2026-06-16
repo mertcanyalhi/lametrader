@@ -36,7 +36,7 @@ export default defineConfig({
         resolve: { alias },
         test: {
           name: 'unit',
-          include: ['packages/**/src/**/*.test.ts'],
+          include: ['packages/**/src/**/*.test.{ts,tsx}'],
           exclude: [...configDefaults.exclude, '**/*.e2e.test.ts', '**/*.live.test.ts'],
         },
       },
