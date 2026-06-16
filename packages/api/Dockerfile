@@ -33,10 +33,12 @@ COPY --from=build /app/packages/core/package.json ./packages/core/package.json
 COPY --from=build /app/packages/core/dist ./packages/core/dist
 COPY --from=build /app/packages/engine/package.json ./packages/engine/package.json
 COPY --from=build /app/packages/engine/dist ./packages/engine/dist
-# engine's `nanoid` (^5) does not hoist to the root `node_modules`: the web
-# workspace's `vite`/`postcss` pull `nanoid@3`, which npm hoists instead, so
-# engine's `nanoid@5` stays nested here. Copy it explicitly — the root
-# `node_modules` alone wouldn't satisfy engine's runtime import.
+# engine's `nanoid` (^5) is installed nested here, not in the root
+# `node_modules`: the dev tool chain (vitest -> vite -> postcss) pulls an
+# older `nanoid@3` that takes the root slot, so the lockfile pins engine's
+# `nanoid@5` to this path. `npm ci` reproduces that layout exactly and never
+# re-hoists, so the api image must ship engine's own `node_modules` for its
+# runtime `nanoid` import to resolve.
 COPY --from=build /app/packages/engine/node_modules ./packages/engine/node_modules
 COPY --from=build /app/packages/api/package.json ./packages/api/package.json
 COPY --from=build /app/packages/api/dist ./packages/api/dist
