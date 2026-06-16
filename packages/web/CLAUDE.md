@@ -7,8 +7,9 @@ Builds via Vite; type-checks via `tsc --noEmit`; not part of the project-refs gr
 
 - **React 19 + TypeScript + Vite** — already in place.
 - **Tailwind CSS v4** via `@tailwindcss/vite`. Tokens live in `src/index.css` under `@theme inline`; **never** add a `tailwind.config.js`.
-- **shadcn/ui pattern** — `@radix-ui/react-*` primitives with hand-authored thin wrappers under `src/components/ui/*`.
-  Compose `class-variance-authority` with `cn(...)` (clsx + tailwind-merge) so callers can override individual classes without losing the variant defaults.
+- **Radix UI primitives** (`@radix-ui/react-*`) wrapped under `src/components/ui/*` to add our theme tokens.
+  We do **not** hand-roll wrappers for elements the platform already provides (`<button>`, `<input>`, …); see "UI/UX rules" below.
+  Compose Tailwind classes with `cn(...)` (clsx + tailwind-merge).
 - **React Router v7** (`react-router`) for routing.
   Tests use `<MemoryRouter>`.
 - **TanStack Query** (`@tanstack/react-query`) for server state.
@@ -19,7 +20,9 @@ Builds via Vite; type-checks via `tsc --noEmit`; not part of the project-refs gr
 
 These are the rules every PR is held to.
 
-### Use the framework primitive, never the native equivalent
+### Use the framework primitive, never the native equivalent (for *behaviour*)
+
+When the framework provides a behavioural primitive, use it. **Never** the ad-hoc native fallback.
 
 - Hover label → `<SimpleTooltip>` (Radix). **Never** `title="…"` on any element.
 - Confirmation prompt → `<AlertDialog>` (Radix). **Never** `window.confirm()`.
@@ -30,7 +33,36 @@ These are the rules every PR is held to.
 - Tabbed views → `<Tabs>` (Radix). **Never** ad-hoc `useState + classNames`.
 - Floating panel → `<Popover>` (Radix). **Never** an absolutely-positioned `<div>` you toggle yourself.
 
-When a new primitive is needed for an issue, hand-author it under `src/components/ui/<name>.tsx` on top of the Radix piece (same shape as `button.tsx`, `tooltip.tsx`).
+For each of the above, the file under `src/components/ui/<name>.tsx` is a **thin wrapper that re-exports the Radix primitive and adds our theme tokens** — nothing more.
+Add a wrapper only when there is a Radix (or comparable framework) primitive underneath.
+
+### Do NOT hand-roll a wrapper for elements the platform already provides
+
+For plain HTML elements that have no underlying behavioural primitive — `<button>`, `<input>`, `<label>`, `<a>`, `<select>` (when not a Radix Select), `<table>` — **use the native element directly with Tailwind classes** at the call site.
+A "Button.tsx that wraps `<button>` with a class string" is exactly the kind of own-component we avoid: it adds indirection without adding behaviour the framework already gives us.
+
+If a Tailwind class string repeats often enough to be worth a name, extract it as a `const` in a `lib/` module — not as a new component file.
+
+#### Concrete examples
+
+```tsx
+// Good — native button, framework-provided primitive, no hand-rolled wrapper.
+<SimpleTooltip content="Toggle sidebar">
+  <button
+    type="button"
+    aria-label="Toggle sidebar"
+    onClick={onToggle}
+    className="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground"
+  >
+    <PanelLeft className="h-4 w-4" aria-hidden="true" />
+  </button>
+</SimpleTooltip>
+
+// Bad — wrapping <button> in a custom component file just to label classes.
+<Button variant="ghost" size="icon" aria-label="Toggle sidebar" onClick={onToggle}>
+  <PanelLeft />
+</Button>
+```
 
 ### Layout
 

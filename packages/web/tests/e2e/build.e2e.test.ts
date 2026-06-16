@@ -49,15 +49,15 @@ describe('web boilerplate build (e2e)', () => {
     });
   });
 
-  it('emits a JS bundle whose contents include the brand string lametrader', () => {
+  it('emits a JS bundle whose contents include the rendered nav label Watchlist', () => {
     const assets = readdirSync(join(distDir, 'assets'));
     const jsFiles = assets.filter((file) => file.endsWith('.js'));
-    const bundlesContainingBrand = jsFiles.filter((file) =>
-      readFileSync(join(distDir, 'assets', file), 'utf8').includes('lametrader'),
+    const bundlesContainingMarker = jsFiles.filter((file) =>
+      readFileSync(join(distDir, 'assets', file), 'utf8').includes('Watchlist'),
     );
     expect({
       hasAtLeastOneJsBundle: jsFiles.length > 0,
-      brandFound: bundlesContainingBrand.length > 0,
-    }).toEqual({ hasAtLeastOneJsBundle: true, brandFound: true });
+      markerFound: bundlesContainingMarker.length > 0,
+    }).toEqual({ hasAtLeastOneJsBundle: true, markerFound: true });
   });
 });

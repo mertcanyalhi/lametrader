@@ -14,7 +14,8 @@ Page bodies are intentionally placeholder — subsequent issues fill in real con
 
 ## Locked decisions (carried over from the planning brainstorm — surfaced here for the record)
 
-- **Design system**: shadcn/ui pattern over Radix UI primitives (`@radix-ui/react-tooltip`, …), hand-authored thin wrappers in `src/components/ui/*`.
+- **Design system**: Radix UI primitives (`@radix-ui/react-tooltip`, …), wrapped under `src/components/ui/*` *only when there is a Radix primitive underneath* (we wrap to add our theme tokens, not to invent components).
+  Plain HTML elements like `<button>`, `<input>`, `<a>` are used natively at the call site with Tailwind classes — no hand-rolled wrappers.
 - **Styling**: Tailwind CSS v4 via `@tailwindcss/vite`, CSS-first tokens under `@theme` in `src/index.css`, no `tailwind.config.js`.
 - **Routing**: React Router v7 (`createBrowserRouter` or `<BrowserRouter>` + `<Routes>` — driven adapter decides; tests use `<MemoryRouter>`).
 - **Server state**: `@tanstack/react-query` with a shared `QueryClient`; `apiFetch` wraps `fetch` against `/api/*`.
@@ -24,8 +25,12 @@ Page bodies are intentionally placeholder — subsequent issues fill in real con
 - **Icon-only theme toggle a11y**: visible label rendered through `<Tooltip>` on hover/focus; accessible name supplied by `aria-label="Toggle theme"`.
   Never `title=`.
 - **CLAUDE.md location**: `packages/web/CLAUDE.md` (scoped to the package; not appended to the root).
-- **Sidebar at narrow widths**: CSS-driven collapse to icon rail below 1024 px (Tailwind `lg:` breakpoint).
-  Not unit-tested (CSS-only); covered by manual visual review.
+- **Sidebar collapsibility**: a hamburger button on the topbar's left edge toggles the sidebar between expanded (label + icon) and collapsed (icon rail) at ≥ 1024 px.
+  Default state: expanded.
+  The choice is persisted to `localStorage.sidebar-collapsed` (`'true'` | `'false'`).
+  **Below 1024 px the CSS rules still force an icon rail regardless of the stored choice** (the manual toggle only widens above the breakpoint).
+- **Topbar brand**: there is no visible app-name label in the topbar; the page `<title>` is the only place the brand text lives.
+  The topbar's left edge holds the sidebar-toggle button instead.
 - **Vitest config**: `packages/**/src/**/*.test.{ts,tsx}` for the unit project so the smoke test (`App.test.tsx`) is picked up.
   No new project / no node-vs-DOM split — jsdom is enabled per-file via `// @vitest-environment jsdom`.
 
@@ -38,10 +43,20 @@ Routing + shell (unit, `@testing-library/react` + jsdom + `<MemoryRouter>`):
 - [ ] At `/settings`, the settings placeholder card renders inside the shell ("Settings" heading).
 - [ ] The sidebar nav link for the current route carries `aria-current="page"`; the other two do not.
 
-Topbar + theme toggle (unit, `@testing-library/react` + jsdom):
+Topbar + sidebar toggle + theme toggle (unit, `@testing-library/react` + jsdom):
 
-- [ ] The topbar shows the brand text "lametrader".
 - [ ] The topbar's theme-toggle button exposes accessible name "Toggle theme" via `aria-label` (its `title` attribute is absent — the visible label comes from `<Tooltip>`, not `title=`).
+- [ ] The topbar holds a sidebar-toggle button with accessible name "Toggle sidebar" (no `title=`).
+- [ ] The sidebar boots expanded by default (`data-collapsed="false"`).
+- [ ] Clicking the topbar sidebar-toggle collapses the sidebar (`data-collapsed="true"`) and writes `'true'` to `localStorage.sidebar-collapsed`.
+- [ ] When `localStorage.sidebar-collapsed === 'true'` on boot, the sidebar starts collapsed.
+
+Sidebar persistence module (unit, jsdom — `getStoredSidebarCollapsed` / `setSidebarCollapsed` over `window.localStorage`):
+
+- [ ] `getStoredSidebarCollapsed()` returns `false` when `localStorage.sidebar-collapsed` is unset.
+- [ ] `getStoredSidebarCollapsed()` returns `true` when `localStorage.sidebar-collapsed === 'true'`.
+- [ ] `setSidebarCollapsed(true)` writes `'true'` to `localStorage.sidebar-collapsed`.
+- [ ] `setSidebarCollapsed(false)` writes `'false'` to `localStorage.sidebar-collapsed`.
 
 Theme module (unit, jsdom — `applyInitialTheme` / `setTheme` over `document.documentElement` + `window.localStorage`):
 
@@ -59,7 +74,7 @@ Documentation:
 E2E for a web feature is a real `vite build` against the package, asserting the deployable artifact is what we ship.
 No browser harness (Playwright) is in scope for this issue.
 
-- Happy path: `vite build` over `packages/web` exits 0; `packages/web/dist/index.html` exists and references at least one JS bundle under `assets/`; that bundle file exists on disk; the bundle contents include the brand string "lametrader" (the shell rendered into the bundle).
+- Happy path: `vite build` over `packages/web` exits 0; `packages/web/dist/index.html` exists and references at least one JS bundle under `assets/`; that bundle file exists on disk; the bundle contents include the rendered string "Watchlist" (a sidebar nav label — proves the shell rendered into the bundle).
 
 There is no orthogonal failure mode worth a second test here — the build either produces a clean artifact or fails on import, which the happy path already detects.
 
