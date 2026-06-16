@@ -28,12 +28,12 @@ describe('parseConfigResolver', () => {
     expect(result).toEqual({
       values: {},
       errors: {
-        periods: { type: 'parseConfig', message: 'periods must not be empty' },
+        periods: { type: 'parseConfig', message: 'Periods must not be empty' },
       },
     });
   });
 
-  it('maps an empty-defaultPeriod ConfigError onto the defaultPeriod field', async () => {
+  it('maps an empty-defaultPeriod ConfigError onto the defaultPeriod field with the human label', async () => {
     const values = { periods: [Period.OneHour], defaultPeriod: '' as Period };
     const result = await parseConfigResolver(values, undefined, {
       fields: {},
@@ -42,7 +42,7 @@ describe('parseConfigResolver', () => {
     expect(result).toEqual({
       values: {},
       errors: {
-        defaultPeriod: { type: 'parseConfig', message: 'defaultPeriod must not be empty' },
+        defaultPeriod: { type: 'parseConfig', message: 'Default period must not be empty' },
       },
     });
   });

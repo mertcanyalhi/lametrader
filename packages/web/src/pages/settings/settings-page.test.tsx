@@ -229,7 +229,7 @@ describe('SettingsPage', () => {
 
     const saveButton = screen.getByRole('button', { name: /save/i });
     await waitFor(() => {
-      expect(screen.getByText('periods must not be empty')).toBeInTheDocument();
+      expect(screen.getByText('Periods must not be empty')).toBeInTheDocument();
     });
     expect(saveButton).toBeDisabled();
     // No PUT was issued — only the initial GET.
@@ -251,7 +251,7 @@ describe('SettingsPage', () => {
     await user.click(oneDayToggle);
 
     await waitFor(() => {
-      expect(screen.getByText('defaultPeriod must not be empty')).toBeInTheDocument();
+      expect(screen.getByText('Default period must not be empty')).toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: /save/i })).toBeDisabled();
   });

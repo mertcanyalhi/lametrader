@@ -19,7 +19,7 @@ import { ApiError } from '../../lib/api-fetch.js';
 import { cn } from '../../lib/cn.js';
 import { useConfig, useUpdateConfig } from '../../lib/hooks/use-config.js';
 import { getLogger } from '../../lib/log.js';
-import { parseConfigResolver } from '../../lib/parse-config-resolver.js';
+import { FIELD_LABELS, parseConfigResolver } from '../../lib/parse-config-resolver.js';
 
 /**
  * Scoped logger for the settings page — form/save lifecycle events.
@@ -193,7 +193,7 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
           <section className="flex flex-col gap-2">
             <FieldLabel
               htmlFor="periods-bar"
-              label="Periods"
+              label={FIELD_LABELS.periods}
               hintLabel="About the periods setting"
               hint="The candle timeframes the platform tracks for each symbol (for example 1h, 1d). Toggle a timeframe on to start tracking it."
             />
@@ -235,7 +235,7 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
           <section className="flex flex-col gap-2">
             <FieldLabel
               htmlFor="default-period-trigger"
-              label="Default period"
+              label={FIELD_LABELS.defaultPeriod}
               hintLabel="About the default period setting"
               hint="The timeframe shown by default when you open a symbol. It must be one of the tracked periods above."
             />
