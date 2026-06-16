@@ -13,6 +13,13 @@ const log = getLogger('api-fetch');
 const NO_RESPONSE_STATUS = 0;
 
 /**
+ * Prefix for errors the user isn't expected to act on — infrastructure or
+ * transport failures (5xx, an unmapped status, a network drop) as opposed to
+ * the API's own `{ error }` validation messages, which are surfaced verbatim.
+ */
+const UNEXPECTED_PREFIX = 'An unexpected error occurred';
+
+/**
  * Human-readable reason phrases for the statuses the app realistically hits.
  * Used when a non-2xx response does NOT carry our API's `{ error }` shape
  * (e.g. an nginx 502 HTML page), so the UI shows a clean message rather than
@@ -34,13 +41,22 @@ const STATUS_MESSAGES: Record<number, string> = {
 };
 
 /**
+ * Wrap a detail string as an "unexpected error" message — the prefix the UI
+ * shows for failures the user can't resolve themselves.
+ */
+function unexpectedMessage(detail: string): string {
+  return `${UNEXPECTED_PREFIX}: ${detail}`;
+}
+
+/**
  * A clean, status-derived message for a response that didn't carry our API's
- * structured `{ error }` payload. Falls back to a generic phrasing for any
- * status not in {@link STATUS_MESSAGES}.
+ * structured `{ error }` payload — always an "unexpected error" (such a body
+ * means infrastructure failed, not domain validation). Falls back to a generic
+ * phrasing for any status not in {@link STATUS_MESSAGES}.
  */
 function statusMessage(status: number): string {
   const phrase = STATUS_MESSAGES[status];
-  return phrase ? `${phrase} (${status})` : `Request failed (${status})`;
+  return unexpectedMessage(phrase ? `${phrase} (${status})` : `HTTP ${status}`);
 }
 
 /**
@@ -70,10 +86,12 @@ export class ApiError extends Error {
  *
  * - Paths are joined under `/api`, so callers pass `/config`, `/symbols`, etc.
  * - A failed request always raises {@link ApiError} with a message safe to show
- *   the user: the server's `{ error: string }` payload when present, otherwise a
- *   clean status-derived message (e.g. `Bad gateway (502)`). A raw response body
- *   (e.g. an nginx HTML error page) is never surfaced. A network failure raises
- *   `ApiError` with status `0` and a connection message.
+ *   the user. The API's own `{ error: string }` validation message is surfaced
+ *   verbatim (an expected, actionable error). Anything else — a 5xx, an unmapped
+ *   status, an HTML body, or a network drop — is an unexpected error and is
+ *   prefixed with "An unexpected error occurred" (e.g. `An unexpected error
+ *   occurred: Bad gateway (502)`). A raw response body is never surfaced. A
+ *   network failure raises `ApiError` with status `0`.
  * - Every failure is logged via {@link log} before the error is thrown, so it is
  *   visible without cracking open the network panel.
  * - 204s return `undefined as T`.
@@ -92,7 +110,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     response = await fetch(`/api${path}`, { ...init, headers });
   } catch (cause) {
     log.error({ method: init?.method ?? 'GET', path, err: cause }, 'network request failed');
-    throw new ApiError(NO_RESPONSE_STATUS, 'Network error — could not reach the server');
+    throw new ApiError(NO_RESPONSE_STATUS, unexpectedMessage('could not reach the server'));
   }
 
   if (response.status === 204) {

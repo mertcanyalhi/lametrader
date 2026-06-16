@@ -128,6 +128,8 @@ Do **not** generalize the exception — every other surface has Pino available.
   - Log the cause via the scope's Pino logger before falling through to a fallback value.
 - For non-2xx HTTP responses, throw `ApiError` (which `apiFetch` already does and logs).
   Callers either let it bubble (React Query surfaces it) or catch it for UI feedback — but they don't re-log; the lower layer already did.
+- Expected vs unexpected messages: `apiFetch` surfaces the API's own `{ error }` validation message verbatim (expected, actionable), and prefixes everything else — 5xx, unmapped statuses, HTML bodies, network drops — with "An unexpected error occurred".
+  Show `error.message` directly; the distinction is already baked in.
 
 ### Tests
 

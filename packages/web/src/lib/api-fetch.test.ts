@@ -80,21 +80,21 @@ describe('apiFetch', () => {
     expect({ name: error.name, status: error.status, message: error.message }).toEqual({
       name: 'ApiError',
       status: 502,
-      message: 'Bad gateway (502)',
+      message: 'An unexpected error occurred: Bad gateway (502)',
     });
   });
 
-  it('falls back to a generic message for an unmapped error status', async () => {
+  it('falls back to a generic unexpected-error message for an unmapped error status', async () => {
     fetchSpy.mockResolvedValueOnce(new Response('', { status: 418 }));
     const error = await captureApiError(apiFetch('/config'));
     expect({ name: error.name, status: error.status, message: error.message }).toEqual({
       name: 'ApiError',
       status: 418,
-      message: 'Request failed (418)',
+      message: 'An unexpected error occurred: HTTP 418',
     });
   });
 
-  it('shows a clean status message when a non-2xx JSON body has an empty error string', async () => {
+  it('shows an unexpected-error message when a non-2xx JSON body has an empty error string', async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response(JSON.stringify({ error: '' }), {
         status: 500,
@@ -105,11 +105,11 @@ describe('apiFetch', () => {
     expect({ name: error.name, status: error.status, message: error.message }).toEqual({
       name: 'ApiError',
       status: 500,
-      message: 'Internal server error (500)',
+      message: 'An unexpected error occurred: Internal server error (500)',
     });
   });
 
-  it('raises an ApiError with status 0 and a connection message when fetch rejects', async () => {
+  it('raises an ApiError with status 0 and an unexpected-error message when fetch rejects', async () => {
     fetchSpy.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     const error = await captureApiError(apiFetch('/config'));
     expect({
@@ -119,7 +119,7 @@ describe('apiFetch', () => {
     }).toEqual({
       isApiError: true,
       status: 0,
-      message: 'Network error — could not reach the server',
+      message: 'An unexpected error occurred: could not reach the server',
     });
   });
 });
