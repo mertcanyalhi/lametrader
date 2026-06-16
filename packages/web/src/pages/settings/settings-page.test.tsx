@@ -113,6 +113,33 @@ describe('SettingsPage', () => {
     expect(saveButton).toBeDisabled();
   });
 
+  it('disables Save again after a successful save (resets the dirty baseline)', async () => {
+    mockJsonResponse({
+      periods: [Period.OneHour, Period.OneDay],
+      defaultPeriod: Period.OneDay,
+    });
+    // PUT response — full replace; 1h toggled off, 1d remains the default.
+    mockJsonResponse({
+      periods: [Period.OneDay],
+      defaultPeriod: Period.OneDay,
+    });
+
+    renderPage();
+    const user = userEvent.setup();
+
+    // Toggle off 1h (not the default), so the form is dirty but still valid.
+    const oneHourToggle = await screen.findByRole('button', { name: '1h', pressed: true });
+    await user.click(oneHourToggle);
+
+    const saveButton = screen.getByRole('button', { name: /save/i });
+    await waitFor(() => expect(saveButton).not.toBeDisabled());
+    await act(async () => {
+      await user.click(saveButton);
+    });
+
+    await waitFor(() => expect(saveButton).toBeDisabled());
+  });
+
   it('clears defaultPeriod when its period is toggled off in the timeframe bar', async () => {
     mockJsonResponse({
       periods: [Period.OneHour, Period.OneDay],

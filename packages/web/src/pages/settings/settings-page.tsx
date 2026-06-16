@@ -79,7 +79,7 @@ function SettingsSkeleton(): ReactNode {
  */
 function SettingsForm({ initial }: { initial: Config }): ReactNode {
   const update = useUpdateConfig();
-  const { handleSubmit, watch, setValue, setError, formState } = useForm<Config>({
+  const { handleSubmit, watch, setValue, setError, reset, formState } = useForm<Config>({
     resolver: parseConfigResolver,
     defaultValues: initial,
   });
@@ -103,7 +103,11 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
   const onSubmit: SubmitHandler<Config> = async (values) => {
     log.info({ periods: values.periods, defaultPeriod: values.defaultPeriod }, 'saving config');
     try {
-      await update.mutateAsync(values);
+      const saved = await update.mutateAsync(values);
+      // Re-baseline the form to the persisted config so `isDirty` clears and
+      // Save disables until the next edit — otherwise the baseline stays the
+      // originally-loaded config and Save stays enabled after a save.
+      reset(saved);
       toast.success('Settings saved');
     } catch (cause) {
       const message = cause instanceof ApiError ? cause.message : 'failed to save settings';

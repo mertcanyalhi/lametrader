@@ -42,6 +42,7 @@ Validation reuses `@lametrader/core`'s `parseConfig` directly through a custom r
 - [ ] While the initial `GET /api/config` is pending, the page renders a `Skeleton` placeholder — not raw text — and no form controls are interactive.
 - [ ] When the initial `GET /api/config` fails (e.g. 500), the page renders an inline `Callout color="red"` with the server message; the form is not rendered.
 - [ ] The "Save" button is disabled until the form is dirty (a period toggled or `defaultPeriod` changed).
+- [ ] After a successful save the form re-baselines to the persisted config, so "Save" disables again until the next edit (it does not stay enabled against the originally-loaded values).
 - [ ] Toggling an active period off in the bar (a) un-presses its button, (b) removes it from the `defaultPeriod` dropdown's options, and (c) **clears** `defaultPeriod` when the toggled-off period equalled the current default — mirroring the domain's `defaultPeriod ∈ periods` rule for instant client feedback.
 - [ ] Submitting the form calls `PUT /api/config` with `{ periods, defaultPeriod }` matching the form state; on a 200 response, the success toast surfaces and the TanStack Query cache for `['config']` is updated to the response payload.
 - [ ] A submit that the **client-side resolver** rejects (e.g. empty `periods`, `defaultPeriod` cleared) renders a form-level inline error from the thrown `ConfigError` and does **not** call `PUT`.
