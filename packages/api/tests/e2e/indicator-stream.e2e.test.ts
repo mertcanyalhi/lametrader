@@ -224,8 +224,11 @@ describe('indicator live streaming (e2e)', () => {
     });
 
     // After poll, candles at 3*HOUR (final, closed) and 4*HOUR (forming) arrive; SMA(3)
-    // over closes [10,20,30,40,50] yields 30 at 3*HOUR and 40 at 4*HOUR.
-    expect([first, second]).toEqual([
+    // over closes [10,20,30,40,50] yields 30 at 3*HOUR and 40 at 4*HOUR. The two
+    // frames' relative delivery order isn't guaranteed, so assert them sorted by
+    // `state.time` rather than by arrival.
+    const byTime = [first, second].sort((a, b) => a.state.time - b.state.time);
+    expect(byTime).toEqual([
       {
         subscriptionId: ack.subscriptionId,
         id: BTC.id,
