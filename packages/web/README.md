@@ -8,28 +8,12 @@ The shell (sidebar + topbar + theme + Radix Themes), the routing, the TanStack Q
 
 ### `/` — Watchlist
 
-A dense, sortable table of watched symbols with their **snapshot** quote, plus the management flows.
-Live ticking (flashing cells, the shared `/stream` client) lands in a separate task.
+The home page: a dense, sortable table of the symbols you watch, each with its latest price and change.
+Sort by symbol, type, price, or change.
+Add a symbol by searching for an instrument, edit which timeframes it's tracked on, or remove it — each confirmed with a toast.
+A symbol with no price yet shows a dash.
 
-**The table**
-
-- Bound to `GET /api/symbols?enrich=true` via `useWatchlist()`.
-- Columns: **Symbol** (`id` mono + muted `description`) · **Type** (`Badge`) · **Price** · **Chg** · **Chg %** · **Periods** (chips) · **Actions**.
-- Numeric columns are `tabular-nums`; change/change-% are coloured green/red/gray by sign.
-  A `null` quote (no snapshot computable) renders an em dash (`—`).
-- **Sortable headers** — Symbol, Type, Price, Chg %.
-  Default sort is Symbol ascending; clicking the active column flips the direction (`aria-sort` reflects it).
-- Loading → skeleton rows; empty → a "No symbols watched yet" card with a **Watch a symbol** button; load failure → a red `Callout`.
-
-**Management flows** (each shows a sonner toast on success; an API `{ error }` surfaces as an error toast)
-
-- **Add** — a toolbar **Add symbol** button opens a `Dialog` with a debounced instrument search (`GET /api/instruments?q=…&type=…`), an asset-class filter, and a radio-selectable results table.
-  Selecting a result and confirming issues `POST /api/symbols` with `periods` defaulted from the config.
-- **Edit periods** — the row's period chips (or the actions menu) open a `Popover` with a timeframe toggle bar over the config's periods.
-  Saving issues `PATCH /api/symbols/:id` with the selection sorted into timeframe order.
-- **Remove** — the row's actions menu opens an `AlertDialog` that names the symbol; confirming issues `DELETE /api/symbols/:id`.
-
-Each mutation invalidates the `['symbols', 'enrich']` query so the table refetches.
+Live price ticking lands in a separate task.
 
 ### `/chart` — Chart
 
@@ -69,15 +53,9 @@ A thrown `ConfigError` becomes a form-level error rendered inline as a Radix The
 - `useConfig()` — `GET /api/config` via TanStack Query under key `['config']`.
 - `useUpdateConfig()` — `PUT /api/config`; on success, writes the response straight into the `['config']` cache so any subscriber re-renders without a follow-up round-trip.
 
-`src/lib/hooks/symbols.ts` exposes the watchlist data layer (all under the `['symbols', 'enrich']` key, which the mutations invalidate):
+`src/lib/hooks/symbols.ts` exposes the watchlist data layer (read the watched symbols, search instruments, add/edit-periods/remove).
 
-- `useWatchlist()` — `GET /api/symbols?enrich=true`; the enriched rows the table renders.
-- `useSearchInstruments(query, type?)` — `GET /api/instruments`; disabled until `query` is non-empty.
-- `useAddSymbol()` — `POST /api/symbols` (`periods` omitted falls back to the server's default periods).
-- `useUpdatePeriods()` — `PATCH /api/symbols/:id`.
-- `useRemoveSymbol()` — `DELETE /api/symbols/:id`.
-
-All go through the package's `apiFetch` wrapper, so logging + `ApiError` mapping happen at the boundary, not at each call site.
+Both modules go through the package's `apiFetch` wrapper, so logging + `ApiError` mapping happen at the boundary, not at each call site.
 
 ## Develop
 
