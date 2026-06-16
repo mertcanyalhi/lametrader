@@ -347,6 +347,54 @@ describe('WatchlistPage', () => {
     });
   });
 
+  it('omits a period no longer enabled in config when saving the edit dialog', async () => {
+    // BTC watches 1h + 1d, but config now only enables 1h (1d removed in settings).
+    let watchlist: EnrichedSymbol[] = [BTC];
+    onRequest('GET', '/symbols?enrich=true', () => watchlist);
+    onRequest('GET', '/config', () => ({
+      periods: [Period.OneHour],
+      defaultPeriod: Period.OneHour,
+    }));
+    onRequest(
+      'PATCH',
+      '/symbols/crypto:BTCUSDT',
+      () => {
+        watchlist = [{ ...BTC, periods: [Period.OneHour] }];
+        return { ...BTC, periods: [Period.OneHour] };
+      },
+      200,
+    );
+    renderPage();
+    const user = userEvent.setup();
+
+    await screen.findByText('crypto:BTCUSDT');
+    await user.click(screen.getByRole('button', { name: 'Open actions for crypto:BTCUSDT' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Edit' }));
+    const dialog = await screen.findByRole('dialog');
+    // The disabled 1d isn't offered as a toggle, so it can't be left selected.
+    const oneDayOffered = within(dialog).queryByRole('button', { name: '1d' });
+    await act(async () => {
+      await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    });
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/symbols/crypto:BTCUSDT',
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+    const patchCall = fetchSpy.mock.calls.find(
+      (call) => (call[1] as RequestInit | undefined)?.method === 'PATCH',
+    );
+    expect({
+      oneDayOffered,
+      body: (patchCall?.[1] as RequestInit | undefined)?.body,
+    }).toEqual({
+      oneDayOffered: null,
+      body: JSON.stringify({ periods: ['1h'] }),
+    });
+  });
+
   it('removes a symbol via the confirm dialog and refetches the list', async () => {
     let watchlist: EnrichedSymbol[] = [BTC, ETH];
     onRequest('GET', '/symbols?enrich=true', () => watchlist);

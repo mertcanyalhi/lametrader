@@ -48,13 +48,19 @@ export function EditSymbolDialog({
   const update = useUpdatePeriods();
   const [selectedPeriods, setSelectedPeriods] = useState<Period[]>(periods);
 
-  // Re-seed the form from the symbol's values each time the dialog opens so a
-  // cancelled edit doesn't leak into the next one.
-  useEffect(() => {
-    if (open) setSelectedPeriods(periods);
-  }, [open, periods]);
-
   const periodOptions = sortPeriods(availablePeriods.length > 0 ? availablePeriods : periods);
+
+  // Re-seed the form each time the dialog opens (so a cancelled edit doesn't
+  // leak into the next one), pre-selecting only periods still offered. A period
+  // the symbol watches but config no longer enables is not shown as a toggle,
+  // so seeding it would leave it selected-but-invisible and the server would
+  // reject the save ("period X is not enabled in config"); dropping it here
+  // heals the symbol to a valid set on the next save.
+  useEffect(() => {
+    if (!open) return;
+    const offered = availablePeriods.length > 0 ? availablePeriods : periods;
+    setSelectedPeriods(periods.filter((period) => offered.includes(period)));
+  }, [open, periods, availablePeriods]);
 
   async function handleSave(): Promise<void> {
     try {
