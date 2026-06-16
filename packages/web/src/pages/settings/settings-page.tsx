@@ -6,10 +6,10 @@ import {
   Card,
   Heading,
   IconButton,
+  Popover,
   Select,
   Skeleton,
   Text,
-  Tooltip,
 } from '@radix-ui/themes';
 import { Info } from 'lucide-react';
 import { type ReactNode, useEffect } from 'react';
@@ -85,9 +85,10 @@ function SettingsSkeleton(): ReactNode {
 }
 
 /**
- * A field label paired with an info icon whose hover/focus tooltip explains
- * what the setting is for. The icon button carries an `aria-label` so the
- * control has an accessible name even before the tooltip opens.
+ * A field label paired with an info icon that opens a popover explaining what
+ * the setting is for. A popover (click/tap) rather than a tooltip (hover) so
+ * the explanation is reachable on touch devices, which have no hover. The icon
+ * button carries an `aria-label` so it has an accessible name before opening.
  */
 function FieldLabel({
   htmlFor,
@@ -99,7 +100,7 @@ function FieldLabel({
   htmlFor: string;
   /** Visible label text. */
   label: string;
-  /** The explanation shown in the info tooltip. */
+  /** The explanation shown in the info popover. */
   hint: string;
   /** Accessible name for the info icon button. */
   hintLabel: string;
@@ -109,18 +110,25 @@ function FieldLabel({
       <Text as="label" htmlFor={htmlFor} size="2" weight="medium">
         {label}
       </Text>
-      <Tooltip content={hint}>
-        <IconButton
-          type="button"
-          variant="ghost"
-          color="gray"
-          size="1"
-          radius="full"
-          aria-label={hintLabel}
-        >
-          <Info className="h-3.5 w-3.5" aria-hidden="true" />
-        </IconButton>
-      </Tooltip>
+      <Popover.Root>
+        <Popover.Trigger>
+          <IconButton
+            type="button"
+            variant="ghost"
+            color="gray"
+            size="1"
+            radius="full"
+            aria-label={hintLabel}
+          >
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          </IconButton>
+        </Popover.Trigger>
+        <Popover.Content size="1" maxWidth="280px">
+          <Text as="p" size="2">
+            {hint}
+          </Text>
+        </Popover.Content>
+      </Popover.Root>
     </div>
   );
 }
@@ -171,13 +179,10 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
     <form onSubmit={handleSubmit(onSubmit)}>
       <Card>
         <div className="flex flex-col gap-6 p-2">
-          <header className="flex flex-col gap-1">
+          <header>
             <Heading as="h1" size="4">
               Settings
             </Heading>
-            <Text as="p" color="gray" size="2">
-              Pick which periods the platform tracks and which one is shown by default.
-            </Text>
           </header>
 
           <section className="flex flex-col gap-2">

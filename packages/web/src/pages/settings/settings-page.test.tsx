@@ -323,7 +323,7 @@ describe('SettingsPage', () => {
     });
   });
 
-  it('renders an info trigger with an explanation for each settings block', async () => {
+  it('renders an info trigger for each settings block', async () => {
     mockJsonResponse({
       periods: [Period.OneHour, Period.OneDay],
       defaultPeriod: Period.OneDay,
@@ -342,5 +342,21 @@ describe('SettingsPage', () => {
       periods: 'About the periods setting',
       defaultPeriod: 'About the default period setting',
     });
+  });
+
+  it('opens a popover with the explanation when the info icon is clicked (works without hover)', async () => {
+    mockJsonResponse({
+      periods: [Period.OneHour, Period.OneDay],
+      defaultPeriod: Period.OneDay,
+    });
+    renderPage();
+    const user = userEvent.setup();
+
+    const periodsInfo = await screen.findByRole('button', { name: 'About the periods setting' });
+    await user.click(periodsInfo);
+
+    expect(
+      await screen.findByText(/the candle timeframes the platform tracks/i),
+    ).toBeInTheDocument();
   });
 });
