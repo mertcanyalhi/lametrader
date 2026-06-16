@@ -1,7 +1,8 @@
 import type { Period, SymbolType } from '@lametrader/core';
-import { Button, Dialog, Flex, Text } from '@radix-ui/themes';
+import { Button, Dialog, Flex } from '@radix-ui/themes';
 import { type ReactNode, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { FieldLabel } from '../../components/field-label.js';
 import { PeriodToggleGroup } from '../../components/period-toggle-group.js';
 import { ApiError } from '../../lib/api-fetch.js';
 import { useUpdatePeriods } from '../../lib/hooks/symbols.js';
@@ -76,14 +77,15 @@ export function EditSymbolDialog({
         </Dialog.Description>
 
         <Flex direction="column" gap="5" mt="4">
-          <section>
-            <Text as="div" size="2" weight="medium" mb="1">
-              Periods
-            </Text>
-            <Text as="p" size="1" color="gray" mb="2">
-              The timeframes tracked for this symbol.
-            </Text>
+          <section className="flex flex-col gap-2">
+            <FieldLabel
+              htmlFor="edit-periods-bar"
+              label="Periods"
+              hintLabel="About the periods setting"
+              hint="The candle timeframes tracked for this symbol (for example 1h, 1d). Toggle a timeframe on to start tracking it."
+            />
             <PeriodToggleGroup
+              id="edit-periods-bar"
               options={periodOptions}
               value={selectedPeriods}
               disabled={update.isPending}

@@ -1,20 +1,10 @@
 import { yupResolver } from '@hookform/resolvers/yup';
 import type { Config, Period } from '@lametrader/core';
-import {
-  Button,
-  Callout,
-  Card,
-  Heading,
-  IconButton,
-  Popover,
-  Select,
-  Skeleton,
-  Text,
-} from '@radix-ui/themes';
-import { Info } from 'lucide-react';
+import { Button, Callout, Card, Heading, Select, Skeleton, Text } from '@radix-ui/themes';
 import { type ReactNode, useEffect } from 'react';
 import { type SubmitHandler, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { FieldLabel } from '../../components/field-label.js';
 import { PeriodToggleGroup } from '../../components/period-toggle-group.js';
 import { ApiError } from '../../lib/api-fetch.js';
 import { configSchema, FIELD_LABELS } from '../../lib/config-schema.js';
@@ -67,55 +57,6 @@ function SettingsSkeleton(): ReactNode {
         <Skeleton height="2rem" width="12rem" />
       </div>
     </Card>
-  );
-}
-
-/**
- * A field label paired with an info icon that opens a popover explaining what
- * the setting is for. A popover (click/tap) rather than a tooltip (hover) so
- * the explanation is reachable on touch devices, which have no hover. The icon
- * button carries an `aria-label` so it has an accessible name before opening.
- */
-function FieldLabel({
-  htmlFor,
-  label,
-  hint,
-  hintLabel,
-}: {
-  /** Id of the control this labels. */
-  htmlFor: string;
-  /** Visible label text. */
-  label: string;
-  /** The explanation shown in the info popover. */
-  hint: string;
-  /** Accessible name for the info icon button. */
-  hintLabel: string;
-}): ReactNode {
-  return (
-    <div className="flex items-center gap-1.5">
-      <Text as="label" htmlFor={htmlFor} size="2" weight="medium">
-        {label}
-      </Text>
-      <Popover.Root>
-        <Popover.Trigger>
-          <IconButton
-            type="button"
-            variant="ghost"
-            color="gray"
-            size="1"
-            radius="full"
-            aria-label={hintLabel}
-          >
-            <Info className="h-3.5 w-3.5" aria-hidden="true" />
-          </IconButton>
-        </Popover.Trigger>
-        <Popover.Content size="1" maxWidth="280px">
-          <Text as="p" size="2">
-            {hint}
-          </Text>
-        </Popover.Content>
-      </Popover.Root>
-    </div>
   );
 }
 
