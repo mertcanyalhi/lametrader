@@ -130,7 +130,7 @@ export function AddSymbolDialog({
           </Select.Root>
         </Flex>
 
-        <div className="mt-3 min-h-24">
+        <div className="mt-3">
           <SearchResults
             isPending={search.isFetching && results.length === 0}
             query={debouncedQuery}
