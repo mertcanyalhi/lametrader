@@ -10,11 +10,13 @@ import {
   InMemoryProfileRepository,
   InMemoryWatchlistRepository,
   ProfileService,
+  QuoteStreamService,
   SymbolService,
 } from '@lametrader/engine';
 import type { AppDependencies } from '../app.types.js';
 import { CandleStreamHub } from '../candle-stream-hub.js';
 import { IndicatorStreamHub } from '../indicator-stream-hub.js';
+import { QuoteStreamHub } from '../quote-stream-hub.js';
 
 /**
  * Override shape accepted by `buildAppDeps`.
@@ -57,6 +59,12 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
     new IndicatorStreamService(registry, watchlist, compute, {
       onState: (event) => indicatorStream.publish(event),
     });
+  const quoteStream = overrides.liveStream?.quoteStream ?? new QuoteStreamHub();
+  const quoteStreamService =
+    overrides.liveStream?.quoteStreamService ??
+    new QuoteStreamService(watchlist, config, candles, {
+      onQuote: (event) => quoteStream.publish(event),
+    });
 
   return {
     config,
@@ -64,6 +72,12 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
     profiles,
     backfill: overrides.backfill ?? new BackfillService(sources, candles, watchlist),
     indicators: { registry, compute },
-    liveStream: { candleStream, indicatorStream, indicatorStreamService },
+    liveStream: {
+      candleStream,
+      indicatorStream,
+      indicatorStreamService,
+      quoteStream,
+      quoteStreamService,
+    },
   };
 }

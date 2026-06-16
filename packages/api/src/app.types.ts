@@ -5,23 +5,29 @@ import type {
   IndicatorRegistry,
   IndicatorStreamService,
   ProfileService,
+  QuoteStreamService,
   SymbolService,
 } from '@lametrader/engine';
 import type { CandleStreamHub } from './candle-stream-hub.js';
 import type { IndicatorStreamHub } from './indicator-stream-hub.js';
+import type { QuoteStreamHub } from './quote-stream-hub.js';
 
 /**
- * The live-stream surface — the candle hub the polling loop publishes to, plus the indicator-stream service + its WS-side hub.
+ * The live-stream surface — the candle hub the polling loop publishes to, plus the indicator- and quote-stream services + their WS-side hubs.
  *
- * Paired so the `/stream` route registers all-or-nothing: when streaming is wired, it handles both candle subscriptions and indicator subscriptions; when absent, the route doesn't register.
+ * Paired so the `/stream` route registers all-or-nothing: when streaming is wired, it handles candle, indicator, and quote subscriptions; when absent, the route doesn't register.
  */
 export interface LiveStream {
   /** The live-candle pub/sub the polling loop publishes to. */
   candleStream: CandleStreamHub;
   /** The indicator-state pub/sub fed by the indicator stream service's `onState` callback. */
   indicatorStream: IndicatorStreamHub;
-  /** The engine-side stream service; the route calls its `subscribe`/`unsubscribe`. */
+  /** The engine-side indicator stream service; the route calls its `subscribe`/`unsubscribe`. */
   indicatorStreamService: IndicatorStreamService;
+  /** The quote pub/sub fed by the quote stream service's `onQuote` callback. */
+  quoteStream: QuoteStreamHub;
+  /** The engine-side quote stream service; the route calls its `subscribe`/`unsubscribe`. */
+  quoteStreamService: QuoteStreamService;
 }
 
 /**

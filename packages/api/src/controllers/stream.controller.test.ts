@@ -1,16 +1,26 @@
-import { type IndicatorStateEvent, Period, SymbolType, type WatchedSymbol } from '@lametrader/core';
 import {
+  type Config,
+  type IndicatorStateEvent,
+  Period,
+  type SymbolQuoteEvent,
+  SymbolType,
+  type WatchedSymbol,
+} from '@lametrader/core';
+import {
+  ConfigService,
   defaultIndicators,
   IndicatorComputeService,
   IndicatorStreamService,
   InMemoryCandleRepository,
   InMemoryWatchlistRepository,
+  QuoteStreamService,
 } from '@lametrader/engine';
 import type { FastifyInstance } from 'fastify';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
 import { CandleStreamHub } from '../candle-stream-hub.js';
 import { IndicatorStreamHub } from '../indicator-stream-hub.js';
+import { QuoteStreamHub } from '../quote-stream-hub.js';
 import { buildAppDeps } from '../testing/app-deps.js';
 
 /** BTC as a watched symbol on the 1h period. */
@@ -52,6 +62,10 @@ interface TestApp {
   service: IndicatorStreamService;
   /** Every event the engine has emitted via `onState`, in order. */
   captured: IndicatorStateEvent[];
+  /** The engine-side quote stream service; tests call `handleCandle` to drive emission. */
+  quoteService: QuoteStreamService;
+  /** Every quote event the engine has emitted via `onQuote`, in order. */
+  capturedQuotes: SymbolQuoteEvent[];
 }
 
 /**
@@ -79,14 +93,30 @@ async function buildApp(): Promise<TestApp> {
       indicatorStream.publish(event);
     },
   });
+  const stored: Config = { periods: [Period.OneHour], defaultPeriod: Period.OneHour };
+  const config = new ConfigService({ load: async () => stored, save: async () => {} });
+  const quoteStream = new QuoteStreamHub();
+  const capturedQuotes: SymbolQuoteEvent[] = [];
+  const quoteService = new QuoteStreamService(watchlist, config, candles, {
+    onQuote: (event) => {
+      capturedQuotes.push(event);
+      quoteStream.publish(event);
+    },
+  });
   const app = createApp(
     buildAppDeps({
       indicators: { registry, compute },
-      liveStream: { candleStream, indicatorStream, indicatorStreamService: service },
+      liveStream: {
+        candleStream,
+        indicatorStream,
+        indicatorStreamService: service,
+        quoteStream,
+        quoteStreamService: quoteService,
+      },
     }),
   );
   const baseUrl = await app.listen({ port: 0, host: '127.0.0.1' });
-  return { app, baseUrl, service, captured };
+  return { app, baseUrl, service, captured, quoteService, capturedQuotes };
 }
 
 /** Open a WebSocket against `/stream` and resolve once open. */
@@ -154,6 +184,23 @@ async function subscribeIndicator(
     id: string;
     period: Period;
     indicatorKey: string;
+  };
+}
+
+/** Send `subscribe-quote` for BTC and resolve with the ack frame. */
+async function subscribeQuote(socket: WebSocket): Promise<{
+  action: 'subscribed-quote';
+  subscriptionId: string;
+  id: string;
+  period: Period;
+}> {
+  const ackPromise = nextFrame(socket);
+  socket.send(JSON.stringify({ action: 'subscribe-quote', id: BTC.id }));
+  return (await ackPromise) as {
+    action: 'subscribed-quote';
+    subscriptionId: string;
+    id: string;
+    period: Period;
   };
 }
 
@@ -299,6 +346,157 @@ describe('/stream indicator state delivery', () => {
       });
 
       expect(captured).toEqual([]);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('/stream subscribe-quote', () => {
+  it('replies with an ack frame carrying a server-generated subscriptionId', async () => {
+    const { app, baseUrl } = await buildApp();
+    try {
+      const socket = await openSocket(baseUrl);
+      const ack = await subscribeQuote(socket);
+
+      expect(ack).toEqual({
+        action: 'subscribed-quote',
+        subscriptionId: expect.any(String),
+        id: BTC.id,
+        period: Period.OneHour,
+      });
+
+      socket.close();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('answers a malformed quote-subscribe message with an error frame', async () => {
+    const { app, baseUrl } = await buildApp();
+    try {
+      const socket = await openSocket(baseUrl);
+      const framePromise = nextFrame(socket);
+      // Missing `id` — the controller rejects this at the boundary.
+      socket.send(JSON.stringify({ action: 'subscribe-quote' }));
+      const frame = await framePromise;
+
+      expect(frame).toEqual({ error: 'subscribe-quote requires id: string' });
+
+      socket.close();
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('/stream quote delivery', () => {
+  it('delivers quote frames to the subscribing socket only, not to other connected sockets', async () => {
+    const { app, baseUrl, quoteService } = await buildApp();
+    try {
+      const a = await openSocket(baseUrl);
+      const b = await openSocket(baseUrl);
+      const ack = await subscribeQuote(a);
+      const aRec = recordFrames(a);
+      const bRec = recordFrames(b);
+
+      // previous bar is candle(HOUR, 20); the closed candle(2*HOUR, 30) → change 10, changePct 0.5.
+      quoteService.handleCandle({
+        id: BTC.id,
+        period: Period.OneHour,
+        candle: candle(2 * HOUR, 30),
+        final: true,
+      });
+      await settle();
+
+      expect(aRec.frames).toEqual([
+        {
+          subscriptionId: ack.subscriptionId,
+          id: BTC.id,
+          period: Period.OneHour,
+          quote: {
+            price: 30,
+            change: expect.closeTo(10, 6),
+            changePct: expect.closeTo(0.5, 6),
+            time: 2 * HOUR,
+          },
+          final: true,
+        },
+      ]);
+      expect(bRec.frames).toEqual([]);
+
+      aRec.stop();
+      bRec.stop();
+      a.close();
+      b.close();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('stops delivering frames for an unsubscribed subscriptionId; the sockets other subscriptions are unaffected', async () => {
+    const { app, baseUrl, quoteService } = await buildApp();
+    try {
+      const socket = await openSocket(baseUrl);
+      const ack1 = await subscribeQuote(socket);
+      const ack2 = await subscribeQuote(socket);
+
+      socket.send(
+        JSON.stringify({ action: 'unsubscribe-quote', subscriptionId: ack1.subscriptionId }),
+      );
+      await settle();
+
+      const rec = recordFrames(socket);
+      quoteService.handleCandle({
+        id: BTC.id,
+        period: Period.OneHour,
+        candle: candle(2 * HOUR, 30),
+        final: true,
+      });
+      await settle();
+
+      // Only sub2 still fires.
+      expect(rec.frames).toEqual([
+        {
+          subscriptionId: ack2.subscriptionId,
+          id: BTC.id,
+          period: Period.OneHour,
+          quote: {
+            price: 30,
+            change: expect.closeTo(10, 6),
+            changePct: expect.closeTo(0.5, 6),
+            time: 2 * HOUR,
+          },
+          final: true,
+        },
+      ]);
+
+      rec.stop();
+      socket.close();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('releases every quote subscription on the socket when the socket closes', async () => {
+    const { app, baseUrl, quoteService, capturedQuotes } = await buildApp();
+    try {
+      const socket = await openSocket(baseUrl);
+      await subscribeQuote(socket);
+      await subscribeQuote(socket);
+      socket.close();
+      await settle();
+
+      // The engine's quote subscription map is now empty: a matching candle reaches no subscribers.
+      capturedQuotes.length = 0;
+      quoteService.handleCandle({
+        id: BTC.id,
+        period: Period.OneHour,
+        candle: candle(2 * HOUR, 30),
+        final: true,
+      });
+
+      expect(capturedQuotes).toEqual([]);
     } finally {
       await app.close();
     }

@@ -6,13 +6,15 @@ import { connectServices, loadSettings } from '@lametrader/engine';
 import { createApp } from './app.js';
 import { CandleStreamHub } from './candle-stream-hub.js';
 import { IndicatorStreamHub } from './indicator-stream-hub.js';
+import { QuoteStreamHub } from './quote-stream-hub.js';
 
 const { mongoUri, apiPort, pollIntervals } = loadSettings();
 
-// Hubs bridge the engine's transport-agnostic `onCandle` / `onIndicatorState`
-// callbacks to the `/stream` WebSocket route (see ADR-0005).
+// Hubs bridge the engine's transport-agnostic `onCandle` / `onIndicatorState` /
+// `onSymbolQuote` callbacks to the `/stream` WebSocket route (see ADR-0005).
 const candleStream = new CandleStreamHub();
 const indicatorStream = new IndicatorStreamHub();
+const quoteStream = new QuoteStreamHub();
 
 const {
   config,
@@ -23,10 +25,12 @@ const {
   indicators,
   indicatorCompute,
   indicatorStream: indicatorStreamService,
+  quoteStream: quoteStreamService,
   close,
 } = await connectServices(mongoUri, {
   onCandle: (event) => candleStream.publish(event),
   onIndicatorState: (event) => indicatorStream.publish(event),
+  onSymbolQuote: (event) => quoteStream.publish(event),
   pollIntervals,
 });
 
@@ -37,7 +41,13 @@ const app = createApp(
     profiles,
     backfill,
     indicators: { registry: indicators, compute: indicatorCompute },
-    liveStream: { candleStream, indicatorStream, indicatorStreamService },
+    liveStream: {
+      candleStream,
+      indicatorStream,
+      indicatorStreamService,
+      quoteStream,
+      quoteStreamService,
+    },
   },
   { logger: true },
 );
