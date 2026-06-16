@@ -1,0 +1,79 @@
+import type { LucideIcon } from 'lucide-react';
+import { CandlestickChart, List, Settings as SettingsIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { NavLink } from 'react-router';
+import { cn } from '../../lib/cn.js';
+
+/**
+ * A single nav entry definition: path, label, and the icon shown next to it
+ * (and shown alone on the icon rail when the sidebar is collapsed).
+ */
+interface NavItem {
+  /** Route path the link points to. */
+  path: string;
+  /** Human-readable label (the accessible name; the link's visible text when expanded). */
+  label: string;
+  /** Icon component (always visible). */
+  icon: LucideIcon;
+}
+
+/**
+ * The three primary destinations of the app. Order is the rendered order.
+ */
+const NAV_ITEMS: NavItem[] = [
+  { path: '/', label: 'Watchlist', icon: List },
+  { path: '/chart', label: 'Chart', icon: CandlestickChart },
+  { path: '/settings', label: 'Settings', icon: SettingsIcon },
+];
+
+/**
+ * Persistent left sidebar with the primary nav.
+ *
+ * Active-route highlighting comes from `react-router`'s `<NavLink>`, which
+ * sets `aria-current="page"` on the matching link.
+ *
+ * Collapse behaviour:
+ * - Below 1024 px the CSS rules force the icon rail regardless of {@link collapsed}.
+ * - At ≥ 1024 px the {@link collapsed} prop controls expansion — `true` keeps
+ *   the icon rail; `false` widens to show labels.
+ *
+ * `data-collapsed` on the `<aside>` mirrors the prop for tests + downstream CSS.
+ */
+export function Sidebar({ collapsed }: { collapsed: boolean }): ReactNode {
+  return (
+    <aside
+      aria-label="Primary"
+      data-collapsed={collapsed ? 'true' : 'false'}
+      className={cn(
+        'flex w-14 shrink-0 flex-col border-r border-border bg-card',
+        collapsed ? 'lg:w-14' : 'lg:w-56',
+      )}
+    >
+      <nav aria-label="Primary navigation" className="flex flex-1 flex-col gap-1 p-2">
+        {NAV_ITEMS.map((item) => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            end={item.path === '/'}
+            aria-label={item.label}
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium',
+                'transition-colors hover:bg-accent hover:text-accent-foreground',
+                isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground',
+              )
+            }
+          >
+            <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span
+              className={cn('hidden', collapsed ? 'lg:hidden' : 'lg:inline')}
+              aria-hidden="true"
+            >
+              {item.label}
+            </span>
+          </NavLink>
+        ))}
+      </nav>
+    </aside>
+  );
+}
