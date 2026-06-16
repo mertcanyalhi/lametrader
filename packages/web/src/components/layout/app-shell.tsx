@@ -1,5 +1,8 @@
 import { Theme } from '@radix-ui/themes';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { type ReactNode, useCallback, useState } from 'react';
+import { Toaster } from 'sonner';
+import { createQueryClient } from '../../lib/query-client.js';
 import {
   getStoredSidebarCollapsed,
   setSidebarCollapsed as persistSidebarCollapsed,
@@ -14,18 +17,27 @@ import { Topbar } from './topbar.js';
  * the top, and a `<main>` content slot for the active route's view.
  *
  * Owns:
+ * - the {@link QueryClientProvider} (TanStack Query), so server-state hooks
+ *   work anywhere inside the shell;
  * - the {@link ThemeProvider}, so the topbar's theme toggle and the Radix
  *   Themes `<Theme appearance>` move together;
  * - the sidebar's collapsed state, hydrated from `localStorage`, so the topbar
- *   trigger and the sidebar render the same thing.
+ *   trigger and the sidebar render the same thing;
+ * - the sonner {@link Toaster} so any descendant can call `toast.*`.
+ *
+ * The {@link QueryClient} is held in state so React's StrictMode double-invoke
+ * does not produce two clients.
  */
 export function AppShell({ children }: { children: ReactNode }): ReactNode {
+  const [queryClient] = useState(createQueryClient);
   return (
-    <ThemeProvider>
-      <RadixThemeBridge>
-        <ShellChrome>{children}</ShellChrome>
-      </RadixThemeBridge>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <RadixThemeBridge>
+          <ShellChrome>{children}</ShellChrome>
+        </RadixThemeBridge>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 
@@ -66,6 +78,7 @@ function ShellChrome({ children }: { children: ReactNode }): ReactNode {
         <Topbar sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />
         <main className="flex-1 overflow-auto p-4">{children}</main>
       </div>
+      <Toaster richColors position="top-right" />
     </div>
   );
 }

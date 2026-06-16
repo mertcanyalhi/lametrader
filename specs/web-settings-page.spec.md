@@ -78,4 +78,13 @@ There is no end-to-end test driving a real browser against the page — we don't
 
 ## Surprises
 
-(Filled in retroactively if anything didn't go as expected.)
+- **RHF v7 silently ignores resolver-returned `errors.root`.**
+  A `setError('root', ...)` call populates `formState.errors.root`, but a resolver that returns `{ values: {}, errors: { root: ... } }` is treated as having no errors — `handleSubmit` calls the submit handler anyway.
+  Fix: the resolver attaches `parseConfig` failures to `errors.periods` (a real field of `Config`); RHF then aborts the submit as expected.
+  The UI reads the message from either `errors.periods` (resolver path) or `errors.root` (the submit handler's `setError` for server-side failures), so the form-level Callout shows the same message in either case.
+  Documented inline in `packages/web/src/lib/parse-config-resolver.ts`.
+- **React 19 + RTL + Vitest** needs `globalThis.IS_REACT_ACT_ENVIRONMENT = true` set before tests run.
+  Without it, `userEvent.click` doesn't flush state updates synchronously and tests see stale form values.
+  Set in `packages/web/src/test-setup.ts` (loaded via the root `vitest.config.ts` setup file).
+- **Radix Themes' `Select` uses an internal `ScrollArea`** which reads `ResizeObserver`.
+  jsdom doesn't ship one — a no-op polyfill in `test-setup.ts` lets the dropdown mount in component tests.

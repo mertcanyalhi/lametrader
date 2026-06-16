@@ -38,6 +38,7 @@ export default defineConfig({
           name: 'unit',
           include: ['packages/**/src/**/*.test.{ts,tsx}'],
           exclude: [...configDefaults.exclude, '**/*.e2e.test.ts', '**/*.live.test.ts'],
+          setupFiles: ['./packages/web/src/test-setup.ts'],
         },
       },
       {
