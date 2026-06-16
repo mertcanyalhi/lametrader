@@ -142,21 +142,26 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
   const { handleSubmit, watch, setValue, setError, reset, formState } = useForm<Config>({
     resolver: parseConfigResolver,
     defaultValues: initial,
+    // Validate on every change so field errors appear live and `isValid` can
+    // gate the Save button rather than waiting for a submit attempt.
+    mode: 'onChange',
   });
 
   const periods = watch('periods');
   const defaultPeriod = watch('defaultPeriod');
-  // The resolver attaches `parseConfig` failures to `errors.periods`; the
-  // submit handler attaches server / network failures to `errors.root`. Both
-  // surface in the same form-level Callout.
-  const formError = formState.errors.periods?.message ?? formState.errors.root?.message;
+  // Field-level validation errors (shown inline on each control).
+  const periodsError = formState.errors.periods?.message;
+  const defaultPeriodError = formState.errors.defaultPeriod?.message;
+  // Server / network failures from the submit handler — shown form-level.
+  const submitError = formState.errors.root?.message;
 
   // When a period is toggled off in the bar that was the current default,
   // clear `defaultPeriod` so the dropdown reflects the new constraint
-  // (`defaultPeriod ∈ periods`).
+  // (`defaultPeriod ∈ periods`). Revalidate so the "select a default" error
+  // surfaces immediately.
   useEffect(() => {
     if (defaultPeriod && !periods.includes(defaultPeriod)) {
-      setValue('defaultPeriod', '' as Period, { shouldDirty: true, shouldValidate: false });
+      setValue('defaultPeriod', '' as Period, { shouldDirty: true, shouldValidate: true });
     }
   }, [defaultPeriod, periods, setValue]);
 
@@ -197,8 +202,10 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
               type="multiple"
               value={periods}
               disabled={update.isPending}
+              aria-invalid={periodsError ? true : undefined}
+              aria-describedby={periodsError ? 'periods-error' : undefined}
               onValueChange={(next) =>
-                setValue('periods', next as Period[], { shouldDirty: true, shouldValidate: false })
+                setValue('periods', next as Period[], { shouldDirty: true, shouldValidate: true })
               }
               className="flex flex-wrap gap-1"
             >
@@ -218,6 +225,11 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
                 </ToggleGroup.Item>
               ))}
             </ToggleGroup.Root>
+            {periodsError ? (
+              <Text id="periods-error" role="alert" color="red" size="1">
+                {periodsError}
+              </Text>
+            ) : null}
           </section>
 
           <section className="flex flex-col gap-2">
@@ -233,7 +245,7 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
               onValueChange={(next) =>
                 setValue('defaultPeriod', next as Period, {
                   shouldDirty: true,
-                  shouldValidate: false,
+                  shouldValidate: true,
                 })
               }
             >
@@ -241,6 +253,8 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
                 id="default-period-trigger"
                 placeholder="Select default period"
                 aria-label="Default period"
+                aria-invalid={defaultPeriodError ? true : undefined}
+                aria-describedby={defaultPeriodError ? 'default-period-error' : undefined}
                 className="w-40"
               />
               <Select.Content>
@@ -251,11 +265,16 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
                 ))}
               </Select.Content>
             </Select.Root>
+            {defaultPeriodError ? (
+              <Text id="default-period-error" role="alert" color="red" size="1">
+                {defaultPeriodError}
+              </Text>
+            ) : null}
           </section>
 
-          {formError ? (
+          {submitError ? (
             <Callout.Root color="red" role="alert">
-              <Callout.Text>{formError}</Callout.Text>
+              <Callout.Text>{submitError}</Callout.Text>
             </Callout.Root>
           ) : null}
 
@@ -264,7 +283,7 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
               type="submit"
               loading={update.isPending}
               aria-busy={update.isPending}
-              disabled={!formState.isDirty || update.isPending}
+              disabled={!formState.isDirty || !formState.isValid || update.isPending}
             >
               Save
             </Button>

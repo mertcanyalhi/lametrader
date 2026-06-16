@@ -45,7 +45,7 @@ Validation reuses `@lametrader/core`'s `parseConfig` directly through a custom r
 - [ ] After a successful save the form re-baselines to the persisted config, so "Save" disables again until the next edit (it does not stay enabled against the originally-loaded values).
 - [ ] Toggling an active period off in the bar (a) un-presses its button, (b) removes it from the `defaultPeriod` dropdown's options, and (c) **clears** `defaultPeriod` when the toggled-off period equalled the current default — mirroring the domain's `defaultPeriod ∈ periods` rule for instant client feedback.
 - [ ] Submitting the form calls `PUT /api/config` with `{ periods, defaultPeriod }` matching the form state; on a 200 response, the success toast surfaces and the TanStack Query cache for `['config']` is updated to the response payload.
-- [ ] A submit that the **client-side resolver** rejects (e.g. empty `periods`, `defaultPeriod` cleared) renders a form-level inline error from the thrown `ConfigError` and does **not** call `PUT`.
+- [ ] An unselected required option surfaces an inline error **on that field** (no periods → "Select at least one period." under the timeframe bar; cleared `defaultPeriod` → "Select a default period." under the select) and **disables Save**, so the invalid state can't be submitted (no `PUT`).
 - [ ] A submit the server rejects with a 400 `{ error: '…' }` renders the server's `error` string inline as the form-level error; the cached config remains the previously-loaded value (the rejected payload is not optimistically applied).
 
 `useConfig` / `useUpdateConfig` (jsdom, fake `fetch`):

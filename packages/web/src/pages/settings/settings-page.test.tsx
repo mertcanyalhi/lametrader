@@ -175,20 +175,19 @@ describe('SettingsPage', () => {
     renderPage();
     const user = userEvent.setup();
 
-    // Wait for the form, then toggle off 1d to make the form dirty.
+    // Toggle off 1d — this clears the default (1d was it), so we must pick a new
+    // valid default before the form is savable.
     const oneDayToggle = await screen.findByRole('button', { name: '1d', pressed: true });
     await user.click(oneDayToggle);
 
-    // Click Save.
-    const saveButton = screen.getByRole('button', { name: /save/i });
-    await waitFor(() => expect(saveButton).not.toBeDisabled());
-
-    // Open the Select and pick 1h as the new default (since 1d is no longer enabled).
+    // Pick 1h as the new default (1d is no longer enabled).
     const defaultPeriodTrigger = screen.getByRole('combobox', { name: /default period/i });
     await user.click(defaultPeriodTrigger);
     const option = await screen.findByRole('option', { name: '1h' });
     await user.click(option);
 
+    const saveButton = screen.getByRole('button', { name: /save/i });
+    await waitFor(() => expect(saveButton).not.toBeDisabled());
     await act(async () => {
       await user.click(saveButton);
     });
@@ -216,7 +215,7 @@ describe('SettingsPage', () => {
     });
   });
 
-  it('renders the form-level inline error when the client-side resolver rejects the submit', async () => {
+  it('shows a field error and disables Save when no periods are selected, preventing the save', async () => {
     mockJsonResponse({
       periods: [Period.OneHour],
       defaultPeriod: Period.OneHour,
@@ -229,18 +228,32 @@ describe('SettingsPage', () => {
     await user.click(oneHourToggle);
 
     const saveButton = screen.getByRole('button', { name: /save/i });
-    await waitFor(() => expect(saveButton).not.toBeDisabled());
-    await act(async () => {
-      await user.click(saveButton);
-    });
-
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent('periods must not be empty');
+      expect(screen.getByText('Select at least one period.')).toBeInTheDocument();
     });
+    expect(saveButton).toBeDisabled();
     // No PUT was issued — only the initial GET.
     expect(
       fetchSpy.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === 'PUT'),
     ).toEqual([]);
+  });
+
+  it('shows a field error and disables Save when the default period is cleared', async () => {
+    mockJsonResponse({
+      periods: [Period.OneHour, Period.OneDay],
+      defaultPeriod: Period.OneDay,
+    });
+    renderPage();
+
+    const user = userEvent.setup();
+    // Toggle off 1d — the current default — which clears the default selection.
+    const oneDayToggle = await screen.findByRole('button', { name: '1d', pressed: true });
+    await user.click(oneDayToggle);
+
+    await waitFor(() => {
+      expect(screen.getByText('Select a default period.')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled();
   });
 
   it('renders the server-supplied error inline when PUT /api/config returns 400, leaving the cache unchanged', async () => {

@@ -1,33 +1,41 @@
 import { type Config, ConfigError, parseConfig } from '@lametrader/core';
-import type { Resolver, ResolverResult } from 'react-hook-form';
+import type { FieldErrors, Resolver, ResolverResult } from 'react-hook-form';
 
 /**
- * react-hook-form resolver backed by `@lametrader/core`'s `parseConfig`.
+ * react-hook-form resolver for the settings form.
  *
- * Lets the form reuse the **same** validator the backend enforces — no zod, no
- * client-side rule duplication — and maps a thrown `ConfigError` onto a
- * form-level error so the UI can surface the same message inline.
+ * Two layers, each mapped to the field it concerns so the form can show errors
+ * inline on the control rather than as one form-level message:
  *
- * Domain rules covered by `parseConfig`:
- * - `periods` must be a non-empty array of supported `Period`s with no duplicates.
- * - `defaultPeriod` must be one of `periods`.
+ * 1. Required-field checks for the two selectors — a missing `periods` or
+ *    `defaultPeriod` is the only invalid state reachable from the UI, and gets
+ *    a friendly per-field message.
+ * 2. The authoritative domain validation — `@lametrader/core`'s `parseConfig`,
+ *    the same validator the backend runs (supported periods, no duplicates,
+ *    `defaultPeriod ∈ periods`). Any residual `ConfigError` is routed to the
+ *    field it names.
+ *
+ * Returning a non-empty `errors` makes `handleSubmit` skip the submit handler,
+ * so an unselected option prevents the save.
  */
 export const parseConfigResolver: Resolver<Config> = (values): ResolverResult<Config> => {
+  const errors: FieldErrors<Config> = {};
+  if (!Array.isArray(values.periods) || values.periods.length === 0) {
+    errors.periods = { type: 'required', message: 'Select at least one period.' };
+  }
+  if (!values.defaultPeriod) {
+    errors.defaultPeriod = { type: 'required', message: 'Select a default period.' };
+  }
+  if (errors.periods || errors.defaultPeriod) {
+    return { values: {}, errors };
+  }
+
   try {
     return { values: parseConfig(values), errors: {} };
   } catch (cause) {
     if (cause instanceof ConfigError) {
-      // RHF v7 only honours errors keyed by real fields of `TFieldValues`
-      // (a resolver-returned `errors.root` is dropped and `handleSubmit`
-      // still calls the submit handler). We attach the `parseConfig`
-      // message to `periods` because every `parseConfig` invariant
-      // (`non-empty`, `no-dupes`, `defaultPeriod ∈ periods`) is rooted in
-      // the periods collection — and the form-level UI surfaces the
-      // message either way.
-      return {
-        values: {},
-        errors: { periods: { type: 'parseConfig', message: cause.message } },
-      };
+      const field = cause.message.startsWith('defaultPeriod') ? 'defaultPeriod' : 'periods';
+      return { values: {}, errors: { [field]: { type: 'parseConfig', message: cause.message } } };
     }
     throw cause;
   }
