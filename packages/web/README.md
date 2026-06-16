@@ -13,6 +13,8 @@ Sort by symbol, type, price, or change.
 Add a symbol by searching for an instrument, edit which timeframes it's tracked on, or remove it — each confirmed with a toast.
 A symbol with no price yet shows a dash.
 
+Backfill historical candles from a symbol's row actions (or right after adding it): pick periods and an optional date range, watch each job's live progress, and retry on failure.
+
 Live price ticking lands in a separate task.
 
 ### `/chart` — Chart
