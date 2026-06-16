@@ -1,4 +1,4 @@
-import type { IndicatorStateListener, Period } from '@lametrader/core';
+import type { IndicatorStateListener, Period, SymbolQuoteListener } from '@lametrader/core';
 import { MongoClient } from 'mongodb';
 import { BackfillService } from './candles/backfill-service.js';
 import { MongoCandleRepository } from './candles/mongo-candle-repository.js';
@@ -14,6 +14,7 @@ import { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 import { ProfileService } from './profiles/profile-service.js';
 import { defaultMarketDataSources } from './symbols/default-sources.js';
 import { MongoWatchlistRepository } from './symbols/mongo-watchlist-repository.js';
+import { QuoteStreamService } from './symbols/quote-stream-service.js';
 import { SymbolService } from './symbols/symbol-service.js';
 
 /**
@@ -25,6 +26,8 @@ export interface ConnectOptions {
   onCandle?: CandleListener;
   /** Where the indicator stream service emits each computed state event (defaults to a no-op). */
   onIndicatorState?: IndicatorStateListener;
+  /** Where the quote stream service emits each derived quote event (defaults to a no-op). */
+  onSymbolQuote?: SymbolQuoteListener;
   /** Per-period poll cadence in ms (required to enable a useful polling loop). */
   pollIntervals: Record<Period, number>;
 }
@@ -45,6 +48,8 @@ export interface ConnectedServices {
   indicatorCompute: IndicatorComputeService;
   /** Live indicator-state streaming (subscription registry + onCandle reaction). */
   indicatorStream: IndicatorStreamService;
+  /** Live quote streaming (subscription registry + onCandle reaction). */
+  quoteStream: QuoteStreamService;
   /** The backfill use-case (historical candles). */
   backfill: BackfillService;
   /** The continuous polling + live-streaming loop. */
@@ -83,18 +88,23 @@ export async function connectServices(
   const indicatorStream = new IndicatorStreamService(indicators, watchlist, indicatorCompute, {
     onState: options.onIndicatorState ?? (() => {}),
   });
+  const quoteStream = new QuoteStreamService(watchlist, config, candleRepo, {
+    onQuote: options.onSymbolQuote ?? (() => {}),
+  });
   const profiles = new ProfileService(new MongoProfileRepository(db), watchlist, indicators);
   const symbols = new SymbolService(sources, watchlist, config, candleRepo, profiles);
   const backfill = new BackfillService(sources, candleRepo, watchlist);
 
-  // Fan the polling loop's per-candle event to both sinks: the user-supplied
-  // `onCandle` (renders to the candle WS hub) and the indicator stream service
-  // (which recomputes for matching subscriptions and emits via its `onState`).
+  // Fan the polling loop's per-candle event to every sink: the user-supplied
+  // `onCandle` (renders to the candle WS hub), the indicator stream service, and
+  // the quote stream service (each reacts for its matching subscriptions and emits
+  // via its own callback).
   const candleListener = options.onCandle ?? (() => {});
   const polling = new PollingService(sources, candleRepo, watchlist, {
     onCandle: (event) => {
       candleListener(event);
       void indicatorStream.handleCandle(event);
+      quoteStream.handleCandle(event);
     },
     intervals: options.pollIntervals,
   });
@@ -105,6 +115,7 @@ export async function connectServices(
     indicators,
     indicatorCompute,
     indicatorStream,
+    quoteStream,
     backfill,
     polling,
     close: async () => {

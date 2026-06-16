@@ -53,5 +53,10 @@ export {
 } from './symbols/in-memory-market-data-source.js';
 export { InMemoryWatchlistRepository } from './symbols/in-memory-watchlist-repository.js';
 export { MongoWatchlistRepository } from './symbols/mongo-watchlist-repository.js';
+export {
+  QuoteStreamService,
+  type QuoteStreamServiceOptions,
+  type QuoteSubscriptionResult,
+} from './symbols/quote-stream-service.js';
 export { SymbolService } from './symbols/symbol-service.js';
 export { YahooMarketDataSource } from './symbols/yahoo-market-data-source.js';

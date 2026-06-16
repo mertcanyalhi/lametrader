@@ -308,15 +308,15 @@ curl 'http://localhost:3000/symbols/crypto:BTCUSDT/indicators/vwma?period=1h&len
 ## Live stream
 
 Once the service is running it continuously polls each watched symbol+period and
-pushes new candles — and any subscribed indicator's recomputed state — to clients
-over one **multiplexed** WebSocket. A single socket can watch many symbols and
-hold many indicator subscriptions in parallel.
+pushes new candles — any subscribed indicator's recomputed state, and any subscribed
+symbol's recomputed quote — to clients over one **multiplexed** WebSocket. A single
+socket can watch many symbols and hold many indicator/quote subscriptions in parallel.
 
-| Method | Path      | Description                                                           |
-| ------ | --------- | --------------------------------------------------------------------- |
-| `WS`   | `/stream` | Subscribe/unsubscribe to candles and indicators; receive live frames. |
+| Method | Path      | Description                                                                  |
+| ------ | --------- | ---------------------------------------------------------------------------- |
+| `WS`   | `/stream` | Subscribe/unsubscribe to candles, indicators, and quotes; receive live frames. |
 
-After connecting, send JSON control messages. The route multiplexes two surfaces:
+After connecting, send JSON control messages. The route multiplexes three surfaces:
 
 ### Candle subscriptions
 
@@ -372,9 +372,45 @@ and a state frame is delivered to the owning socket:
 
 `state` carries only the latest point (one row per frame); `final` mirrors the
 underlying candle's `final` (forming bars stream provisional state, closed bars
-stream confirmed state). Closing the socket releases every subscription on it
-(both candle and indicator), and a malformed control message is answered with an
-`{ "error": "<reason>" }` frame instead of being silently dropped.
+stream confirmed state).
+
+### Quote subscriptions
+
+Keyed by a server-generated `subscriptionId`, scoped to a symbol id; the quote is
+derived on the config's `defaultPeriod` (the live counterpart of `GET /symbols?enrich=true`).
+
+- `{ "action": "subscribe-quote", "id": "crypto:BTCUSDT" }` — register interest.
+  The server validates (symbol watched, watches `defaultPeriod`, has ≥ 2 candles there)
+  and replies with an ack frame:
+
+  ```json
+  { "action": "subscribed-quote", "subscriptionId": "k7Qa…", "id": "crypto:BTCUSDT", "period": "1d" }
+  ```
+
+  Validation failure replies with `{ "error": "<reason>" }` and no subscription is opened.
+
+- `{ "action": "unsubscribe-quote", "subscriptionId": "k7Qa…" }` — stop frames for that subscription.
+
+For each polled candle on the subscribed symbol's `defaultPeriod`, a quote frame is
+delivered to the owning socket:
+
+```json
+{
+  "subscriptionId": "k7Qa…",
+  "id": "crypto:BTCUSDT",
+  "period": "1d",
+  "quote": { "price": 110, "change": 10, "changePct": 0.1, "time": 1704153600000 },
+  "final": true
+}
+```
+
+`change`/`changePct` are measured against the previous close; after a `final: true`
+frame the baseline rotates to the just-closed bar, so subsequent frames measure
+against it (matching the snapshot's "since last close" semantics).
+
+Closing the socket releases every subscription on it (candle, indicator, and quote),
+and a malformed control message is answered with an `{ "error": "<reason>" }` frame
+instead of being silently dropped.
 
 ### Poll cadence
 
