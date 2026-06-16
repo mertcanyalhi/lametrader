@@ -1,6 +1,5 @@
 import { yupResolver } from '@hookform/resolvers/yup';
-import { type Config, Period } from '@lametrader/core';
-import * as ToggleGroup from '@radix-ui/react-toggle-group';
+import type { Config, Period } from '@lametrader/core';
 import {
   Button,
   Callout,
@@ -16,32 +15,18 @@ import { Info } from 'lucide-react';
 import { type ReactNode, useEffect } from 'react';
 import { type SubmitHandler, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { PeriodToggleGroup } from '../../components/period-toggle-group.js';
 import { ApiError } from '../../lib/api-fetch.js';
-import { cn } from '../../lib/cn.js';
 import { configSchema, FIELD_LABELS } from '../../lib/config-schema.js';
 import { useConfig, useUpdateConfig } from '../../lib/hooks/use-config.js';
 import { getLogger } from '../../lib/log.js';
+import { PERIOD_ORDER } from '../../lib/periods.js';
 
 /**
  * Scoped logger for the settings page — form/save lifecycle events.
  * The lower `api-fetch` / `query-client` scopes still log their layer.
  */
 const log = getLogger('settings-page');
-
-/**
- * The order in which periods are rendered in the timeframe bar.
- * Mirrors `Period`'s declared order, smallest first.
- */
-const PERIOD_ORDER: Period[] = [
-  Period.OneMinute,
-  Period.FiveMinutes,
-  Period.FifteenMinutes,
-  Period.ThirtyMinutes,
-  Period.OneHour,
-  Period.FourHours,
-  Period.OneDay,
-  Period.OneWeek,
-];
 
 /**
  * The `/settings` route component.
@@ -198,34 +183,17 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
               hintLabel="About the periods setting"
               hint="The candle timeframes the platform tracks for each symbol (for example 1h, 1d). Toggle a timeframe on to start tracking it."
             />
-            <ToggleGroup.Root
+            <PeriodToggleGroup
               id="periods-bar"
-              type="multiple"
+              options={PERIOD_ORDER}
               value={periods}
               disabled={update.isPending}
-              aria-invalid={periodsError ? true : undefined}
-              aria-describedby={periodsError ? 'periods-error' : undefined}
+              ariaInvalid={periodsError ? true : undefined}
+              ariaDescribedBy={periodsError ? 'periods-error' : undefined}
               onValueChange={(next) =>
-                setValue('periods', next as Period[], { shouldDirty: true, shouldValidate: true })
+                setValue('periods', next, { shouldDirty: true, shouldValidate: true })
               }
-              className="flex flex-wrap gap-1"
-            >
-              {PERIOD_ORDER.map((period) => (
-                <ToggleGroup.Item
-                  key={period}
-                  value={period}
-                  className={cn(
-                    'inline-flex h-8 min-w-12 items-center justify-center rounded-md',
-                    'border border-[var(--gray-a6)] bg-[var(--color-surface)] px-3 text-sm',
-                    'text-[var(--gray-12)] transition-colors',
-                    'hover:bg-[var(--gray-a3)]',
-                    'data-[state=on]:border-[var(--accent-9)] data-[state=on]:bg-[var(--accent-9)] data-[state=on]:text-[var(--accent-contrast)]',
-                  )}
-                >
-                  {period}
-                </ToggleGroup.Item>
-              ))}
-            </ToggleGroup.Root>
+            />
             {periodsError ? (
               <Text id="periods-error" role="alert" color="red" size="1">
                 {periodsError}
