@@ -322,8 +322,8 @@ describe('WatchlistPage', () => {
 
     expect({
       title: within(dialog).getByText('Backfill history').textContent,
-      oneHour: within(dialog).getByRole('button', { name: '1h' }).getAttribute('aria-pressed'),
-      oneDay: within(dialog).getByRole('button', { name: '1d' }).getAttribute('aria-pressed'),
+      oneHour: within(dialog).getByRole('checkbox', { name: '1h' }).getAttribute('aria-checked'),
+      oneDay: within(dialog).getByRole('checkbox', { name: '1d' }).getAttribute('aria-checked'),
     }).toEqual({ title: 'Backfill history', oneHour: 'true', oneDay: 'true' });
   });
 
@@ -365,9 +365,9 @@ describe('WatchlistPage', () => {
     const dialog = await screen.findByRole('dialog');
     expect({
       title: within(dialog).getByText('Backfill history').textContent,
-      oneMinute: within(dialog).getByRole('button', { name: '1m' }).getAttribute('aria-pressed'),
-      oneHour: within(dialog).getByRole('button', { name: '1h' }).getAttribute('aria-pressed'),
-      oneDay: within(dialog).getByRole('button', { name: '1d' }).getAttribute('aria-pressed'),
+      oneMinute: within(dialog).getByRole('checkbox', { name: '1m' }).getAttribute('aria-checked'),
+      oneHour: within(dialog).getByRole('checkbox', { name: '1h' }).getAttribute('aria-checked'),
+      oneDay: within(dialog).getByRole('checkbox', { name: '1d' }).getAttribute('aria-checked'),
     }).toEqual({ title: 'Backfill history', oneMinute: 'true', oneHour: 'true', oneDay: 'true' });
   });
 

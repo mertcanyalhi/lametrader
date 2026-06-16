@@ -165,6 +165,22 @@ describe('BackfillDialog', () => {
     });
   });
 
+  it('disables the Start button while a job is running', async () => {
+    onRequest('POST', '/symbols/crypto:BTCUSDT/backfill', () => runningJob('job-1'), 202);
+    renderDialog([Period.OneHour]);
+    const user = userEvent.setup();
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'Start backfill' }));
+    });
+    const socket = await latestSocket();
+    act(() => socket.emit({ ...runningJob('job-1'), progress: { saved: 1, total: 3 } }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start backfill' })).toBeDisabled(),
+    );
+  });
+
   it('shows the error of a failed job and retries it with a fresh POST', async () => {
     let started = 0;
     onRequest(
@@ -249,7 +265,11 @@ describe('BackfillDialog', () => {
     renderDialog([Period.OneHour]);
     const user = userEvent.setup();
 
-    fireEvent.change(screen.getByLabelText('From date'), { target: { value: '2024-01-01' } });
+    // The range is opt-in: uncheck "Longest available period" to reveal the inputs.
+    await user.click(screen.getByRole('checkbox', { name: 'Longest available period' }));
+    fireEvent.change(await screen.findByLabelText('From date'), {
+      target: { value: '2024-01-01' },
+    });
     fireEvent.change(screen.getByLabelText('To date'), { target: { value: '2024-01-31' } });
     await act(async () => {
       await user.click(screen.getByRole('button', { name: 'Start backfill' }));
