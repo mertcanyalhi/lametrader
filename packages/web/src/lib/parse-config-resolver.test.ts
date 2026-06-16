@@ -19,7 +19,7 @@ describe('parseConfigResolver', () => {
     });
   });
 
-  it('returns a periods field error when no periods are selected', async () => {
+  it('maps an empty-periods ConfigError onto the periods field', async () => {
     const values = { periods: [], defaultPeriod: Period.OneDay };
     const result = await parseConfigResolver(values, undefined, {
       fields: {},
@@ -28,12 +28,12 @@ describe('parseConfigResolver', () => {
     expect(result).toEqual({
       values: {},
       errors: {
-        periods: { type: 'required', message: 'Select at least one period.' },
+        periods: { type: 'parseConfig', message: 'periods must not be empty' },
       },
     });
   });
 
-  it('returns a defaultPeriod field error when no default period is selected', async () => {
+  it('maps an empty-defaultPeriod ConfigError onto the defaultPeriod field', async () => {
     const values = { periods: [Period.OneHour], defaultPeriod: '' as Period };
     const result = await parseConfigResolver(values, undefined, {
       fields: {},
@@ -42,7 +42,7 @@ describe('parseConfigResolver', () => {
     expect(result).toEqual({
       values: {},
       errors: {
-        defaultPeriod: { type: 'required', message: 'Select a default period.' },
+        defaultPeriod: { type: 'parseConfig', message: 'defaultPeriod must not be empty' },
       },
     });
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultConfig, mergeConfig, parseConfig } from './config';
+import { ConfigError, defaultConfig, mergeConfig, parseConfig } from './config';
 import { type Config, Period } from './config.types';
 
 describe('defaultConfig', () => {
@@ -42,7 +42,47 @@ describe('parseConfig', () => {
       'defaultPeriod 4h is not in periods',
     );
   });
+
+  it('throws a defaultPeriod-tagged error when defaultPeriod is empty', () => {
+    const error = parseError({ periods: ['1h'], defaultPeriod: '' });
+    expect({ message: error.message, field: error.field }).toEqual({
+      message: 'defaultPeriod must not be empty',
+      field: 'defaultPeriod',
+    });
+  });
+
+  it('tags an empty-periods error with the periods field', () => {
+    const error = parseError({ periods: [], defaultPeriod: '1d' });
+    expect({ message: error.message, field: error.field }).toEqual({
+      message: 'periods must not be empty',
+      field: 'periods',
+    });
+  });
+
+  it('tags a defaultPeriod-not-in-periods error with the defaultPeriod field', () => {
+    const error = parseError({ periods: ['1h', '1d'], defaultPeriod: '4h' });
+    expect({ message: error.message, field: error.field }).toEqual({
+      message: 'defaultPeriod 4h is not in periods',
+      field: 'defaultPeriod',
+    });
+  });
 });
+
+/**
+ * Run `parseConfig` expecting a {@link ConfigError} and return it (narrowed by
+ * `instanceof`, no cast). Fails loudly if it doesn't throw a `ConfigError`.
+ */
+function parseError(input: unknown): ConfigError {
+  try {
+    parseConfig(input);
+  } catch (error) {
+    if (error instanceof ConfigError) {
+      return error;
+    }
+    throw error;
+  }
+  throw new Error('expected parseConfig to throw a ConfigError');
+}
 
 describe('mergeConfig', () => {
   const current: Config = {

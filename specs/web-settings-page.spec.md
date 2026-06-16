@@ -4,8 +4,8 @@
 - Touches:
   - `web` — the driving adapter only.
     Adds the `/settings` page (a real form bound to `GET`/`PUT /config`), a thin `useConfig` / `useUpdateConfig` query layer over the existing `apiFetch` + `QueryClient`, a `parseConfig`-backed react-hook-form resolver, the `sonner` toast surface, and a `Toaster` mounted in `AppShell`.
-  - `core` — **no changes**.
-    `parseConfig` / `Period` / `ConfigError` already enforce the rules and are reused verbatim.
+  - `core` — `ConfigError` gains an optional `field` (free-form string) and `parseConfig` tags every thrown error with the field it concerns (plus an explicit `defaultPeriod must not be empty`).
+    This lets the resolver route a domain error to the right form control without re-implementing any rule. `parseConfig` / `Period` are otherwise reused verbatim.
   - `api` — **no changes**.
     The existing `GET`/`PUT /config` controller (`packages/api/src/controllers/config.controller.ts`) is the contract.
 
@@ -45,7 +45,7 @@ Validation reuses `@lametrader/core`'s `parseConfig` directly through a custom r
 - [ ] After a successful save the form re-baselines to the persisted config, so "Save" disables again until the next edit (it does not stay enabled against the originally-loaded values).
 - [ ] Toggling an active period off in the bar (a) un-presses its button, (b) removes it from the `defaultPeriod` dropdown's options, and (c) **clears** `defaultPeriod` when the toggled-off period equalled the current default — mirroring the domain's `defaultPeriod ∈ periods` rule for instant client feedback.
 - [ ] Submitting the form calls `PUT /api/config` with `{ periods, defaultPeriod }` matching the form state; on a 200 response, the success toast surfaces and the TanStack Query cache for `['config']` is updated to the response payload.
-- [ ] An unselected required option surfaces an inline error **on that field** (no periods → "Select at least one period." under the timeframe bar; cleared `defaultPeriod` → "Select a default period." under the select) and **disables Save**, so the invalid state can't be submitted (no `PUT`).
+- [ ] An unselected required option surfaces an inline error **on that field** (no periods → "periods must not be empty" under the timeframe bar; cleared `defaultPeriod` → "defaultPeriod must not be empty" under the select) and **disables Save**, so the invalid state can't be submitted (no `PUT`). The message + target field both come from the `ConfigError` `parseConfig` throws (its new `field` tag) — no rule is re-implemented in the resolver.
 - [ ] A submit the server rejects with a 400 `{ error: '…' }` renders the server's `error` string inline as the form-level error; the cached config remains the previously-loaded value (the rejected payload is not optimistically applied).
 
 `useConfig` / `useUpdateConfig` (jsdom, fake `fetch`):
