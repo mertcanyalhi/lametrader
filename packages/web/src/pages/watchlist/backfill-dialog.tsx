@@ -44,6 +44,22 @@ function isActive(status: BackfillJobStatus | undefined): boolean {
 }
 
 /**
+ * Validate the date range when it's enabled (the "Longest available period"
+ * checkbox is off): both ends must be filled and ordered. Returns the message
+ * to show, or `null` when the range is valid (or not in use).
+ */
+function rangeErrorFor(longestAvailable: boolean, fromDate: string, toDate: string): string | null {
+  if (longestAvailable) return null;
+  if (!fromDate || !toDate) {
+    return 'Enter a start and end date, or use the longest available period.';
+  }
+  if (new Date(fromDate).getTime() > new Date(toDate).getTime()) {
+    return 'The start date must be on or before the end date.';
+  }
+  return null;
+}
+
+/**
  * The per-symbol backfill modal: the symbol's watched periods are listed one per
  * row with a checkbox to include them and their live progress shown beside each.
  * Starting issues one job per selected period (`POST /symbols/:id/backfill`) and
@@ -100,6 +116,7 @@ export function BackfillDialog({
   const options = sortPeriods(periods);
   const inProgress =
     start.isPending || options.some((period) => jobIds[period] && isActive(statuses[period]));
+  const rangeError = rangeErrorFor(longestAvailable, fromDate, toDate);
 
   function range(): { from?: number; to?: number } {
     if (longestAvailable) return {};
@@ -127,6 +144,7 @@ export function BackfillDialog({
   }
 
   async function handleStart(): Promise<void> {
+    if (rangeError) return;
     await Promise.all(selected.map(startPeriod));
   }
 
@@ -171,6 +189,11 @@ export function BackfillDialog({
                 />
               </Flex>
             )}
+            {rangeError ? (
+              <Text size="1" color="red" role="alert">
+                {rangeError}
+              </Text>
+            ) : null}
           </section>
 
           <section className="flex flex-col gap-2">
@@ -212,7 +235,7 @@ export function BackfillDialog({
           </Dialog.Close>
           <Button
             onClick={handleStart}
-            disabled={selected.length === 0 || inProgress}
+            disabled={selected.length === 0 || inProgress || rangeError !== null}
             loading={inProgress}
           >
             Start backfill

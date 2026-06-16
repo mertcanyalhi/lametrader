@@ -264,6 +264,24 @@ describe('BackfillDialog', () => {
     }).toEqual({ hasRetry: true, sockets: 0 });
   });
 
+  it('blocks Start with a validation message when the range is enabled but dates are empty', async () => {
+    renderDialog([Period.OneHour]);
+    const user = userEvent.setup();
+
+    // Uncheck "Longest available period" without filling the dates.
+    await user.click(screen.getByRole('checkbox', { name: 'Longest available period' }));
+
+    expect({
+      startDisabled: screen
+        .getByRole('button', { name: 'Start backfill' })
+        .hasAttribute('disabled'),
+      message: screen.getByRole('alert').textContent,
+    }).toEqual({
+      startDisabled: true,
+      message: 'Enter a start and end date, or use the longest available period.',
+    });
+  });
+
   it('passes an explicit from/to range through as epoch-ms in the POST body', async () => {
     onRequest('POST', '/symbols/crypto:BTCUSDT/backfill', () => runningJob('job-1'), 202);
     renderDialog([Period.OneHour]);
