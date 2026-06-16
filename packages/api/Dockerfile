@@ -33,6 +33,11 @@ COPY --from=build /app/packages/core/package.json ./packages/core/package.json
 COPY --from=build /app/packages/core/dist ./packages/core/dist
 COPY --from=build /app/packages/engine/package.json ./packages/engine/package.json
 COPY --from=build /app/packages/engine/dist ./packages/engine/dist
+# engine's `nanoid` (^5) does not hoist to the root `node_modules`: the web
+# workspace's `vite`/`postcss` pull `nanoid@3`, which npm hoists instead, so
+# engine's `nanoid@5` stays nested here. Copy it explicitly — the root
+# `node_modules` alone wouldn't satisfy engine's runtime import.
+COPY --from=build /app/packages/engine/node_modules ./packages/engine/node_modules
 COPY --from=build /app/packages/api/package.json ./packages/api/package.json
 COPY --from=build /app/packages/api/dist ./packages/api/dist
 
