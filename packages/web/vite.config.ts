@@ -9,8 +9,8 @@ import { defineConfig } from 'vite';
  * packages); web type-checking runs separately via this package's `typecheck`.
  *
  * Plugins: React (Fast Refresh + JSX), Tailwind CSS v4 (`@tailwindcss/vite`
- * scans `src/**/*.{ts,tsx}` and emits the utility CSS imported by
- * `src/index.css`).
+ * scans the `src` tree for `.ts` / `.tsx` files and emits the utility CSS
+ * imported by `src/index.css`).
  */
 export default defineConfig({
   plugins: [react(), tailwindcss()],

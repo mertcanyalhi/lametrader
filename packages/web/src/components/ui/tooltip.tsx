@@ -1,10 +1,5 @@
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
-import {
-  type ComponentPropsWithoutRef,
-  type ElementRef,
-  type ReactNode,
-  forwardRef,
-} from 'react';
+import { type ComponentPropsWithoutRef, type ElementRef, forwardRef, type ReactNode } from 'react';
 import { cn } from '../../lib/cn.js';
 
 /**

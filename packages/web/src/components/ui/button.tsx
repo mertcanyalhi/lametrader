@@ -1,5 +1,5 @@
-import { type VariantProps, cva } from 'class-variance-authority';
-import { type ButtonHTMLAttributes, type Ref, forwardRef } from 'react';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { type ButtonHTMLAttributes, forwardRef, type Ref } from 'react';
 import { cn } from '../../lib/cn.js';
 
 /**
@@ -17,8 +17,7 @@ const buttonVariants = cva(
       variant: {
         default: 'bg-primary text-primary-foreground hover:bg-primary/90',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
-        outline:
-          'border border-border bg-background hover:bg-accent hover:text-accent-foreground',
+        outline: 'border border-border bg-background hover:bg-accent hover:text-accent-foreground',
       },
       size: {
         default: 'h-9 px-4 py-2',

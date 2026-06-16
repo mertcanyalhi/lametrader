@@ -7,9 +7,6 @@ import { PagePlaceholder } from './page-placeholder.js';
  */
 export function WatchlistPage(): ReactNode {
   return (
-    <PagePlaceholder
-      title="Watchlist"
-      description="The watched-symbols table will render here."
-    />
+    <PagePlaceholder title="Watchlist" description="The watched-symbols table will render here." />
   );
 }

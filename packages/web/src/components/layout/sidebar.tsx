@@ -1,5 +1,5 @@
-import { CandlestickChart, List, Settings as SettingsIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { CandlestickChart, List, Settings as SettingsIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router';
 import { cn } from '../../lib/cn.js';
@@ -51,9 +51,7 @@ export function Sidebar(): ReactNode {
               cn(
                 'flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium',
                 'transition-colors hover:bg-accent hover:text-accent-foreground',
-                isActive
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground',
+                isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground',
               )
             }
           >

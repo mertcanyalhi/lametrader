@@ -7,15 +7,18 @@
     <title>lametrader</title>
     <script>
       // Apply the persisted theme before React paints so the app never flashes
-      // the wrong palette. The `main.tsx` `applyInitialTheme` re-runs after
+      // the wrong palette. `main.tsx`'s `applyInitialTheme` re-runs after
       // mount but the class is already correct from this inline call.
-      try {
-        var t = localStorage.getItem('theme');
+      (() => {
+        let t = null;
+        try {
+          t = localStorage.getItem('theme');
+        } catch (_) {
+          /* localStorage unavailable — fall through with the default. */
+        }
         if (t === 'light') document.documentElement.classList.remove('dark');
         else document.documentElement.classList.add('dark');
-      } catch (_) {
-        document.documentElement.classList.add('dark');
-      }
+      })();
     </script>
   </head>
   <body>
