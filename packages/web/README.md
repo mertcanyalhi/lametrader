@@ -8,8 +8,12 @@ The shell (sidebar + topbar + theme + Radix Themes), the routing, the TanStack Q
 
 ### `/` — Watchlist
 
-Boilerplate placeholder.
-The real watchlist table lands in a follow-up issue.
+The home page: a dense, sortable table of the symbols you watch, each with its latest price and change.
+Sort by symbol, type, price, or change.
+Add a symbol by searching for an instrument, edit which timeframes it's tracked on, or remove it — each confirmed with a toast.
+A symbol with no price yet shows a dash.
+
+Live price ticking lands in a separate task.
 
 ### `/chart` — Chart
 
@@ -49,7 +53,9 @@ A thrown `ConfigError` becomes a form-level error rendered inline as a Radix The
 - `useConfig()` — `GET /api/config` via TanStack Query under key `['config']`.
 - `useUpdateConfig()` — `PUT /api/config`; on success, writes the response straight into the `['config']` cache so any subscriber re-renders without a follow-up round-trip.
 
-Both go through the package's `apiFetch` wrapper, so logging + `ApiError` mapping happen at the boundary, not at each call site.
+`src/lib/hooks/symbols.ts` exposes the watchlist data layer (read the watched symbols, search instruments, add/edit-periods/remove).
+
+Both modules go through the package's `apiFetch` wrapper, so logging + `ApiError` mapping happen at the boundary, not at each call site.
 
 ## Develop
 
@@ -73,5 +79,5 @@ npm test
   RTL `cleanup()` + `vi.restoreAllMocks()` in `afterEach`.
   Mock at the `fetch` boundary so the real `apiFetch` + `QueryClient` + RHF resolver are exercised.
 - **E2E** — at the HTTP boundary, in `packages/api/tests/e2e/`.
-  The settings page's contract is pinned by `packages/api/tests/e2e/settings-page.e2e.test.ts` (happy path + the 400 critical failure).
+  The settings page's contract is pinned by `packages/api/tests/e2e/settings-page.e2e.test.ts` (happy path + the 400 critical failure); the watchlist page's by `watchlist-page.e2e.test.ts` (the discover → add → enriched-list → edit → remove round-trip + the 404 failure).
   No browser harness — page-level behaviour is covered by the unit tier.

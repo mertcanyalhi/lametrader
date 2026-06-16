@@ -1,47 +1,22 @@
 import { yupResolver } from '@hookform/resolvers/yup';
-import { type Config, Period } from '@lametrader/core';
-import * as ToggleGroup from '@radix-ui/react-toggle-group';
-import {
-  Button,
-  Callout,
-  Card,
-  Heading,
-  IconButton,
-  Popover,
-  Select,
-  Skeleton,
-  Text,
-} from '@radix-ui/themes';
-import { Info } from 'lucide-react';
+import type { Config, Period } from '@lametrader/core';
+import { Button, Callout, Card, Heading, Select, Skeleton, Text } from '@radix-ui/themes';
 import { type ReactNode, useEffect } from 'react';
 import { type SubmitHandler, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { FieldLabel } from '../../components/field-label.js';
+import { PeriodToggleGroup } from '../../components/period-toggle-group.js';
 import { ApiError } from '../../lib/api-fetch.js';
-import { cn } from '../../lib/cn.js';
 import { configSchema, FIELD_LABELS } from '../../lib/config-schema.js';
 import { useConfig, useUpdateConfig } from '../../lib/hooks/use-config.js';
 import { getLogger } from '../../lib/log.js';
+import { PERIOD_ORDER } from '../../lib/periods.js';
 
 /**
  * Scoped logger for the settings page — form/save lifecycle events.
  * The lower `api-fetch` / `query-client` scopes still log their layer.
  */
 const log = getLogger('settings-page');
-
-/**
- * The order in which periods are rendered in the timeframe bar.
- * Mirrors `Period`'s declared order, smallest first.
- */
-const PERIOD_ORDER: Period[] = [
-  Period.OneMinute,
-  Period.FiveMinutes,
-  Period.FifteenMinutes,
-  Period.ThirtyMinutes,
-  Period.OneHour,
-  Period.FourHours,
-  Period.OneDay,
-  Period.OneWeek,
-];
 
 /**
  * The `/settings` route component.
@@ -82,55 +57,6 @@ function SettingsSkeleton(): ReactNode {
         <Skeleton height="2rem" width="12rem" />
       </div>
     </Card>
-  );
-}
-
-/**
- * A field label paired with an info icon that opens a popover explaining what
- * the setting is for. A popover (click/tap) rather than a tooltip (hover) so
- * the explanation is reachable on touch devices, which have no hover. The icon
- * button carries an `aria-label` so it has an accessible name before opening.
- */
-function FieldLabel({
-  htmlFor,
-  label,
-  hint,
-  hintLabel,
-}: {
-  /** Id of the control this labels. */
-  htmlFor: string;
-  /** Visible label text. */
-  label: string;
-  /** The explanation shown in the info popover. */
-  hint: string;
-  /** Accessible name for the info icon button. */
-  hintLabel: string;
-}): ReactNode {
-  return (
-    <div className="flex items-center gap-1.5">
-      <Text as="label" htmlFor={htmlFor} size="2" weight="medium">
-        {label}
-      </Text>
-      <Popover.Root>
-        <Popover.Trigger>
-          <IconButton
-            type="button"
-            variant="ghost"
-            color="gray"
-            size="1"
-            radius="full"
-            aria-label={hintLabel}
-          >
-            <Info className="h-3.5 w-3.5" aria-hidden="true" />
-          </IconButton>
-        </Popover.Trigger>
-        <Popover.Content size="1" maxWidth="280px">
-          <Text as="p" size="2">
-            {hint}
-          </Text>
-        </Popover.Content>
-      </Popover.Root>
-    </div>
   );
 }
 
@@ -198,34 +124,17 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
               hintLabel="About the periods setting"
               hint="The candle timeframes the platform tracks for each symbol (for example 1h, 1d). Toggle a timeframe on to start tracking it."
             />
-            <ToggleGroup.Root
+            <PeriodToggleGroup
               id="periods-bar"
-              type="multiple"
+              options={PERIOD_ORDER}
               value={periods}
               disabled={update.isPending}
-              aria-invalid={periodsError ? true : undefined}
-              aria-describedby={periodsError ? 'periods-error' : undefined}
+              ariaInvalid={periodsError ? true : undefined}
+              ariaDescribedBy={periodsError ? 'periods-error' : undefined}
               onValueChange={(next) =>
-                setValue('periods', next as Period[], { shouldDirty: true, shouldValidate: true })
+                setValue('periods', next, { shouldDirty: true, shouldValidate: true })
               }
-              className="flex flex-wrap gap-1"
-            >
-              {PERIOD_ORDER.map((period) => (
-                <ToggleGroup.Item
-                  key={period}
-                  value={period}
-                  className={cn(
-                    'inline-flex h-8 min-w-12 items-center justify-center rounded-md',
-                    'border border-[var(--gray-a6)] bg-[var(--color-surface)] px-3 text-sm',
-                    'text-[var(--gray-12)] transition-colors',
-                    'hover:bg-[var(--gray-a3)]',
-                    'data-[state=on]:border-[var(--accent-9)] data-[state=on]:bg-[var(--accent-9)] data-[state=on]:text-[var(--accent-contrast)]',
-                  )}
-                >
-                  {period}
-                </ToggleGroup.Item>
-              ))}
-            </ToggleGroup.Root>
+            />
             {periodsError ? (
               <Text id="periods-error" role="alert" color="red" size="1">
                 {periodsError}
