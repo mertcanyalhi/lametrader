@@ -154,14 +154,18 @@ describe('BackfillDialog', () => {
     const postCall = fetchSpy.mock.calls.find(
       (call) => (call[1] as RequestInit | undefined)?.method === 'POST',
     );
+    // The range start shown is the first retrieved candle's timestamp (summary.from).
+    const start = document.querySelector('time');
     expect({
       url: postCall?.[0],
       body: (postCall?.[1] as RequestInit | undefined)?.body,
       toasted: (toast.success as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0],
+      startTimestamp: start?.getAttribute('dateTime'),
     }).toEqual({
       url: '/api/symbols/crypto:BTCUSDT/backfill',
       body: JSON.stringify({ period: '1h' }),
       toasted: 'Backfilled 1h for crypto:BTCUSDT',
+      startTimestamp: new Date(1000).toISOString(),
     });
   });
 

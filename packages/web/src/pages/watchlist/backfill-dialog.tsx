@@ -33,13 +33,9 @@ function percent(progress: BackfillProgress | null): number {
   return Math.round((progress.saved / progress.total) * 100);
 }
 
-/** A backfilled candle `time` (epoch ms) as a short calendar date. */
-function formatDate(ms: number): string {
-  return new Date(ms).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+/** A backfilled candle `time` (epoch ms) as a calendar date and time. */
+function formatTimestamp(ms: number): string {
+  return new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 /** A job is in flight while it has been started but hasn't reached a terminal status. */
@@ -296,7 +292,11 @@ function PeriodStatus({
   );
 }
 
-/** A completed job's saved count plus the backfilled date range. */
+/**
+ * A completed job's saved count plus the backfilled range — the timestamps of
+ * the first and last candles actually retrieved (`summary.from`/`to`), rendered
+ * as machine-readable `<time>` elements.
+ */
 function SuccessSummary({ job }: { job: BackfillJob }): ReactNode {
   const { summary } = job;
   return (
@@ -306,7 +306,11 @@ function SuccessSummary({ job }: { job: BackfillJob }): ReactNode {
       </Text>
       {summary && summary.from !== null && summary.to !== null ? (
         <Text size="1" color="gray">
-          {formatDate(summary.from)} – {formatDate(summary.to)}
+          <time dateTime={new Date(summary.from).toISOString()}>
+            {formatTimestamp(summary.from)}
+          </time>
+          {' – '}
+          <time dateTime={new Date(summary.to).toISOString()}>{formatTimestamp(summary.to)}</time>
         </Text>
       ) : null}
     </Flex>
