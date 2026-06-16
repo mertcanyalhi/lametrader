@@ -65,7 +65,10 @@ Discover, add/remove, and tune watchlist symbols. Canonical ids are
 - **`discover <query> [--type <type>]`** — search sources for matching instruments (JSON).
 - **`add <id> [--periods <csv>]`** — validate the id exists, then add it. Periods
   default to the config's `periods` and must be a subset of them.
-- **`list`** — print the watchlist as JSON.
+- **`list [--enrich]`** — print the watchlist as JSON. With `--enrich`, each item
+  carries a `quote` (`{ price, change, changePct, period, time }`) computed from the
+  symbol's stored candles on the config's `defaultPeriod`, or `null` when none can be
+  computed (the symbol doesn't watch `defaultPeriod`, or has fewer than two candles there).
 - **`remove <id>`** — remove a symbol (also deletes its stored candles).
 - **`set-periods <id> --periods <csv>`** — change a watched symbol's periods.
 
@@ -76,6 +79,7 @@ npm run cli -- symbols discover bitcoin --type crypto
 npm run cli -- symbols add crypto:BTCUSDT
 npm run cli -- symbols add stock:AAPL --periods 1h,1d
 npm run cli -- symbols list
+npm run cli -- symbols list --enrich
 npm run cli -- symbols set-periods crypto:BTCUSDT --periods 1h
 npm run cli -- symbols remove crypto:BTCUSDT
 ```

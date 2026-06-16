@@ -62,6 +62,18 @@ export function runCandleRepositoryContract(
     expect(await repo.latest(ID, PERIOD)).toEqual(candle(3000));
   });
 
+  it('latestN returns the most recent n candles highest-time first, capped at how many exist', async () => {
+    const repo = await make();
+    expect(await repo.latestN(ID, PERIOD, 2)).toEqual([]);
+
+    await repo.save(ID, PERIOD, [candle(1000), candle(3000), candle(2000)]);
+
+    // Asks for 2 of 3 — newest first.
+    expect(await repo.latestN(ID, PERIOD, 2)).toEqual([candle(3000), candle(2000)]);
+    // Asks for more than exist — returns all it has, newest first.
+    expect(await repo.latestN(ID, PERIOD, 5)).toEqual([candle(3000), candle(2000), candle(1000)]);
+  });
+
   it('deleteSymbol removes the symbol candles (all periods), leaving others intact', async () => {
     const repo = await make();
     await repo.save(ID, Period.OneHour, [candle(1000)]);

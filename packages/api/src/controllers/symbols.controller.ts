@@ -5,7 +5,9 @@ import { ErrorSchema } from '../schemas/common.schema.js';
 import {
   AddSymbolSchema,
   DiscoverQuerySchema,
+  EnrichedSymbolSchema,
   InstrumentSchema,
+  ListSymbolsQuerySchema,
   PatchSymbolSchema,
   SymbolIdParamSchema,
   WatchedSymbolSchema,
@@ -43,10 +45,12 @@ export function symbolsController(service: SymbolService) {
         schema: {
           tags: ['symbols'],
           summary: 'List watched symbols',
-          response: { 200: Type.Array(WatchedSymbolSchema) },
+          description: 'With ?enrich=true, each item carries a computed quote.',
+          querystring: ListSymbolsQuerySchema,
+          response: { 200: Type.Array(Type.Union([WatchedSymbolSchema, EnrichedSymbolSchema])) },
         },
       },
-      async () => service.list(),
+      async (request) => (request.query.enrich ? service.listWithQuotes() : service.list()),
     );
 
     app.post(

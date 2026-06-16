@@ -128,6 +128,12 @@ export interface CandleRepository {
    */
   latest(symbolId: string, period: Period): Promise<Candle | null>;
   /**
+   * The most recent `n` stored candles for the symbol+period, ordered
+   * highest-`time` first (newest at index 0), capped at however many exist.
+   * Empty when none are stored.
+   */
+  latestN(symbolId: string, period: Period, n: number): Promise<Candle[]>;
+  /**
    * Delete every stored candle for the symbol, across all periods. Idempotent
    * (no-op when none exist). Used when a symbol is removed from the watchlist.
    */

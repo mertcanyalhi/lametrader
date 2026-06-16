@@ -8,7 +8,7 @@ import type { SymbolService } from '@lametrader/engine';
  *
  * - `discover <query> [--type <t>]` → discovered symbols as JSON.
  * - `add <id> [--periods 1h,1d]` → add (validated), echo the watched symbol.
- * - `list` → the watchlist as JSON.
+ * - `list [--enrich]` → the watchlist as JSON; with `--enrich`, each item carries a quote.
  * - `remove <id>` → remove it.
  * - `set-periods <id> --periods 1h,1d` → update periods, echo the symbol.
  *
@@ -38,8 +38,14 @@ export async function runSymbols(argv: string[], service: SymbolService): Promis
       if (!id) throw new Error('add requires an id');
       return json(await service.add(id, values.periods?.split(',')));
     }
-    case 'list':
-      return json(await service.list());
+    case 'list': {
+      const { values } = parseArgs({
+        args: rest,
+        allowPositionals: true,
+        options: { enrich: { type: 'boolean' } },
+      });
+      return json(await (values.enrich ? service.listWithQuotes() : service.list()));
+    }
     case 'remove': {
       const { positionals } = parseArgs({ args: rest, allowPositionals: true });
       const id = positionals[0];

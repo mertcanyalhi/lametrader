@@ -321,3 +321,83 @@ describe('SymbolService watchlist management', () => {
     await expect(service.setPeriods('crypto:BTCUSDT', ['1h'])).rejects.toThrow(SymbolNotFoundError);
   });
 });
+
+/** A crypto candle at `time` closing at `close` (other OHLC fields tracked to it). */
+const cryptoBar = (time: number, close: number) => ({
+  type: SymbolType.Crypto,
+  time,
+  open: close,
+  high: close,
+  low: close,
+  close,
+  volume: 10,
+  quoteVolume: 15,
+  trades: 3,
+});
+
+describe('SymbolService.listWithQuotes', () => {
+  it('attaches a quote per symbol from the latest two defaultPeriod candles', async () => {
+    const watchlist = new FakeWatchlist();
+    await watchlist.add({ ...BTC, periods: [Period.OneHour, Period.OneDay] });
+    const candles = new InMemoryCandleRepository();
+    await candles.save('crypto:BTCUSDT', Period.OneDay, [
+      cryptoBar(1000, 100),
+      cryptoBar(2000, 110),
+    ]);
+    const config = configService({
+      periods: [Period.OneHour, Period.OneDay],
+      defaultPeriod: Period.OneDay,
+    });
+    const service = new SymbolService([], watchlist, config, candles);
+
+    expect(await service.listWithQuotes()).toEqual([
+      {
+        ...BTC,
+        periods: [Period.OneHour, Period.OneDay],
+        quote: {
+          price: 110,
+          change: expect.closeTo(10, 5),
+          changePct: expect.closeTo(0.1, 5),
+          period: Period.OneDay,
+          time: 2000,
+        },
+      },
+    ]);
+  });
+
+  it('yields a null quote for a symbol that does not watch the defaultPeriod', async () => {
+    const watchlist = new FakeWatchlist();
+    await watchlist.add({ ...BTC, periods: [Period.OneHour] });
+    const candles = new InMemoryCandleRepository();
+    // Data exists at 1d, but the symbol does not watch 1d — strictly defaultPeriod, else null.
+    await candles.save('crypto:BTCUSDT', Period.OneDay, [
+      cryptoBar(1000, 100),
+      cryptoBar(2000, 110),
+    ]);
+    const config = configService({
+      periods: [Period.OneHour, Period.OneDay],
+      defaultPeriod: Period.OneDay,
+    });
+    const service = new SymbolService([], watchlist, config, candles);
+
+    expect(await service.listWithQuotes()).toEqual([
+      { ...BTC, periods: [Period.OneHour], quote: null },
+    ]);
+  });
+
+  it('yields a null quote when fewer than two defaultPeriod candles are stored', async () => {
+    const watchlist = new FakeWatchlist();
+    await watchlist.add({ ...BTC, periods: [Period.OneHour, Period.OneDay] });
+    const candles = new InMemoryCandleRepository();
+    await candles.save('crypto:BTCUSDT', Period.OneDay, [cryptoBar(2000, 110)]);
+    const config = configService({
+      periods: [Period.OneHour, Period.OneDay],
+      defaultPeriod: Period.OneDay,
+    });
+    const service = new SymbolService([], watchlist, config, candles);
+
+    expect(await service.listWithQuotes()).toEqual([
+      { ...BTC, periods: [Period.OneHour, Period.OneDay], quote: null },
+    ]);
+  });
+});

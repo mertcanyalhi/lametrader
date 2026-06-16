@@ -95,7 +95,7 @@ results (so a discovery hit may omit it; a watched symbol always has it).
 | Method   | Path                  | Body                    | Description                                         |
 | -------- | --------------------- | ----------------------- | --------------------------------------------------- |
 | `GET`    | `/instruments?q=&type=` | —                     | Discover instruments (optionally filtered by type). |
-| `GET`    | `/symbols`            | —                       | List the watchlist.                                 |
+| `GET`    | `/symbols?enrich=`    | —                       | List the watchlist; `?enrich=true` attaches a `quote` per symbol. |
 | `POST`   | `/symbols`            | `{ id, periods? }`      | Add (validates existence). **201** / 400 / 404 / 409. |
 | `PATCH`  | `/symbols/{id}`       | `{ periods }`           | Change a symbol's periods. 200 / 400 / 404.         |
 | `DELETE` | `/symbols/{id}`       | —                       | Remove a symbol **and its stored candles**. **204**. |
@@ -105,6 +105,13 @@ Errors use the uniform `{ "error": "<reason>" }` body — **400** for invalid in
 re-adding an already-watched symbol (re-adding never changes its periods; use
 `PATCH`).
 
+With `?enrich=true`, each item carries a `quote` computed server-side from the
+symbol's stored candles on the config's `defaultPeriod` (strictly — no fallback):
+`{ price, change, changePct, period, time }`, where `change` is period-over-period
+(`latestClose − previousClose`) and `changePct` is `change / previousClose`.
+`quote` is **`null`** when the symbol does not watch `defaultPeriod` or has fewer
+than two candles stored there. Absent or `?enrich=false` returns the plain list.
+
 ### Examples
 
 ```sh
@@ -112,6 +119,7 @@ curl 'http://localhost:3000/instruments?q=bitcoin&type=crypto'
 curl -X POST http://localhost:3000/symbols \
   -H 'content-type: application/json' -d '{ "id": "crypto:BTCUSDT" }'
 curl http://localhost:3000/symbols
+curl 'http://localhost:3000/symbols?enrich=true'
 curl -X PATCH http://localhost:3000/symbols/crypto:BTCUSDT \
   -H 'content-type: application/json' -d '{ "periods": ["1h"] }'
 curl -X DELETE http://localhost:3000/symbols/crypto:BTCUSDT

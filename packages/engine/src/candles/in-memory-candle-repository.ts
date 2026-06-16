@@ -38,6 +38,10 @@ export class InMemoryCandleRepository implements CandleRepository {
     return sorted.at(-1) ?? null;
   }
 
+  async latestN(symbolId: string, period: Period, n: number): Promise<Candle[]> {
+    return this.sorted(symbolId, period).slice(-n).reverse();
+  }
+
   async deleteSymbol(symbolId: string): Promise<void> {
     const prefix = `${symbolId}|`;
     for (const key of this.series.keys()) {
