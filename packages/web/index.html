@@ -9,12 +9,17 @@
       // Apply the persisted theme before React paints so the app never flashes
       // the wrong palette. `main.tsx`'s `applyInitialTheme` re-runs after
       // mount but the class is already correct from this inline call.
+      //
+      // This script runs BEFORE the JS bundle loads, so the Pino logger
+      // (`lib/log.ts`) isn't available yet. `console.warn` is the only tool
+      // here — an intentional, documented exception to the "no ad-hoc
+      // `console.*`" rule in `packages/web/CLAUDE.md`.
       (() => {
         let t = null;
         try {
           t = localStorage.getItem('theme');
-        } catch (_) {
-          /* localStorage unavailable — fall through with the default. */
+        } catch (cause) {
+          console.warn('[web/theme-bootstrap] localStorage unavailable; defaulting to dark', cause);
         }
         if (t === 'light') document.documentElement.classList.remove('dark');
         else document.documentElement.classList.add('dark');

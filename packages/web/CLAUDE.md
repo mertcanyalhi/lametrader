@@ -97,6 +97,38 @@ If a Tailwind class string repeats often enough to be worth a name, extract it a
   No client-side validation duplicates: the domain validator is the single source of truth.
 - For complex forms, use `react-hook-form` with a custom resolver that wraps the core parser.
 
+### Logging
+
+The web package uses [Pino](https://getpino.io) — same logger family as the backend (Fastify's built-in), per the root `CLAUDE.md` rule "log through a common log library."
+
+- **Never** call `console.log` / `console.warn` / `console.error` directly in feature code.
+  Use `getLogger(scope)` from `lib/log.ts`, which returns a Pino child logger with `{ scope }` baked into every entry.
+- One scope per module / subsystem: `'api-fetch'`, `'query-client'`, `'main'`, …
+  Construct the logger at module top (`const log = getLogger('foo')`), not inside each function.
+- Pino's signature is `log.<level>(context, message)` — context object first, message string second.
+  Use the standard `err` key for caught errors so Pino's serializer formats them: `log.warn({ err: cause, status }, 'request failed')`.
+- Log levels:
+  - `error` — fatal / about-to-throw conditions.
+  - `warn` — non-fatal anomalies (swallowed catch-blocks falling through to a fallback, query / mutation failures).
+  - `info`, `debug`, `trace` — only when there is a clear consumer for them.
+- Runtime override: `localStorage.LOG_LEVEL = 'debug'` (then reload) crank verbosity without rebuilding.
+
+#### Documented exception: pre-bundle inline scripts
+
+The theme-bootstrap inline `<script>` in `index.html` runs **before** the JS bundle loads, so Pino isn't available.
+A direct `console.warn('[web/<scope>] ...')` is the only option there.
+Document this inline with a comment explaining why and reference this rule.
+Do **not** generalize the exception — every other surface has Pino available.
+
+### Error handling
+
+- Never swallow caught errors silently.
+  Either:
+  - Re-throw (or convert into a typed error like `ApiError`), OR
+  - Log the cause via the scope's Pino logger before falling through to a fallback value.
+- For non-2xx HTTP responses, throw `ApiError` (which `apiFetch` already does and logs).
+  Callers either let it bubble (React Query surfaces it) or catch it for UI feedback — but they don't re-log; the lower layer already did.
+
 ### Tests
 
 - Component tests sit beside the code as `*.test.tsx` and start with `// @vitest-environment jsdom`.

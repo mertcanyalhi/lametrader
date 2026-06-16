@@ -8,12 +8,14 @@ import { createRoot } from 'react-dom/client';
 import '@radix-ui/themes/styles.css';
 import { App } from './App';
 import './index.css';
+import { getLogger } from './lib/log';
 import { applyInitialTheme } from './lib/theme';
 
 applyInitialTheme();
 
 const container = document.getElementById('root');
 if (!container) {
+  getLogger('main').error({ phase: 'mount' }, 'root element #root not found');
   throw new Error('root element #root not found');
 }
 
