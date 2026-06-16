@@ -4,11 +4,10 @@ import {
   Code,
   Dialog,
   Flex,
-  RadioGroup,
+  RadioCards,
   ScrollArea,
   Select,
   Spinner,
-  Table,
   Text,
   TextField,
 } from '@radix-ui/themes';
@@ -199,30 +198,25 @@ function SearchResults({
       </Text>
     );
   }
+  // RadioCards make the whole row the radio, so a click anywhere on a result
+  // selects it (and it stays keyboard-navigable as a radio group).
   return (
     <ScrollArea type="auto" scrollbars="vertical" style={{ maxHeight: RESULTS_MAX_HEIGHT }}>
-      <RadioGroup.Root value={selectedId} onValueChange={onSelect}>
-        <Table.Root size="1" variant="surface">
-          <Table.Body>
-            {instruments.map((instrument) => (
-              <Table.Row key={instrument.id}>
-                <Table.Cell width="1">
-                  <RadioGroup.Item value={instrument.id} aria-label={instrument.id} />
-                </Table.Cell>
-                <Table.Cell>
-                  <Code>{instrument.id}</Code>{' '}
-                  <Text color="gray" size="2">
-                    {instrument.description}
-                  </Text>
-                </Table.Cell>
-                <Table.Cell>
-                  <SymbolTypeBadge type={instrument.type} />
-                </Table.Cell>
-              </Table.Row>
-            ))}
-          </Table.Body>
-        </Table.Root>
-      </RadioGroup.Root>
+      <RadioCards.Root value={selectedId} onValueChange={onSelect} columns="1" gap="2" size="1">
+        {instruments.map((instrument) => (
+          <RadioCards.Item key={instrument.id} value={instrument.id}>
+            <Flex justify="between" align="center" width="100%" gap="3">
+              <Flex direction="column">
+                <Code>{instrument.id}</Code>
+                <Text color="gray" size="2">
+                  {instrument.description}
+                </Text>
+              </Flex>
+              <SymbolTypeBadge type={instrument.type} />
+            </Flex>
+          </RadioCards.Item>
+        ))}
+      </RadioCards.Root>
     </ScrollArea>
   );
 }
