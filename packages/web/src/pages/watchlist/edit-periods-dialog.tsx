@@ -1,5 +1,5 @@
 import type { Period } from '@lametrader/core';
-import { Badge, Button, Flex, Popover, Text } from '@radix-ui/themes';
+import { Button, Code, Dialog, Flex, Text } from '@radix-ui/themes';
 import { type ReactNode, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { PeriodToggleGroup } from '../../components/period-toggle-group.js';
@@ -9,16 +9,16 @@ import { getLogger } from '../../lib/log.js';
 import { sortPeriods } from '../../lib/periods.js';
 
 /** Scoped logger for the edit-periods flow. */
-const log = getLogger('edit-periods-popover');
+const log = getLogger('edit-periods-dialog');
 
 /**
- * The watched-period editor for one row: a button showing the current period
- * chips that opens a popover with a timeframe toggle bar over the platform's
- * available periods. Saving issues `PATCH /symbols/:id` with the selection
- * (sorted into timeframe order) and surfaces a success/error toast.
+ * The watched-period editor for one row: a modal dialog (opened from the row's
+ * Edit action) with a timeframe toggle bar over the platform's available
+ * periods. Saving issues `PATCH /symbols/:id` with the selection (sorted into
+ * timeframe order) and surfaces a success/error toast.
  *
- * The popover is controlled so the row's actions menu can open it too. Opening
- * re-seeds the selection from the symbol's current periods.
+ * Controlled by the row so its actions menu drives it. Opening re-seeds the
+ * selection from the symbol's current periods.
  *
  * @param id - the symbol whose periods are edited.
  * @param periods - the symbol's current watched periods.
@@ -26,7 +26,7 @@ const log = getLogger('edit-periods-popover');
  * @param open - controlled open state.
  * @param onOpenChange - controlled open-state setter.
  */
-export function EditPeriodsPopover({
+export function EditPeriodsDialog({
   id,
   periods,
   availablePeriods,
@@ -42,7 +42,7 @@ export function EditPeriodsPopover({
   const update = useUpdatePeriods();
   const [selected, setSelected] = useState<Period[]>(periods);
 
-  // Re-seed the selection from the symbol's periods each time the popover opens
+  // Re-seed the selection from the symbol's periods each time the dialog opens
   // so a cancelled edit doesn't leak into the next one.
   useEffect(() => {
     if (open) setSelected(periods);
@@ -63,48 +63,37 @@ export function EditPeriodsPopover({
   }
 
   return (
-    <Popover.Root open={open} onOpenChange={onOpenChange}>
-      <Popover.Trigger>
-        <button
-          type="button"
-          aria-label={`Edit periods for ${id}`}
-          className="inline-flex flex-wrap gap-1 rounded-md p-1 hover:bg-[var(--gray-a3)]"
-        >
-          {periods.length === 0 ? (
-            <Text color="gray" size="1">
-              —
-            </Text>
-          ) : (
-            sortPeriods(periods).map((period) => (
-              <Badge key={period} variant="soft" radius="full">
-                {period}
-              </Badge>
-            ))
-          )}
-        </button>
-      </Popover.Trigger>
-      <Popover.Content size="2" maxWidth="320px">
-        <Flex direction="column" gap="3">
-          <Text size="2" weight="medium">
-            Watched periods
-          </Text>
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Content maxWidth="420px">
+        <Dialog.Title>Edit watched periods</Dialog.Title>
+        <Dialog.Description size="2" color="gray">
+          Choose the timeframes tracked for <Code>{id}</Code>.
+        </Dialog.Description>
+
+        <div className="mt-4">
           <PeriodToggleGroup
             options={options}
             value={selected}
             disabled={update.isPending}
             onValueChange={setSelected}
           />
-          <Flex justify="end" gap="2">
-            <Button
-              onClick={handleSave}
-              disabled={selected.length === 0 || update.isPending}
-              loading={update.isPending}
-            >
-              Save periods
+        </div>
+
+        <Flex gap="3" mt="4" justify="end">
+          <Dialog.Close>
+            <Button variant="soft" color="gray">
+              Cancel
             </Button>
-          </Flex>
+          </Dialog.Close>
+          <Button
+            onClick={handleSave}
+            disabled={selected.length === 0 || update.isPending}
+            loading={update.isPending}
+          >
+            Save periods
+          </Button>
         </Flex>
-      </Popover.Content>
-    </Popover.Root>
+      </Dialog.Content>
+    </Dialog.Root>
   );
 }

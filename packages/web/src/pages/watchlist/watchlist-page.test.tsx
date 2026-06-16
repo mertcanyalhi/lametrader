@@ -304,7 +304,7 @@ describe('WatchlistPage', () => {
     });
   });
 
-  it('edits a symbol’s periods via the popover, sending the sorted selection', async () => {
+  it('edits a symbol’s periods via the edit dialog, sending the sorted selection', async () => {
     let watchlist: EnrichedSymbol[] = [BTC];
     onRequest('GET', '/symbols?enrich=true', () => watchlist);
     onRequest('GET', '/config', () => CONFIG);
@@ -321,10 +321,12 @@ describe('WatchlistPage', () => {
     const user = userEvent.setup();
 
     await screen.findByText('crypto:BTCUSDT');
-    await user.click(screen.getByRole('button', { name: 'Edit periods for crypto:BTCUSDT' }));
-    await user.click(await screen.findByRole('button', { name: '1m', pressed: false }));
+    await user.click(screen.getByRole('button', { name: 'Open actions for crypto:BTCUSDT' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Edit periods' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: '1m', pressed: false }));
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: 'Save periods' }));
+      await user.click(within(dialog).getByRole('button', { name: 'Save periods' }));
     });
 
     await waitFor(() => {

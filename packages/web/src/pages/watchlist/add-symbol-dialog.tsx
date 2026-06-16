@@ -18,7 +18,7 @@ import { ApiError } from '../../lib/api-fetch.js';
 import { useAddSymbol, useSearchInstruments } from '../../lib/hooks/symbols.js';
 import { getLogger } from '../../lib/log.js';
 import { useDebouncedValue } from '../../lib/use-debounced-value.js';
-import { SymbolTypeBadge } from './symbol-type-badge.js';
+import { SYMBOL_TYPE_COLOR, SymbolTypeBadge } from './symbol-type-badge.js';
 
 /** Scoped logger for the add-symbol flow. */
 const log = getLogger('add-symbol-dialog');
@@ -207,7 +207,7 @@ function SearchResults({
           <RadioCards.Item key={instrument.id} value={instrument.id}>
             <Flex justify="between" align="center" width="100%" gap="3">
               <Flex direction="column">
-                <Code>{instrument.id}</Code>
+                <Code color={SYMBOL_TYPE_COLOR[instrument.type]}>{instrument.id}</Code>
                 <Text color="gray" size="2">
                   {instrument.description}
                 </Text>

@@ -1,19 +1,20 @@
 import type { EnrichedSymbol, Period } from '@lametrader/core';
-import { Code, DropdownMenu, IconButton, Table, Text } from '@radix-ui/themes';
+import { Badge, Code, DropdownMenu, Flex, IconButton, Table, Text } from '@radix-ui/themes';
 import { MoreHorizontal } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
-import { EditPeriodsPopover } from './edit-periods-popover.js';
+import { sortPeriods } from '../../lib/periods.js';
+import { EditPeriodsDialog } from './edit-periods-dialog.js';
 import { PriceCells } from './price-cell.js';
 import { RemoveSymbolDialog } from './remove-symbol-dialog.js';
-import { SymbolTypeBadge } from './symbol-type-badge.js';
+import { SYMBOL_TYPE_COLOR, SymbolTypeBadge } from './symbol-type-badge.js';
 
 /**
- * One watchlist table row: the symbol identity, asset type, the snapshot quote
- * cells, the watched-period chips (which open the edit popover), and a per-row
+ * One watchlist table row: the symbol identity (colour-coded by asset class),
+ * asset type, the snapshot quote cells, the watched-period chips, and a per-row
  * actions menu (Edit periods, Remove).
  *
- * The row owns the open state for its edit popover and remove dialog so the
- * actions menu and the period chips can both drive them.
+ * The row owns the open state for its edit and remove dialogs, both opened from
+ * the actions menu.
  *
  * @param symbol - the enriched symbol this row renders.
  * @param availablePeriods - the platform's enabled periods (edit options).
@@ -32,7 +33,7 @@ export function WatchlistRow({
     <Table.Row align="center">
       <Table.RowHeaderCell>
         <div className="flex flex-col">
-          <Code variant="ghost" className="font-mono">
+          <Code variant="ghost" color={SYMBOL_TYPE_COLOR[symbol.type]} className="font-mono">
             {symbol.id}
           </Code>
           <Text size="1" color="gray">
@@ -45,13 +46,13 @@ export function WatchlistRow({
       </Table.Cell>
       <PriceCells quote={symbol.quote} />
       <Table.Cell>
-        <EditPeriodsPopover
-          id={symbol.id}
-          periods={symbol.periods}
-          availablePeriods={availablePeriods}
-          open={editOpen}
-          onOpenChange={setEditOpen}
-        />
+        <Flex gap="1" wrap="wrap">
+          {sortPeriods(symbol.periods).map((period) => (
+            <Badge key={period} variant="soft" radius="full">
+              {period}
+            </Badge>
+          ))}
+        </Flex>
       </Table.Cell>
       <Table.Cell>
         <DropdownMenu.Root>
@@ -68,6 +69,13 @@ export function WatchlistRow({
           </DropdownMenu.Content>
         </DropdownMenu.Root>
       </Table.Cell>
+      <EditPeriodsDialog
+        id={symbol.id}
+        periods={symbol.periods}
+        availablePeriods={availablePeriods}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
       <RemoveSymbolDialog id={symbol.id} open={removeOpen} onOpenChange={setRemoveOpen} />
     </Table.Row>
   );
