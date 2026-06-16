@@ -1,8 +1,7 @@
 # Multi-stage build for @lametrader/web.
 #
-# Stage 1 installs the workspace, compiles the internal libraries the web
-# bundle imports (currently `@lametrader/core`, for `parseConfig` / `Period`),
-# then runs `vite build`. The core build must come first: Vite and the web's
+# Stage 1 installs the workspace, builds `@lametrader/core`, then runs
+# `vite build`. The core build must come first: Vite and the web's
 # `tsc --noEmit` resolve `@lametrader/core` to its built `dist/` (the web
 # package is bundler-owned, not part of the root project-refs graph), so the
 # dependency has to exist before the web build runs.
