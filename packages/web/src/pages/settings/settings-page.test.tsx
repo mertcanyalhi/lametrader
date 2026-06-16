@@ -273,4 +273,74 @@ describe('SettingsPage', () => {
       defaultPeriod: Period.OneDay,
     });
   });
+
+  it('marks Save busy and disables the form controls while the save is in flight', async () => {
+    mockJsonResponse({
+      periods: [Period.OneHour, Period.OneDay],
+      defaultPeriod: Period.OneDay,
+    });
+    // Hold the PUT pending so the in-flight state is observable.
+    let resolvePut!: (response: Response) => void;
+    fetchSpy.mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        resolvePut = resolve;
+      }),
+    );
+
+    renderPage();
+    const user = userEvent.setup();
+
+    const oneHourToggle = await screen.findByRole('button', { name: '1h', pressed: true });
+    await user.click(oneHourToggle);
+
+    const saveButton = screen.getByRole('button', { name: /save/i });
+    await waitFor(() => expect(saveButton).not.toBeDisabled());
+    await user.click(saveButton);
+
+    await waitFor(() => expect(saveButton).toHaveAttribute('aria-busy', 'true'));
+    expect({
+      saveBusy: saveButton.getAttribute('aria-busy'),
+      saveDisabled: saveButton.hasAttribute('disabled'),
+      periodDisabled: screen.getByRole('button', { name: '1d' }).hasAttribute('disabled'),
+      selectDisabled: screen
+        .getByRole('combobox', { name: /default period/i })
+        .hasAttribute('disabled'),
+    }).toEqual({
+      saveBusy: 'true',
+      saveDisabled: true,
+      periodDisabled: true,
+      selectDisabled: true,
+    });
+
+    // Resolve the PUT so the test doesn't leak a pending request.
+    await act(async () => {
+      resolvePut(
+        new Response(JSON.stringify({ periods: [Period.OneDay], defaultPeriod: Period.OneDay }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    });
+  });
+
+  it('renders an info trigger with an explanation for each settings block', async () => {
+    mockJsonResponse({
+      periods: [Period.OneHour, Period.OneDay],
+      defaultPeriod: Period.OneDay,
+    });
+    renderPage();
+
+    await screen.findByRole('button', { name: '1h' });
+    expect({
+      periods: screen
+        .getByRole('button', { name: 'About the periods setting' })
+        .getAttribute('aria-label'),
+      defaultPeriod: screen
+        .getByRole('button', { name: 'About the default period setting' })
+        .getAttribute('aria-label'),
+    }).toEqual({
+      periods: 'About the periods setting',
+      defaultPeriod: 'About the default period setting',
+    });
+  });
 });

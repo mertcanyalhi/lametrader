@@ -1,6 +1,17 @@
 import { type Config, Period } from '@lametrader/core';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
-import { Button, Callout, Card, Heading, Select, Skeleton, Text } from '@radix-ui/themes';
+import {
+  Button,
+  Callout,
+  Card,
+  Heading,
+  IconButton,
+  Select,
+  Skeleton,
+  Text,
+  Tooltip,
+} from '@radix-ui/themes';
+import { Info } from 'lucide-react';
 import { type ReactNode, useEffect } from 'react';
 import { type SubmitHandler, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -74,6 +85,47 @@ function SettingsSkeleton(): ReactNode {
 }
 
 /**
+ * A field label paired with an info icon whose hover/focus tooltip explains
+ * what the setting is for. The icon button carries an `aria-label` so the
+ * control has an accessible name even before the tooltip opens.
+ */
+function FieldLabel({
+  htmlFor,
+  label,
+  hint,
+  hintLabel,
+}: {
+  /** Id of the control this labels. */
+  htmlFor: string;
+  /** Visible label text. */
+  label: string;
+  /** The explanation shown in the info tooltip. */
+  hint: string;
+  /** Accessible name for the info icon button. */
+  hintLabel: string;
+}): ReactNode {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Text as="label" htmlFor={htmlFor} size="2" weight="medium">
+        {label}
+      </Text>
+      <Tooltip content={hint}>
+        <IconButton
+          type="button"
+          variant="ghost"
+          color="gray"
+          size="1"
+          radius="full"
+          aria-label={hintLabel}
+        >
+          <Info className="h-3.5 w-3.5" aria-hidden="true" />
+        </IconButton>
+      </Tooltip>
+    </div>
+  );
+}
+
+/**
  * The form bound to the loaded config. Owns the local RHF state and the
  * mutation; the parent decides when to mount it (after the GET succeeds).
  */
@@ -129,13 +181,17 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
           </header>
 
           <section className="flex flex-col gap-2">
-            <Text as="label" htmlFor="periods-bar" size="2" weight="medium">
-              Periods
-            </Text>
+            <FieldLabel
+              htmlFor="periods-bar"
+              label="Periods"
+              hintLabel="About the periods setting"
+              hint="The candle timeframes the platform tracks for each symbol (for example 1h, 1d). Toggle a timeframe on to start tracking it."
+            />
             <ToggleGroup.Root
               id="periods-bar"
               type="multiple"
               value={periods}
+              disabled={update.isPending}
               onValueChange={(next) =>
                 setValue('periods', next as Period[], { shouldDirty: true, shouldValidate: false })
               }
@@ -160,11 +216,15 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
           </section>
 
           <section className="flex flex-col gap-2">
-            <Text as="label" htmlFor="default-period-trigger" size="2" weight="medium">
-              Default period
-            </Text>
+            <FieldLabel
+              htmlFor="default-period-trigger"
+              label="Default period"
+              hintLabel="About the default period setting"
+              hint="The timeframe shown by default when you open a symbol. It must be one of the tracked periods above."
+            />
             <Select.Root
               value={defaultPeriod || undefined}
+              disabled={update.isPending}
               onValueChange={(next) =>
                 setValue('defaultPeriod', next as Period, {
                   shouldDirty: true,
@@ -195,7 +255,12 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
           ) : null}
 
           <footer className="flex justify-end">
-            <Button type="submit" disabled={!formState.isDirty || update.isPending}>
+            <Button
+              type="submit"
+              loading={update.isPending}
+              aria-busy={update.isPending}
+              disabled={!formState.isDirty || update.isPending}
+            >
               Save
             </Button>
           </footer>
