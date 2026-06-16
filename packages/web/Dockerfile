@@ -1,6 +1,10 @@
 # Multi-stage build for @lametrader/web.
 #
-# Stage 1 installs the workspace and runs `vite build` for the web package.
+# Stage 1 installs the workspace, builds `@lametrader/core`, then runs
+# `vite build`. The core build must come first: Vite and the web's
+# `tsc --noEmit` resolve `@lametrader/core` to its built `dist/` (the web
+# package is bundler-owned, not part of the root project-refs graph), so the
+# dependency has to exist before the web build runs.
 # Stage 2 serves the static `dist/` through nginx on port 8080, with a
 # reverse-proxy hop for `/api/*` so the browser stays same-origin (no CORS).
 #
@@ -13,6 +17,7 @@ COPY package.json package-lock.json tsconfig.base.json tsconfig.json ./
 COPY packages ./packages
 
 RUN npm ci
+RUN npm run build -w @lametrader/core
 RUN npm run build -w @lametrader/web
 
 FROM nginx:1.27-alpine AS run

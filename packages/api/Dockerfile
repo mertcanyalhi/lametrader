@@ -33,6 +33,7 @@ COPY --from=build /app/packages/core/package.json ./packages/core/package.json
 COPY --from=build /app/packages/core/dist ./packages/core/dist
 COPY --from=build /app/packages/engine/package.json ./packages/engine/package.json
 COPY --from=build /app/packages/engine/dist ./packages/engine/dist
+COPY --from=build /app/packages/engine/node_modules ./packages/engine/node_modules
 COPY --from=build /app/packages/api/package.json ./packages/api/package.json
 COPY --from=build /app/packages/api/dist ./packages/api/dist
 

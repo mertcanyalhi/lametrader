@@ -1,6 +1,10 @@
 node_modules
 **/node_modules
 **/dist
+# Exclude TS incremental state too: with `**/dist` ignored, a stale
+# `*.tsbuildinfo` copied from the host would make `tsc --build` believe a
+# package is up-to-date and skip emitting its `dist/`, breaking the image build.
+**/*.tsbuildinfo
 .git
 .github
 coverage

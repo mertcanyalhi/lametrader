@@ -93,9 +93,12 @@ If a Tailwind class string repeats often enough to be worth a name, extract it a
 
 ### Forms
 
-- Validate at the boundary by parsing the form payload through the corresponding `@lametrader/core` parser (`parseConfig`, `parseProfileFields`, …).
-  No client-side validation duplicates: the domain validator is the single source of truth.
-- For complex forms, use `react-hook-form` with a custom resolver that wraps the core parser.
+- Use `react-hook-form` with a **Yup** schema via `yupResolver` (`@hookform/resolvers/yup`).
+  Schemas live in `lib/*-schema.ts` and use `.label(...)` so messages are label-aware and per-field (e.g. "Default period is required.").
+  For `${label}` interpolation, use Yup's **function-message** form (`({ label }) => \`${label} is required.\``) — a real template literal — not a `'${label}'` string (which trips Biome's `noTemplateCurlyInString`).
+- The schema is the UI validation layer; the **server** re-validates every write via the domain validator (`@lametrader/core`), which stays the authority.
+  This client/server split is intentional and scoped to user-facing schemas — see `docs/decisions/0011-web-form-validation-with-yup.md`.
+  Don't pull a schema library into `core`/`engine`/`api`.
 
 ### Logging
 
@@ -128,6 +131,8 @@ Do **not** generalize the exception — every other surface has Pino available.
   - Log the cause via the scope's Pino logger before falling through to a fallback value.
 - For non-2xx HTTP responses, throw `ApiError` (which `apiFetch` already does and logs).
   Callers either let it bubble (React Query surfaces it) or catch it for UI feedback — but they don't re-log; the lower layer already did.
+- Expected vs unexpected messages: `apiFetch` surfaces the API's own `{ error }` validation message verbatim (expected, actionable), and prefixes everything else — 5xx, unmapped statuses, HTML bodies, network drops — with "An unexpected error occurred".
+  Show `error.message` directly; the distinction is already baked in.
 
 ### Tests
 
