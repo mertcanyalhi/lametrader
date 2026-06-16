@@ -194,6 +194,8 @@ Follow these by default, unprompted.
 
 ### GitHub workflow
 
+- **Branch names follow `<type>/<kebab-summary>`** — the same `<type>` vocabulary as Conventional Commits (`feat/`, `fix/`, `docs/`, `chore/`, …), then a short kebab-case summary of the change (e.g. `feat/symbols-quote-enrich`, `fix/review-high-findings`).
+  Don't develop on an auto-generated branch name (e.g. `claude/feature-35-...`); rename it to this convention before pushing.
 - **Always subscribe to PR activity on every PR you open** (via `subscribe_pr_activity`), so CI failures and review comments wake the session up.
   Stop subscribing only when the user explicitly says to.
 

@@ -1,4 +1,4 @@
-import { SymbolType, type WatchedSymbol, type WatchlistRepository } from '@lametrader/core';
+import { Period, SymbolType, type WatchedSymbol, type WatchlistRepository } from '@lametrader/core';
 import {
   ConfigService,
   InMemoryCandleRepository,
@@ -58,6 +58,51 @@ describe('runSymbols list', () => {
     await runSymbols(['add', 'crypto:BTCUSDT'], service);
     expect(JSON.parse(await runSymbols(['list'], service))).toEqual([
       { ...BTC, periods: ['1h', '1d'] },
+    ]);
+  });
+
+  it('prints the watchlist enriched with quotes when --enrich is given', async () => {
+    const candles = new InMemoryCandleRepository();
+    const bar = (time: number, close: number) => ({
+      type: SymbolType.Crypto as const,
+      time,
+      open: close,
+      high: close,
+      low: close,
+      close,
+      volume: 10,
+      quoteVolume: 15,
+      trades: 3,
+    });
+    await candles.save('crypto:BTCUSDT', Period.OneDay, [bar(1000, 100), bar(2000, 110)]);
+    const items = new Map<string, WatchedSymbol>();
+    const watchlist: WatchlistRepository = {
+      list: async () => [...items.values()],
+      get: async (id) => items.get(id) ?? null,
+      add: async (symbol) => void items.set(symbol.id, symbol),
+      remove: async (id) => void items.delete(id),
+    };
+    const config = new ConfigService({ load: async () => null, save: async () => {} });
+    const service = new SymbolService(
+      [new InMemoryMarketDataSource([BTC])],
+      watchlist,
+      config,
+      candles,
+    );
+    await runSymbols(['add', 'crypto:BTCUSDT'], service);
+
+    expect(JSON.parse(await runSymbols(['list', '--enrich'], service))).toEqual([
+      {
+        ...BTC,
+        periods: ['1h', '1d'],
+        quote: {
+          price: 110,
+          change: 10,
+          changePct: expect.closeTo(0.1, 5),
+          period: '1d',
+          time: 2000,
+        },
+      },
     ]);
   });
 });

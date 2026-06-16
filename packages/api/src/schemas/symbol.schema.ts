@@ -37,6 +37,44 @@ export const WatchedSymbolSchema = Type.Object(
 );
 
 /**
+ * A point-in-time quote for a symbol (latest price + period-over-period change).
+ */
+export const SymbolQuoteSchema = Type.Object(
+  {
+    price: Type.Number(),
+    change: Type.Number(),
+    changePct: Type.Number(),
+    period: PeriodSchema,
+    time: Type.Number(),
+  },
+  { $id: 'SymbolQuote', additionalProperties: false },
+);
+
+/**
+ * A watched symbol enriched with its quote (or `null` when none can be computed).
+ */
+export const EnrichedSymbolSchema = Type.Object(
+  {
+    id: Type.String(),
+    type: SymbolTypeSchema,
+    description: Type.String(),
+    exchange: Type.String(),
+    currency: Type.Optional(Type.String()),
+    periods: Type.Array(PeriodSchema),
+    quote: Type.Union([SymbolQuoteSchema, Type.Null()]),
+  },
+  { $id: 'EnrichedSymbol', additionalProperties: false },
+);
+
+/**
+ * Query for `GET /symbols`. With `enrich=true` each item carries a `quote`.
+ */
+export const ListSymbolsQuerySchema = Type.Object(
+  { enrich: Type.Optional(Type.Boolean()) },
+  { additionalProperties: false },
+);
+
+/**
  * Query for `GET /instruments` (discovery).
  */
 export const DiscoverQuerySchema = Type.Object({

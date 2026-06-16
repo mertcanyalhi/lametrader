@@ -1,12 +1,15 @@
 import {
   assertInstrumentTypeMatchesId,
   type CandleRepository,
+  computeQuote,
+  type EnrichedSymbol,
   type Instrument,
   type Period,
   parseSymbolPeriods,
   SymbolConflictError,
   type SymbolDiscovery,
   SymbolNotFoundError,
+  type SymbolQuote,
   type SymbolType,
   symbolType,
   type WatchedSymbol,
@@ -94,6 +97,35 @@ export class SymbolService {
    */
   list(): Promise<WatchedSymbol[]> {
     return this.watchlist.list();
+  }
+
+  /**
+   * List the watched symbols, each enriched with a {@link SymbolQuote} computed
+   * from its latest two candles on the config's `defaultPeriod` (strictly — no
+   * fallback). `quote` is `null` when the symbol does not watch `defaultPeriod`
+   * or has fewer than two candles stored there.
+   */
+  async listWithQuotes(): Promise<EnrichedSymbol[]> {
+    const { defaultPeriod } = await this.config.get();
+    const watched = await this.watchlist.list();
+    return Promise.all(
+      watched.map(async (symbol) => ({
+        ...symbol,
+        quote: symbol.periods.includes(defaultPeriod)
+          ? await this.quoteFor(symbol.id, defaultPeriod)
+          : null,
+      })),
+    );
+  }
+
+  /**
+   * Compute a symbol's quote on `period` from its latest two stored candles, or
+   * `null` when fewer than two exist.
+   */
+  private async quoteFor(id: string, period: Period): Promise<SymbolQuote | null> {
+    const [latest, previous] = await this.candles.latestN(id, period, 2);
+    if (!latest || !previous) return null;
+    return { ...computeQuote(latest, previous), period };
   }
 
   /**

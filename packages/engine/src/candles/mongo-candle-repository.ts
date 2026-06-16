@@ -73,6 +73,15 @@ export class MongoCandleRepository implements CandleRepository {
     return doc ? toCandle(doc) : null;
   }
 
+  async latestN(symbolId: string, period: Period, n: number): Promise<Candle[]> {
+    const docs = await this.collection
+      .find({ '_id.s': symbolId, '_id.p': period })
+      .sort({ '_id.t': -1 })
+      .limit(n)
+      .toArray();
+    return docs.map(toCandle);
+  }
+
   async deleteSymbol(symbolId: string): Promise<void> {
     await this.collection.deleteMany({ '_id.s': symbolId });
   }

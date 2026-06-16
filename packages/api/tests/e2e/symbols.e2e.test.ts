@@ -119,6 +119,83 @@ describe('symbols API (e2e)', () => {
     ]);
   });
 
+  it('enriches GET /symbols?enrich=true with a quote, and yields null without default-period data', async () => {
+    // A source that serves two `1d` (the default period) candles for BTC and
+    // knows ETH (catalog only, no candles) — on its own db to isolate state.
+    const enrichDb = client.db('lametrader-enrich');
+    const ETH = { ...BTC, id: 'crypto:ETHUSDT', description: 'Ethereum / TetherUS' };
+    const day = 86_400_000;
+    const bar = (time: number, close: number) => ({
+      type: SymbolType.Crypto as const,
+      time,
+      open: close,
+      high: close,
+      low: close,
+      close,
+      volume: 10,
+      quoteVolume: 15,
+      trades: 3,
+    });
+    const source = new InMemoryMarketDataSource(
+      [BTC, ETH],
+      [SymbolType.Crypto],
+      [{ id: BTC.id, period: Period.OneDay, candles: [bar(day, 100), bar(2 * day, 110)] }],
+    );
+    const config = new ConfigService(new MongoConfigRepository(enrichDb));
+    const watchlist = new MongoWatchlistRepository(enrichDb);
+    const candles = new MongoCandleRepository(enrichDb);
+    const symbols = new SymbolService([source], watchlist, config, candles);
+    const backfill = new BackfillService([source], candles, watchlist);
+    const registry = defaultIndicators();
+    const compute = new IndicatorComputeService(registry, watchlist, candles);
+    const enrichApp = createApp({ config, symbols, backfill, indicators: { registry, compute } });
+    await enrichApp.ready();
+
+    try {
+      await enrichApp.inject({ method: 'POST', url: '/symbols', payload: { id: BTC.id } });
+      await enrichApp.inject({ method: 'POST', url: '/symbols', payload: { id: ETH.id } });
+
+      // Backfill BTC on the default period (1d) as an async job; poll to terminal.
+      const started = await enrichApp.inject({
+        method: 'POST',
+        url: `/symbols/${BTC.id}/backfill`,
+        payload: { period: '1d' },
+      });
+      const { id: jobId } = started.json() as { id: string };
+      let status = 'running';
+      for (let i = 0; i < 100 && status === 'running'; i += 1) {
+        const res = await enrichApp.inject({
+          method: 'GET',
+          url: `/symbols/${BTC.id}/backfill/jobs/${jobId}`,
+        });
+        status = (res.json() as { status: string }).status;
+        if (status === 'running') await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(status).toBe('succeeded');
+
+      const enriched = await enrichApp.inject({ method: 'GET', url: '/symbols?enrich=true' });
+      expect(enriched.statusCode).toBe(200);
+      expect(enriched.json()).toEqual([
+        {
+          ...BTC,
+          periods: ['1h', '1d'],
+          quote: {
+            price: 110,
+            change: 10,
+            changePct: expect.closeTo(0.1, 5),
+            period: '1d',
+            time: 2 * day,
+          },
+        },
+        // ETH watches 1d but has no candles there → quote null (the failure mode).
+        { ...ETH, periods: ['1h', '1d'], quote: null },
+      ]);
+    } finally {
+      await enrichApp.close();
+      await enrichDb.dropDatabase();
+    }
+  });
+
   it('rejects watching a symbol at a period its source cannot serve, with 400', async () => {
     // A crypto source that can only fetch 1h/1d (like Yahoo lacking a 4h bar),
     // wired on its own database so it doesn't disturb the shared app's state.

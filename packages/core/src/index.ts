@@ -76,6 +76,8 @@ export {
   type ProfileScopeSpec,
   type SymbolsScope,
 } from './profile.types.js';
+export { computeQuote } from './quote.js';
+export type { EnrichedSymbol, SymbolQuote } from './quote.types.js';
 export {
   assertInstrumentTypeMatchesId,
   MarketDataError,
