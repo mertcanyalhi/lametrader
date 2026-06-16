@@ -1,11 +1,11 @@
 import { type Instrument, type Period, SymbolType } from '@lametrader/core';
 import {
-  Badge,
   Button,
   Code,
   Dialog,
   Flex,
   RadioGroup,
+  ScrollArea,
   Select,
   Spinner,
   Table,
@@ -19,6 +19,7 @@ import { ApiError } from '../../lib/api-fetch.js';
 import { useAddSymbol, useSearchInstruments } from '../../lib/hooks/symbols.js';
 import { getLogger } from '../../lib/log.js';
 import { useDebouncedValue } from '../../lib/use-debounced-value.js';
+import { SymbolTypeBadge } from './symbol-type-badge.js';
 
 /** Scoped logger for the add-symbol flow. */
 const log = getLogger('add-symbol-dialog');
@@ -28,6 +29,9 @@ const ANY_TYPE = 'all';
 
 /** Quiet period before a keystroke triggers an instrument search. */
 const SEARCH_DEBOUNCE_MS = 250;
+
+/** Max height of the results panel — roughly ten compact rows; scrolls beyond. */
+const RESULTS_MAX_HEIGHT = '22rem';
 
 /** The asset-class filter options, in display order. */
 const TYPE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
@@ -158,9 +162,9 @@ export function AddSymbolDialog({
 }
 
 /**
- * The body of the search panel: a spinner while a query is in flight, a hint
- * before any search, an empty message when nothing matches, or the results as
- * a radio-selectable table.
+ * The body of the search panel: nothing before any search, a spinner while a
+ * query is in flight, an empty message when nothing matches, or the results as
+ * a radio-selectable table (scrollable past {@link RESULTS_MAX_HEIGHT}).
  */
 function SearchResults({
   isPending,
@@ -176,11 +180,7 @@ function SearchResults({
   onSelect: (id: string) => void;
 }): ReactNode {
   if (query.trim().length === 0) {
-    return (
-      <Text size="2" color="gray">
-        Type to search instruments.
-      </Text>
-    );
+    return null;
   }
   if (isPending) {
     return (
@@ -200,27 +200,29 @@ function SearchResults({
     );
   }
   return (
-    <RadioGroup.Root value={selectedId} onValueChange={onSelect}>
-      <Table.Root size="1" variant="surface">
-        <Table.Body>
-          {instruments.map((instrument) => (
-            <Table.Row key={instrument.id}>
-              <Table.Cell width="1">
-                <RadioGroup.Item value={instrument.id} aria-label={instrument.id} />
-              </Table.Cell>
-              <Table.Cell>
-                <Code>{instrument.id}</Code>{' '}
-                <Text color="gray" size="2">
-                  {instrument.description}
-                </Text>
-              </Table.Cell>
-              <Table.Cell>
-                <Badge variant="soft">{instrument.type}</Badge>
-              </Table.Cell>
-            </Table.Row>
-          ))}
-        </Table.Body>
-      </Table.Root>
-    </RadioGroup.Root>
+    <ScrollArea type="auto" scrollbars="vertical" style={{ maxHeight: RESULTS_MAX_HEIGHT }}>
+      <RadioGroup.Root value={selectedId} onValueChange={onSelect}>
+        <Table.Root size="1" variant="surface">
+          <Table.Body>
+            {instruments.map((instrument) => (
+              <Table.Row key={instrument.id}>
+                <Table.Cell width="1">
+                  <RadioGroup.Item value={instrument.id} aria-label={instrument.id} />
+                </Table.Cell>
+                <Table.Cell>
+                  <Code>{instrument.id}</Code>{' '}
+                  <Text color="gray" size="2">
+                    {instrument.description}
+                  </Text>
+                </Table.Cell>
+                <Table.Cell>
+                  <SymbolTypeBadge type={instrument.type} />
+                </Table.Cell>
+              </Table.Row>
+            ))}
+          </Table.Body>
+        </Table.Root>
+      </RadioGroup.Root>
+    </ScrollArea>
   );
 }

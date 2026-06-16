@@ -1,10 +1,11 @@
 import type { EnrichedSymbol, Period } from '@lametrader/core';
-import { Badge, Code, DropdownMenu, IconButton, Table, Text } from '@radix-ui/themes';
+import { Code, DropdownMenu, IconButton, Table, Text } from '@radix-ui/themes';
 import { MoreHorizontal } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { EditPeriodsPopover } from './edit-periods-popover.js';
 import { PriceCells } from './price-cell.js';
 import { RemoveSymbolDialog } from './remove-symbol-dialog.js';
+import { SymbolTypeBadge } from './symbol-type-badge.js';
 
 /**
  * One watchlist table row: the symbol identity, asset type, the snapshot quote
@@ -40,7 +41,7 @@ export function WatchlistRow({
         </div>
       </Table.RowHeaderCell>
       <Table.Cell>
-        <Badge variant="soft">{symbol.type}</Badge>
+        <SymbolTypeBadge type={symbol.type} />
       </Table.Cell>
       <PriceCells quote={symbol.quote} />
       <Table.Cell>
