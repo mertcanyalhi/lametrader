@@ -1,9 +1,11 @@
-import { AlertDialog, Button, Code, Flex, Text } from '@radix-ui/themes';
+import type { SymbolType } from '@lametrader/core';
+import { AlertDialog, Button, Flex, Text } from '@radix-ui/themes';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { ApiError } from '../../lib/api-fetch.js';
 import { useRemoveSymbol } from '../../lib/hooks/symbols.js';
 import { getLogger } from '../../lib/log.js';
+import { SymbolIdCode } from './symbol-type-badge.js';
 
 /** Scoped logger for the remove flow. */
 const log = getLogger('remove-symbol-dialog');
@@ -14,15 +16,18 @@ const log = getLogger('remove-symbol-dialog');
  * `DELETE /symbols/:id` and surfaces a success/error toast.
  *
  * @param id - the symbol to remove.
+ * @param type - the symbol's asset class (for the colour-coded id label).
  * @param open - controlled open state.
  * @param onOpenChange - controlled open-state setter.
  */
 export function RemoveSymbolDialog({
   id,
+  type,
   open,
   onOpenChange,
 }: {
   id: string;
+  type: SymbolType;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }): ReactNode {
@@ -45,8 +50,8 @@ export function RemoveSymbolDialog({
         <AlertDialog.Title>Remove symbol</AlertDialog.Title>
         <AlertDialog.Description size="2">
           <Text>
-            Stop watching <Code>{id}</Code>? Its stored candles are removed too. This can’t be
-            undone.
+            Stop watching <SymbolIdCode id={id} type={type} />? Its stored candles are removed too.
+            This can’t be undone.
           </Text>
         </AlertDialog.Description>
         <Flex gap="3" mt="4" justify="end">

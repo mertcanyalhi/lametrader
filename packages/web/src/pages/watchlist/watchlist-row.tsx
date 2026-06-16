@@ -1,17 +1,17 @@
 import type { EnrichedSymbol, Period } from '@lametrader/core';
-import { Badge, Code, DropdownMenu, Flex, IconButton, Table, Text } from '@radix-ui/themes';
+import { Badge, DropdownMenu, Flex, IconButton, Table, Text } from '@radix-ui/themes';
 import { MoreHorizontal } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { sortPeriods } from '../../lib/periods.js';
-import { EditPeriodsDialog } from './edit-periods-dialog.js';
+import { EditSymbolDialog } from './edit-symbol-dialog.js';
 import { PriceCells } from './price-cell.js';
 import { RemoveSymbolDialog } from './remove-symbol-dialog.js';
-import { SYMBOL_TYPE_COLOR, SymbolTypeBadge } from './symbol-type-badge.js';
+import { SymbolIdCode, SymbolTypeBadge } from './symbol-type-badge.js';
 
 /**
  * One watchlist table row: the symbol identity (colour-coded by asset class),
  * asset type, the snapshot quote cells, the watched-period chips, and a per-row
- * actions menu (Edit periods, Remove).
+ * actions menu (Edit, Remove).
  *
  * The row owns the open state for its edit and remove dialogs, both opened from
  * the actions menu.
@@ -33,9 +33,7 @@ export function WatchlistRow({
     <Table.Row align="center">
       <Table.RowHeaderCell>
         <div className="flex flex-col">
-          <Code variant="ghost" color={SYMBOL_TYPE_COLOR[symbol.type]} className="font-mono">
-            {symbol.id}
-          </Code>
+          <SymbolIdCode id={symbol.id} type={symbol.type} />
           <Text size="1" color="gray">
             {symbol.description}
           </Text>
@@ -62,21 +60,27 @@ export function WatchlistRow({
             </IconButton>
           </DropdownMenu.Trigger>
           <DropdownMenu.Content>
-            <DropdownMenu.Item onSelect={() => setEditOpen(true)}>Edit periods</DropdownMenu.Item>
+            <DropdownMenu.Item onSelect={() => setEditOpen(true)}>Edit</DropdownMenu.Item>
             <DropdownMenu.Item color="red" onSelect={() => setRemoveOpen(true)}>
               Remove
             </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Root>
       </Table.Cell>
-      <EditPeriodsDialog
+      <EditSymbolDialog
         id={symbol.id}
+        type={symbol.type}
         periods={symbol.periods}
         availablePeriods={availablePeriods}
         open={editOpen}
         onOpenChange={setEditOpen}
       />
-      <RemoveSymbolDialog id={symbol.id} open={removeOpen} onOpenChange={setRemoveOpen} />
+      <RemoveSymbolDialog
+        id={symbol.id}
+        type={symbol.type}
+        open={removeOpen}
+        onOpenChange={setRemoveOpen}
+      />
     </Table.Row>
   );
 }

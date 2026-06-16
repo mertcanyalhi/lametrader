@@ -1,7 +1,6 @@
 import { type Instrument, type Period, SymbolType } from '@lametrader/core';
 import {
   Button,
-  Code,
   Dialog,
   Flex,
   RadioCards,
@@ -18,7 +17,7 @@ import { ApiError } from '../../lib/api-fetch.js';
 import { useAddSymbol, useSearchInstruments } from '../../lib/hooks/symbols.js';
 import { getLogger } from '../../lib/log.js';
 import { useDebouncedValue } from '../../lib/use-debounced-value.js';
-import { SYMBOL_TYPE_COLOR, SymbolTypeBadge } from './symbol-type-badge.js';
+import { SymbolIdCode, SymbolTypeBadge } from './symbol-type-badge.js';
 
 /** Scoped logger for the add-symbol flow. */
 const log = getLogger('add-symbol-dialog');
@@ -202,12 +201,20 @@ function SearchResults({
   // selects it (and it stays keyboard-navigable as a radio group).
   return (
     <ScrollArea type="auto" scrollbars="vertical" style={{ maxHeight: RESULTS_MAX_HEIGHT }}>
-      <RadioCards.Root value={selectedId} onValueChange={onSelect} columns="1" gap="2" size="1">
+      {/* Right padding keeps the overlay scrollbar off the result content. */}
+      <RadioCards.Root
+        value={selectedId}
+        onValueChange={onSelect}
+        columns="1"
+        gap="2"
+        size="1"
+        className="pr-3"
+      >
         {instruments.map((instrument) => (
           <RadioCards.Item key={instrument.id} value={instrument.id}>
             <Flex justify="between" align="center" width="100%" gap="3">
               <Flex direction="column">
-                <Code color={SYMBOL_TYPE_COLOR[instrument.type]}>{instrument.id}</Code>
+                <SymbolIdCode id={instrument.id} type={instrument.type} />
                 <Text color="gray" size="2">
                   {instrument.description}
                 </Text>

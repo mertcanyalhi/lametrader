@@ -23,7 +23,7 @@ Each bullet maps to exactly one test.
 - [ ] Clicking the Chg % header sorts rows by change % ascending.
 - [ ] Clicking the Type header sorts rows by type ascending.
 - [ ] Add flow: searching in the dialog issues `GET /instruments?q=…`, and selecting a result + Add issues `POST /symbols` with `periods` defaulted from the config, shows a success toast, and refetches the list.
-- [ ] Edit-periods flow: opening the edit dialog from the row's actions, changing the periods, and saving issues `PATCH /symbols/:id`, shows a success toast, and refetches the list.
+- [ ] Edit flow: opening the edit dialog from the row's actions, changing the periods in its Periods section, and saving issues `PATCH /symbols/:id`, shows a success toast, and refetches the list.
 - [ ] Remove flow: confirming in the `AlertDialog` issues `DELETE /symbols/:id`, shows a success toast, and refetches the list.
 - [ ] A mutation that fails with `{ error }` surfaces the server message as an error toast and leaves the cached list unchanged.
 
