@@ -1,27 +1,52 @@
+import pino, { type Logger } from 'pino';
+
 /**
- * Minimal frontend logger so feature modules don't reach for `console.*`
- * directly. Each entry is namespaced (`[web/<scope>]`) so logs from different
- * subsystems are grep-able in the browser console.
+ * The root Pino logger for the web package.
  *
- * Levels are intentionally narrow: `warn` for swallowed failures (kept-running
- * conditions worth flagging) and `error` for thrown / fatal paths. Use `info`
- * / `debug` only when we introduce them with a real driver — until then, those
- * messages have no callers and shouldn't exist.
+ * - Matches the backend's logger family (Fastify's built-in Pino) so log
+ *   shapes are consistent across the stack, per the root `CLAUDE.md` rule
+ *   ("log through a common log library").
+ * - `browser.asObject: true` keeps log records as structured objects when
+ *   inspected in the devtools console, while Pino's default browser write
+ *   still routes them to the matching `console.*` method so existing
+ *   developer workflows (filtering, breakpoints) keep working.
+ * - Level defaults to `info` so noisy `debug` logs don't ship to users;
+ *   developers can override at runtime via `localStorage.LOG_LEVEL = 'debug'`.
+ *   (Pino picks the env-style setting up automatically when the level is set
+ *   via `level: storedLevel()`.)
  */
-export const log = {
-  /**
-   * Flag a non-fatal anomaly — typically inside a `catch` block where the
-   * caller intentionally falls through with a fallback value.
-   */
-  warn(scope: string, message: string, context?: Record<string, unknown>): void {
-    console.warn(`[web/${scope}] ${message}`, context ?? {});
-  },
-  /**
-   * Flag a fatal condition that the caller is about to surface to the user
-   * (typically by throwing). The log gives a developer / SRE the breadcrumb
-   * they would otherwise have to dig out of the network panel.
-   */
-  error(scope: string, message: string, context?: Record<string, unknown>): void {
-    console.error(`[web/${scope}] ${message}`, context ?? {});
-  },
-};
+const rootLogger = pino({
+  level: storedLevel() ?? 'info',
+  browser: { asObject: true },
+  base: { app: 'web' },
+});
+
+/**
+ * Construct a scoped child logger. Every entry from the returned logger
+ * carries `scope: <scope>` so logs from one subsystem can be filtered out of
+ * the console.
+ *
+ * @example
+ *   const log = getLogger('api-fetch');
+ *   log.warn({ status: 500 }, 'failed to parse error response as JSON');
+ */
+export function getLogger(scope: string): Logger {
+  return rootLogger.child({ scope });
+}
+
+/**
+ * Read an explicit log level from `localStorage.LOG_LEVEL` so developers can
+ * crank verbosity without rebuilding. Returns `null` when the storage entry is
+ * missing or its value isn't one of Pino's recognized levels.
+ */
+function storedLevel(): pino.Level | null {
+  try {
+    const raw = window.localStorage.getItem('LOG_LEVEL');
+    if (raw === 'trace' || raw === 'debug' || raw === 'info' || raw === 'warn' || raw === 'error') {
+      return raw;
+    }
+  } catch {
+    // localStorage unavailable (e.g. SSR rehydrate edge cases); fall through.
+  }
+  return null;
+}

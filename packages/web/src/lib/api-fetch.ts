@@ -1,4 +1,10 @@
-import { log } from './log.js';
+import { getLogger } from './log.js';
+
+/**
+ * Scoped logger for the api-fetch surface. Every entry carries
+ * `scope: 'api-fetch'` so it can be filtered out of the console.
+ */
+const log = getLogger('api-fetch');
 
 /**
  * Raised when the backend returns a non-2xx response. Carries the status code
@@ -43,10 +49,10 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
   if (!response.ok) {
     const message = await readErrorMessage(response);
-    log.error('api-fetch', `${init?.method ?? 'GET'} ${path} → ${response.status}`, {
-      status: response.status,
-      message,
-    });
+    log.error(
+      { method: init?.method ?? 'GET', path, status: response.status, message },
+      'api request failed',
+    );
     throw new ApiError(response.status, message);
   }
   return (await response.json()) as T;
@@ -68,31 +74,13 @@ async function readErrorMessage(response: Response): Promise<string> {
       return data.error;
     }
   } catch (cause) {
-    log.warn('api-fetch', 'failed to parse error response as JSON', {
-      status: response.status,
-      cause: describe(cause),
-    });
+    log.warn({ status: response.status, err: cause }, 'failed to parse error response as JSON');
   }
   try {
     const text = await response.text();
     return text || `HTTP ${response.status}`;
   } catch (cause) {
-    log.warn('api-fetch', 'failed to read error response body as text', {
-      status: response.status,
-      cause: describe(cause),
-    });
+    log.warn({ status: response.status, err: cause }, 'failed to read error response body as text');
     return `HTTP ${response.status}`;
   }
-}
-
-/**
- * Best-effort string description of a caught value — `Error` instances keep
- * their `message`, everything else is coerced through `String(…)`. Internal
- * helper for the log entries above.
- */
-function describe(cause: unknown): string {
-  if (cause instanceof Error) {
-    return cause.message;
-  }
-  return String(cause);
 }
