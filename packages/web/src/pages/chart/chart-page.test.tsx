@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { type Config, type EnrichedSymbol, Period, SymbolType } from '@lametrader/core';
+import {
+  type Candle,
+  type Config,
+  type EnrichedSymbol,
+  Period,
+  SymbolType,
+} from '@lametrader/core';
 import { Theme } from '@radix-ui/themes';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -28,6 +34,19 @@ const CONFIG: Config = {
   periods: [Period.OneHour, Period.FourHours, Period.OneDay],
   defaultPeriod: Period.OneDay,
 };
+
+/** Build a crypto candle closing at `close`, at `time`. */
+const candle = (time: number, close: number): Candle => ({
+  type: SymbolType.Crypto,
+  time,
+  open: close,
+  high: close,
+  low: close,
+  close,
+  volume: 10,
+  quoteVolume: 10,
+  trades: 1,
+});
 
 /** Renders the current location so a redirect's target can be asserted. */
 function LocationProbe(): ReactNode {
@@ -114,17 +133,20 @@ describe('ChartPage', () => {
     }).toEqual({ hint: true, chartShown: false });
   });
 
-  it('reflects the current symbol and snapshot in document.title', async () => {
+  it("reflects the latest loaded candle's close and change (current period) in document.title", async () => {
     onRequest('/symbols?enrich=true', () => [BTC]);
     onRequest('/config', () => CONFIG);
-    onRequest('/candles', () => ({ candles: [], nextCursor: null }));
+    // Latest close 102 vs previous close 100 → +2.00 (+2.00%), on the charted 1h.
+    onRequest('/candles', () => ({
+      candles: [candle(1000, 100), candle(2000, 102)],
+      nextCursor: null,
+    }));
 
     renderAt('/chart?id=crypto:BTCUSDT&period=1h');
 
-    // The symbol-picker trigger labels itself with the current symbol id once
-    // the watchlist + config queries resolve — wait on that as a render anchor.
-    await screen.findByRole('button', { name: 'crypto:BTCUSDT' });
+    // Wait for the chart body (mock) to render, which means candles have loaded.
+    await screen.findByText('candle-chart');
 
-    expect(document.title).toEqual('crypto:BTCUSDT · 50,000.00 +100.00 (+0.20%) - lametrader');
+    expect(document.title).toEqual('crypto:BTCUSDT · 102.00 +2.00 (+2.00%) - lametrader');
   });
 });

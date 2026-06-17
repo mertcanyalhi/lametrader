@@ -1,4 +1,4 @@
-import type { EnrichedSymbol, Period, SymbolQuote } from '@lametrader/core';
+import type { Candle, EnrichedSymbol, Period } from '@lametrader/core';
 import { Callout, Flex, Link as RadixLink } from '@radix-ui/themes';
 import { type ReactNode, useEffect } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router';
@@ -66,12 +66,14 @@ export function ChartPage(): ReactNode {
 
   return (
     <div className="grid h-full grid-rows-[minmax(0,1fr)_auto] gap-3">
-      <DocumentTitle symbol={selected} />
       <div className="min-h-0">
         {selected.periods.includes(period) ? (
           <ChartView id={id} period={period} range={range} symbol={selected} />
         ) : (
-          <PeriodNotWatched period={period} />
+          <>
+            <DocumentTitle id={id} latest={null} previous={null} />
+            <PeriodNotWatched period={period} />
+          </>
         )}
       </div>
       <Flex
@@ -99,28 +101,42 @@ function parseRange(raw: string | null): ChartRange | null {
 }
 
 /**
- * Drives the document title to `<id> · <price> <change> (<pct>%) - lametrader`,
- * so the browser tab reflects the current chart. Restores the previous title
- * on unmount so navigating away doesn't leave a stale tab label.
+ * Drives the document title to `<id> · <close> <change> (<pct>%) - lametrader`
+ * from the chart's latest loaded candle on the current period, so the browser
+ * tab matches what's on screen (the selected period — not the default-period
+ * snapshot). Restores the previous title on unmount.
  */
-function DocumentTitle({ symbol }: { symbol: EnrichedSymbol }): ReactNode {
+function DocumentTitle({
+  id,
+  latest,
+  previous,
+}: {
+  id: string;
+  latest: Candle | null;
+  previous: Candle | null;
+}): ReactNode {
   useEffect(() => {
-    const previous = document.title;
-    document.title = `${symbol.id}${quoteTitlePart(symbol.quote)} - lametrader`;
+    const prevTitle = document.title;
+    document.title = chartTitle(id, latest, previous);
     return () => {
-      document.title = previous;
+      document.title = prevTitle;
     };
-  }, [symbol.id, symbol.quote]);
+  }, [id, latest, previous]);
   return null;
 }
 
 /**
- * The price / change segment of the document title, prefixed with ` · ` when a
- * snapshot quote is available — otherwise empty so the title is just the id.
+ * The document title for the chart: the latest candle's close plus its change
+ * versus the previous candle's close. Falls back to just the id when no candle
+ * is loaded (and to id + price when only one candle is available).
  */
-function quoteTitlePart(quote: SymbolQuote | null): string {
-  if (!quote) return '';
-  return ` · ${formatPrice(quote.price)} ${formatChange(quote.change)} (${formatChangePct(quote.changePct)})`;
+function chartTitle(id: string, latest: Candle | null, previous: Candle | null): string {
+  if (!latest) return `${id} - lametrader`;
+  const price = formatPrice(latest.close);
+  if (!previous) return `${id} · ${price} - lametrader`;
+  const change = latest.close - previous.close;
+  const pct = previous.close === 0 ? 0 : change / previous.close;
+  return `${id} · ${price} ${formatChange(change)} (${formatChangePct(pct)}) - lametrader`;
 }
 
 /**
@@ -139,11 +155,15 @@ function ChartView({
   symbol: EnrichedSymbol;
 }): ReactNode {
   const feed = usePagedCandles({ id, period });
-  if (feed.isPending) return <ChartLoading />;
-  if (feed.isError)
-    return <ErrorCallout message={feed.error?.message ?? 'Failed to load candles.'} />;
-  if (feed.candles.length === 0) return <ChartEmptyState id={id} periods={symbol.periods} />;
-  return (
+  const latest = feed.candles.at(-1) ?? null;
+  const previous = feed.candles.at(-2) ?? null;
+  const body = feed.isPending ? (
+    <ChartLoading />
+  ) : feed.isError ? (
+    <ErrorCallout message={feed.error?.message ?? 'Failed to load candles.'} />
+  ) : feed.candles.length === 0 ? (
+    <ChartEmptyState id={id} periods={symbol.periods} />
+  ) : (
     <CandleChart
       candles={feed.candles}
       symbol={symbol}
@@ -152,6 +172,12 @@ function ChartView({
       loadOlder={feed.loadOlder}
       hasMore={feed.hasMore}
     />
+  );
+  return (
+    <>
+      <DocumentTitle id={id} latest={latest} previous={previous} />
+      {body}
+    </>
   );
 }
 
