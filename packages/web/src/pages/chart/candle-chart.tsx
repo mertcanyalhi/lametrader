@@ -22,7 +22,7 @@ import {
   setStoredViewport,
 } from '../../lib/chart-viewport.js';
 import { priceDecimals } from '../../lib/format.js';
-import { liveCandleForPeriod } from '../../lib/hooks/candles.js';
+import { liveCandleForPeriod, mergeLiveCandle } from '../../lib/hooks/candles.js';
 import { StreamKind } from '../../lib/stream/stream-client.types.js';
 import { useStreamSubscription } from '../../lib/stream/use-stream-subscription.js';
 import { useTheme } from '../../lib/theme-context.js';
@@ -236,8 +236,12 @@ export function CandleChart({
   // per event (each frame) lets both land: `update` replaces the bar when the
   // time matches (forming / final correction) and appends when it is newer.
   useStreamSubscription(StreamKind.Candle, symbol.id, (event) => {
-    const candle = liveCandleForPeriod(event, period);
-    if (!candle) return;
+    const incoming = liveCandleForPeriod(event, period);
+    if (!incoming) return;
+    // Fold into the bar accumulated for this interval: a flat in-progress bar
+    // (e.g. Yahoo 1m) would otherwise render as a flat line, so we keep a running
+    // high/low across ticks instead of replacing it each event.
+    const candle = mergeLiveCandle(liveBarsRef.current.get(incoming.time), incoming);
     liveBarsRef.current.set(candle.time, candle);
     setLiveLatest(candle);
     const candleSeries = candleSeriesRef.current;

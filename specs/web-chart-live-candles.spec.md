@@ -79,6 +79,9 @@ Each bullet maps to exactly one test (jsdom; mocked socket / mocked
       reaches the latest bar, and a `fixed` `{from,to}` window when scrolled back.
 - [ ] `liveLogicalRange` spans the last `bars` of the series (right edge on the
       newest bar), clamped to bar 0 for short series.
+- [ ] `mergeLiveCandle` keeps the bar's open, widens the running high/low, follows
+      the latest close, and takes the larger volume; a flat tick stream builds a
+      real range rather than a flat line.
 
 ## End-to-end expectation
 
@@ -99,6 +102,14 @@ the realistic surface for a canvas feature.
 
 ## Surprises
 
+- **Yahoo's 1m forming bar arrives flat.** Yahoo serves the in-progress 1m bar as
+  `O=H=L=C` (just the latest price) until late in the interval, so replacing the
+  series bar each tick rendered a flat line. The chart now folds each tick into
+  the bar with `mergeLiveCandle` — keeping the open and widening a running
+  high/low across ticks — so the forming bar shows a real range even from flat
+  inputs. (The backend data-quality root cause — boundary `V=0` bars and the
+  flat in-progress bar at source — is tracked separately for a polling refactor;
+  see issue #58.)
 - **An absolute persisted viewport doesn't follow new bars.** The stored window
   was `{from, to}` epoch-ms and was restored verbatim, so once you were watching
   the live edge the window went stale — new bars appeared off-screen to the right.
