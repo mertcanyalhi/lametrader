@@ -34,24 +34,24 @@ required, so the chart calls `update(...)` per tick rather than re-`setData`ing.
 
 ## Design
 
-- **`useCandleStream(id): CandleEvent | null`** (`src/lib/hooks/candles.ts`) —
-  built on `#41`'s `useStreamSubscription(StreamKind.Candle, id, …)`; returns the
-  latest candle event for the id (or `null` before the first), re-subscribing on
-  `id` change and tearing down on unmount.
-- **`chart-page.tsx` (`ChartView`)** filters the live event to the charted
-  period (`event.period === period`) and passes the resulting `Candle | null`
-  down to `CandleChart` as a `liveCandle` prop; it also feeds that live bar into
-  the latest candle the `DocumentTitle` reads, so the tab tracks the live close.
-- **`candle-chart.tsx`** gains a `liveCandle` prop and an effect that, on each
-  new live bar, calls `candleSeriesRef.current.update(toCandlestick(liveCandle))`
-  (and, when a volume pane exists, `volumeSeriesRef.current.update(toVolume(…))`).
-  It also tracks the live bar as state so the **on-canvas legend header** (the
-  latest-candle fallback when nothing is hovered) shows the live OHLC/close,
-  colored green/red — the chart's live "price header".
-- Subscription lifecycle: `useCandleStream(id)` re-subscribes when the symbol id
-  changes and tears down on unmount; the period filter handles period switches
-  (the same id keeps one upstream candle subscription, frames filtered
-  client-side).
+- **`candle-chart.tsx` owns live application.** It subscribes to the candle feed
+  itself (`#41`'s `useStreamSubscription(StreamKind.Candle, symbol.id, …)`) and
+  applies **each event imperatively in the callback** — `candleSeriesRef.current
+  .update(toCandlestick(candle))` (plus volume) — *not* via React state. A poll
+  that crosses an interval boundary emits the just-closed bar's final values and
+  the new forming bar as two frames in one batch; collapsing them through a
+  single "latest" state value would keep only the last, leaving the closed bar
+  stuck at its last in-progress value. Per-event application lets both land —
+  `update` replaces the bar when the time matches (forming bar / final
+  correction) and appends when it is newer. Each applied bar is also kept in a
+  by-time map and re-applied after a `setData` re-seed (theme/data refresh), and
+  surfaced as `liveLatest` state to the on-canvas legend header.
+- **`liveCandleForPeriod(event, period)`** (`src/lib/hooks/candles.ts`) filters
+  the all-periods candle feed to the charted period; the chart skips non-matching
+  events. The accumulation resets when the streamed `(id, period)` changes.
+- **`useCandleStream(id): CandleEvent | null`** remains the latest-value
+  convenience hook; `chart-page.tsx` (`ChartView`) uses it only to drive the tab
+  title's latest close (display, where the latest frame suffices).
 
 ## Acceptance criteria
 
@@ -61,14 +61,16 @@ Each bullet maps to exactly one test (jsdom; mocked socket / mocked
 - [ ] `useCandleStream(id)` exposes the latest `CandleEvent` and returns `null`
       before any frame; changing `id` unsubscribes the old id and subscribes the
       new one.
-- [ ] A live `Candle` whose `time` equals the last loaded bar's makes
-      `CandleChart` call the series' `update` mutator with that bar's mapped
-      OHLC (forming-bar update in place).
-- [ ] A live `Candle` with a newer `time` than the last bar makes `CandleChart`
-      call `update` with the new mapped bar (append).
-- [ ] `ChartView` passes a live candle to the chart only when the event's
-      `period` matches the charted period (a mismatched-period event yields
-      `null` to the chart).
+- [ ] `liveCandleForPeriod` returns the event's candle when the period matches
+      and `null` otherwise.
+- [ ] `CandleChart` applies a live event to the series via the `update` mutator
+      with the bar's mapped OHLC.
+- [ ] `CandleChart` applies **both** a just-closed bar's final values and the
+      next forming bar when both arrive from one poll (the close is not dropped) —
+      the regression behind stale closed bars.
+- [ ] `CandleChart` ignores a live event whose `period` differs from the chart's.
+- [ ] `CandleChart` re-applies every accumulated live bar after a `setData`
+      re-seed, so a theme/data refresh keeps the live tail.
 - [ ] The on-canvas legend header reflects the live bar's close once a tick
       arrives (the latest-candle fallback uses the live bar).
 
@@ -91,6 +93,17 @@ the realistic surface for a canvas feature.
 
 ## Surprises
 
+- **A "latest event" state value drops co-arriving frames.** The first design had
+  `useCandleStream` keep only the latest event and the chart apply it via an
+  effect. When a poll crosses an interval boundary it emits two frames at once —
+  the just-closed bar's *final* values and the next *forming* bar — and React
+  batches the two state updates, so only the forming bar survived and the closed
+  bar kept its last in-progress value (it never received its real close). An
+  empirical Yahoo probe confirmed the backend is correct: a tight poll window
+  returns the real aligned bar plus a flat `V=0` live row, and the merge folds
+  them into a real bar. So the fix is on the client — the chart subscribes itself
+  and applies **every** event imperatively in the callback (per frame, immune to
+  batching), rather than collapsing to one state value.
 - **The historical `candles` array identity must be stable.** `usePagedCandles`
   rebuilt the flattened array on every render, so each live tick (which
   re-renders the chart page) handed the chart a new `candles` reference,

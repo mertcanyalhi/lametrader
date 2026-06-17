@@ -16,6 +16,9 @@ import {
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { getStoredViewport, setStoredViewport } from '../../lib/chart-viewport.js';
 import { priceDecimals } from '../../lib/format.js';
+import { liveCandleForPeriod } from '../../lib/hooks/candles.js';
+import { StreamKind } from '../../lib/stream/stream-client.types.js';
+import { useStreamSubscription } from '../../lib/stream/use-stream-subscription.js';
 import { useTheme } from '../../lib/theme-context.js';
 import { ChartOverlay } from './chart-overlay.js';
 import type { ChartRange } from './chart-range.js';
@@ -64,8 +67,11 @@ function toVolume(candle: Candle, colors: ChartColors): HistogramData {
  * @param range - the active range preset (drives the visible scale), or `null`.
  * @param loadOlder - fetch the next older window (called on scroll-back / range fill).
  * @param hasMore - whether older history may still be available.
- * @param liveCandle - the latest streamed bar for this period, applied to the
- *   series in place (forming-bar update / append), or `null` when none yet.
+ *
+ * Subscribes to the symbol's live candle feed itself and applies each event to
+ * the series imperatively (per frame, not via React state), so a poll that emits
+ * a just-closed bar's final values *and* the next forming bar in one batch
+ * applies both — the closed bar isn't left stuck at its last in-progress value.
  */
 export function CandleChart({
   candles,
@@ -74,7 +80,6 @@ export function CandleChart({
   range,
   loadOlder,
   hasMore,
-  liveCandle = null,
 }: {
   candles: Candle[];
   symbol: EnrichedSymbol;
@@ -82,7 +87,6 @@ export function CandleChart({
   range: ChartRange | null;
   loadOlder: () => void;
   hasMore: boolean;
-  liveCandle?: Candle | null;
 }): ReactNode {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -91,6 +95,8 @@ export function CandleChart({
   const { theme } = useTheme();
   /** Time (epoch ms) of the candle under the crosshair, or `null` when none. */
   const [hoveredTime, setHoveredTime] = useState<number | null>(null);
+  /** The latest live bar applied to the series, surfaced to the overlay legend. */
+  const [liveLatest, setLiveLatest] = useState<Candle | null>(null);
   // Latest paging callbacks for the visible-range listener (avoids stale closures).
   const paging = useRef({ loadOlder, hasMore });
   paging.current = { loadOlder, hasMore };
@@ -105,6 +111,7 @@ export function CandleChart({
   if (streamKeyRef.current !== streamKey) {
     streamKeyRef.current = streamKey;
     liveBarsRef.current = new Map();
+    setLiveLatest(null);
   }
   // Mirror the active preset so the long-lived capture closure sees the current value.
   const rangeRef = useRef(range);
@@ -201,16 +208,23 @@ export function CandleChart({
     }
   }, [candles, theme]);
 
-  // Apply each live tick to the series in place. `lightweight-charts`' `update`
-  // replaces the last bar when the time matches (forming bar) and appends when
-  // the time is newer — the "update or append" the live feed needs.
-  useEffect(() => {
+  // Apply each live candle event to the series the instant it arrives — directly
+  // in the subscription callback, not via React state. A poll that crosses an
+  // interval boundary emits the just-closed bar's final values *and* the new
+  // forming bar in one batch; collapsing them through state would keep only the
+  // last, leaving the closed bar stuck at its last in-progress value. Applying
+  // per event (each frame) lets both land: `update` replaces the bar when the
+  // time matches (forming / final correction) and appends when it is newer.
+  useStreamSubscription(StreamKind.Candle, symbol.id, (event) => {
+    const candle = liveCandleForPeriod(event, period);
+    if (!candle) return;
+    liveBarsRef.current.set(candle.time, candle);
+    setLiveLatest(candle);
     const candleSeries = candleSeriesRef.current;
-    if (!candleSeries || !liveCandle) return;
-    liveBarsRef.current.set(liveCandle.time, liveCandle);
-    candleSeries.update(toCandlestick(liveCandle));
-    volumeSeriesRef.current?.update(toVolume(liveCandle, chartColors(theme)));
-  }, [liveCandle, theme]);
+    if (!candleSeries) return;
+    candleSeries.update(toCandlestick(candle));
+    volumeSeriesRef.current?.update(toVolume(candle, chartColors(theme)));
+  });
 
   // When a range preset is active, drive the visible time scale to its window;
   // auto-trigger loadOlder if the earliest loaded candle doesn't yet cover it.
@@ -269,7 +283,7 @@ export function CandleChart({
   // Resolve the candle to inspect in the overlay: the one at the crosshair, or
   // the latest as a stable fallback when no hover is active. The live bar (when
   // present) is the freshest "latest", so the header tracks the streamed close.
-  const latestCandle = liveCandle ?? candles.at(-1) ?? null;
+  const latestCandle = liveLatest ?? candles.at(-1) ?? null;
   const inspected = useMemo<Candle | null>(() => {
     if (hoveredTime !== null) {
       return candles.find((candle) => candle.time === hoveredTime) ?? latestCandle;

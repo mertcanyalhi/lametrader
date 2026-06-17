@@ -163,6 +163,8 @@ function ChartView({
   symbol: EnrichedSymbol;
 }): ReactNode {
   const feed = usePagedCandles({ id, period });
+  // The chart applies live bars itself; here the live bar only drives the tab
+  // title's latest close (display, so the latest frame is enough).
   const liveCandle = liveCandleForPeriod(useCandleStream(id), period);
   const lastLoaded = feed.candles.at(-1) ?? null;
   // The live bar is the freshest "latest"; when it opens a new bar the last
@@ -186,7 +188,6 @@ function ChartView({
       range={range}
       loadOlder={feed.loadOlder}
       hasMore={feed.hasMore}
-      liveCandle={liveCandle}
     />
   );
   return (
