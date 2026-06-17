@@ -196,9 +196,15 @@ export class YahooMarketDataSource implements MarketDataSource {
         const candle = toCandle(type, bar);
         if (candle) out.push(candle);
       }
+      // Return only the requested window. Intraday ranges are widened (see
+      // `resolveYahooChartRange`) so Yahoo reports the current bar with real
+      // volume, but the widened-in lookback bars are context only — the oldest
+      // comes back with partial/zero volume, and ingesting it would overwrite
+      // those older candles' correct values. Drop anything outside `[from, to)`.
+      const candles = range ? out.filter((c) => c.time >= range.from && c.time < range.to) : out;
       // Yahoo's chart returns the whole requested window in one response — no
       // paging cap of ours applies, so the batch is always complete.
-      return { candles: out, complete: true };
+      return { candles, complete: true };
     } catch (cause) {
       throw new MarketDataError(
         `Yahoo failed to fetch candles for ${id}: ${(cause as Error).message}`,

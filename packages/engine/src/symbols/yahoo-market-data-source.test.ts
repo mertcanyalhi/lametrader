@@ -394,6 +394,82 @@ describe('YahooMarketDataSource.fetchCandles', () => {
     });
   });
 
+  it('returns only bars within the requested range, dropping widened-in lookback bars', async () => {
+    const HOUR = 3_600_000;
+    // An intraday range is widened back for data quality, so Yahoo also returns
+    // older lookback bars — the oldest with bad (zero) volume. Only the requested
+    // [from, to) window must be ingested, or those older bars get clobbered.
+    vi.spyOn(YahooFinance.prototype, 'chart').mockResolvedValue({
+      quotes: [
+        {
+          date: new Date(2 * HOUR),
+          open: 10,
+          high: 11,
+          low: 9,
+          close: 10,
+          volume: 0,
+          adjclose: 10,
+        },
+        {
+          date: new Date(3 * HOUR),
+          open: 11,
+          high: 12,
+          low: 10,
+          close: 11,
+          volume: 100,
+          adjclose: 11,
+        },
+        {
+          date: new Date(4 * HOUR),
+          open: 12,
+          high: 13,
+          low: 11,
+          close: 12,
+          volume: 200,
+          adjclose: 12,
+        },
+        {
+          date: new Date(5 * HOUR),
+          open: 13,
+          high: 14,
+          low: 12,
+          close: 13,
+          volume: 300,
+          adjclose: 13,
+        },
+      ],
+    } as never);
+    const source = new YahooMarketDataSource();
+
+    await expect(
+      source.fetchCandles('stock:AAPL', Period.OneHour, { from: 4 * HOUR, to: 6 * HOUR }),
+    ).resolves.toEqual({
+      candles: [
+        {
+          type: SymbolType.Stock,
+          time: 4 * HOUR,
+          open: 12,
+          high: 13,
+          low: 11,
+          close: 12,
+          volume: 200,
+          adjClose: 12,
+        },
+        {
+          type: SymbolType.Stock,
+          time: 5 * HOUR,
+          open: 13,
+          high: 14,
+          low: 12,
+          close: 13,
+          volume: 300,
+          adjClose: 13,
+        },
+      ],
+      complete: true,
+    });
+  });
+
   it('re-stamps a trailing live row that opens a new bucket with no placeholder (the 5m case)', async () => {
     const MIN = 60_000;
     // Equities/FX 5m: Yahoo emits no null placeholder for the current bucket, so
