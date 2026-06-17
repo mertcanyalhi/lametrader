@@ -1,24 +1,32 @@
-import type { EnrichedSymbol, Period } from '@lametrader/core';
+import type { EnrichedSymbol, Period, SymbolQuote } from '@lametrader/core';
 import { Callout, Flex, Link as RadixLink } from '@radix-ui/themes';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router';
+import { formatChange, formatChangePct, formatPrice } from '../../lib/format.js';
 import { usePagedCandles } from '../../lib/hooks/candles.js';
 import { useWatchlist } from '../../lib/hooks/symbols.js';
 import { useConfig } from '../../lib/hooks/use-config.js';
 import { CandleChart } from './candle-chart.js';
 import { ChartLoading } from './chart-loading.js';
-import { ChartToolbar } from './chart-toolbar.js';
+import { CHART_RANGE_ORDER, type ChartRange } from './chart-range.js';
 import { ChartEmptyState } from './empty-state.js';
+import { PeriodRangeDialog } from './period-range-dialog.js';
+import { SymbolPickerDialog } from './symbol-picker-dialog.js';
 
 /**
  * The `/chart` page: a URL-driven candlestick chart of one watched symbol on one
- * period (`/chart?id=&period=`). Reads the enriched watchlist (for the symbol
- * selector + snapshot header) and the config (for the default period). Bare
+ * period (`/chart?id=&period=&range=`). Reads the enriched watchlist (for the
+ * symbol picker + overlay) and the config (for the default period). Bare
  * `/chart` redirects to the first watched symbol on `config.defaultPeriod`, or
  * to the watchlist when nothing is watched.
+ *
+ * Layout (TradingView-style): the candle canvas fills the page, with a
+ * top-left overlay carrying the symbol summary + the hovered candle's OHLC
+ * legend; the bottom bar holds the symbol picker and the period+range dialog
+ * triggers, leaving room for further actions in the future.
  */
 export function ChartPage(): ReactNode {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const watchlist = useWatchlist();
   const config = useConfig();
 
@@ -30,6 +38,7 @@ export function ChartPage(): ReactNode {
   const cfg = config.data;
   const id = params.get('id');
   const period = params.get('period') as Period | null;
+  const range = parseRange(params.get('range'));
 
   // Bare /chart (or a missing half) → resolve a sensible default, or bounce home.
   if (!id || !period) {
@@ -42,16 +51,76 @@ export function ChartPage(): ReactNode {
   const selected = symbols.find((symbol) => symbol.id === id);
   if (!selected) return <Navigate to="/" replace />;
 
+  function selectSymbol(nextId: string): void {
+    const next = new URLSearchParams({ id: nextId });
+    if (period) next.set('period', period);
+    if (range) next.set('range', range);
+    setParams(next);
+  }
+
+  function applyPeriodRange(next: { period: Period; range: ChartRange | null }): void {
+    const params = new URLSearchParams({ id: id ?? '', period: next.period });
+    if (next.range) params.set('range', next.range);
+    setParams(params);
+  }
+
   return (
-    <Flex direction="column" gap="4">
-      <ChartToolbar symbols={symbols} id={id} period={period} />
-      {selected.periods.includes(period) ? (
-        <ChartView id={id} period={period} symbol={selected} />
-      ) : (
-        <PeriodNotWatched period={period} />
-      )}
+    <Flex direction="column" gap="3" className="h-full">
+      <DocumentTitle symbol={selected} />
+      <div className="flex-1">
+        {selected.periods.includes(period) ? (
+          <ChartView id={id} period={period} range={range} symbol={selected} />
+        ) : (
+          <PeriodNotWatched period={period} />
+        )}
+      </div>
+      <Flex
+        gap="2"
+        align="center"
+        className="border-t border-[var(--gray-a5)] pt-3"
+        aria-label="Chart actions"
+      >
+        <SymbolPickerDialog currentId={id} watched={symbols} onSelect={selectSymbol} />
+        <PeriodRangeDialog
+          period={period}
+          range={range}
+          watchedPeriods={selected.periods}
+          onApply={applyPeriodRange}
+        />
+      </Flex>
     </Flex>
   );
+}
+
+/** Coerce a URL `?range=…` query into a {@link ChartRange}, or `null` when missing/invalid. */
+function parseRange(raw: string | null): ChartRange | null {
+  if (raw === null) return null;
+  return CHART_RANGE_ORDER.find((value) => value === raw) ?? null;
+}
+
+/**
+ * Drives the document title to `<id> · <price> <change> (<pct>%) - lametrader`,
+ * so the browser tab reflects the current chart. Restores the previous title
+ * on unmount so navigating away doesn't leave a stale tab label.
+ */
+function DocumentTitle({ symbol }: { symbol: EnrichedSymbol }): ReactNode {
+  useEffect(() => {
+    const previous = document.title;
+    document.title = `${symbol.id}${quoteTitlePart(symbol.quote)} - lametrader`;
+    return () => {
+      document.title = previous;
+    };
+  }, [symbol.id, symbol.quote]);
+  return null;
+}
+
+/**
+ * The price / change segment of the document title, prefixed with ` · ` when a
+ * snapshot quote is available — otherwise empty so the title is just the id.
+ */
+function quoteTitlePart(quote: SymbolQuote | null): string {
+  if (!quote) return '';
+  return ` · ${formatPrice(quote.price)} ${formatChange(quote.change)} (${formatChangePct(quote.changePct)})`;
 }
 
 /**
@@ -61,10 +130,12 @@ export function ChartPage(): ReactNode {
 function ChartView({
   id,
   period,
+  range,
   symbol,
 }: {
   id: string;
   period: Period;
+  range: ChartRange | null;
   symbol: EnrichedSymbol;
 }): ReactNode {
   const feed = usePagedCandles({ id, period });
@@ -75,7 +146,9 @@ function ChartView({
   return (
     <CandleChart
       candles={feed.candles}
-      type={symbol.type}
+      symbol={symbol}
+      period={period}
+      range={range}
       loadOlder={feed.loadOlder}
       hasMore={feed.hasMore}
     />

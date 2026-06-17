@@ -113,4 +113,18 @@ describe('ChartPage', () => {
       chartShown: screen.queryByText('candle-chart') !== null,
     }).toEqual({ hint: true, chartShown: false });
   });
+
+  it('reflects the current symbol and snapshot in document.title', async () => {
+    onRequest('/symbols?enrich=true', () => [BTC]);
+    onRequest('/config', () => CONFIG);
+    onRequest('/candles', () => ({ candles: [], nextCursor: null }));
+
+    renderAt('/chart?id=crypto:BTCUSDT&period=1h');
+
+    // The symbol-picker trigger labels itself with the current symbol id once
+    // the watchlist + config queries resolve — wait on that as a render anchor.
+    await screen.findByRole('button', { name: 'crypto:BTCUSDT' });
+
+    expect(document.title).toEqual('crypto:BTCUSDT · 50,000.00 +100.00 (+0.20%) - lametrader');
+  });
 });

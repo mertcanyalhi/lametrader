@@ -40,10 +40,9 @@ Each bullet maps to exactly one test.
 
 ### Toolbar + URL contract
 
-- [ ] Selecting a different symbol updates the URL to `/chart?id=<new>&period=<current>`.
-- [ ] Selecting a different period updates the URL to `/chart?id=<current>&period=<new>`.
-- [ ] A period the symbol does not watch is disabled in the toolbar with a Radix `Tooltip` hint (no `title=`).
-- [ ] The toolbar header shows the symbol's snapshot price/change from the enriched watchlist quote.
+The original inline toolbar (symbol `Select`, period buttons, snapshot header on top) was reshaped into a TradingView-style layout in v1.1 — see *Refinements (v1.1)* below.
+The URL contract is preserved: `?id=…` for the symbol and `?period=…` for the period (now plus `?range=…`).
+The disabled-period and snapshot behaviours moved into the modal and the canvas overlay respectively.
 
 ### Page states
 
@@ -51,6 +50,52 @@ Each bullet maps to exactly one test.
 - [ ] Bare `/chart` with an empty watchlist redirects to `/`.
 - [ ] When the selected symbol has loaded zero candles, the page shows an explicit empty state with a "Run backfill" action that opens the backfill flow.
 - [ ] When the URL's `period` is not among the symbol's watched periods, the page shows a "period not watched — edit on the watchlist" hint instead of the chart.
+
+### Refinements (v1.1)
+
+#### Decimal-aware price formatting
+
+- [ ] `formatPrice` shows enough decimals to keep ~4 significant figures across magnitudes (e.g. `50000 → "50,000.00"`, `123.3 → "123.30"`, `0.5432 → "0.5432"`, `0.000034 → "0.0000340"`).
+  The shared helper is the single source of truth; the watchlist and chart both inherit it.
+
+#### Volume formatting
+
+- [ ] `formatVolume` renders human-readable magnitudes with `K`/`M`/`B` suffixes (e.g. `258_270 → "258.27K"`, `12_300_000 → "12.30M"`).
+
+#### Top-left chart overlay (summary + legend)
+
+- [ ] A top-left overlay is rendered *inside the chart pane* (TradingView style): the symbol's `description · period · exchange` on top, the inspected candle's OHLC + diff + volume below it.
+  The summary line is always present once a symbol is selected; the OHLC legend appears once candles load.
+
+#### Dynamic document title
+
+- [ ] `document.title` reflects the current symbol + snapshot quote (`<symbol> · <price> <change> (<pct>%) — lametrader`); resets when the page unmounts.
+
+#### Candle-inspection legend
+
+- [ ] A top-left overlay on the chart shows the hovered candle's OHLC + diff + volume (e.g. `O 123.02  H 124.49  L 122.00  C 123.30  +0.25 (+0.20%)  Vol 258.27K`); when no candle is hovered, the latest candle's values are shown.
+  OHLC + diff are colored green when the candle's close ≥ open and red when close < open; the volume label is neutral.
+  FX (no volume) omits the `Vol` segment.
+
+#### Symbol-picker modal (replaces the dropdown)
+
+- [ ] The symbol selector is a modal trigger button showing the current symbol id; clicking opens a dialog listing the watched symbols plus a search input.
+- [ ] Search results outside the watchlist render faded; clicking a non-watched result shows a popover saying "Symbol is not in the watchlist" (info only) and does not change the URL.
+- [ ] Clicking a watched result closes the dialog and updates the URL `?id=…&period=<current>`.
+
+#### Period + range modal (replaces the inline period bar)
+
+- [ ] The period selector is a modal trigger button showing the current period (and range when set); clicking opens a dialog with two sections — range presets (`1D 5D 1M 3M 6M YTD 1Y 5Y All`) and the symbol's watched periods.
+- [ ] Confirming the dialog writes `?period=…&range=…` to the URL; the chart's visible time scale is set to `[now − rangeMillis(range), now]`, and the existing windowed scroll-back keeps working — `loadOlder()` auto-runs to fill the visible range, and the user can still scroll further back beyond the preset.
+- [ ] Periods the symbol is not watched on are disabled in the dialog.
+
+#### Bottom action bar
+
+- [ ] Below the chart pane, a thin action bar holds the symbol-picker trigger and the period+range trigger (extensible for future actions per the screenshot reference).
+
+#### Watchlist → chart navigation
+
+- [ ] On the watchlist page, each row's symbol id is a link to `/chart?id=<id>&period=<defaultPeriod>`, opening that symbol on the platform's default period.
 
 ## End-to-end expectation
 
@@ -75,3 +120,13 @@ Page-level behaviour (URL round-trip, empty-state button, redirect) is covered b
 - Biome's a11y rules reject `aria-label` on a bare `<div>` (no supporting role) and reject `role="group"` (wants `<fieldset>`).
   The snapshot header is a native `<output>` element — semantically a result/status, accepts `aria-label`, and trips neither rule.
 - The disabled-period tooltip wraps the disabled `<button>` in a plain `<span>` (no `tabIndex`, which Biome flags on non-interactive elements); the hover hint reaches mouse users via the span, which is enough for the "not watched" cue.
+
+### v1.1 refinement surprises
+
+- `formatPrice` can't render *consistent* decimal alignment across an instrument's candles without per-asset precision metadata (FX wants 4–5 dp, equities 2, crypto varies).
+  v1.1 uses a magnitude-aware range (`min=2`, `max ∈ [2, 8]` based on the value) and Intl trims to the value's own precision — so a single FX candle with `H=1.0823, L=1.078` renders as "1.0823" / "1.078" rather than "1.0823" / "1.0780".
+  Polishing this needs an instrument-precision field from the API; tracked as a follow-up.
+- `aria-label` on a bare `<div>` is rejected by Biome's a11y rules (no role to support the attribute) and `role="group"` is rejected by `useSemanticElements` (which wants `<fieldset>`).
+  The candle legend and the original snapshot header both use a native `<output>` element — it's semantically a result/status, accepts `aria-label`, and trips neither rule.
+- The candle "selected" by the legend is the crosshair-hovered one (`lightweight-charts`' `subscribeCrosshairMove`); when no crosshair is active the latest candle stands in as a stable default. Click-to-select isn't an idiom for this library.
+- Range presets cooperate with — rather than replace — the windowed scroll-back: picking "1Y" pins the visible time scale to `[now − 1y, now]` and the chart's range-fill effect auto-runs `loadOlder()` until the earliest loaded candle covers the range; scroll-back beyond the preset keeps working.
