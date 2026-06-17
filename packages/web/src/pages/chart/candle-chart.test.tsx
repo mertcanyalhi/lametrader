@@ -35,6 +35,8 @@ vi.mock('lightweight-charts', () => ({
       subscribeVisibleLogicalRangeChange: vi.fn(),
       subscribeVisibleTimeRangeChange: vi.fn(),
       setVisibleRange: vi.fn(),
+      setVisibleLogicalRange: vi.fn(),
+      getVisibleLogicalRange: vi.fn(() => null),
     }),
     priceScale: () => ({ applyOptions: vi.fn() }),
     subscribeCrosshairMove: (cb: (param: { time?: number }) => void) => {

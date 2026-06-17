@@ -14,7 +14,13 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { getStoredViewport, setStoredViewport } from '../../lib/chart-viewport.js';
+import {
+  captureViewport,
+  DEFAULT_VISIBLE_BARS,
+  getStoredViewport,
+  liveLogicalRange,
+  setStoredViewport,
+} from '../../lib/chart-viewport.js';
 import { priceDecimals } from '../../lib/format.js';
 import { liveCandleForPeriod } from '../../lib/hooks/candles.js';
 import { StreamKind } from '../../lib/stream/stream-client.types.js';
@@ -113,6 +119,10 @@ export function CandleChart({
     liveBarsRef.current = new Map();
     setLiveLatest(null);
   }
+  // The newest bar's open time (live tick or last loaded), read by the long-lived
+  // capture closure to tell "following live" from "scrolled back".
+  const lastBarTimeRef = useRef<number | null>(null);
+  lastBarTimeRef.current = (liveLatest ?? candles.at(-1))?.time ?? null;
   // Mirror the active preset so the long-lived capture closure sees the current value.
   const rangeRef = useRef(range);
   rangeRef.current = range;
@@ -157,12 +167,22 @@ export function CandleChart({
       if (logical && logical.from < 1 && paging.current.hasMore) paging.current.loadOlder();
     };
     chart.timeScale().subscribeVisibleLogicalRangeChange(onRange);
-    // Persist the user's scroll/pinch window so the next chart restores it. Gated
-    // until restore settles, and skipped while a preset range owns the view.
+    // Persist the user's scroll/pinch window so the next chart restores it —
+    // following live (a bar count) when the right edge is on the newest bar, or
+    // a fixed date window when scrolled back. Gated until restore settles, and
+    // skipped while a preset range owns the view.
     const onTimeRange = (timeRange: IRange<Time> | null): void => {
       if (!captureEnabledRef.current || rangeRef.current !== null) return;
       if (timeRange && typeof timeRange.from === 'number' && typeof timeRange.to === 'number') {
-        setStoredViewport({ from: timeRange.from * 1000, to: timeRange.to * 1000 });
+        const logical = chart.timeScale().getVisibleLogicalRange();
+        setStoredViewport(
+          captureViewport({
+            visibleFrom: timeRange.from * 1000,
+            visibleTo: timeRange.to * 1000,
+            lastBarTime: lastBarTimeRef.current,
+            visibleBars: logical ? logical.to - logical.from : DEFAULT_VISIBLE_BARS,
+          }),
+        );
       }
     };
     chart.timeScale().subscribeVisibleTimeRangeChange(onTimeRange);
@@ -245,10 +265,12 @@ export function CandleChart({
     });
   }, [range, candles]);
 
-  // With no preset active, restore the persisted scroll/pinch window once this
-  // mount's data is ready, so switching symbols (and reloads) keep the same date
-  // range. Pages older history first if the stored window starts before the
-  // loaded data, then applies the range after the auto-fit and enables capture.
+  // With no preset active, restore the persisted window once this mount's data is
+  // ready, so switching symbols (and reloads) keep the same view. A `live`
+  // viewport shows the last N bars in logical (bar-index) coordinates and then
+  // tracks new bars; a `fixed` viewport pages older history if its start predates
+  // the loaded data, then restores the absolute window. Both apply after the
+  // chart's auto-fit and re-enable capture.
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart || candles.length === 0 || settledRef.current) return;
@@ -260,20 +282,26 @@ export function CandleChart({
       captureEnabledRef.current = true;
       return;
     }
-    const earliestLoaded = candles[0]?.time ?? stored.to;
-    if (earliestLoaded > stored.from && paging.current.hasMore) {
-      paging.current.loadOlder();
-      return;
+    if (stored.mode === 'fixed') {
+      const earliestLoaded = candles[0]?.time ?? stored.to;
+      if (earliestLoaded > stored.from && paging.current.hasMore) {
+        paging.current.loadOlder();
+        return;
+      }
     }
     settledRef.current = true;
     // Defer past the chart's initial auto-fit (runs after autoSize measures the
     // container next frame) so our restored window isn't overridden, then re-enable
     // capture once it has settled.
     requestAnimationFrame(() => {
-      chart.timeScale().setVisibleRange({
-        from: (stored.from / 1000) as UTCTimestamp,
-        to: (stored.to / 1000) as UTCTimestamp,
-      });
+      if (stored.mode === 'live') {
+        chart.timeScale().setVisibleLogicalRange(liveLogicalRange(candles.length, stored.bars));
+      } else {
+        chart.timeScale().setVisibleRange({
+          from: (stored.from / 1000) as UTCTimestamp,
+          to: (stored.to / 1000) as UTCTimestamp,
+        });
+      }
       requestAnimationFrame(() => {
         captureEnabledRef.current = true;
       });

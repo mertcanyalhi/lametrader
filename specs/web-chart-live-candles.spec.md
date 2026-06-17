@@ -75,6 +75,10 @@ Each bullet maps to exactly one test (jsdom; mocked socket / mocked
       arrives (the latest-candle fallback uses the live bar).
 - [ ] Hovering a previous *live* bar shows that bar's OHLC in the legend (the
       inspection lookup checks the accumulated live bars, not just history).
+- [ ] `captureViewport` records a `live` bar-count window when the visible range
+      reaches the latest bar, and a `fixed` `{from,to}` window when scrolled back.
+- [ ] `liveLogicalRange` spans the last `bars` of the series (right edge on the
+      newest bar), clamped to bar 0 for short series.
 
 ## End-to-end expectation
 
@@ -95,6 +99,14 @@ the realistic surface for a canvas feature.
 
 ## Surprises
 
+- **An absolute persisted viewport doesn't follow new bars.** The stored window
+  was `{from, to}` epoch-ms and was restored verbatim, so once you were watching
+  the live edge the window went stale — new bars appeared off-screen to the right.
+  Reworked to a tagged union: `{mode:'live', bars}` (restored in logical/bar-index
+  coordinates so the right edge tracks new bars via `shiftVisibleRangeOnNewBar`)
+  vs `{mode:'fixed', from, to}` (a pinned historical window). The capture handler
+  picks the mode by whether the visible range reaches the latest bar; the decision
+  and the restore range are pure helpers (`captureViewport`, `liveLogicalRange`).
 - **Live bars aren't in the historical `candles` array.** They're applied to the
   series via `update` and kept in the by-time accumulation, but the legend's
   hovered-candle lookup originally searched only `candles` — so hovering any bar
