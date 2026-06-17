@@ -40,6 +40,20 @@ function fixedDecimals(value: number): Intl.NumberFormatOptions {
 }
 
 /**
+ * A *fixed* fraction-digit count for a price of the given magnitude — for charting
+ * libraries (e.g. `lightweight-charts`' price-axis precision) that need a single
+ * integer precision rather than a min/max range. Values at or above 1 use 2
+ * decimals (standard for equities/FX); sub-1 values grow so a low-unit price like
+ * `0.000718` keeps its significant figures on the axis instead of showing `0.00`.
+ */
+export function priceDecimals(value: number): number {
+  const abs = Math.abs(value);
+  if (abs === 0 || abs >= 1) return 2;
+  const leadingZeros = -Math.floor(Math.log10(abs)) - 1;
+  return Math.min(8, leadingZeros + 4);
+}
+
+/**
  * Format a price for display, choosing the decimal count by magnitude so both
  * `45000.5 → "45,000.50"` and `0.000034 → "0.00003400"` render readably.
  */

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { formatChange, formatChangePct, formatPrice, formatVolume } from './format.js';
+import {
+  formatChange,
+  formatChangePct,
+  formatPrice,
+  formatVolume,
+  priceDecimals,
+} from './format.js';
 
 describe('formatPrice', () => {
   it('keeps two decimals for values at or above 1000, lets [1, 1000) widen to four, and grows for smaller values so significant figures survive', () => {
@@ -63,6 +69,28 @@ describe('formatChangePct', () => {
       positive: '+3.45%',
       negative: '-3.86%',
       zero: '0.00%',
+    });
+  });
+});
+
+describe('priceDecimals', () => {
+  it('uses two decimals at or above 1 and grows for smaller values to keep significant figures', () => {
+    expect({
+      large: priceDecimals(50_000),
+      mid: priceDecimals(123.3),
+      one: priceDecimals(1),
+      subOne: priceDecimals(0.5432),
+      lowUnit: priceDecimals(0.000718),
+      tiny: priceDecimals(0.000034),
+      zero: priceDecimals(0),
+    }).toEqual({
+      large: 2,
+      mid: 2,
+      one: 2,
+      subOne: 4,
+      lowUnit: 7,
+      tiny: 8,
+      zero: 2,
     });
   });
 });

@@ -15,6 +15,7 @@ import {
 } from 'lightweight-charts';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { getStoredViewport, setStoredViewport } from '../../lib/chart-viewport.js';
+import { priceDecimals } from '../../lib/format.js';
 import { useTheme } from '../../lib/theme-context.js';
 import { ChartOverlay } from './chart-overlay.js';
 import type { ChartRange } from './chart-range.js';
@@ -157,7 +158,18 @@ export function CandleChart({
 
   // Push data whenever the candles (or theme-derived volume colors) change.
   useEffect(() => {
-    candleSeriesRef.current?.setData(candles.map(toCandlestick));
+    const candleSeries = candleSeriesRef.current;
+    if (!candleSeries) return;
+    // Match the price-axis precision to the symbol's magnitude so low-unit prices
+    // (e.g. a 0.000718 crypto cross) aren't rounded to "0.00" on the axis/crosshair.
+    const reference = candles.at(-1)?.close ?? candles[0]?.close;
+    if (reference !== undefined) {
+      const precision = priceDecimals(reference);
+      candleSeries.applyOptions({
+        priceFormat: { type: 'price', precision, minMove: 10 ** -precision },
+      });
+    }
+    candleSeries.setData(candles.map(toCandlestick));
     if (volumeSeriesRef.current) {
       const colors = chartColors(theme);
       volumeSeriesRef.current.setData(candles.map((candle) => toVolume(candle, colors)));
