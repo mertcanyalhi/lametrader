@@ -91,6 +91,15 @@ the realistic surface for a canvas feature.
 
 ## Surprises
 
+- **The historical `candles` array identity must be stable.** `usePagedCandles`
+  rebuilt the flattened array on every render, so each live tick (which
+  re-renders the chart page) handed the chart a new `candles` reference,
+  re-running the data effect's `setData` — which wipes the bars applied via
+  `update` and then re-seeds only from history. The result: every new minute's
+  bar replaced the previous one (so closed bars vanished) and the load-time bar
+  reverted to its partial value. Fixed by memoizing `candles` on the query pages,
+  and by accumulating *all* live bars (not just the latest) to re-apply after any
+  genuine `setData` (theme/data refresh), keyed reset on `(id, period)`.
 - **`setData` drops the forming bar.** Live ticks live only via `series.update`,
   but the data effect's `setData` (on a candles refetch / theme change) replaces
   the whole series, erasing the live bar until the next tick. The fix keeps the

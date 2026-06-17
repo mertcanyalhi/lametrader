@@ -141,6 +141,22 @@ describe('usePagedCandles', () => {
 
     expect(result.current.candles).toEqual([candle(NOW - DAY)]);
   });
+
+  it('returns a referentially stable candles array across re-renders when the data is unchanged', async () => {
+    windows.set(NOW, { candles: [candle(NOW - HOUR)], nextCursor: null });
+
+    const { result, rerender } = renderHook(
+      () => usePagedCandles({ id: ID, period: Period.OneHour }),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.candles).toHaveLength(1));
+    const first = result.current.candles;
+    rerender();
+
+    // Same reference — consumers key effects on it, so an unchanged render must
+    // not hand back a fresh array (which would re-run setData and drop live bars).
+    expect(result.current.candles).toBe(first);
+  });
 });
 
 /** A controllable fake `WebSocket` for the shared stream client. */

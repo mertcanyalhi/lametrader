@@ -94,10 +94,18 @@ export function CandleChart({
   // Latest paging callbacks for the visible-range listener (avoids stale closures).
   const paging = useRef({ loadOlder, hasMore });
   paging.current = { loadOlder, hasMore };
-  // Mirror the live bar so the data effect can re-apply it after a full setData
-  // (which drops the forming bar, since it lives only via `series.update`).
-  const liveCandleRef = useRef(liveCandle);
-  liveCandleRef.current = liveCandle;
+  // Accumulate the live bars applied via `update`, keyed by time, so they can be
+  // re-applied after a `setData` re-seeds the series from history alone — which
+  // happens on a theme or data refresh and would otherwise drop the live tail.
+  const liveBarsRef = useRef<Map<number, Candle>>(new Map());
+  // Those bars belong to one (id, period); when it changes, start a fresh tail.
+  // Reset during render (not an effect) so the data effect re-seeds from empty.
+  const streamKey = `${symbol.id}:${period}`;
+  const streamKeyRef = useRef(streamKey);
+  if (streamKeyRef.current !== streamKey) {
+    streamKeyRef.current = streamKey;
+    liveBarsRef.current = new Map();
+  }
   // Mirror the active preset so the long-lived capture closure sees the current value.
   const rangeRef = useRef(range);
   rangeRef.current = range;
@@ -182,12 +190,14 @@ export function CandleChart({
     if (volumeSeriesRef.current) {
       volumeSeriesRef.current.setData(candles.map((candle) => toVolume(candle, colors)));
     }
-    // setData replaces the whole series, dropping any forming bar applied via
-    // `update`; re-apply the current live bar so it survives a data refresh.
-    const live = liveCandleRef.current;
-    if (live) {
-      candleSeries.update(toCandlestick(live));
-      volumeSeriesRef.current?.update(toVolume(live, colors));
+    // setData replaces the whole series, dropping bars applied via `update`;
+    // re-apply every accumulated live bar (ascending) so the live tail survives.
+    const lastHistoryTime = candles.at(-1)?.time ?? Number.NEGATIVE_INFINITY;
+    const liveBars = [...liveBarsRef.current.values()].sort((a, b) => a.time - b.time);
+    for (const bar of liveBars) {
+      if (bar.time < lastHistoryTime) continue;
+      candleSeries.update(toCandlestick(bar));
+      volumeSeriesRef.current?.update(toVolume(bar, colors));
     }
   }, [candles, theme]);
 
@@ -197,6 +207,7 @@ export function CandleChart({
   useEffect(() => {
     const candleSeries = candleSeriesRef.current;
     if (!candleSeries || !liveCandle) return;
+    liveBarsRef.current.set(liveCandle.time, liveCandle);
     candleSeries.update(toCandlestick(liveCandle));
     volumeSeriesRef.current?.update(toVolume(liveCandle, chartColors(theme)));
   }, [liveCandle, theme]);

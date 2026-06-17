@@ -1,6 +1,6 @@
 import { type Candle, type CandlePage, type Period, periodMillis } from '@lametrader/core';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { apiFetch } from '../api-fetch.js';
 import { type CandleEvent, StreamKind } from '../stream/stream-client.types.js';
 import { useStreamSubscription } from '../stream/use-stream-subscription.js';
@@ -71,10 +71,18 @@ export function usePagedCandles({ id, period }: { id: string; period: Period }):
 
   // Pages arrive newest-window-first; reversing then flattening yields one
   // series ascending by time (each page is already ascending internally).
-  const candles = (query.data?.pages ?? [])
-    .slice()
-    .reverse()
-    .flatMap((page) => page.candles);
+  // Memoized on the pages so the array identity is stable across re-renders that
+  // don't change the data — consumers (the chart) key effects on this reference,
+  // and a fresh array each render would re-run them (and clobber live updates).
+  const pages = query.data?.pages;
+  const candles = useMemo(
+    () =>
+      (pages ?? [])
+        .slice()
+        .reverse()
+        .flatMap((page) => page.candles),
+    [pages],
+  );
 
   return {
     candles,

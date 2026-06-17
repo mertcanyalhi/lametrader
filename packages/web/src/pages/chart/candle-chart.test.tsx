@@ -73,8 +73,8 @@ const point = (candle: Candle) => ({
 });
 
 /** Render the chart with a stable candles array so the data effect runs once. */
-function renderChart(candles: Candle[], liveCandle: Candle | null) {
-  return render(
+function chartElement(candles: Candle[], liveCandle: Candle | null) {
+  return (
     <ThemeProvider>
       <Theme>
         <CandleChart
@@ -87,8 +87,12 @@ function renderChart(candles: Candle[], liveCandle: Candle | null) {
           liveCandle={liveCandle}
         />
       </Theme>
-    </ThemeProvider>,
+    </ThemeProvider>
   );
+}
+
+function renderChart(candles: Candle[], liveCandle: Candle | null) {
+  return render(chartElement(candles, liveCandle));
 }
 
 describe('CandleChart live ticks', () => {
@@ -104,21 +108,7 @@ describe('CandleChart live ticks', () => {
     const candles = [bar(1000, 100, 100, 100, 100)];
     const live = bar(1000, 100, 120, 100, 110);
     const { rerender } = renderChart(candles, null);
-    rerender(
-      <ThemeProvider>
-        <Theme>
-          <CandleChart
-            candles={candles}
-            symbol={SYMBOL}
-            period={Period.OneHour}
-            range={null}
-            loadOlder={() => {}}
-            hasMore={false}
-            liveCandle={live}
-          />
-        </Theme>
-      </ThemeProvider>,
-    );
+    rerender(chartElement(candles, live));
 
     expect(createdSeries[0]?.update.mock.calls).toEqual([[point(live)]]);
   });
@@ -127,21 +117,7 @@ describe('CandleChart live ticks', () => {
     const candles = [bar(1000, 100, 100, 100, 100)];
     const live = bar(2000, 110, 130, 105, 125);
     const { rerender } = renderChart(candles, null);
-    rerender(
-      <ThemeProvider>
-        <Theme>
-          <CandleChart
-            candles={candles}
-            symbol={SYMBOL}
-            period={Period.OneHour}
-            range={null}
-            loadOlder={() => {}}
-            hasMore={false}
-            liveCandle={live}
-          />
-        </Theme>
-      </ThemeProvider>,
-    );
+    rerender(chartElement(candles, live));
 
     expect(createdSeries[0]?.update.mock.calls).toEqual([[point(live)]]);
   });
@@ -150,22 +126,27 @@ describe('CandleChart live ticks', () => {
     const candles = [bar(1000, 100, 100, 100, 100)];
     const live = bar(1000, 100, 160, 90, 150);
     const { rerender } = renderChart(candles, null);
-    rerender(
-      <ThemeProvider>
-        <Theme>
-          <CandleChart
-            candles={candles}
-            symbol={SYMBOL}
-            period={Period.OneHour}
-            range={null}
-            loadOlder={() => {}}
-            hasMore={false}
-            liveCandle={live}
-          />
-        </Theme>
-      </ThemeProvider>,
-    );
+    rerender(chartElement(candles, live));
 
     expect(screen.getByText('150.00')).toBeInTheDocument();
+  });
+
+  it('re-applies every accumulated live bar after the data series is re-seeded', () => {
+    const candles = [bar(1000, 100, 100, 100, 100)];
+    const live2 = bar(2000, 100, 120, 100, 110);
+    const live3 = bar(3000, 110, 130, 105, 125);
+    const { rerender } = renderChart(candles, null);
+    rerender(chartElement(candles, live2));
+    rerender(chartElement(candles, live3));
+    // A fresh candles array reference (theme / data refresh) re-seeds the series
+    // via setData; both earlier live bars must be re-applied, not dropped.
+    rerender(chartElement([bar(1000, 100, 100, 100, 100)], live3));
+
+    expect(createdSeries[0]?.update.mock.calls).toEqual([
+      [point(live2)],
+      [point(live3)],
+      [point(live2)],
+      [point(live3)],
+    ]);
   });
 });
