@@ -1,10 +1,17 @@
 // @vitest-environment jsdom
 import { type Candle, type CandlePage, Period, periodMillis, SymbolType } from '@lametrader/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CHART_CANDLE_LIMIT, CHART_PAGE_BARS, usePagedCandles } from './candles.js';
+import { type CandleEvent, StreamKind } from '../stream/stream-client.types.js';
+import {
+  CHART_CANDLE_LIMIT,
+  CHART_PAGE_BARS,
+  liveCandleForPeriod,
+  useCandleStream,
+  usePagedCandles,
+} from './candles.js';
 
 /** A fixed "now" so the windowed query params are deterministic. */
 const NOW = Date.UTC(2024, 5, 1);
@@ -133,5 +140,102 @@ describe('usePagedCandles', () => {
     await waitFor(() => expect(result.current.candles).toEqual([candle(NOW - DAY)]));
 
     expect(result.current.candles).toEqual([candle(NOW - DAY)]);
+  });
+});
+
+/** A controllable fake `WebSocket` for the shared stream client. */
+class FakeWebSocket {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
+  static instances: FakeWebSocket[] = [];
+
+  readyState = FakeWebSocket.CONNECTING;
+  readonly sent: unknown[] = [];
+  private readonly listeners: Record<string, Array<(event: unknown) => void>> = {};
+
+  constructor() {
+    FakeWebSocket.instances.push(this);
+  }
+  addEventListener(type: string, cb: (event: unknown) => void): void {
+    const list = this.listeners[type] ?? [];
+    list.push(cb);
+    this.listeners[type] = list;
+  }
+  send(raw: string): void {
+    this.sent.push(JSON.parse(raw));
+  }
+  close(): void {
+    this.readyState = FakeWebSocket.CLOSED;
+    for (const cb of this.listeners.close ?? []) cb({});
+  }
+  open(): void {
+    this.readyState = FakeWebSocket.OPEN;
+    for (const cb of this.listeners.open ?? []) cb({});
+  }
+  emit(frame: unknown): void {
+    for (const cb of this.listeners.message ?? []) cb({ data: JSON.stringify(frame) });
+  }
+}
+
+const OTHER = 'crypto:ETHUSDT';
+
+/** A candle event frame for an id on a period. */
+const candleEvent = (id: string, period: Period): CandleEvent => ({
+  id,
+  period,
+  candle: candle(NOW),
+  final: false,
+});
+
+describe('useCandleStream', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+  });
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('returns null before any frame and the latest candle event once one arrives', () => {
+    const { result } = renderHook(() => useCandleStream(ID));
+    const before = result.current;
+    const socket = FakeWebSocket.instances[0];
+    const event = candleEvent(ID, Period.OneHour);
+    act(() => {
+      socket?.open();
+      socket?.emit(event);
+    });
+
+    expect({ before, after: result.current }).toEqual({ before: null, after: event });
+  });
+
+  it('unsubscribes the old id and subscribes the new one when id changes', () => {
+    const { rerender } = renderHook(({ id }) => useCandleStream(id), { initialProps: { id: ID } });
+    act(() => FakeWebSocket.instances[0]?.open());
+    // Changing id releases the sole subscription (closing the idle socket) and
+    // opens a fresh one for the new id; open it so its replayed subscribe lands.
+    act(() => rerender({ id: OTHER }));
+    act(() => FakeWebSocket.instances[1]?.open());
+
+    expect(FakeWebSocket.instances.flatMap((socket) => socket.sent)).toEqual([
+      { action: 'subscribe', id: ID },
+      { action: 'unsubscribe', id: ID },
+      { action: 'subscribe', id: OTHER },
+    ]);
+  });
+});
+
+describe('liveCandleForPeriod', () => {
+  it('returns the event candle when the period matches the charted period', () => {
+    const event = candleEvent(ID, Period.OneHour);
+    expect(liveCandleForPeriod(event, Period.OneHour)).toEqual(candle(NOW));
+  });
+
+  it('returns null when the event is for a different period than the chart', () => {
+    const event = candleEvent(ID, Period.OneDay);
+    expect(liveCandleForPeriod(event, Period.OneHour)).toEqual(null);
   });
 });

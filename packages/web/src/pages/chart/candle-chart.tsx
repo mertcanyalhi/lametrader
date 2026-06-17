@@ -64,6 +64,8 @@ function toVolume(candle: Candle, colors: ChartColors): HistogramData {
  * @param range - the active range preset (drives the visible scale), or `null`.
  * @param loadOlder - fetch the next older window (called on scroll-back / range fill).
  * @param hasMore - whether older history may still be available.
+ * @param liveCandle - the latest streamed bar for this period, applied to the
+ *   series in place (forming-bar update / append), or `null` when none yet.
  */
 export function CandleChart({
   candles,
@@ -72,6 +74,7 @@ export function CandleChart({
   range,
   loadOlder,
   hasMore,
+  liveCandle = null,
 }: {
   candles: Candle[];
   symbol: EnrichedSymbol;
@@ -79,6 +82,7 @@ export function CandleChart({
   range: ChartRange | null;
   loadOlder: () => void;
   hasMore: boolean;
+  liveCandle?: Candle | null;
 }): ReactNode {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -90,6 +94,10 @@ export function CandleChart({
   // Latest paging callbacks for the visible-range listener (avoids stale closures).
   const paging = useRef({ loadOlder, hasMore });
   paging.current = { loadOlder, hasMore };
+  // Mirror the live bar so the data effect can re-apply it after a full setData
+  // (which drops the forming bar, since it lives only via `series.update`).
+  const liveCandleRef = useRef(liveCandle);
+  liveCandleRef.current = liveCandle;
   // Mirror the active preset so the long-lived capture closure sees the current value.
   const rangeRef = useRef(range);
   rangeRef.current = range;
@@ -169,12 +177,29 @@ export function CandleChart({
         priceFormat: { type: 'price', precision, minMove: 10 ** -precision },
       });
     }
+    const colors = chartColors(theme);
     candleSeries.setData(candles.map(toCandlestick));
     if (volumeSeriesRef.current) {
-      const colors = chartColors(theme);
       volumeSeriesRef.current.setData(candles.map((candle) => toVolume(candle, colors)));
     }
+    // setData replaces the whole series, dropping any forming bar applied via
+    // `update`; re-apply the current live bar so it survives a data refresh.
+    const live = liveCandleRef.current;
+    if (live) {
+      candleSeries.update(toCandlestick(live));
+      volumeSeriesRef.current?.update(toVolume(live, colors));
+    }
   }, [candles, theme]);
+
+  // Apply each live tick to the series in place. `lightweight-charts`' `update`
+  // replaces the last bar when the time matches (forming bar) and appends when
+  // the time is newer — the "update or append" the live feed needs.
+  useEffect(() => {
+    const candleSeries = candleSeriesRef.current;
+    if (!candleSeries || !liveCandle) return;
+    candleSeries.update(toCandlestick(liveCandle));
+    volumeSeriesRef.current?.update(toVolume(liveCandle, chartColors(theme)));
+  }, [liveCandle, theme]);
 
   // When a range preset is active, drive the visible time scale to its window;
   // auto-trigger loadOlder if the earliest loaded candle doesn't yet cover it.
@@ -230,15 +255,16 @@ export function CandleChart({
     });
   }, [range, candles]);
 
-  // Resolve the candle to inspect in the overlay: the one at the crosshair,
-  // or the latest as a stable fallback when no hover is active.
+  // Resolve the candle to inspect in the overlay: the one at the crosshair, or
+  // the latest as a stable fallback when no hover is active. The live bar (when
+  // present) is the freshest "latest", so the header tracks the streamed close.
+  const latestCandle = liveCandle ?? candles.at(-1) ?? null;
   const inspected = useMemo<Candle | null>(() => {
-    if (candles.length === 0) return null;
     if (hoveredTime !== null) {
-      return candles.find((candle) => candle.time === hoveredTime) ?? candles.at(-1) ?? null;
+      return candles.find((candle) => candle.time === hoveredTime) ?? latestCandle;
     }
-    return candles.at(-1) ?? null;
-  }, [candles, hoveredTime]);
+    return latestCandle;
+  }, [candles, hoveredTime, latestCandle]);
 
   return (
     <div className="relative h-full w-full">

@@ -30,7 +30,9 @@ Candle and volume colors follow the app theme and update live when you toggle it
 Scrolling back in time loads older history a window at a time until the start of what's stored; a symbol with no stored candles shows a "Run backfill" card that fetches history without leaving the page.
 The visible date range and selected period persist (localStorage), so switching symbols and reloads keep your view.
 
-Live candle ticks and indicator overlays land in follow-up issues.
+The chart ticks live: it subscribes to the symbol's candle feed over the shared `/stream` socket and applies each candle for the charted period to the series in place — updating the forming bar when the time matches, appending when it's newer — so the latest bar (and the overlay's price header / document title) track the stream. Changing symbol or period re-subscribes; leaving the page tears the subscription down.
+
+Indicator overlays land in follow-up issues.
 
 ### `/settings` — Settings (this README's focus)
 
@@ -79,6 +81,7 @@ It hides the protocol's asymmetry — candle subscriptions are keyed by the clie
 
 - `useStreamSubscription(kind, id, onEvent)` — the typed React primitive: subscribe for the component's lifetime, re-subscribing on `id` change.
 - `useQuoteStream(id)` — the latest live quote for a symbol (used by each watchlist row), `null` until the first frame.
+- `useCandleStream(id)` — the latest live candle event for a symbol (used by the chart); the feed spans every polled period, so `liveCandleForPeriod` filters it to the charted one.
 
 `new WebSocket(...)` is never called from a component — only through this client (see `web/CLAUDE.md`).
 

@@ -1,6 +1,9 @@
 import { type Candle, type CandlePage, type Period, periodMillis } from '@lametrader/core';
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { apiFetch } from '../api-fetch.js';
+import { type CandleEvent, StreamKind } from '../stream/stream-client.types.js';
+import { useStreamSubscription } from '../stream/use-stream-subscription.js';
 
 /**
  * Bars per fetch window. The window is sized as `CHART_PAGE_BARS × periodMillis`
@@ -84,4 +87,35 @@ export function usePagedCandles({ id, period }: { id: string; period: Period }):
     isError: query.isError,
     error: query.error,
   };
+}
+
+/**
+ * Subscribe to a symbol's live candle feed over the shared `/stream` client and
+ * return the latest candle event, or `null` before the first frame. The feed
+ * spans every period the symbol is polled on — callers filter to the period
+ * they chart via {@link liveCandleForPeriod}. The latest event is stored with
+ * the id it arrived for, so changing `id` reads back `null` until the new
+ * symbol's first frame; the subscription is torn down on unmount.
+ *
+ * @param id - canonical symbol id to stream candles for.
+ */
+export function useCandleStream(id: string): CandleEvent | null {
+  const [latest, setLatest] = useState<{ id: string; event: CandleEvent } | null>(null);
+
+  useStreamSubscription(StreamKind.Candle, id, (event) => setLatest({ id, event }));
+
+  return latest?.id === id ? latest.event : null;
+}
+
+/**
+ * The candle from a live {@link CandleEvent} when it belongs to `period`, else
+ * `null`. The candle feed carries every polled period for a symbol; the chart
+ * renders one, so it keeps only the matching event's bar (and `null` when there
+ * is no event yet or it is for another period).
+ *
+ * @param event - the latest live candle event, or `null`.
+ * @param period - the period the chart is rendering.
+ */
+export function liveCandleForPeriod(event: CandleEvent | null, period: Period): Candle | null {
+  return event && event.period === period ? event.candle : null;
 }
