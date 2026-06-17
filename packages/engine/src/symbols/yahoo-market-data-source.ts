@@ -55,8 +55,22 @@ const YAHOO_MAX_LOOKBACK_MS: Partial<Record<Period, number>> = {
 };
 
 /**
+ * Minimum intraday lookback, in bars, for a *ranged* fetch. Yahoo reports the
+ * in-progress bar with **zero volume** and a degenerate (often flat) OHLC when
+ * the request window starts at — or within a bar of — that bar's open, which is
+ * exactly the tight resume window continuous polling uses (`from = latest.time`,
+ * the current bar). Widening the window so it spans a few completed bars makes
+ * Yahoo return the current bar with its real accumulating data. The extra older
+ * bars are already stored (idempotent upserts), so re-fetching them is harmless.
+ */
+const LIVE_POLL_MIN_BARS = 3;
+
+/**
  * Resolve the `period1`/`period2` dates for a Yahoo chart request. With an
- * explicit `range`, uses its bounds. With no range, intraday intervals start a
+ * explicit `range`, uses its bounds — but for **intraday** intervals widens the
+ * start back to at least {@link LIVE_POLL_MIN_BARS} bars before the end, so a
+ * poll's tight resume window still returns the in-progress bar with real volume
+ * (see {@link LIVE_POLL_MIN_BARS}). With no range, intraday intervals start a
  * bounded lookback before `now` (Yahoo rejects `new Date(0)` for them); daily and
  * weekly start at epoch 0 for the provider's deepest history.
  *
@@ -70,7 +84,10 @@ export function resolveYahooChartRange(
   now: number = Date.now(),
 ): { period1: Date; period2: Date } {
   if (range) {
-    return { period1: new Date(range.from), period2: new Date(range.to) };
+    const span = periodMillis(period);
+    const from =
+      span < DAY_MS ? Math.min(range.from, range.to - LIVE_POLL_MIN_BARS * span) : range.from;
+    return { period1: new Date(from), period2: new Date(range.to) };
   }
   const lookback = YAHOO_MAX_LOOKBACK_MS[period];
   return {

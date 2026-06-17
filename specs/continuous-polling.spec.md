@@ -77,6 +77,18 @@ which Yahoo rejects for intraday intervals (they allow only a bounded lookback) 
 daily/weekly keep `new Date(0)` (full history). Range computation extracted to a pure
 `resolveYahooChartRange(period, range, now)` so it's unit-testable without the network.
 
+A second Yahoo quirk affects the *ranged* (polling) path: when the request window
+starts at — or within one bar of — the in-progress bar's open (exactly the tight
+resume window a poll uses, `from = latest.time`), Yahoo returns that bar with
+**zero volume** and a degenerate, often flat OHLC, while a wider window returns it
+with real accumulating data.
+So `resolveYahooChartRange` widens an intraday explicit range so its start spans at
+least `LIVE_POLL_MIN_BARS` (3) completed bars before the end
+(`period1 = min(range.from, range.to - 3 · periodMillis)`); daily/weekly ranges are
+left exact.
+The extra older bars are already stored (idempotent upserts), so re-fetching them
+each poll is harmless.
+
 ## Yahoo live-bar merge fix (`engine`)
 
 Yahoo's v8 chart appends the in-progress interval stamped at the live update time
@@ -163,7 +175,11 @@ Yahoo bug-fix (`engine`, pure `resolveYahooChartRange`, injected `now`):
 - [ ] no `range`, intraday interval (`1m`) ⇒ `period1 = now - 7d`, `period2 = now`
       (not `new Date(0)`).
 - [ ] no `range`, daily interval (`1d`) ⇒ `period1 = new Date(0)`, `period2 = now`.
-- [ ] explicit `range` ⇒ `period1 = range.from`, `period2 = range.to` (unchanged).
+- [ ] explicit `range`, daily ⇒ `period1 = range.from`, `period2 = range.to` (unchanged).
+- [ ] explicit `range`, intraday, already spanning ≥ 3 bars ⇒ `period1 = range.from`.
+- [ ] explicit `range`, intraday, narrower than 3 bars (a poll's resume window) ⇒
+      `period1 = range.to - 3 · periodMillis` — widened so Yahoo returns the
+      in-progress bar with real volume/OHLC instead of a zero-volume snapshot.
 
 API adapter:
 

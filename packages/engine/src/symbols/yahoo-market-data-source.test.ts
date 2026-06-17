@@ -23,8 +23,26 @@ describe('resolveYahooChartRange', () => {
     });
   });
 
-  it('uses the explicit range bounds when a range is given', () => {
-    expect(resolveYahooChartRange(Period.OneMinute, { from: 100, to: 200 }, NOW)).toEqual({
+  it('keeps an intraday range start that already spans several bars', () => {
+    expect(
+      resolveYahooChartRange(Period.OneMinute, { from: NOW - 10 * 60_000, to: NOW }, NOW),
+    ).toEqual({
+      period1: new Date(NOW - 10 * 60_000),
+      period2: new Date(NOW),
+    });
+  });
+
+  it('widens a tight intraday range to a few bars so the in-progress bar has real data', () => {
+    // A poll resumes from the current bar's open (within one bar of `to`); Yahoo
+    // reports that bar with zero volume unless the window spans completed bars.
+    expect(resolveYahooChartRange(Period.OneMinute, { from: NOW - 30_000, to: NOW }, NOW)).toEqual({
+      period1: new Date(NOW - 3 * 60_000),
+      period2: new Date(NOW),
+    });
+  });
+
+  it('uses the explicit range bounds for a daily interval (no intraday widening)', () => {
+    expect(resolveYahooChartRange(Period.OneDay, { from: 100, to: 200 }, NOW)).toEqual({
       period1: new Date(100),
       period2: new Date(200),
     });
