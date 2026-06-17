@@ -66,8 +66,7 @@ export function SymbolPickerDialog({
       <Dialog.Content maxWidth="480px">
         <Dialog.Title>Pick a symbol</Dialog.Title>
         <Dialog.Description size="2" color="gray">
-          Choose from your watchlist, or search the catalog. Symbols outside the watchlist can't be
-          charted yet.
+          Choose from your watchlist, or search the catalog.
         </Dialog.Description>
 
         <Flex direction="column" gap="3" mt="4">
