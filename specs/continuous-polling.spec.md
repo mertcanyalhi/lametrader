@@ -77,6 +77,22 @@ which Yahoo rejects for intraday intervals (they allow only a bounded lookback) 
 daily/weekly keep `new Date(0)` (full history). Range computation extracted to a pure
 `resolveYahooChartRange(period, range, now)` so it's unit-testable without the network.
 
+## Yahoo live-duplicate bar fix (`engine`)
+
+Yahoo's chart appends the in-progress interval stamped at the live update time
+(≈ `now`) rather than the bar open — *in addition to* that interval's properly
+aligned bar — so the trailing quote opens inside the previous quote's period.
+Persisting it verbatim scattered a new sub-period row each poll (the candle key
+is `(symbol, period, time)`), e.g. an hourly chart showing 08:07, 08:22, 08:35.
+Fix: `YahooMarketDataSource.fetchCandles` drops any trailing quote that opens
+within the prior bar's period (`last.time < prev.time + periodMillis(period)`),
+keeping Yahoo's own aligned bar. No grid is reconstructed, so session/DST-anchored
+timestamps stay correct, and the fix covers both backfill and polling (both go
+through `fetchCandles`). Binance is unaffected (kline `openTime` is already aligned).
+
+- [ ] `fetchCandles` drops the trailing live-stamped duplicate, keeping the aligned bar.
+- [ ] `fetchCandles` leaves an already-aligned series (no trailing duplicate) unchanged.
+
 ## Acceptance criteria (each → one unit test, full-payload `toEqual`)
 
 Domain (`core`):

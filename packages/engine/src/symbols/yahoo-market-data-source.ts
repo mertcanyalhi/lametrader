@@ -9,6 +9,7 @@ import {
   MarketDataError,
   type MarketDataSource,
   Period,
+  periodMillis,
   SymbolType,
   symbolType,
 } from '@lametrader/core';
@@ -177,7 +178,7 @@ export class YahooMarketDataSource implements MarketDataSource {
       }
       // Yahoo's chart returns the whole requested window in one response — no
       // paging cap of ours applies, so the batch is always complete.
-      return { candles: out, complete: true };
+      return { candles: dropLiveDuplicate(out, period), complete: true };
     } catch (cause) {
       throw new MarketDataError(
         `Yahoo failed to fetch candles for ${id}: ${(cause as Error).message}`,
@@ -209,6 +210,31 @@ interface YahooBar {
   close?: number | null;
   adjclose?: number | null;
   volume?: number | null;
+}
+
+/**
+ * Drop Yahoo's trailing live duplicate of the in-progress bar. Yahoo's chart
+ * appends the current interval stamped at the live update time (≈ `now`) rather
+ * than the bar open, *in addition to* that interval's properly aligned bar — so
+ * the last quote lands inside the previous quote's period. Persisting it verbatim
+ * (the candle key includes `time`) would scatter a new sub-period row every poll
+ * (e.g. an hourly chart showing 08:07, 08:22, …). We keep Yahoo's own aligned bar
+ * and drop any trailing quote that opens within the prior bar's period; no grid is
+ * reconstructed, so session/DST-anchored timestamps stay correct.
+ */
+function dropLiveDuplicate(candles: Candle[], period: Period): Candle[] {
+  const span = periodMillis(period);
+  const out = [...candles];
+  while (out.length >= 2) {
+    const last = out[out.length - 1];
+    const prev = out[out.length - 2];
+    if (last && prev && last.time < prev.time + span) {
+      out.pop();
+    } else {
+      break;
+    }
+  }
+  return out;
 }
 
 /**
