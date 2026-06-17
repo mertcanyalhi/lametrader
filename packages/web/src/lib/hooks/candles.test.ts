@@ -9,7 +9,6 @@ import {
   CHART_CANDLE_LIMIT,
   CHART_PAGE_BARS,
   liveCandleForPeriod,
-  mergeLiveCandle,
   useCandleStream,
   usePagedCandles,
 } from './candles.js';
@@ -254,94 +253,5 @@ describe('liveCandleForPeriod', () => {
   it('returns null when the event is for a different period than the chart', () => {
     const event = candleEvent(ID, Period.OneDay);
     expect(liveCandleForPeriod(event, Period.OneHour)).toEqual(null);
-  });
-});
-
-describe('mergeLiveCandle', () => {
-  /** A crypto candle with explicit OHLCV at `time`. */
-  const crypto = (
-    open: number,
-    high: number,
-    low: number,
-    close: number,
-    volume: number,
-  ): Candle => ({
-    type: SymbolType.Crypto,
-    time: 1000,
-    open,
-    high,
-    low,
-    close,
-    volume,
-    quoteVolume: volume,
-    trades: 1,
-  });
-
-  it('returns the incoming candle unchanged when there is no accumulated bar', () => {
-    const incoming = crypto(100, 100, 100, 100, 5);
-    expect(mergeLiveCandle(undefined, incoming)).toEqual(incoming);
-  });
-
-  it('keeps the open, widens running high/low, follows the latest close and max volume', () => {
-    const existing = crypto(100, 101, 99, 100, 5);
-    // A later flat tick at a higher price: high extends, low holds, close follows.
-    const incoming = crypto(103, 103, 103, 103, 8);
-
-    expect(mergeLiveCandle(existing, incoming)).toEqual({
-      type: SymbolType.Crypto,
-      time: 1000,
-      open: 100,
-      high: 103,
-      low: 99,
-      close: 103,
-      volume: 8,
-      quoteVolume: 8,
-      trades: 1,
-    });
-  });
-
-  it('widens the running low when a later tick prints below it', () => {
-    const existing = crypto(100, 101, 99, 100, 5);
-    const incoming = crypto(97, 97, 97, 97, 6);
-
-    expect(mergeLiveCandle(existing, incoming)).toEqual({
-      type: SymbolType.Crypto,
-      time: 1000,
-      open: 100,
-      high: 101,
-      low: 97,
-      close: 97,
-      volume: 6,
-      quoteVolume: 6,
-      trades: 1,
-    });
-  });
-
-  it('merges an fx candle without a volume field', () => {
-    const existing: Candle = {
-      type: SymbolType.Fx,
-      time: 1000,
-      open: 1.1,
-      high: 1.1,
-      low: 1.1,
-      close: 1.1,
-    };
-    const incoming: Candle = {
-      type: SymbolType.Fx,
-      time: 1000,
-      open: 1.12,
-      high: 1.12,
-      low: 1.12,
-      close: 1.12,
-    };
-
-    expect(mergeLiveCandle(existing, incoming)).toEqual({
-      type: SymbolType.Fx,
-      time: 1000,
-      open: 1.1,
-      high: 1.12,
-      low: 1.1,
-      close: 1.12,
-    });
   });
 });

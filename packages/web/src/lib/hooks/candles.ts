@@ -1,10 +1,4 @@
-import {
-  type Candle,
-  type CandlePage,
-  type Period,
-  periodMillis,
-  SymbolType,
-} from '@lametrader/core';
+import { type Candle, type CandlePage, type Period, periodMillis } from '@lametrader/core';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { apiFetch } from '../api-fetch.js';
@@ -132,26 +126,4 @@ export function useCandleStream(id: string): CandleEvent | null {
  */
 export function liveCandleForPeriod(event: CandleEvent | null, period: Period): Candle | null {
   return event && event.period === period ? event.candle : null;
-}
-
-/**
- * Fold a freshly streamed forming-bar candle into the one already accumulated for
- * the same interval. The provider's in-progress bar can arrive flat — only the
- * latest price, no intra-bar range (notably Yahoo 1m) — so replacing it each tick
- * would leave a flat line. Instead keep the bar's first `open`, widen the running
- * `high`/`low` across ticks, follow the latest `close`, and take the larger
- * `volume` (the provider reports it cumulatively). With no existing bar the
- * incoming one starts the accumulation unchanged.
- *
- * @param existing - the bar accumulated so far for this time, or `undefined`.
- * @param incoming - the newly streamed candle for the same time.
- */
-export function mergeLiveCandle(existing: Candle | undefined, incoming: Candle): Candle {
-  if (!existing) return incoming;
-  const open = existing.open;
-  const high = Math.max(existing.high, incoming.high);
-  const low = Math.min(existing.low, incoming.low);
-  if (incoming.type === SymbolType.Fx) return { ...incoming, open, high, low };
-  const existingVolume = 'volume' in existing ? existing.volume : 0;
-  return { ...incoming, open, high, low, volume: Math.max(existingVolume, incoming.volume) };
 }

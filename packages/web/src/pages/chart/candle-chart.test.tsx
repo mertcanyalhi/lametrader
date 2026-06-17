@@ -156,19 +156,6 @@ describe('CandleChart live ticks', () => {
     ]);
   });
 
-  it('accumulates a running high/low for the forming bar across flat ticks', () => {
-    render(chartElement([bar(1000, 100, 100, 100, 100)]));
-    // Two flat ticks for the same interval at different prices; the bar should
-    // keep its open and widen its range, not render as a flat line.
-    emit(event(bar(1000, 100, 100, 100, 100)));
-    emit(event(bar(1000, 103, 103, 103, 103)));
-
-    expect(createdSeries[0]?.update.mock.calls).toEqual([
-      [{ time: 1, open: 100, high: 100, low: 100, close: 100 }],
-      [{ time: 1, open: 100, high: 103, low: 100, close: 103 }],
-    ]);
-  });
-
   it('ignores a live event for a different period than the chart', () => {
     render(chartElement([bar(1000, 100, 100, 100, 100)]));
     emit(event(bar(1000, 100, 120, 100, 110), Period.OneDay));
