@@ -1,7 +1,9 @@
 import { Callout, Flex, Heading, Skeleton, Table } from '@radix-ui/themes';
-import type { ReactNode } from 'react';
-import { useWatchlist } from '../../lib/hooks/symbols.js';
+import { useQueryClient } from '@tanstack/react-query';
+import { type ReactNode, useEffect } from 'react';
+import { useWatchlist, WATCHLIST_QUERY_KEY } from '../../lib/hooks/symbols.js';
 import { useConfig } from '../../lib/hooks/use-config.js';
+import { streamClient } from '../../lib/stream/stream-client.js';
 import { AddSymbolDialog } from './add-symbol-dialog.js';
 import { EmptyState } from './empty-state.js';
 import { WatchlistTable } from './watchlist-table.js';
@@ -21,6 +23,17 @@ export function WatchlistPage(): ReactNode {
   const watchlist = useWatchlist();
   const config = useConfig();
   const availablePeriods = config.data?.periods ?? [];
+  const queryClient = useQueryClient();
+
+  // After a stream reconnect the rows' live values may have drifted while the
+  // socket was down, so refetch the snapshot to resync from the server.
+  useEffect(
+    () =>
+      streamClient.onReconnect(() => {
+        queryClient.invalidateQueries({ queryKey: WATCHLIST_QUERY_KEY });
+      }),
+    [queryClient],
+  );
 
   return (
     <Flex direction="column" gap="4">

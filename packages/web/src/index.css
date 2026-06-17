@@ -112,3 +112,45 @@ body,
 body {
   overflow: hidden;
 }
+
+/*
+ * Live-tick price flash. A streamed quote update tints the price cell green
+ * (up) or red (down) and fades back over ~400 ms — long enough to catch the
+ * eye, short enough not to distract. `useFlash` toggles the class; it stays off
+ * under `prefers-reduced-motion`, but we also disable the animation here as a
+ * belt-and-suspenders so the tint never lingers for motion-sensitive users.
+ */
+@keyframes flash-up {
+  from {
+    background-color: hsl(var(--success) / 0.35);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@keyframes flash-down {
+  from {
+    background-color: hsl(var(--destructive) / 0.35);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.flash-up {
+  animation: flash-up 400ms ease-out;
+  border-radius: 0.25rem;
+}
+
+.flash-down {
+  animation: flash-down 400ms ease-out;
+  border-radius: 0.25rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flash-up,
+  .flash-down {
+    animation: none;
+  }
+}

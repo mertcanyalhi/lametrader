@@ -24,7 +24,7 @@ export interface JsonSocket {
  * current origin, mirroring how `apiFetch` proxies HTTP through `/api`. The
  * nginx proxy forwards `/api/*` upgrades to the backend.
  */
-function toWsUrl(path: string): string {
+export function toWsUrl(path: string): string {
   const { protocol, host } = window.location;
   const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
   return `${wsProtocol}//${host}/api${path}`;
