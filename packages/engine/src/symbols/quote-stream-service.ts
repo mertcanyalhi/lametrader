@@ -56,7 +56,7 @@ export interface QuoteStreamServiceOptions {
  *
  * Maintains an in-process registry of per-symbol subscriptions and reacts to {@link CandleEvent}s from the polling loop: for every subscription matching `(symbolId, defaultPeriod)`, re-derive the quote via the pure `computeQuote(eventCandle, previousBar)` and emit one {@link SymbolQuoteEvent}.
  *
- * Holds the rolling previous (closed) bar in each subscription; on a `final: true` candle it rotates that bar to the just-closed candle *after* emitting, so subsequent frames measure change against the new close (the TV-style snap-back, matching the snapshot semantics).
+ * Holds the rolling previous (closed) bar in each subscription; on a `final: true` candle it rotates that bar to the just-closed candle *after* emitting, so subsequent frames measure change against the new close (the last-bar snap-back, matching the snapshot semantics).
  *
  * Transport-agnostic per ADR-0005 — emission happens via the `onQuote` callback; the API renders it to WebSocket frames.
  */

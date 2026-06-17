@@ -13,7 +13,7 @@ The snapshot from `?enrich=true` (#35) provides each subscription's initial `pre
 
 - The engine reuses #35's pure `computeQuote(latest, previous)` to derive each frame and the "latest two candles on `defaultPeriod`" path to seed the baseline.
 - A subscription holds the rolling **previous (closed) bar**; its `close` is the baseline `computeQuote` measures change against.
-  On a `final: true` candle event, after emitting that frame, the subscription rotates the previous bar to the just-closed candle, so subsequent frames measure against it (the TV-style snap-back, matching the snapshot semantics).
+  On a `final: true` candle event, after emitting that frame, the subscription rotates the previous bar to the just-closed candle, so subsequent frames measure against it (the last-bar snap-back, matching the snapshot semantics).
 - `handleCandle` is synchronous — derivation is pure (no candle load at tick time), unlike indicator streaming which recomputes over stored candles.
 - `SymbolQuoteEvent.quote` is exactly `computeQuote`'s output `{ price, change, changePct, time }` (no `period` inside); `period` is a top-level field of the event, mirroring how `IndicatorStateEvent` keeps `period` out of its `state`.
   The #35-consistency criterion compares these shared fields against the snapshot's `SymbolQuote`.
