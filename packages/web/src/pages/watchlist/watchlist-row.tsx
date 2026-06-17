@@ -2,6 +2,7 @@ import type { EnrichedSymbol, Period } from '@lametrader/core';
 import { Badge, DropdownMenu, Flex, IconButton, Table, Text } from '@radix-ui/themes';
 import { MoreHorizontal } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import { Link } from 'react-router';
 import { sortPeriods } from '../../lib/periods.js';
 import { BackfillDialog } from './backfill-dialog.js';
 import { EditSymbolDialog } from './edit-symbol-dialog.js';
@@ -19,13 +20,16 @@ import { SymbolIdCode, SymbolTypeBadge } from './symbol-type-badge.js';
  *
  * @param symbol - the enriched symbol this row renders.
  * @param availablePeriods - the platform's enabled periods (edit options).
+ * @param defaultPeriod - the platform's default period, used as the chart-link target.
  */
 export function WatchlistRow({
   symbol,
   availablePeriods,
+  defaultPeriod,
 }: {
   symbol: EnrichedSymbol;
   availablePeriods: Period[];
+  defaultPeriod: Period | undefined;
 }): ReactNode {
   const [editOpen, setEditOpen] = useState(false);
   const [backfillOpen, setBackfillOpen] = useState(false);
@@ -35,7 +39,17 @@ export function WatchlistRow({
     <Table.Row align="center">
       <Table.RowHeaderCell>
         <div className="flex flex-col">
-          <SymbolIdCode id={symbol.id} type={symbol.type} />
+          {defaultPeriod ? (
+            <Link
+              to={`/chart?${new URLSearchParams({ id: symbol.id, period: defaultPeriod })}`}
+              aria-label={symbol.id}
+              className="self-start hover:opacity-80"
+            >
+              <SymbolIdCode id={symbol.id} type={symbol.type} />
+            </Link>
+          ) : (
+            <SymbolIdCode id={symbol.id} type={symbol.type} />
+          )}
           <Text size="1" color="gray">
             {symbol.description}
           </Text>

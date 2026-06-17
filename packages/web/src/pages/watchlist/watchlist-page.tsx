@@ -46,7 +46,11 @@ export function WatchlistPage(): ReactNode {
       ) : null}
 
       {watchlist.data && watchlist.data.length > 0 ? (
-        <WatchlistTable symbols={watchlist.data} availablePeriods={availablePeriods} />
+        <WatchlistTable
+          symbols={watchlist.data}
+          availablePeriods={availablePeriods}
+          defaultPeriod={config.data?.defaultPeriod}
+        />
       ) : null}
     </Flex>
   );
