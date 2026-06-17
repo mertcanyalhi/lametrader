@@ -2,6 +2,7 @@ import type { Candle, EnrichedSymbol, Period } from '@lametrader/core';
 import { Callout, Flex, Link as RadixLink } from '@radix-ui/themes';
 import { type ReactNode, useEffect } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router';
+import { getStoredPeriod, setStoredPeriod } from '../../lib/chart-period.js';
 import { formatChange, formatChangePct, formatPrice } from '../../lib/format.js';
 import { usePagedCandles } from '../../lib/hooks/candles.js';
 import { useWatchlist } from '../../lib/hooks/symbols.js';
@@ -41,10 +42,15 @@ export function ChartPage(): ReactNode {
   const range = parseRange(params.get('range'));
 
   // Bare /chart (or a missing half) → resolve a sensible default, or bounce home.
+  // The period prefers the last-selected one (persisted), as long as it's still
+  // enabled in config; otherwise the config default.
   if (!id || !period) {
     const first = symbols[0];
     if (!first || !cfg) return <Navigate to="/" replace />;
-    const target = new URLSearchParams({ id: id ?? first.id, period: period ?? cfg.defaultPeriod });
+    const stored = getStoredPeriod();
+    const resolvedPeriod =
+      period ?? (stored && cfg.periods.includes(stored) ? stored : cfg.defaultPeriod);
+    const target = new URLSearchParams({ id: id ?? first.id, period: resolvedPeriod });
     return <Navigate to={`/chart?${target}`} replace />;
   }
 
@@ -59,6 +65,8 @@ export function ChartPage(): ReactNode {
   }
 
   function applyPeriodRange(next: { period: Period; range: ChartRange | null }): void {
+    // Remember the chosen period so the chart reopens on it (bare /chart, reload).
+    setStoredPeriod(next.period);
     const params = new URLSearchParams({ id: id ?? '', period: next.period });
     if (next.range) params.set('range', next.range);
     setParams(params);

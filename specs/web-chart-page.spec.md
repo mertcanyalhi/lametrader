@@ -103,6 +103,15 @@ The disabled-period and snapshot behaviours moved into the modal and the canvas 
 - [ ] Switching symbols (and reloading) restores the persisted window: the new symbol opens on the same start/end timestamps, paging older history in first if the window starts before the loaded data.
   Capture is gated until the restore settles so the chart's initial auto-fit can't overwrite the stored window; a preset range, when set, owns the view instead.
 
+#### Persisted period
+
+- [ ] The selected period is persisted to `localStorage` (`getStoredPeriod`/`setStoredPeriod`; non-period values yield `null`) when applied from the period dialog.
+- [ ] A bare `/chart` (or reload) opens on the last-selected period when it's still enabled in config, otherwise the config default.
+
+#### Document title
+
+- [ ] The document title reflects the chart's latest loaded candle on the current period — `<id> · <close> <Δ vs prev close> (<pct>%) - lametrader` — not the default-period snapshot; it falls back to `<id>` (or `<id> · <price>`) with fewer than two candles.
+
 ## End-to-end expectation
 
 The chart page's data contract is pinned at the HTTP boundary in `packages/api/tests/e2e/`:

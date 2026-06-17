@@ -10,6 +10,7 @@ import { Theme } from '@radix-ui/themes';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -75,6 +76,7 @@ describe('ChartPage', () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    window.localStorage.clear();
   });
 
   function onRequest(includes: string, body: () => unknown): void {
@@ -148,5 +150,35 @@ describe('ChartPage', () => {
     await screen.findByText('candle-chart');
 
     expect(document.title).toEqual('crypto:BTCUSDT · 102.00 +2.00 (+2.00%) - lametrader');
+  });
+
+  it('redirects bare /chart to the last-selected period from storage when one is saved', async () => {
+    window.localStorage.setItem('chart-period', '1h');
+    onRequest('/symbols?enrich=true', () => [BTC]);
+    onRequest('/config', () => CONFIG);
+    onRequest('/candles', () => ({ candles: [], nextCursor: null }));
+
+    renderAt('/chart');
+
+    // Config default is 1d, but the stored 1h (still enabled) wins.
+    await screen.findByText(`at:/chart?${new URLSearchParams({ id: BTC.id, period: '1h' })}`);
+    expect(
+      screen.queryByText(`at:/chart?${new URLSearchParams({ id: BTC.id, period: '1h' })}`),
+    ).not.toBeNull();
+  });
+
+  it('persists the selected period to localStorage when applied', async () => {
+    onRequest('/symbols?enrich=true', () => [BTC]);
+    onRequest('/config', () => CONFIG);
+    onRequest('/candles', () => ({ candles: [], nextCursor: null }));
+    renderAt('/chart?id=crypto:BTCUSDT&period=1h');
+    const user = userEvent.setup();
+
+    // Open the period dialog (bottom-bar trigger is labeled with the current period).
+    await user.click(await screen.findByRole('button', { name: '1h' }));
+    await user.click(await screen.findByRole('button', { name: '1d' }));
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    expect(window.localStorage.getItem('chart-period')).toEqual('1d');
   });
 });
