@@ -44,9 +44,9 @@ function toVolume(candle: Candle, colors: ChartColors): HistogramData {
 
 /**
  * The `lightweight-charts` candlestick canvas, plus a volume sub-pane for
- * asset classes that have volume (crypto/equity; omitted for FX), a TV-style
- * top-left overlay (symbol summary + the hovered candle's OHLC legend), and
- * the scroll-back paging trigger. The chart auto-sizes to its container.
+ * asset classes that have volume (crypto/equity; omitted for FX), a top-left
+ * overlay (symbol summary + the hovered candle's OHLC legend), and the
+ * scroll-back paging trigger. The chart auto-sizes to its container.
  *
  * The overlay's candle is the one currently under the crosshair (subscribed via
  * `subscribeCrosshairMove`); when no crosshair is active, the latest loaded

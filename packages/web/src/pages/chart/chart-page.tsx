@@ -21,10 +21,10 @@ import { SymbolPickerDialog } from './symbol-picker-dialog.js';
  * `/chart` redirects to the first watched symbol on `config.defaultPeriod`, or
  * to the watchlist when nothing is watched.
  *
- * Layout (TradingView-style): the candle canvas fills the page, with a
- * top-left overlay carrying the symbol summary + the hovered candle's OHLC
- * legend; the bottom bar holds the symbol picker and the period+range dialog
- * triggers, leaving room for further actions in the future.
+ * Layout: the candle canvas fills the page, with a top-left overlay carrying
+ * the symbol summary + the hovered candle's OHLC legend; the bottom bar holds
+ * the symbol picker and the period+range dialog triggers, leaving room for
+ * further actions in the future.
  */
 export function ChartPage(): ReactNode {
   const [params, setParams] = useSearchParams();

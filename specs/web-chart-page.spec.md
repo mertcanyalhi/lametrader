@@ -6,7 +6,7 @@
 
 ## Goal
 
-Build the `/chart` page: pick a watched symbol + period from a toolbar and render a TradingView-style candlestick chart (`lightweight-charts`) from historical candles, with a volume sub-pane for asset classes that have volume.
+Build the `/chart` page: pick a watched symbol + period from a toolbar and render a candlestick chart (`lightweight-charts`) from historical candles, with a volume sub-pane for asset classes that have volume.
 Symbol/period live in the URL so navigation is shareable and back/forward works.
 Live candle ticks and indicators are separate tasks.
 
@@ -40,7 +40,7 @@ Each bullet maps to exactly one test.
 
 ### Toolbar + URL contract
 
-The original inline toolbar (symbol `Select`, period buttons, snapshot header on top) was reshaped into a TradingView-style layout in v1.1 — see *Refinements (v1.1)* below.
+The original inline toolbar (symbol `Select`, period buttons, snapshot header on top) was reshaped into a canvas-overlay + bottom-action-bar layout in v1.1 — see *Refinements (v1.1)* below.
 The URL contract is preserved: `?id=…` for the symbol and `?period=…` for the period (now plus `?range=…`).
 The disabled-period and snapshot behaviours moved into the modal and the canvas overlay respectively.
 
@@ -64,7 +64,7 @@ The disabled-period and snapshot behaviours moved into the modal and the canvas 
 
 #### Top-left chart overlay (summary + legend)
 
-- [ ] A top-left overlay is rendered *inside the chart pane* (TradingView style): the symbol's `description · period · exchange` on top, the inspected candle's OHLC + diff + volume below it.
+- [ ] A top-left overlay is rendered *inside the chart pane*: the symbol's `description · period · exchange` on top, the inspected candle's OHLC + diff + volume below it.
   The summary line is always present once a symbol is selected; the OHLC legend appears once candles load.
 
 #### Dynamic document title

@@ -20,16 +20,13 @@ import { SymbolIdCode, SymbolTypeBadge } from './symbol-type-badge.js';
  *
  * @param symbol - the enriched symbol this row renders.
  * @param availablePeriods - the platform's enabled periods (edit options).
- * @param defaultPeriod - the platform's default period, used as the chart-link target.
  */
 export function WatchlistRow({
   symbol,
   availablePeriods,
-  defaultPeriod,
 }: {
   symbol: EnrichedSymbol;
   availablePeriods: Period[];
-  defaultPeriod: Period | undefined;
 }): ReactNode {
   const [editOpen, setEditOpen] = useState(false);
   const [backfillOpen, setBackfillOpen] = useState(false);
@@ -39,17 +36,14 @@ export function WatchlistRow({
     <Table.Row align="center">
       <Table.RowHeaderCell>
         <div className="flex flex-col">
-          {defaultPeriod ? (
-            <Link
-              to={`/chart?${new URLSearchParams({ id: symbol.id, period: defaultPeriod })}`}
-              aria-label={symbol.id}
-              className="self-start hover:opacity-80"
-            >
-              <SymbolIdCode id={symbol.id} type={symbol.type} />
-            </Link>
-          ) : (
+          {/* Link without a period so the chart resolves the persisted period (then the config default). */}
+          <Link
+            to={`/chart?${new URLSearchParams({ id: symbol.id })}`}
+            aria-label={symbol.id}
+            className="self-start hover:opacity-80"
+          >
             <SymbolIdCode id={symbol.id} type={symbol.type} />
-          )}
+          </Link>
           <Text size="1" color="gray">
             {symbol.description}
           </Text>

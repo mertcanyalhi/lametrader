@@ -7,8 +7,8 @@ import { showsVolume } from './chart-series.js';
 /**
  * The top-left overlay rendered over the chart canvas — stacks the symbol's
  * summary (description · period · exchange) above the inspected candle's OHLC
- * legend. TradingView-style: identity-then-numbers, both inside the chart pane
- * so the candles read directly underneath.
+ * legend: identity-then-numbers, both inside the chart pane so the candles read
+ * directly underneath.
  *
  * @param symbol - the enriched symbol the chart is currently rendering.
  * @param period - the current charted period (the middle of the summary).

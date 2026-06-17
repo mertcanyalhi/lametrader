@@ -40,16 +40,13 @@ function compareOn(column: SortColumn, a: EnrichedSymbol, b: EnrichedSymbol): nu
  *
  * @param symbols - the enriched rows to render.
  * @param availablePeriods - the platform's enabled periods (passed to each row).
- * @param defaultPeriod - the platform's default period, used as the chart-link target.
  */
 export function WatchlistTable({
   symbols,
   availablePeriods,
-  defaultPeriod,
 }: {
   symbols: EnrichedSymbol[];
   availablePeriods: Period[];
-  defaultPeriod: Period | undefined;
 }): ReactNode {
   const [sort, setSort] = useState<SortState>({ column: 'symbol', direction: 'asc' });
 
@@ -93,12 +90,7 @@ export function WatchlistTable({
       </Table.Header>
       <Table.Body>
         {sorted.map((symbol) => (
-          <WatchlistRow
-            key={symbol.id}
-            symbol={symbol}
-            availablePeriods={availablePeriods}
-            defaultPeriod={defaultPeriod}
-          />
+          <WatchlistRow key={symbol.id} symbol={symbol} availablePeriods={availablePeriods} />
         ))}
       </Table.Body>
     </Table.Root>

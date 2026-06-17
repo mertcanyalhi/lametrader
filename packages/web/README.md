@@ -19,12 +19,14 @@ Live price ticking lands in a separate task.
 
 ### `/chart` — Chart
 
-A TradingView-style candlestick chart of one watched symbol on one timeframe.
-The symbol and period live in the URL (`/chart?id=&period=`), so a chart is shareable and the browser's back/forward buttons navigate between views; a bare `/chart` opens the first watched symbol on the default period (or sends you to the watchlist when nothing is watched).
-The toolbar picks the symbol and timeframe — timeframes the symbol isn't tracked on are disabled with a hint — and shows the symbol's latest price and change.
+A candlestick chart of one watched symbol on one timeframe, rendered with `lightweight-charts`.
+The symbol and period live in the URL (`/chart?id=&period=&range=`), so a chart is shareable and the browser's back/forward buttons navigate between views; a bare `/chart` opens the first watched symbol on your last-selected period (falling back to the config default), or sends you to the watchlist when nothing is watched.
+A top-left overlay shows the symbol summary (description · period · exchange) and the inspected candle's open/high/low/close, change, and volume — the candle under the crosshair, or the latest one otherwise.
+A bottom action bar holds the symbol picker (a searchable dialog; instruments outside your watchlist appear faded and can't be charted) and the period + date-range dialog.
 Crypto and equities get a volume sub-pane; FX (no volume) omits it.
 Candle and volume colors follow the app theme and update live when you toggle it.
 Scrolling back in time loads older history a window at a time until the start of what's stored; a symbol with no stored candles shows a "Run backfill" card that fetches history without leaving the page.
+The visible date range and selected period persist (localStorage), so switching symbols and reloads keep your view.
 
 Live candle ticks and indicator overlays land in follow-up issues.
 
