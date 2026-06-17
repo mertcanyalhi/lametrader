@@ -15,7 +15,9 @@ A symbol with no price yet shows a dash.
 
 Backfill historical candles from a symbol's row actions (or right after adding it): pick periods and an optional date range, watch each job's live progress, and retry on failure.
 
-Live price ticking lands in a separate task.
+Each visible row ticks live: on mount it subscribes to the symbol's quote feed over the shared `/stream` socket and updates its price/change/change-% in place, with the price cell flashing green (up) or red (down) on each move (suppressed under `prefers-reduced-motion`).
+Leaving the page tears the subscriptions down; returning re-subscribes from the current snapshot.
+If the socket drops, the shared client reconnects with backoff and replays the active subscriptions, and the watchlist refetches its snapshot so the rows resync.
 
 ### `/chart` — Chart
 
@@ -68,6 +70,17 @@ A thrown `ConfigError` becomes a form-level error rendered inline as a Radix The
 `src/lib/hooks/candles.ts` exposes `usePagedCandles` — the chart's historical candle feed, which loads a symbol/period's bars a time window at a time and walks the window backward through history as you scroll.
 
 Both modules go through the package's `apiFetch` wrapper, so logging + `ApiError` mapping happen at the boundary, not at each call site.
+
+### Live `/stream` client
+
+`src/lib/stream/` holds the shared real-time client over the multiplexed `GET /api/stream` WebSocket.
+A single module-level socket (`stream-client.ts`) backs the whole app: subscriptions are ref-counted by `(kind, id)`, so many components can watch the same symbol over one connection, and the socket opens on the first subscription and closes once the last one is released.
+It hides the protocol's asymmetry — candle subscriptions are keyed by the client's symbol `id`, quote subscriptions by the server-assigned `subscriptionId` learned from the `subscribed-quote` reply — behind one `subscribe(kind, id, listener)` call, and reconnects with exponential backoff, replaying the active subscriptions and firing `onReconnect` listeners so consumers can resync.
+
+- `useStreamSubscription(kind, id, onEvent)` — the typed React primitive: subscribe for the component's lifetime, re-subscribing on `id` change.
+- `useQuoteStream(id)` — the latest live quote for a symbol (used by each watchlist row), `null` until the first frame.
+
+`new WebSocket(...)` is never called from a component — only through this client (see `web/CLAUDE.md`).
 
 ## Develop
 

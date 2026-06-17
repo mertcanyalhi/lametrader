@@ -4,6 +4,7 @@ import { MoreHorizontal } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { Link } from 'react-router';
 import { sortPeriods } from '../../lib/periods.js';
+import { useQuoteStream } from '../../lib/stream/use-quote-stream.js';
 import { BackfillDialog } from './backfill-dialog.js';
 import { EditSymbolDialog } from './edit-symbol-dialog.js';
 import { PriceCells } from './price-cell.js';
@@ -32,6 +33,11 @@ export function WatchlistRow({
   const [backfillOpen, setBackfillOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
 
+  // Live ticks override the snapshot quote in place; before the first frame the
+  // static snapshot (from `?enrich=true`) is shown.
+  const liveQuote = useQuoteStream(symbol.id);
+  const quote = liveQuote ?? symbol.quote;
+
   return (
     <Table.Row align="center">
       <Table.RowHeaderCell>
@@ -52,7 +58,7 @@ export function WatchlistRow({
       <Table.Cell>
         <SymbolTypeBadge type={symbol.type} />
       </Table.Cell>
-      <PriceCells quote={symbol.quote} />
+      <PriceCells quote={quote} />
       <Table.Cell>
         <Flex gap="1" wrap="wrap">
           {sortPeriods(symbol.periods).map((period) => (

@@ -21,7 +21,24 @@ vi.mock('sonner', () => ({
   Toaster: () => null,
 }));
 
+/**
+ * The shared `/stream` client is mocked: row quote subscriptions become no-ops
+ * (jsdom has no `WebSocket`), and the registered `onReconnect` callbacks are
+ * captured so a test can fire a reconnect and assert the page resyncs.
+ */
+const { reconnectCallbacks } = vi.hoisted(() => ({ reconnectCallbacks: [] as Array<() => void> }));
+vi.mock('../../lib/stream/stream-client.js', () => ({
+  streamClient: {
+    subscribe: () => () => {},
+    onReconnect: (cb: () => void) => {
+      reconnectCallbacks.push(cb);
+      return () => {};
+    },
+  },
+}));
+
 import { toast } from 'sonner';
+import { WATCHLIST_QUERY_KEY } from '../../lib/hooks/symbols';
 
 /** A fully-enriched Bitcoin row with a non-null snapshot quote. */
 const BTC: EnrichedSymbol = {
@@ -86,6 +103,7 @@ describe('WatchlistPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    reconnectCallbacks.length = 0;
     matchers = [];
     fetchSpy = vi.fn(async (url: string, init?: RequestInit) => {
       const method = init?.method ?? 'GET';
@@ -527,6 +545,20 @@ describe('WatchlistPage', () => {
       );
     });
     expect(screen.getByText('crypto:BTCUSDT')).toBeInTheDocument();
+  });
+
+  it('invalidates the enriched query so rows resync from a fresh snapshot on stream reconnect', async () => {
+    onRequest('GET', '/symbols?enrich=true', () => [BTC]);
+    onRequest('GET', '/config', () => CONFIG);
+    renderPage();
+    await screen.findByText('crypto:BTCUSDT');
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+
+    act(() => {
+      for (const callback of reconnectCallbacks) callback();
+    });
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: WATCHLIST_QUERY_KEY });
   });
 
   it("links each row's symbol id to the chart page without pinning a period", async () => {
