@@ -19,8 +19,16 @@ Live price ticking lands in a separate task.
 
 ### `/chart` — Chart
 
-Boilerplate placeholder.
-The candlestick chart + indicator overlays land in follow-up issues.
+A candlestick chart of one watched symbol on one timeframe, rendered with `lightweight-charts`.
+The symbol and period live in the URL (`/chart?id=&period=&range=`), so a chart is shareable and the browser's back/forward buttons navigate between views; a bare `/chart` opens the first watched symbol on your last-selected period (falling back to the config default), or sends you to the watchlist when nothing is watched.
+A top-left overlay shows the symbol summary (description · period · exchange) and the inspected candle's open/high/low/close, change, and volume — the candle under the crosshair, or the latest one otherwise.
+A bottom action bar holds the symbol picker (a searchable dialog; instruments outside your watchlist appear faded and can't be charted) and the period + date-range dialog.
+Crypto and equities get a volume sub-pane; FX (no volume) omits it.
+Candle and volume colors follow the app theme and update live when you toggle it.
+Scrolling back in time loads older history a window at a time until the start of what's stored; a symbol with no stored candles shows a "Run backfill" card that fetches history without leaving the page.
+The visible date range and selected period persist (localStorage), so switching symbols and reloads keep your view.
+
+Live candle ticks and indicator overlays land in follow-up issues.
 
 ### `/settings` — Settings (this README's focus)
 
@@ -57,6 +65,8 @@ A thrown `ConfigError` becomes a form-level error rendered inline as a Radix The
 
 `src/lib/hooks/symbols.ts` exposes the watchlist data layer (read the watched symbols, search instruments, add/edit-periods/remove).
 
+`src/lib/hooks/candles.ts` exposes `usePagedCandles` — the chart's historical candle feed, which loads a symbol/period's bars a time window at a time and walks the window backward through history as you scroll.
+
 Both modules go through the package's `apiFetch` wrapper, so logging + `ApiError` mapping happen at the boundary, not at each call site.
 
 ## Develop
@@ -81,5 +91,5 @@ npm test
   RTL `cleanup()` + `vi.restoreAllMocks()` in `afterEach`.
   Mock at the `fetch` boundary so the real `apiFetch` + `QueryClient` + RHF resolver are exercised.
 - **E2E** — at the HTTP boundary, in `packages/api/tests/e2e/`.
-  The settings page's contract is pinned by `packages/api/tests/e2e/settings-page.e2e.test.ts` (happy path + the 400 critical failure); the watchlist page's by `watchlist-page.e2e.test.ts` (the discover → add → enriched-list → edit → remove round-trip + the 404 failure).
+  The settings page's contract is pinned by `packages/api/tests/e2e/settings-page.e2e.test.ts` (happy path + the 400 critical failure); the watchlist page's by `watchlist-page.e2e.test.ts` (the discover → add → enriched-list → edit → remove round-trip + the 404 failure); the chart page's by `chart-page.e2e.test.ts` (the backfill → windowed candle read + the empty-window state).
   No browser harness — page-level behaviour is covered by the unit tier.

@@ -32,19 +32,10 @@ describe('App shell', () => {
     expect(within(main).getByRole('heading', { name: 'Watchlist' })).toBeInTheDocument();
   });
 
-  it('renders the chart placeholder card at /chart', () => {
-    render(
-      <MemoryRouter initialEntries={['/chart']}>
-        <AppRoutes />
-      </MemoryRouter>,
-    );
-    const main = screen.getByRole('main');
-    expect(within(main).getByRole('heading', { name: 'Chart' })).toBeInTheDocument();
-  });
-
-  // The /settings route renders the real form (a data-fetching page) in #34;
-  // its rendering is covered exhaustively by `pages/settings/settings-page.test.tsx`.
-  // We deliberately do not assert it here to keep this smoke test fetch-free.
+  // The /chart and /settings routes render real data-fetching pages (#38, #34);
+  // their rendering is covered exhaustively by `pages/chart/*.test.tsx` and
+  // `pages/settings/settings-page.test.tsx`. We deliberately do not assert them
+  // here to keep this smoke test fetch-free.
 
   it('marks the active route nav link with aria-current=page and the others without it', () => {
     render(

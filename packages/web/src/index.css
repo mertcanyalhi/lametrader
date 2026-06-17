@@ -85,8 +85,30 @@
   --color-success-foreground: hsl(var(--success-foreground));
 }
 
+/*
+ * The app is a fixed-height shell that scrolls internally (`<main>` owns the
+ * scroll), so the document itself must never scroll. Pin the root chain to the
+ * viewport and forbid document overflow.
+ *
+ * `100%` is the fallback; `100dvh` (dynamic viewport height) is used where
+ * supported so mobile browsers whose toolbar shrinks the visible area don't
+ * leave the root taller than what's on screen — otherwise the page scrolls
+ * even though the shell fits (see the chart page's bottom action bar).
+ */
 html,
 body,
 #root {
   height: 100%;
+}
+
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    height: 100dvh;
+  }
+}
+
+body {
+  overflow: hidden;
 }

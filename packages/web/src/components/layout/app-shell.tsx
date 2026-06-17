@@ -72,7 +72,7 @@ function ShellChrome({ children }: { children: ReactNode }): ReactNode {
   }, []);
 
   return (
-    <div className="flex h-screen w-full bg-background text-foreground">
+    <div className="flex h-dvh w-full bg-background text-foreground">
       <Sidebar collapsed={sidebarCollapsed} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />

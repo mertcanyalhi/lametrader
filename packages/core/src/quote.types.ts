@@ -4,7 +4,7 @@ import type { WatchedSymbol } from './symbol.types.js';
 /**
  * A point-in-time price summary for a symbol, derived from its stored candles on
  * one {@link Period}. `change`/`changePct` are period-over-period ("since the
- * previous close"), the TV/industry-standard last-bar change.
+ * previous close"), the industry-standard last-bar change.
  */
 export interface SymbolQuote {
   /** Latest candle's close. */

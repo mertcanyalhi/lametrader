@@ -5,6 +5,7 @@ import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WatchlistPage } from './watchlist-page';
 
@@ -114,7 +115,9 @@ describe('WatchlistPage', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <Theme>
-          <WatchlistPage />
+          <MemoryRouter>
+            <WatchlistPage />
+          </MemoryRouter>
         </Theme>
       </QueryClientProvider>,
     );
@@ -524,5 +527,16 @@ describe('WatchlistPage', () => {
       );
     });
     expect(screen.getByText('crypto:BTCUSDT')).toBeInTheDocument();
+  });
+
+  it("links each row's symbol id to the chart page without pinning a period", async () => {
+    onRequest('GET', '/symbols?enrich=true', () => [BTC]);
+    onRequest('GET', '/config', () => CONFIG);
+    renderPage();
+
+    const symbolLink = await screen.findByRole('link', { name: 'crypto:BTCUSDT' });
+
+    // No period in the link — the chart resolves the persisted period (then default).
+    expect(symbolLink.getAttribute('href')).toEqual('/chart?id=crypto%3ABTCUSDT');
   });
 });

@@ -2,6 +2,7 @@ import type { EnrichedSymbol, Period } from '@lametrader/core';
 import { Badge, DropdownMenu, Flex, IconButton, Table, Text } from '@radix-ui/themes';
 import { MoreHorizontal } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import { Link } from 'react-router';
 import { sortPeriods } from '../../lib/periods.js';
 import { BackfillDialog } from './backfill-dialog.js';
 import { EditSymbolDialog } from './edit-symbol-dialog.js';
@@ -35,7 +36,14 @@ export function WatchlistRow({
     <Table.Row align="center">
       <Table.RowHeaderCell>
         <div className="flex flex-col">
-          <SymbolIdCode id={symbol.id} type={symbol.type} />
+          {/* Link without a period so the chart resolves the persisted period (then the config default). */}
+          <Link
+            to={`/chart?${new URLSearchParams({ id: symbol.id })}`}
+            aria-label={symbol.id}
+            className="self-start hover:opacity-80"
+          >
+            <SymbolIdCode id={symbol.id} type={symbol.type} />
+          </Link>
           <Text size="1" color="gray">
             {symbol.description}
           </Text>
