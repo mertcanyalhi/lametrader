@@ -170,7 +170,7 @@ export function CandleChart({
   }, [candles, hoveredTime]);
 
   return (
-    <div className="relative h-[60vh] w-full">
+    <div className="relative h-full w-full">
       <div ref={containerRef} className="absolute inset-0" />
       <ChartOverlay symbol={symbol} period={period} candle={inspected} />
     </div>

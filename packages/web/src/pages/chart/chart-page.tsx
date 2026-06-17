@@ -67,7 +67,7 @@ export function ChartPage(): ReactNode {
   return (
     <Flex direction="column" gap="3" className="h-full">
       <DocumentTitle symbol={selected} />
-      <div className="flex-1">
+      <div className="min-h-0 flex-1">
         {selected.periods.includes(period) ? (
           <ChartView id={id} period={period} range={range} symbol={selected} />
         ) : (

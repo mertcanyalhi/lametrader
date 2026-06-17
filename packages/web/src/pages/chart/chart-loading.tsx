@@ -6,5 +6,5 @@ import type { ReactNode } from 'react';
  * loading — a full-height block matching the chart's footprint.
  */
 export function ChartLoading(): ReactNode {
-  return <Skeleton className="h-[60vh] w-full rounded-lg" />;
+  return <Skeleton className="h-full min-h-64 w-full rounded-lg" />;
 }
