@@ -77,6 +77,57 @@ which Yahoo rejects for intraday intervals (they allow only a bounded lookback) 
 daily/weekly keep `new Date(0)` (full history). Range computation extracted to a pure
 `resolveYahooChartRange(period, range, now)` so it's unit-testable without the network.
 
+## Yahoo live-bar merge fix (`engine`)
+
+Yahoo's v8 chart appends the in-progress interval stamped at the live update time
+(≈ `now`) as a *separate* quote from that interval's grid-aligned bar — and it
+leaves the aligned bar's OHLC `null` until the interval closes, carrying the live
+price only on the trailing row.
+Persisting that row verbatim scattered a new sub-period row each poll (the candle
+key is `(symbol, period, time)`) and, because the sub-period stamp became the
+resume cursor, the closed bar's final data was never re-fetched — so 1m series
+showed both duplicate sub-minute candles and missing aligned bars (an hourly chart
+showing 08:07, 08:22, 08:35).
+The aligned current-bucket placeholder is not always there to anchor onto: crypto
+includes a null-OHLC bar for the in-progress interval, but equities/FX omit it, so
+the live row follows the last *completed* bar directly (e.g. a 5m series jumping
+`11:50 → 11:57`).
+A "within one period of the previous quote" rule therefore misses the equities/FX
+case — the live row is always at least one period past the last completed bar.
+Fix (generalises yahoo-finance's `fix_Yahoo_returning_live_separate`):
+`YahooMarketDataSource.fetchCandles` takes the grid *phase* from the previous quote
+and snaps the trailing live row to its bucket open,
+`live - ((live - prev) % periodMillis(period))`, *before* mapping.
+A zero remainder means the trailing quote is itself grid-aligned (a genuine bar) and
+the series is left untouched.
+Otherwise, when the previous quote is that bucket it is merged onto (open from the
+live row when still null, running high/low, the live close, summed volume — the live
+row carries none of its own); when the bucket has no quote yet the live row is
+re-stamped to the bucket open.
+Phasing off Yahoo's own previous bar (not epoch modulo) keeps session/DST-anchored
+bars correct — e.g. an equity 1h bar opening at `:30`.
+The fix covers both backfill and polling (both go through `fetchCandles`); daily and
+weekly keep the simpler same-interval merge; Binance is unaffected (kline `openTime`
+is already aligned).
+
+Across the period boundary the resume cursor therefore stays on the aligned bar:
+each poll re-fetches `{ from: latest.time, to: now }` inclusive of it and `save`
+upserts, so when the bar closes the next poll overwrites its partial snapshot with
+the provider's final OHLC and emits it as `final`.
+
+- [ ] `fetchCandles` merges a trailing live row into the aligned in-progress bar
+      (running high/low, live close), keeping the aligned timestamp.
+- [ ] `fetchCandles` fills a null-OHLC aligned current-period bar from the trailing
+      live row (the 1m case).
+- [ ] `fetchCandles` re-stamps a trailing live row that opens a new bucket with no
+      placeholder to its bucket open (the equities/FX 5m case).
+- [ ] `fetchCandles` snaps the live row using the previous bar's grid phase, not
+      epoch modulo (a session-anchored 1h `:30` bar merges correctly).
+- [ ] `fetchCandles` leaves an already-aligned series (no sub-period trailing row)
+      unchanged.
+- [ ] `poll()` re-fetches the resume bar and overwrites its partial data with the
+      provider's final values (the closed bar is corrected on the next poll).
+
 ## Acceptance criteria (each → one unit test, full-payload `toEqual`)
 
 Domain (`core`):

@@ -108,6 +108,28 @@ describe('PollingService.poll', () => {
     ]);
   });
 
+  it('re-fetches the resume bar and overwrites its partial data with the final values', async () => {
+    // The forming H:00 bar was stored on an earlier poll with a partial close.
+    const partialZero: CryptoCandle = { ...candle(0), close: 1.1 };
+    await repo.save(BTC.id, Period.OneHour, [partialZero]);
+    // A later poll lands in the next hour: the provider now returns H:00 closed
+    // with its final close, plus the new H+1 bar.
+    const finalZero: CryptoCandle = { ...candle(0), close: 1.9 };
+    const source = new RecordingSource({ [BTC.id]: [finalZero, candle(HOUR)] });
+    const service = new PollingService([source], repo, new InMemoryWatchlistRepository([BTC]), {
+      onCandle: () => {},
+      intervals: allIntervals(1000),
+      now: () => NOW,
+    });
+
+    await service.poll();
+
+    expect(await repo.range(BTC.id, Period.OneHour, 0, Number.MAX_SAFE_INTEGER)).toEqual([
+      finalZero,
+      candle(HOUR),
+    ]);
+  });
+
   it('emits one CandleEvent per fetched candle, final when the bar has closed', async () => {
     await repo.save(BTC.id, Period.OneHour, [candle(0)]);
     const source = new RecordingSource({ [BTC.id]: [candle(0), candle(HOUR), candle(2 * HOUR)] });
