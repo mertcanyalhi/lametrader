@@ -24,7 +24,7 @@ export function ChartOverlay({
   candle: Candle | null;
 }): ReactNode {
   return (
-    <div className="pointer-events-none absolute left-2 top-2 z-10 flex flex-col gap-0.5">
+    <div className="pointer-events-none absolute left-1.5 top-1.5 z-10 flex flex-col">
       <Text size="2" weight="medium" aria-label="Chart summary">
         {symbol.description} · {period} · {symbol.exchange}
       </Text>

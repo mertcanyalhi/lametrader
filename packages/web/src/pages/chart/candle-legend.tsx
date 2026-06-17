@@ -41,7 +41,7 @@ export function CandleLegend({
     <output
       aria-label="Candle inspection"
       data-direction={direction}
-      className={`flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs tabular-nums ${colorClass}`}
+      className={`flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs tabular-nums ${colorClass}`}
     >
       {ohlc.map((segment, index) => (
         <Fragment key={segment.label}>
