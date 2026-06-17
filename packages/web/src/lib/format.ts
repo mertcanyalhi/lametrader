@@ -70,10 +70,11 @@ export function formatChangePct(rate: number): string {
 /**
  * Format a volume with K / M / B suffixes (two decimals), so chart legends stay
  * readable across the magnitude range typical of crypto, equities, and ETFs.
- * Values below 1,000 render as plain integers.
+ * Values below 1,000 keep up to two decimals (crypto base-asset volume can be
+ * fractional, e.g. `0.34` — rounding to an integer would wrongly show `0`).
  */
 export function formatVolume(value: number): string {
-  if (value < 1000) return Math.round(value).toLocaleString('en-US');
+  if (value < 1000) return value.toLocaleString('en-US', { maximumFractionDigits: 2 });
   if (value < 1_000_000) return `${(value / 1000).toFixed(2)}K`;
   if (value < 1_000_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
   return `${(value / 1_000_000_000).toFixed(2)}B`;

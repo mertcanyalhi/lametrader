@@ -83,4 +83,16 @@ describe('formatVolume', () => {
       zero: '0',
     });
   });
+
+  it('keeps fractional sub-thousand volumes legible instead of rounding them to zero', () => {
+    expect({
+      fractional: formatVolume(0.34),
+      smallInteger: formatVolume(258),
+      hundreds: formatVolume(742.5),
+    }).toEqual({
+      fractional: '0.34',
+      smallInteger: '258',
+      hundreds: '742.5',
+    });
+  });
 });
