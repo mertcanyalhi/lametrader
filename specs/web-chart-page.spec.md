@@ -97,6 +97,12 @@ The disabled-period and snapshot behaviours moved into the modal and the canvas 
 
 - [ ] On the watchlist page, each row's symbol id is a link to `/chart?id=<id>&period=<defaultPeriod>`, opening that symbol on the platform's default period.
 
+#### Persisted visible window
+
+- [ ] The chart's visible time window (set by scroll/pinch) is persisted to `localStorage` (`getStoredViewport`/`setStoredViewport` round-trip; malformed/absent values yield `null`).
+- [ ] Switching symbols (and reloading) restores the persisted window: the new symbol opens on the same start/end timestamps, paging older history in first if the window starts before the loaded data.
+  Capture is gated until the restore settles so the chart's initial auto-fit can't overwrite the stored window; a preset range, when set, owns the view instead.
+
 ## End-to-end expectation
 
 The chart page's data contract is pinned at the HTTP boundary in `packages/api/tests/e2e/`:

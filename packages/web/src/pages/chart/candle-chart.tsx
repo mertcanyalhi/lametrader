@@ -6,12 +6,15 @@ import {
   type HistogramData,
   HistogramSeries,
   type IChartApi,
+  type IRange,
   type ISeriesApi,
   type LogicalRange,
   type MouseEventParams,
+  type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { getStoredViewport, setStoredViewport } from '../../lib/chart-viewport.js';
 import { useTheme } from '../../lib/theme-context.js';
 import { ChartOverlay } from './chart-overlay.js';
 import type { ChartRange } from './chart-range.js';
@@ -86,11 +89,23 @@ export function CandleChart({
   // Latest paging callbacks for the visible-range listener (avoids stale closures).
   const paging = useRef({ loadOlder, hasMore });
   paging.current = { loadOlder, hasMore };
+  // Mirror the active preset so the long-lived capture closure sees the current value.
+  const rangeRef = useRef(range);
+  rangeRef.current = range;
+  // Capture is gated until the persisted viewport has been restored for this mount,
+  // so the chart's initial auto-fit (which fires a range-change event) can't clobber
+  // the stored window before we apply it.
+  const captureEnabledRef = useRef(false);
+  // Whether this mount has settled its initial viewport (restored or accepted default).
+  const settledRef = useRef(false);
 
   // Create / recreate the chart when the theme or asset class (volume pane) changes.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    // A new chart instance starts at its default view and must re-settle.
+    captureEnabledRef.current = false;
+    settledRef.current = false;
     const colors = chartColors(theme);
     const chart: IChartApi = createChart(container, {
       autoSize: true,
@@ -118,6 +133,15 @@ export function CandleChart({
       if (logical && logical.from < 1 && paging.current.hasMore) paging.current.loadOlder();
     };
     chart.timeScale().subscribeVisibleLogicalRangeChange(onRange);
+    // Persist the user's scroll/pinch window so the next chart restores it. Gated
+    // until restore settles, and skipped while a preset range owns the view.
+    const onTimeRange = (timeRange: IRange<Time> | null): void => {
+      if (!captureEnabledRef.current || rangeRef.current !== null) return;
+      if (timeRange && typeof timeRange.from === 'number' && typeof timeRange.to === 'number') {
+        setStoredViewport({ from: timeRange.from * 1000, to: timeRange.to * 1000 });
+      }
+    };
+    chart.timeScale().subscribeVisibleTimeRangeChange(onTimeRange);
     const onCrosshair = (param: MouseEventParams): void => {
       const time = typeof param.time === 'number' ? param.time : null;
       setHoveredTime(time === null ? null : time * 1000);
@@ -156,6 +180,41 @@ export function CandleChart({
     chart.timeScale().setVisibleRange({
       from: (earliestNeeded / 1000) as UTCTimestamp,
       to: (now / 1000) as UTCTimestamp,
+    });
+  }, [range, candles]);
+
+  // With no preset active, restore the persisted scroll/pinch window once this
+  // mount's data is ready, so switching symbols (and reloads) keep the same date
+  // range. Pages older history first if the stored window starts before the
+  // loaded data, then applies the range after the auto-fit and enables capture.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || candles.length === 0 || settledRef.current) return;
+    if (range !== null) return;
+    const stored = getStoredViewport();
+    if (!stored) {
+      // Nothing to restore — accept the default view and start capturing.
+      settledRef.current = true;
+      captureEnabledRef.current = true;
+      return;
+    }
+    const earliestLoaded = candles[0]?.time ?? stored.to;
+    if (earliestLoaded > stored.from && paging.current.hasMore) {
+      paging.current.loadOlder();
+      return;
+    }
+    settledRef.current = true;
+    // Defer past the chart's initial auto-fit (runs after autoSize measures the
+    // container next frame) so our restored window isn't overridden, then re-enable
+    // capture once it has settled.
+    requestAnimationFrame(() => {
+      chart.timeScale().setVisibleRange({
+        from: (stored.from / 1000) as UTCTimestamp,
+        to: (stored.to / 1000) as UTCTimestamp,
+      });
+      requestAnimationFrame(() => {
+        captureEnabledRef.current = true;
+      });
     });
   }, [range, candles]);
 
