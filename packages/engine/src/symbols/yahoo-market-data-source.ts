@@ -216,44 +216,83 @@ interface YahooBar {
 }
 
 /**
- * Fold Yahoo's trailing live row onto the aligned bar it belongs to. Yahoo's v8
- * chart appends the in-progress interval stamped at the live update time (≈ `now`)
- * as a *separate* quote from that interval's grid-aligned bar — and it leaves the
- * aligned bar's OHLC `null` until the interval closes, carrying the live price
- * only on the trailing row. Persisting that row verbatim (the candle key includes
- * `time`) scatters a fresh sub-period row on every poll and drifts the resume
- * cursor off the grid, so the bar's final data is never re-fetched (missing bars)
- * and the period fills with duplicates (e.g. an hourly chart showing 08:07, 08:22, …).
+ * Snap Yahoo's trailing live row onto the period grid. Yahoo's v8 chart appends
+ * the in-progress interval stamped at the live update time (≈ `now`) as a
+ * *separate* quote from that interval's grid-aligned bar — sometimes alongside a
+ * null-OHLC placeholder for the current bucket (crypto), sometimes with no
+ * placeholder at all (equities/FX), so the live row simply follows the last
+ * completed bar. Persisting that row verbatim (the candle key includes `time`)
+ * scatters a fresh sub-period row on every poll and drifts the resume cursor off
+ * the grid, so the bar's final data is never re-fetched (missing bars) and the
+ * period fills with duplicates (e.g. an hourly chart showing 08:07, 08:22, …).
  *
- * Mirrors yahoo-finance's `fix_Yahoo_returning_live_separate`: when the last quote
- * opens within one period of the previous quote, merge it onto that (aligned)
- * quote — open from the live row when the aligned one is still null, running
- * high/low, the live close, and summed volume (the live row carries none of its
- * own, so this preserves the aligned bar's) — keeping the aligned timestamp and
- * dropping the live row. The aligned timestamp is Yahoo's own (no grid is
- * reconstructed), so session/DST-anchored bars stay correct, and the fix covers
- * both backfill and polling (both go through `fetchCandles`). Binance is
- * unaffected (kline `openTime` is already aligned).
+ * Generalises yahoo-finance's `fix_Yahoo_returning_live_separate`: take the grid
+ * *phase* from the previous quote (Yahoo's bars are spaced exactly one period
+ * apart within a session) and find the live row's bucket open as
+ * `live - ((live - prev) % period)`. A zero remainder means the trailing quote is
+ * itself grid-aligned (a genuine bar) — leave the series untouched. Otherwise the
+ * live row belongs to that bucket: if the previous quote *is* that bucket (with or
+ * without OHLC), merge onto it — open from the live row when the bucket is still
+ * null, running high/low, the live close, summed volume (the live row carries none
+ * of its own); if the bucket has no quote yet, re-stamp the live row to the bucket
+ * open. Either way the result is grid-aligned. Phasing off Yahoo's own previous bar
+ * (not epoch modulo) keeps session/DST-anchored bars correct — e.g. an equity 1h
+ * bar opening at `:30`. The fix covers both backfill and polling (both go through
+ * `fetchCandles`); Binance is unaffected (kline `openTime` is already aligned).
+ *
+ * Daily/weekly keep the simpler same-interval merge: those bars carry no separate
+ * live row of concern here and their session/DST stamping is out of scope.
  */
 function mergeLiveBar(bars: YahooBar[], period: Period): YahooBar[] {
   if (bars.length < 2) return bars;
   const live = bars[bars.length - 1];
-  const aligned = bars[bars.length - 2];
-  if (!live || !aligned) return bars;
-  const gap = live.date.getTime() - aligned.date.getTime();
-  // A gap of a full period or more means the last quote is its own aligned bar,
-  // not the live duplicate of the previous one — leave the series untouched.
-  if (gap <= 0 || gap >= periodMillis(period)) return bars;
-  const merged: YahooBar = {
-    date: aligned.date,
-    open: aligned.open ?? live.open,
-    high: nanMax(aligned.high, live.high),
-    low: nanMin(aligned.low, live.low),
-    close: live.close ?? aligned.close,
-    adjclose: live.adjclose ?? aligned.adjclose,
-    volume: (aligned.volume ?? 0) + (live.volume ?? 0),
+  const prev = bars[bars.length - 2];
+  if (!live || !prev) return bars;
+  const span = periodMillis(period);
+  const delta = live.date.getTime() - prev.date.getTime();
+  if (delta <= 0) return bars;
+  if (span >= DAY_MS) {
+    // Daily/weekly: merge only when the trailing quote falls in the same interval.
+    return delta < span
+      ? [...bars.slice(0, -2), placeLiveBar(prev, live, prev.date.getTime())]
+      : bars;
+  }
+  const offset = delta % span;
+  // A grid-aligned trailing quote (no remainder) is a genuine bar — leave it.
+  if (offset === 0) return bars;
+  const bucketTime = live.date.getTime() - offset;
+  if (bucketTime === prev.date.getTime()) {
+    // The previous quote is this bucket (placeholder or in-progress) — merge onto it.
+    return [...bars.slice(0, -2), placeLiveBar(prev, live, bucketTime)];
+  }
+  // The bucket has no quote yet (Yahoo omitted the placeholder) — re-stamp the live row.
+  return [...bars.slice(0, -1), placeLiveBar(undefined, live, bucketTime)];
+}
+
+/**
+ * Build the grid-aligned bar at `bucketTime` from a trailing live row, merged onto
+ * an existing bucket quote when present (open from the live row if the bucket is
+ * still null, running high/low, live close, summed volume — the live row carries
+ * none of its own). With no existing quote the live row is simply re-stamped to the
+ * bucket open.
+ */
+function placeLiveBar(
+  existing: YahooBar | undefined,
+  live: YahooBar,
+  bucketTime: number,
+): YahooBar {
+  if (!existing) {
+    return { ...live, date: new Date(bucketTime) };
+  }
+  return {
+    date: new Date(bucketTime),
+    open: existing.open ?? live.open,
+    high: nanMax(existing.high, live.high),
+    low: nanMin(existing.low, live.low),
+    close: live.close ?? existing.close,
+    adjclose: live.adjclose ?? existing.adjclose,
+    volume: (existing.volume ?? 0) + (live.volume ?? 0),
   };
-  return [...bars.slice(0, -2), merged];
 }
 
 /**

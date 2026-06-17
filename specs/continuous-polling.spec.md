@@ -88,17 +88,27 @@ key is `(symbol, period, time)`) and, because the sub-period stamp became the
 resume cursor, the closed bar's final data was never re-fetched — so 1m series
 showed both duplicate sub-minute candles and missing aligned bars (an hourly chart
 showing 08:07, 08:22, 08:35).
-The earlier drop-only fix failed here: `toCandle` strips the null aligned bar
-*before* the de-duplication runs, removing the anchor the drop relied on.
-Fix (mirrors yahoo-finance's `fix_Yahoo_returning_live_separate`):
-`YahooMarketDataSource.fetchCandles` merges a trailing quote that opens within the
-prior bar's period (`gap < periodMillis(period)`) onto that aligned bar *before*
-mapping — open from the live row when the aligned one is still null, running
-high/low, the live close, summed volume (the live row carries none of its own) —
-keeping Yahoo's own aligned timestamp and dropping the live row.
-No grid is reconstructed, so session/DST-anchored timestamps stay correct, and the
-fix covers both backfill and polling (both go through `fetchCandles`).
-Binance is unaffected (kline `openTime` is already aligned).
+The aligned current-bucket placeholder is not always there to anchor onto: crypto
+includes a null-OHLC bar for the in-progress interval, but equities/FX omit it, so
+the live row follows the last *completed* bar directly (e.g. a 5m series jumping
+`11:50 → 11:57`).
+A "within one period of the previous quote" rule therefore misses the equities/FX
+case — the live row is always at least one period past the last completed bar.
+Fix (generalises yahoo-finance's `fix_Yahoo_returning_live_separate`):
+`YahooMarketDataSource.fetchCandles` takes the grid *phase* from the previous quote
+and snaps the trailing live row to its bucket open,
+`live - ((live - prev) % periodMillis(period))`, *before* mapping.
+A zero remainder means the trailing quote is itself grid-aligned (a genuine bar) and
+the series is left untouched.
+Otherwise, when the previous quote is that bucket it is merged onto (open from the
+live row when still null, running high/low, the live close, summed volume — the live
+row carries none of its own); when the bucket has no quote yet the live row is
+re-stamped to the bucket open.
+Phasing off Yahoo's own previous bar (not epoch modulo) keeps session/DST-anchored
+bars correct — e.g. an equity 1h bar opening at `:30`.
+The fix covers both backfill and polling (both go through `fetchCandles`); daily and
+weekly keep the simpler same-interval merge; Binance is unaffected (kline `openTime`
+is already aligned).
 
 Across the period boundary the resume cursor therefore stays on the aligned bar:
 each poll re-fetches `{ from: latest.time, to: now }` inclusive of it and `save`
@@ -109,6 +119,10 @@ the provider's final OHLC and emits it as `final`.
       (running high/low, live close), keeping the aligned timestamp.
 - [ ] `fetchCandles` fills a null-OHLC aligned current-period bar from the trailing
       live row (the 1m case).
+- [ ] `fetchCandles` re-stamps a trailing live row that opens a new bucket with no
+      placeholder to its bucket open (the equities/FX 5m case).
+- [ ] `fetchCandles` snaps the live row using the previous bar's grid phase, not
+      epoch modulo (a session-anchored 1h `:30` bar merges correctly).
 - [ ] `fetchCandles` leaves an already-aligned series (no sub-period trailing row)
       unchanged.
 - [ ] `poll()` re-fetches the resume bar and overwrites its partial data with the
