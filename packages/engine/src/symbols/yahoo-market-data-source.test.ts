@@ -80,73 +80,242 @@ describe('YahooMarketDataSource.fetchCandles', () => {
     );
   });
 
-  it("drops Yahoo's trailing live-stamped duplicate of the in-progress bar", async () => {
+  it('merges Yahoo trailing live row into the aligned in-progress bar (running high/low, live close)', async () => {
     const HOUR = 3_600_000;
-    const quote = (time: number, close: number) => ({
-      date: new Date(time),
-      open: close,
-      high: close + 1,
-      low: close - 1,
-      close,
-      volume: 100,
-      adjclose: close,
-    });
-    // Aligned hourly bars, then a trailing quote stamped 55 min into the last
-    // bar's period (Yahoo's live update time) — the duplicate to drop.
+    // Aligned hourly bars with accumulated data, then Yahoo's trailing live
+    // snapshot 55 min into the current hour: a new high (14) and the latest
+    // close (13), carrying no volume of its own (V=0), as the real API does.
     vi.spyOn(YahooFinance.prototype, 'chart').mockResolvedValue({
       quotes: [
-        quote(3 * HOUR, 10),
-        quote(4 * HOUR, 11),
-        quote(5 * HOUR, 12),
-        quote(5 * HOUR + 55 * 60_000, 12.5),
+        {
+          date: new Date(3 * HOUR),
+          open: 10,
+          high: 11,
+          low: 9,
+          close: 10,
+          volume: 100,
+          adjclose: 10,
+        },
+        {
+          date: new Date(4 * HOUR),
+          open: 11,
+          high: 12,
+          low: 10,
+          close: 11,
+          volume: 100,
+          adjclose: 11,
+        },
+        {
+          date: new Date(5 * HOUR),
+          open: 12,
+          high: 13,
+          low: 11,
+          close: 12,
+          volume: 100,
+          adjclose: 12,
+        },
+        {
+          date: new Date(5 * HOUR + 55 * 60_000),
+          open: 12.5,
+          high: 14,
+          low: 10,
+          close: 13,
+          volume: 0,
+          adjclose: 13,
+        },
       ],
     } as never);
     const source = new YahooMarketDataSource();
 
-    const candle = (time: number, close: number) => ({
-      type: SymbolType.Stock,
-      time,
-      open: close,
-      high: close + 1,
-      low: close - 1,
-      close,
-      volume: 100,
-      adjClose: close,
-    });
     await expect(source.fetchCandles('stock:AAPL', Period.OneHour)).resolves.toEqual({
-      candles: [candle(3 * HOUR, 10), candle(4 * HOUR, 11), candle(5 * HOUR, 12)],
+      candles: [
+        {
+          type: SymbolType.Stock,
+          time: 3 * HOUR,
+          open: 10,
+          high: 11,
+          low: 9,
+          close: 10,
+          volume: 100,
+          adjClose: 10,
+        },
+        {
+          type: SymbolType.Stock,
+          time: 4 * HOUR,
+          open: 11,
+          high: 12,
+          low: 10,
+          close: 11,
+          volume: 100,
+          adjClose: 11,
+        },
+        {
+          type: SymbolType.Stock,
+          time: 5 * HOUR,
+          open: 12,
+          high: 14,
+          low: 10,
+          close: 13,
+          volume: 100,
+          adjClose: 13,
+        },
+      ],
       complete: true,
     });
   });
 
-  it('leaves an already-aligned series unchanged (no trailing duplicate)', async () => {
-    const HOUR = 3_600_000;
-    const quote = (time: number, close: number) => ({
-      date: new Date(time),
-      open: close,
-      high: close + 1,
-      low: close - 1,
-      close,
-      volume: 100,
-      adjclose: close,
-    });
+  it('fills a null-OHLC aligned current-period bar from the trailing live row', async () => {
+    const MIN = 60_000;
+    // Yahoo leaves the aligned current-minute bar all-null until it closes,
+    // carrying the live price only on a trailing snapshot 44s in — the exact
+    // 1m case that scattered sub-minute rows before the merge.
     vi.spyOn(YahooFinance.prototype, 'chart').mockResolvedValue({
-      quotes: [quote(3 * HOUR, 10), quote(4 * HOUR, 11), quote(5 * HOUR, 12)],
+      quotes: [
+        {
+          date: new Date(3 * MIN),
+          open: 10,
+          high: 11,
+          low: 9,
+          close: 10,
+          volume: 50,
+          adjclose: 10,
+        },
+        {
+          date: new Date(4 * MIN),
+          open: 11,
+          high: 12,
+          low: 10,
+          close: 11,
+          volume: 50,
+          adjclose: 11,
+        },
+        {
+          date: new Date(5 * MIN),
+          open: null,
+          high: null,
+          low: null,
+          close: null,
+          volume: null,
+          adjclose: null,
+        },
+        {
+          date: new Date(5 * MIN + 44_000),
+          open: 12.5,
+          high: 12.5,
+          low: 12.5,
+          close: 12.5,
+          volume: 0,
+          adjclose: 12.5,
+        },
+      ],
     } as never);
     const source = new YahooMarketDataSource();
 
-    const candle = (time: number, close: number) => ({
-      type: SymbolType.Stock,
-      time,
-      open: close,
-      high: close + 1,
-      low: close - 1,
-      close,
-      volume: 100,
-      adjClose: close,
+    await expect(source.fetchCandles('stock:AAPL', Period.OneMinute)).resolves.toEqual({
+      candles: [
+        {
+          type: SymbolType.Stock,
+          time: 3 * MIN,
+          open: 10,
+          high: 11,
+          low: 9,
+          close: 10,
+          volume: 50,
+          adjClose: 10,
+        },
+        {
+          type: SymbolType.Stock,
+          time: 4 * MIN,
+          open: 11,
+          high: 12,
+          low: 10,
+          close: 11,
+          volume: 50,
+          adjClose: 11,
+        },
+        {
+          type: SymbolType.Stock,
+          time: 5 * MIN,
+          open: 12.5,
+          high: 12.5,
+          low: 12.5,
+          close: 12.5,
+          volume: 0,
+          adjClose: 12.5,
+        },
+      ],
+      complete: true,
     });
+  });
+
+  it('leaves an already-aligned series unchanged (no sub-period trailing row)', async () => {
+    const HOUR = 3_600_000;
+    vi.spyOn(YahooFinance.prototype, 'chart').mockResolvedValue({
+      quotes: [
+        {
+          date: new Date(3 * HOUR),
+          open: 10,
+          high: 11,
+          low: 9,
+          close: 10,
+          volume: 100,
+          adjclose: 10,
+        },
+        {
+          date: new Date(4 * HOUR),
+          open: 11,
+          high: 12,
+          low: 10,
+          close: 11,
+          volume: 100,
+          adjclose: 11,
+        },
+        {
+          date: new Date(5 * HOUR),
+          open: 12,
+          high: 13,
+          low: 11,
+          close: 12,
+          volume: 100,
+          adjclose: 12,
+        },
+      ],
+    } as never);
+    const source = new YahooMarketDataSource();
+
     await expect(source.fetchCandles('stock:AAPL', Period.OneHour)).resolves.toEqual({
-      candles: [candle(3 * HOUR, 10), candle(4 * HOUR, 11), candle(5 * HOUR, 12)],
+      candles: [
+        {
+          type: SymbolType.Stock,
+          time: 3 * HOUR,
+          open: 10,
+          high: 11,
+          low: 9,
+          close: 10,
+          volume: 100,
+          adjClose: 10,
+        },
+        {
+          type: SymbolType.Stock,
+          time: 4 * HOUR,
+          open: 11,
+          high: 12,
+          low: 10,
+          close: 11,
+          volume: 100,
+          adjClose: 11,
+        },
+        {
+          type: SymbolType.Stock,
+          time: 5 * HOUR,
+          open: 12,
+          high: 13,
+          low: 11,
+          close: 12,
+          volume: 100,
+          adjClose: 12,
+        },
+      ],
       complete: true,
     });
   });

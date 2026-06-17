@@ -171,14 +171,17 @@ export class YahooMarketDataSource implements MarketDataSource {
     try {
       const { period1, period2 } = resolveYahooChartRange(period, range);
       const chart = await this.yf.chart(native, { period1, period2, interval });
+      // Fold Yahoo's trailing live row onto its aligned bar *before* mapping, so
+      // the null-OHLC current-period bar (the merge anchor) is still present.
+      const bars = mergeLiveBar(chart.quotes as YahooBar[], period);
       const out: Candle[] = [];
-      for (const bar of chart.quotes as YahooBar[]) {
+      for (const bar of bars) {
         const candle = toCandle(type, bar);
         if (candle) out.push(candle);
       }
       // Yahoo's chart returns the whole requested window in one response — no
       // paging cap of ours applies, so the batch is always complete.
-      return { candles: dropLiveDuplicate(out, period), complete: true };
+      return { candles: out, complete: true };
     } catch (cause) {
       throw new MarketDataError(
         `Yahoo failed to fetch candles for ${id}: ${(cause as Error).message}`,
@@ -213,28 +216,64 @@ interface YahooBar {
 }
 
 /**
- * Drop Yahoo's trailing live duplicate of the in-progress bar. Yahoo's chart
- * appends the current interval stamped at the live update time (≈ `now`) rather
- * than the bar open, *in addition to* that interval's properly aligned bar — so
- * the last quote lands inside the previous quote's period. Persisting it verbatim
- * (the candle key includes `time`) would scatter a new sub-period row every poll
- * (e.g. an hourly chart showing 08:07, 08:22, …). We keep Yahoo's own aligned bar
- * and drop any trailing quote that opens within the prior bar's period; no grid is
- * reconstructed, so session/DST-anchored timestamps stay correct.
+ * Fold Yahoo's trailing live row onto the aligned bar it belongs to. Yahoo's v8
+ * chart appends the in-progress interval stamped at the live update time (≈ `now`)
+ * as a *separate* quote from that interval's grid-aligned bar — and it leaves the
+ * aligned bar's OHLC `null` until the interval closes, carrying the live price
+ * only on the trailing row. Persisting that row verbatim (the candle key includes
+ * `time`) scatters a fresh sub-period row on every poll and drifts the resume
+ * cursor off the grid, so the bar's final data is never re-fetched (missing bars)
+ * and the period fills with duplicates (e.g. an hourly chart showing 08:07, 08:22, …).
+ *
+ * Mirrors yahoo-finance's `fix_Yahoo_returning_live_separate`: when the last quote
+ * opens within one period of the previous quote, merge it onto that (aligned)
+ * quote — open from the live row when the aligned one is still null, running
+ * high/low, the live close, and summed volume (the live row carries none of its
+ * own, so this preserves the aligned bar's) — keeping the aligned timestamp and
+ * dropping the live row. The aligned timestamp is Yahoo's own (no grid is
+ * reconstructed), so session/DST-anchored bars stay correct, and the fix covers
+ * both backfill and polling (both go through `fetchCandles`). Binance is
+ * unaffected (kline `openTime` is already aligned).
  */
-function dropLiveDuplicate(candles: Candle[], period: Period): Candle[] {
-  const span = periodMillis(period);
-  const out = [...candles];
-  while (out.length >= 2) {
-    const last = out[out.length - 1];
-    const prev = out[out.length - 2];
-    if (last && prev && last.time < prev.time + span) {
-      out.pop();
-    } else {
-      break;
-    }
-  }
-  return out;
+function mergeLiveBar(bars: YahooBar[], period: Period): YahooBar[] {
+  if (bars.length < 2) return bars;
+  const live = bars[bars.length - 1];
+  const aligned = bars[bars.length - 2];
+  if (!live || !aligned) return bars;
+  const gap = live.date.getTime() - aligned.date.getTime();
+  // A gap of a full period or more means the last quote is its own aligned bar,
+  // not the live duplicate of the previous one — leave the series untouched.
+  if (gap <= 0 || gap >= periodMillis(period)) return bars;
+  const merged: YahooBar = {
+    date: aligned.date,
+    open: aligned.open ?? live.open,
+    high: nanMax(aligned.high, live.high),
+    low: nanMin(aligned.low, live.low),
+    close: live.close ?? aligned.close,
+    adjclose: live.adjclose ?? aligned.adjclose,
+    volume: (aligned.volume ?? 0) + (live.volume ?? 0),
+  };
+  return [...bars.slice(0, -2), merged];
+}
+
+/**
+ * Larger of two possibly-null bar values, ignoring nulls (NaN-safe max). `null`
+ * only when both inputs are null.
+ */
+function nanMax(a: number | null | undefined, b: number | null | undefined): number | null {
+  if (a == null) return b ?? null;
+  if (b == null) return a;
+  return Math.max(a, b);
+}
+
+/**
+ * Smaller of two possibly-null bar values, ignoring nulls (NaN-safe min). `null`
+ * only when both inputs are null.
+ */
+function nanMin(a: number | null | undefined, b: number | null | undefined): number | null {
+  if (a == null) return b ?? null;
+  if (b == null) return a;
+  return Math.min(a, b);
 }
 
 /**

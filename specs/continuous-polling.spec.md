@@ -77,21 +77,42 @@ which Yahoo rejects for intraday intervals (they allow only a bounded lookback) 
 daily/weekly keep `new Date(0)` (full history). Range computation extracted to a pure
 `resolveYahooChartRange(period, range, now)` so it's unit-testable without the network.
 
-## Yahoo live-duplicate bar fix (`engine`)
+## Yahoo live-bar merge fix (`engine`)
 
-Yahoo's chart appends the in-progress interval stamped at the live update time
-(≈ `now`) rather than the bar open — *in addition to* that interval's properly
-aligned bar — so the trailing quote opens inside the previous quote's period.
-Persisting it verbatim scattered a new sub-period row each poll (the candle key
-is `(symbol, period, time)`), e.g. an hourly chart showing 08:07, 08:22, 08:35.
-Fix: `YahooMarketDataSource.fetchCandles` drops any trailing quote that opens
-within the prior bar's period (`last.time < prev.time + periodMillis(period)`),
-keeping Yahoo's own aligned bar. No grid is reconstructed, so session/DST-anchored
-timestamps stay correct, and the fix covers both backfill and polling (both go
-through `fetchCandles`). Binance is unaffected (kline `openTime` is already aligned).
+Yahoo's v8 chart appends the in-progress interval stamped at the live update time
+(≈ `now`) as a *separate* quote from that interval's grid-aligned bar — and it
+leaves the aligned bar's OHLC `null` until the interval closes, carrying the live
+price only on the trailing row.
+Persisting that row verbatim scattered a new sub-period row each poll (the candle
+key is `(symbol, period, time)`) and, because the sub-period stamp became the
+resume cursor, the closed bar's final data was never re-fetched — so 1m series
+showed both duplicate sub-minute candles and missing aligned bars (an hourly chart
+showing 08:07, 08:22, 08:35).
+The earlier drop-only fix failed here: `toCandle` strips the null aligned bar
+*before* the de-duplication runs, removing the anchor the drop relied on.
+Fix (mirrors yahoo-finance's `fix_Yahoo_returning_live_separate`):
+`YahooMarketDataSource.fetchCandles` merges a trailing quote that opens within the
+prior bar's period (`gap < periodMillis(period)`) onto that aligned bar *before*
+mapping — open from the live row when the aligned one is still null, running
+high/low, the live close, summed volume (the live row carries none of its own) —
+keeping Yahoo's own aligned timestamp and dropping the live row.
+No grid is reconstructed, so session/DST-anchored timestamps stay correct, and the
+fix covers both backfill and polling (both go through `fetchCandles`).
+Binance is unaffected (kline `openTime` is already aligned).
 
-- [ ] `fetchCandles` drops the trailing live-stamped duplicate, keeping the aligned bar.
-- [ ] `fetchCandles` leaves an already-aligned series (no trailing duplicate) unchanged.
+Across the period boundary the resume cursor therefore stays on the aligned bar:
+each poll re-fetches `{ from: latest.time, to: now }` inclusive of it and `save`
+upserts, so when the bar closes the next poll overwrites its partial snapshot with
+the provider's final OHLC and emits it as `final`.
+
+- [ ] `fetchCandles` merges a trailing live row into the aligned in-progress bar
+      (running high/low, live close), keeping the aligned timestamp.
+- [ ] `fetchCandles` fills a null-OHLC aligned current-period bar from the trailing
+      live row (the 1m case).
+- [ ] `fetchCandles` leaves an already-aligned series (no sub-period trailing row)
+      unchanged.
+- [ ] `poll()` re-fetches the resume bar and overwrites its partial data with the
+      provider's final values (the closed bar is corrected on the next poll).
 
 ## Acceptance criteria (each → one unit test, full-payload `toEqual`)
 
