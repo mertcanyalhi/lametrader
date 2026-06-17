@@ -73,6 +73,8 @@ Each bullet maps to exactly one test (jsdom; mocked socket / mocked
       re-seed, so a theme/data refresh keeps the live tail.
 - [ ] The on-canvas legend header reflects the live bar's close once a tick
       arrives (the latest-candle fallback uses the live bar).
+- [ ] Hovering a previous *live* bar shows that bar's OHLC in the legend (the
+      inspection lookup checks the accumulated live bars, not just history).
 
 ## End-to-end expectation
 
@@ -93,6 +95,17 @@ the realistic surface for a canvas feature.
 
 ## Surprises
 
+- **Live bars aren't in the historical `candles` array.** They're applied to the
+  series via `update` and kept in the by-time accumulation, but the legend's
+  hovered-candle lookup originally searched only `candles` — so hovering any bar
+  that arrived live showed the wrong OHLC (it fell back to the latest), even
+  though the bar rendered correctly. The lookup now checks the live bars first.
+- **Yahoo's tight poll window returns a zero-volume bar.** A poll resumes from the
+  current bar's open; for that window Yahoo reports the in-progress bar with
+  `volume: 0` and a degenerate OHLC (so the forming bar looked flat and stored
+  candles showed `Vol 0`, while backfilled ones — fetched over a wide window —
+  were fine). Fixed in the source by widening an intraday ranged fetch to span a
+  few completed bars (see `continuous-polling.spec.md`).
 - **A "latest event" state value drops co-arriving frames.** The first design had
   `useCandleStream` keep only the latest event and the chart apply it via an
   effect. When a poll crosses an interval boundary it emits two frames at once —

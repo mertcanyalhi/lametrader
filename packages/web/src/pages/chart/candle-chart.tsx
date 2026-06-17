@@ -286,7 +286,14 @@ export function CandleChart({
   const latestCandle = liveLatest ?? candles.at(-1) ?? null;
   const inspected = useMemo<Candle | null>(() => {
     if (hoveredTime !== null) {
-      return candles.find((candle) => candle.time === hoveredTime) ?? latestCandle;
+      // Live bars are applied to the series but aren't in the historical
+      // `candles` array, so check them first — otherwise hovering a streamed bar
+      // falls back to the latest and shows the wrong OHLC.
+      return (
+        liveBarsRef.current.get(hoveredTime) ??
+        candles.find((candle) => candle.time === hoveredTime) ??
+        latestCandle
+      );
     }
     return latestCandle;
   }, [candles, hoveredTime, latestCandle]);

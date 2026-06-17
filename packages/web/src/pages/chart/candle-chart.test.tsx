@@ -14,13 +14,14 @@ import { CandleChart } from './candle-chart.js';
  * chart's forming-bar mutator. The shared stream client is mocked so the test
  * captures the candle listener and emits frames directly (jsdom has no socket).
  */
-const { createdSeries, listeners } = vi.hoisted(() => ({
+const { createdSeries, listeners, crosshairCallbacks } = vi.hoisted(() => ({
   createdSeries: [] as Array<{
     setData: ReturnType<typeof vi.fn>;
     applyOptions: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
   }>,
   listeners: [] as Array<(event: unknown) => void>,
+  crosshairCallbacks: [] as Array<(param: { time?: number }) => void>,
 }));
 
 vi.mock('lightweight-charts', () => ({
@@ -36,7 +37,9 @@ vi.mock('lightweight-charts', () => ({
       setVisibleRange: vi.fn(),
     }),
     priceScale: () => ({ applyOptions: vi.fn() }),
-    subscribeCrosshairMove: vi.fn(),
+    subscribeCrosshairMove: (cb: (param: { time?: number }) => void) => {
+      crosshairCallbacks.push(cb);
+    },
     remove: vi.fn(),
   }),
   CandlestickSeries: 'Candlestick',
@@ -121,6 +124,7 @@ describe('CandleChart live ticks', () => {
   beforeEach(() => {
     createdSeries.length = 0;
     listeners.length = 0;
+    crosshairCallbacks.length = 0;
   });
   afterEach(() => {
     cleanup();
@@ -160,6 +164,20 @@ describe('CandleChart live ticks', () => {
   it('shows the live bar close in the legend header once a tick arrives', () => {
     render(chartElement([bar(1000, 100, 100, 100, 100)]));
     emit(event(bar(1000, 100, 160, 90, 150)));
+
+    expect(screen.getByText('150.00')).toBeInTheDocument();
+  });
+
+  it('shows a hovered previous live bar in the legend, not the latest', () => {
+    render(chartElement([bar(1000, 100, 100, 100, 100)]));
+    // An earlier live bar (close 150) and a later "latest" one (close 200).
+    emit(event(bar(2000, 140, 160, 130, 150)));
+    emit(event(bar(3000, 150, 210, 150, 200)));
+    // Hover the earlier live bar (time 2000 ms → 2 s); it isn't in the historical
+    // `candles`, so only the live-bar lookup can surface its values.
+    act(() => {
+      for (const cb of crosshairCallbacks) cb({ time: 2 });
+    });
 
     expect(screen.getByText('150.00')).toBeInTheDocument();
   });
