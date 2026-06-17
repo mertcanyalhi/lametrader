@@ -333,9 +333,12 @@ function nanMin(a: number | null | undefined, b: number | null | undefined): num
 }
 
 /**
- * Map a Yahoo chart bar to a typed {@link Candle}, or `null` when the bar has no
- * OHLC (a gap). FX yields an {@link FxCandle} (no volume); stocks/funds an
- * {@link EquityCandle}.
+ * Map a Yahoo chart bar to a typed {@link Candle}, or `null` when the bar is
+ * incomplete and must not be ingested: missing any of OHLC (a gap), or — for
+ * equities/funds, which carry volume — a missing volume. A *present* volume of
+ * `0` is a real no-trade interval and is kept; only an absent value is rejected
+ * (so we never fabricate a zero). FX yields an {@link FxCandle} (no volume);
+ * stocks/funds an {@link EquityCandle}.
  */
 function toCandle(type: SymbolType, bar: YahooBar): Candle | null {
   if (bar.open == null || bar.high == null || bar.low == null || bar.close == null) {
@@ -351,10 +354,13 @@ function toCandle(type: SymbolType, bar: YahooBar): Candle | null {
   if (type === SymbolType.Fx) {
     return { ...base, type: SymbolType.Fx } satisfies FxCandle;
   }
+  if (bar.volume == null) {
+    return null;
+  }
   return {
     ...base,
     type: type === SymbolType.Fund ? SymbolType.Fund : SymbolType.Stock,
-    volume: bar.volume ?? 0,
+    volume: bar.volume,
     adjClose: bar.adjclose ?? bar.close,
   } satisfies EquityCandle;
 }

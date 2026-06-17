@@ -89,6 +89,16 @@ left exact.
 The extra older bars are already stored (idempotent upserts), so re-fetching them
 each poll is harmless.
 
+`toCandle` also guards completeness so degenerate provider bars are never ingested:
+a bar missing any of OHLC is dropped (an existing rule), and — for equities/funds,
+which carry volume — a bar with a **missing** volume is dropped rather than stored
+with a fabricated `0`.
+A *present* `volume: 0` is a real no-trade interval and is kept (so the guard rejects
+absent fields, not legitimate zero values); FX has no volume and is exempt.
+
+- [ ] `fetchCandles` drops an equity bar whose volume is absent (no fabricated `0`)
+      but keeps a bar whose volume is a real `0`.
+
 ## Yahoo live-bar merge fix (`engine`)
 
 Yahoo's v8 chart appends the in-progress interval stamped at the live update time

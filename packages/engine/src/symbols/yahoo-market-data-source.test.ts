@@ -338,6 +338,62 @@ describe('YahooMarketDataSource.fetchCandles', () => {
     });
   });
 
+  it('drops an equity bar missing volume (no fabricated zero) but keeps a real zero-volume bar', async () => {
+    const HOUR = 3_600_000;
+    vi.spyOn(YahooFinance.prototype, 'chart').mockResolvedValue({
+      quotes: [
+        {
+          date: new Date(3 * HOUR),
+          open: 10,
+          high: 11,
+          low: 9,
+          close: 10,
+          volume: 100,
+          adjclose: 10,
+        },
+        // A real no-trade interval: volume is present and 0 — kept.
+        {
+          date: new Date(4 * HOUR),
+          open: 11,
+          high: 12,
+          low: 10,
+          close: 11,
+          volume: 0,
+          adjclose: 11,
+        },
+        // Volume absent (Yahoo gap) — incomplete, must not be ingested as 0.
+        { date: new Date(5 * HOUR), open: 12, high: 13, low: 11, close: 12, adjclose: 12 },
+      ],
+    } as never);
+    const source = new YahooMarketDataSource();
+
+    await expect(source.fetchCandles('stock:AAPL', Period.OneHour)).resolves.toEqual({
+      candles: [
+        {
+          type: SymbolType.Stock,
+          time: 3 * HOUR,
+          open: 10,
+          high: 11,
+          low: 9,
+          close: 10,
+          volume: 100,
+          adjClose: 10,
+        },
+        {
+          type: SymbolType.Stock,
+          time: 4 * HOUR,
+          open: 11,
+          high: 12,
+          low: 10,
+          close: 11,
+          volume: 0,
+          adjClose: 11,
+        },
+      ],
+      complete: true,
+    });
+  });
+
   it('re-stamps a trailing live row that opens a new bucket with no placeholder (the 5m case)', async () => {
     const MIN = 60_000;
     // Equities/FX 5m: Yahoo emits no null placeholder for the current bucket, so
