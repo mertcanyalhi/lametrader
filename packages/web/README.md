@@ -4,6 +4,20 @@ Browser app for the lametrader platform — a Vite/React/TypeScript driving adap
 
 The shell (sidebar + topbar + theme + Radix Themes), the routing, the TanStack Query + `apiFetch` data layer, and the logging conventions are documented in [`CLAUDE.md`](./CLAUDE.md) — read that first if you are extending the UI.
 
+## Status bar
+
+A persistent bottom status bar renders on every page beneath `<main>` (a `contentinfo` landmark).
+It carries global, always-available controls; today that is the **profile selector**.
+
+The selector lists the platform's profiles (`GET /api/profiles`) and shows the active one on its trigger.
+Picking a profile sets the **currently selected profile** — a global app concept that later drives chart indicator overlays — and persists the choice to `localStorage` so it survives reloads.
+
+- **Source of truth** — only the selected profile *id* is client state, held in the `useSelectedProfile()` store and persisted to `localStorage`; the profile objects themselves are server state (`useProfiles()`).
+- **First-run / recovery** — once profiles load, a stored id that no longer names a listed profile (or no stored id at all) resolves to the first **enabled** profile; with no profiles the trigger reads "No profile" and is disabled.
+- A disabled profile is still listed and selectable, shown with a muted "(disabled)" hint.
+
+Profile create / edit / delete management, and the chart contributing its symbol + period controls to this bar (plus `?profile=` URL sync), land in follow-up iterations of the same issue.
+
 ## Pages
 
 ### `/` — Watchlist
@@ -70,6 +84,9 @@ A thrown `ConfigError` becomes a form-level error rendered inline as a Radix The
 `src/lib/hooks/symbols.ts` exposes the watchlist data layer (read the watched symbols, search instruments, add/edit-periods/remove).
 
 `src/lib/hooks/candles.ts` exposes `usePagedCandles` — the chart's historical candle feed, which loads a symbol/period's bars a time window at a time and walks the window backward through history as you scroll.
+
+`src/lib/hooks/profiles.ts` exposes `useProfiles()` — `GET /api/profiles` via TanStack Query under key `['profiles']`, backing the status-bar profile selector.
+The selected-profile *id* is client state, owned by `src/lib/selected-profile/` (a `localStorage` store + a React Context exposing `useSelectedProfile()`), and reconciled against the fetched list by `resolveSelectedProfileId`.
 
 Both modules go through the package's `apiFetch` wrapper, so logging + `ApiError` mapping happen at the boundary, not at each call site.
 

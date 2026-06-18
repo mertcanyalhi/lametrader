@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppRoutes } from './App';
 
 /**
@@ -16,8 +16,21 @@ import { AppRoutes } from './App';
  * starting URL deterministically.
  */
 describe('App shell', () => {
+  // The global status bar's profile selector fetches `GET /profiles`; stub it
+  // with an empty list so these shell smoke tests stay network-free.
+  beforeEach(() => {
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    ) as unknown as typeof fetch;
+  });
+
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     document.documentElement.className = '';
     window.localStorage.clear();
   });
@@ -36,6 +49,21 @@ describe('App shell', () => {
   // their rendering is covered exhaustively by `pages/chart/*.test.tsx` and
   // `pages/settings/settings-page.test.tsx`. We deliberately do not assert them
   // here to keep this smoke test fetch-free.
+
+  it('renders the global bottom status bar with the profile selector on every page', async () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <AppRoutes />
+      </MemoryRouter>,
+    );
+    const statusBar = screen.getByRole('contentinfo');
+
+    await waitFor(() =>
+      expect(
+        within(statusBar).getByRole('combobox', { name: 'Selected profile' }),
+      ).toBeInTheDocument(),
+    );
+  });
 
   it('marks the active route nav link with aria-current=page and the others without it', () => {
     render(
