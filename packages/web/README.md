@@ -16,7 +16,12 @@ Picking a profile sets the **currently selected profile** — a global app conce
 - **First-run / recovery** — once profiles load, a stored id that no longer names a listed profile (or no stored id at all) resolves to the first **enabled** profile; with no profiles the trigger reads "No profile" and is disabled.
 - A disabled profile is still listed and selectable, shown with a muted "(disabled)" hint.
 
-Profile create / edit / delete management, and the chart contributing its symbol + period controls to this bar (plus `?profile=` URL sync), land in follow-up iterations of the same issue.
+A **"Manage profiles"** control next to the selector opens a dialog listing every profile with per-row Edit / Delete plus a "New profile" action.
+Create (`POST`) and edit (`PATCH`) share a form (`name`, `description`, `enabled`); a duplicate name surfaces the server's `409` inline under the name field, and a successful create selects the new profile.
+Edit uses `PATCH` deliberately — it preserves the profile's `scope` and attached indicators (a `PUT` would re-default an omitted `scope` to `All`).
+Delete confirms with an `AlertDialog`; if the deleted profile was selected, the selector falls back to the first remaining enabled one.
+
+The chart contributing its symbol + period controls to this bar (plus `?profile=` URL sync) lands in a follow-up iteration of the same issue.
 
 ## Pages
 
@@ -85,8 +90,9 @@ A thrown `ConfigError` becomes a form-level error rendered inline as a Radix The
 
 `src/lib/hooks/candles.ts` exposes `usePagedCandles` — the chart's historical candle feed, which loads a symbol/period's bars a time window at a time and walks the window backward through history as you scroll.
 
-`src/lib/hooks/profiles.ts` exposes `useProfiles()` — `GET /api/profiles` via TanStack Query under key `['profiles']`, backing the status-bar profile selector.
+`src/lib/hooks/profiles.ts` exposes `useProfiles()` — `GET /api/profiles` via TanStack Query under key `['profiles']`, backing the status-bar profile selector — plus the `useCreateProfile()` / `useUpdateProfile()` / `useDeleteProfile()` mutations (which invalidate `['profiles']` on success).
 The selected-profile *id* is client state, owned by `src/lib/selected-profile/` (a `localStorage` store + a React Context exposing `useSelectedProfile()`), and reconciled against the fetched list by `resolveSelectedProfileId`.
+The create/edit form is validated by a Yup schema (`src/lib/profile-schema.ts`), matching `config-schema.ts`.
 
 Both modules go through the package's `apiFetch` wrapper, so logging + `ApiError` mapping happen at the boundary, not at each call site.
 
