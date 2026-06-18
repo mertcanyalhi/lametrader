@@ -12,6 +12,7 @@ import { ChartLoading } from './chart-loading.js';
 import { CHART_RANGE_ORDER, type ChartRange } from './chart-range.js';
 import { ChartEmptyState } from './empty-state.js';
 import { PeriodRangeDialog } from './period-range-dialog.js';
+import { ProfilePickerDialog } from './profile-picker-dialog.js';
 import { SymbolPickerDialog } from './symbol-picker-dialog.js';
 
 /**
@@ -88,6 +89,7 @@ export function ChartPage(): ReactNode {
         gap="2"
         align="center"
         className="border-t border-[var(--gray-a5)] pt-3"
+        role="group"
         aria-label="Chart actions"
       >
         <SymbolPickerDialog currentId={id} watched={symbols} onSelect={selectSymbol} />
@@ -97,6 +99,7 @@ export function ChartPage(): ReactNode {
           watchedPeriods={selected.periods}
           onApply={applyPeriodRange}
         />
+        <ProfilePickerDialog />
       </Flex>
     </div>
   );

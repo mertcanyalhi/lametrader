@@ -3,6 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { type ReactNode, useCallback, useState } from 'react';
 import { Toaster } from 'sonner';
 import { createQueryClient } from '../../lib/query-client.js';
+import { SelectedProfileProvider } from '../../lib/selected-profile-context.js';
 import {
   getStoredSidebarCollapsed,
   setSidebarCollapsed as persistSidebarCollapsed,
@@ -34,7 +35,9 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <RadixThemeBridge>
-          <ShellChrome>{children}</ShellChrome>
+          <SelectedProfileProvider>
+            <ShellChrome>{children}</ShellChrome>
+          </SelectedProfileProvider>
         </RadixThemeBridge>
       </ThemeProvider>
     </QueryClientProvider>
