@@ -79,6 +79,10 @@ Each bullet maps to exactly one test (jsdom; mocked socket / mocked
       reaches the latest bar, and a `fixed` `{from,to}` window when scrolled back.
 - [ ] `liveLogicalRange` spans the last `bars` of the series (right edge on the
       newest bar), clamped to bar 0 for short series.
+- [ ] `mergeCandlesByTime` folds a catch-up window over the paged history, deduped
+      by `time` with the catch-up bar winning, ascending.
+- [ ] Reopening the chart later fetches a catch-up window up to the current time,
+      filling bars the frozen paged (infinite) query misses.
 
 ## End-to-end expectation
 
@@ -99,6 +103,15 @@ the realistic surface for a canvas feature.
 
 ## Surprises
 
+- **Reopening the chart left a gap.** `usePagedCandles` is an infinite query whose
+  newest page freezes its `to` at the first open (the query key has no time), so on
+  navigating back it refetched the *same* stale window — bars that formed while the
+  chart was unmounted were never fetched, and the live stream only delivers events
+  forward from each re-subscribe. Fixed by adding a plain `useQuery` for the recent
+  window: a `useQuery` re-reads its `queryFn` on each mount/focus refetch (unlike
+  infinite-query page params), so it catches up to the present, and
+  `mergeCandlesByTime` folds it over the paged history. (A genuine server-side
+  polling halt still leaves real gaps in storage — tracked separately in #58.)
 - **An absolute persisted viewport doesn't follow new bars.** The stored window
   was `{from, to}` epoch-ms and was restored verbatim, so once you were watching
   the live edge the window went stale — new bars appeared off-screen to the right.

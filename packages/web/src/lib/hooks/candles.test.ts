@@ -9,6 +9,7 @@ import {
   CHART_CANDLE_LIMIT,
   CHART_PAGE_BARS,
   liveCandleForPeriod,
+  mergeCandlesByTime,
   useCandleStream,
   usePagedCandles,
 } from './candles.js';
@@ -157,6 +158,36 @@ describe('usePagedCandles', () => {
     // not hand back a fresh array (which would re-run setData and drop live bars).
     expect(result.current.candles).toBe(first);
   });
+
+  it('catches up to the current time when reopened, filling bars the frozen paged window misses', async () => {
+    windows.set(NOW, { candles: [candle(NOW - HOUR)], nextCursor: null });
+    const first = renderHook(() => usePagedCandles({ id: ID, period: Period.OneHour }), {
+      wrapper,
+    });
+    await waitFor(() => expect(first.result.current.candles).toEqual([candle(NOW - HOUR)]));
+    first.unmount();
+
+    // Reopen the chart later (navigate back). The catch-up window now covers newer
+    // bars; the paged (infinite) query stays frozen at its first-open `to`, so the
+    // catch-up is what fills the gap.
+    const LATER = NOW + 3 * HOUR;
+    vi.mocked(Date.now).mockReturnValue(LATER);
+    windows.set(LATER, {
+      candles: [candle(NOW - HOUR), candle(NOW), candle(NOW + HOUR), candle(NOW + 2 * HOUR)],
+      nextCursor: null,
+    });
+    const second = renderHook(() => usePagedCandles({ id: ID, period: Period.OneHour }), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(second.result.current.candles).toHaveLength(4));
+    expect(second.result.current.candles).toEqual([
+      candle(NOW - HOUR),
+      candle(NOW),
+      candle(NOW + HOUR),
+      candle(NOW + 2 * HOUR),
+    ]);
+  });
 });
 
 /** A controllable fake `WebSocket` for the shared stream client. */
@@ -253,5 +284,34 @@ describe('liveCandleForPeriod', () => {
   it('returns null when the event is for a different period than the chart', () => {
     const event = candleEvent(ID, Period.OneDay);
     expect(liveCandleForPeriod(event, Period.OneHour)).toEqual(null);
+  });
+});
+
+describe('mergeCandlesByTime', () => {
+  it('returns the paged series unchanged when there is no catch-up data', () => {
+    const paged = [candle(NOW - HOUR), candle(NOW)];
+    expect(mergeCandlesByTime(paged, [])).toEqual([candle(NOW - HOUR), candle(NOW)]);
+  });
+
+  it('appends newer catch-up bars and keeps the series ascending by time', () => {
+    const paged = [candle(NOW - HOUR), candle(NOW)];
+    const latest = [candle(NOW + HOUR), candle(NOW + 2 * HOUR)];
+
+    expect(mergeCandlesByTime(paged, latest)).toEqual([
+      candle(NOW - HOUR),
+      candle(NOW),
+      candle(NOW + HOUR),
+      candle(NOW + 2 * HOUR),
+    ]);
+  });
+
+  it('dedupes overlapping times with the catch-up bar winning (fresher reading)', () => {
+    const stale: Candle = { ...candle(NOW), close: 1 };
+    const fresh: Candle = { ...candle(NOW), close: 2 };
+
+    expect(mergeCandlesByTime([candle(NOW - HOUR), stale], [fresh])).toEqual([
+      candle(NOW - HOUR),
+      fresh,
+    ]);
   });
 });
