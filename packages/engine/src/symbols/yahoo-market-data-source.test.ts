@@ -23,8 +23,26 @@ describe('resolveYahooChartRange', () => {
     });
   });
 
-  it('uses the explicit range bounds when a range is given', () => {
-    expect(resolveYahooChartRange(Period.OneMinute, { from: 100, to: 200 }, NOW)).toEqual({
+  it('keeps an intraday range start that already spans several bars', () => {
+    expect(
+      resolveYahooChartRange(Period.OneMinute, { from: NOW - 10 * 60_000, to: NOW }, NOW),
+    ).toEqual({
+      period1: new Date(NOW - 10 * 60_000),
+      period2: new Date(NOW),
+    });
+  });
+
+  it('widens a tight intraday range to a few bars so the in-progress bar has real data', () => {
+    // A poll resumes from the current bar's open (within one bar of `to`); Yahoo
+    // reports that bar with zero volume unless the window spans completed bars.
+    expect(resolveYahooChartRange(Period.OneMinute, { from: NOW - 30_000, to: NOW }, NOW)).toEqual({
+      period1: new Date(NOW - 3 * 60_000),
+      period2: new Date(NOW),
+    });
+  });
+
+  it('uses the explicit range bounds for a daily interval (no intraday widening)', () => {
+    expect(resolveYahooChartRange(Period.OneDay, { from: 100, to: 200 }, NOW)).toEqual({
       period1: new Date(100),
       period2: new Date(200),
     });
@@ -314,6 +332,138 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           close: 12,
           volume: 100,
           adjClose: 12,
+        },
+      ],
+      complete: true,
+    });
+  });
+
+  it('drops an equity bar missing volume (no fabricated zero) but keeps a real zero-volume bar', async () => {
+    const HOUR = 3_600_000;
+    vi.spyOn(YahooFinance.prototype, 'chart').mockResolvedValue({
+      quotes: [
+        {
+          date: new Date(3 * HOUR),
+          open: 10,
+          high: 11,
+          low: 9,
+          close: 10,
+          volume: 100,
+          adjclose: 10,
+        },
+        // A real no-trade interval: volume is present and 0 — kept.
+        {
+          date: new Date(4 * HOUR),
+          open: 11,
+          high: 12,
+          low: 10,
+          close: 11,
+          volume: 0,
+          adjclose: 11,
+        },
+        // Volume absent (Yahoo gap) — incomplete, must not be ingested as 0.
+        { date: new Date(5 * HOUR), open: 12, high: 13, low: 11, close: 12, adjclose: 12 },
+      ],
+    } as never);
+    const source = new YahooMarketDataSource();
+
+    await expect(source.fetchCandles('stock:AAPL', Period.OneHour)).resolves.toEqual({
+      candles: [
+        {
+          type: SymbolType.Stock,
+          time: 3 * HOUR,
+          open: 10,
+          high: 11,
+          low: 9,
+          close: 10,
+          volume: 100,
+          adjClose: 10,
+        },
+        {
+          type: SymbolType.Stock,
+          time: 4 * HOUR,
+          open: 11,
+          high: 12,
+          low: 10,
+          close: 11,
+          volume: 0,
+          adjClose: 11,
+        },
+      ],
+      complete: true,
+    });
+  });
+
+  it('returns only bars within the requested range, dropping widened-in lookback bars', async () => {
+    const HOUR = 3_600_000;
+    // An intraday range is widened back for data quality, so Yahoo also returns
+    // older lookback bars — the oldest with bad (zero) volume. Only the requested
+    // [from, to) window must be ingested, or those older bars get clobbered.
+    vi.spyOn(YahooFinance.prototype, 'chart').mockResolvedValue({
+      quotes: [
+        {
+          date: new Date(2 * HOUR),
+          open: 10,
+          high: 11,
+          low: 9,
+          close: 10,
+          volume: 0,
+          adjclose: 10,
+        },
+        {
+          date: new Date(3 * HOUR),
+          open: 11,
+          high: 12,
+          low: 10,
+          close: 11,
+          volume: 100,
+          adjclose: 11,
+        },
+        {
+          date: new Date(4 * HOUR),
+          open: 12,
+          high: 13,
+          low: 11,
+          close: 12,
+          volume: 200,
+          adjclose: 12,
+        },
+        {
+          date: new Date(5 * HOUR),
+          open: 13,
+          high: 14,
+          low: 12,
+          close: 13,
+          volume: 300,
+          adjclose: 13,
+        },
+      ],
+    } as never);
+    const source = new YahooMarketDataSource();
+
+    await expect(
+      source.fetchCandles('stock:AAPL', Period.OneHour, { from: 4 * HOUR, to: 6 * HOUR }),
+    ).resolves.toEqual({
+      candles: [
+        {
+          type: SymbolType.Stock,
+          time: 4 * HOUR,
+          open: 12,
+          high: 13,
+          low: 11,
+          close: 12,
+          volume: 200,
+          adjClose: 12,
+        },
+        {
+          type: SymbolType.Stock,
+          time: 5 * HOUR,
+          open: 13,
+          high: 14,
+          low: 12,
+          close: 13,
+          volume: 300,
+          adjClose: 13,
         },
       ],
       complete: true,

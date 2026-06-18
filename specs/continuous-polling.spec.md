@@ -77,6 +77,35 @@ which Yahoo rejects for intraday intervals (they allow only a bounded lookback) 
 daily/weekly keep `new Date(0)` (full history). Range computation extracted to a pure
 `resolveYahooChartRange(period, range, now)` so it's unit-testable without the network.
 
+A second Yahoo quirk affects the *ranged* (polling) path: when the request window
+starts at — or within one bar of — the in-progress bar's open (exactly the tight
+resume window a poll uses, `from = latest.time`), Yahoo returns that bar with
+**zero volume** and a degenerate, often flat OHLC, while a wider window returns it
+with real accumulating data.
+So `resolveYahooChartRange` widens an intraday explicit range so its start spans at
+least `LIVE_POLL_MIN_BARS` (3) completed bars before the end
+(`period1 = min(range.from, range.to - 3 · periodMillis)`); daily/weekly ranges are
+left exact.
+Those widened-in lookback bars are **context for Yahoo only** — the oldest still
+comes back with partial/zero volume — so `fetchCandles` returns **only the bars
+within the originally-requested `[from, to)`** (`time >= from && time < to`).
+Otherwise a poll would ingest the bad boundary bar and overwrite an older candle's
+already-correct volume with `0`.
+(This also aligns the Yahoo adapter with the implicit `MarketDataSource` contract,
+which returns candles within the requested range — the in-memory fake already does.)
+
+`toCandle` also guards completeness so degenerate provider bars are never ingested:
+a bar missing any of OHLC is dropped (an existing rule), and — for equities/funds,
+which carry volume — a bar with a **missing** volume is dropped rather than stored
+with a fabricated `0`.
+A *present* `volume: 0` is a real no-trade interval and is kept (so the guard rejects
+absent fields, not legitimate zero values); FX has no volume and is exempt.
+
+- [ ] `fetchCandles` returns only bars within the requested `[from, to)`, dropping
+      the widened-in lookback bars (so a poll never overwrites older candles).
+- [ ] `fetchCandles` drops an equity bar whose volume is absent (no fabricated `0`)
+      but keeps a bar whose volume is a real `0`.
+
 ## Yahoo live-bar merge fix (`engine`)
 
 Yahoo's v8 chart appends the in-progress interval stamped at the live update time
@@ -163,7 +192,11 @@ Yahoo bug-fix (`engine`, pure `resolveYahooChartRange`, injected `now`):
 - [ ] no `range`, intraday interval (`1m`) ⇒ `period1 = now - 7d`, `period2 = now`
       (not `new Date(0)`).
 - [ ] no `range`, daily interval (`1d`) ⇒ `period1 = new Date(0)`, `period2 = now`.
-- [ ] explicit `range` ⇒ `period1 = range.from`, `period2 = range.to` (unchanged).
+- [ ] explicit `range`, daily ⇒ `period1 = range.from`, `period2 = range.to` (unchanged).
+- [ ] explicit `range`, intraday, already spanning ≥ 3 bars ⇒ `period1 = range.from`.
+- [ ] explicit `range`, intraday, narrower than 3 bars (a poll's resume window) ⇒
+      `period1 = range.to - 3 · periodMillis` — widened so Yahoo returns the
+      in-progress bar with real volume/OHLC instead of a zero-volume snapshot.
 
 API adapter:
 

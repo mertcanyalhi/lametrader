@@ -55,8 +55,22 @@ const YAHOO_MAX_LOOKBACK_MS: Partial<Record<Period, number>> = {
 };
 
 /**
+ * Minimum intraday lookback, in bars, for a *ranged* fetch. Yahoo reports the
+ * in-progress bar with **zero volume** and a degenerate (often flat) OHLC when
+ * the request window starts at — or within a bar of — that bar's open, which is
+ * exactly the tight resume window continuous polling uses (`from = latest.time`,
+ * the current bar). Widening the window so it spans a few completed bars makes
+ * Yahoo return the current bar with its real accumulating data. The extra older
+ * bars are already stored (idempotent upserts), so re-fetching them is harmless.
+ */
+const LIVE_POLL_MIN_BARS = 3;
+
+/**
  * Resolve the `period1`/`period2` dates for a Yahoo chart request. With an
- * explicit `range`, uses its bounds. With no range, intraday intervals start a
+ * explicit `range`, uses its bounds — but for **intraday** intervals widens the
+ * start back to at least {@link LIVE_POLL_MIN_BARS} bars before the end, so a
+ * poll's tight resume window still returns the in-progress bar with real volume
+ * (see {@link LIVE_POLL_MIN_BARS}). With no range, intraday intervals start a
  * bounded lookback before `now` (Yahoo rejects `new Date(0)` for them); daily and
  * weekly start at epoch 0 for the provider's deepest history.
  *
@@ -70,7 +84,10 @@ export function resolveYahooChartRange(
   now: number = Date.now(),
 ): { period1: Date; period2: Date } {
   if (range) {
-    return { period1: new Date(range.from), period2: new Date(range.to) };
+    const span = periodMillis(period);
+    const from =
+      span < DAY_MS ? Math.min(range.from, range.to - LIVE_POLL_MIN_BARS * span) : range.from;
+    return { period1: new Date(from), period2: new Date(range.to) };
   }
   const lookback = YAHOO_MAX_LOOKBACK_MS[period];
   return {
@@ -179,9 +196,15 @@ export class YahooMarketDataSource implements MarketDataSource {
         const candle = toCandle(type, bar);
         if (candle) out.push(candle);
       }
+      // Return only the requested window. Intraday ranges are widened (see
+      // `resolveYahooChartRange`) so Yahoo reports the current bar with real
+      // volume, but the widened-in lookback bars are context only — the oldest
+      // comes back with partial/zero volume, and ingesting it would overwrite
+      // those older candles' correct values. Drop anything outside `[from, to)`.
+      const candles = range ? out.filter((c) => c.time >= range.from && c.time < range.to) : out;
       // Yahoo's chart returns the whole requested window in one response — no
       // paging cap of ours applies, so the batch is always complete.
-      return { candles: out, complete: true };
+      return { candles, complete: true };
     } catch (cause) {
       throw new MarketDataError(
         `Yahoo failed to fetch candles for ${id}: ${(cause as Error).message}`,
@@ -316,9 +339,12 @@ function nanMin(a: number | null | undefined, b: number | null | undefined): num
 }
 
 /**
- * Map a Yahoo chart bar to a typed {@link Candle}, or `null` when the bar has no
- * OHLC (a gap). FX yields an {@link FxCandle} (no volume); stocks/funds an
- * {@link EquityCandle}.
+ * Map a Yahoo chart bar to a typed {@link Candle}, or `null` when the bar is
+ * incomplete and must not be ingested: missing any of OHLC (a gap), or — for
+ * equities/funds, which carry volume — a missing volume. A *present* volume of
+ * `0` is a real no-trade interval and is kept; only an absent value is rejected
+ * (so we never fabricate a zero). FX yields an {@link FxCandle} (no volume);
+ * stocks/funds an {@link EquityCandle}.
  */
 function toCandle(type: SymbolType, bar: YahooBar): Candle | null {
   if (bar.open == null || bar.high == null || bar.low == null || bar.close == null) {
@@ -334,10 +360,13 @@ function toCandle(type: SymbolType, bar: YahooBar): Candle | null {
   if (type === SymbolType.Fx) {
     return { ...base, type: SymbolType.Fx } satisfies FxCandle;
   }
+  if (bar.volume == null) {
+    return null;
+  }
   return {
     ...base,
     type: type === SymbolType.Fund ? SymbolType.Fund : SymbolType.Stock,
-    volume: bar.volume ?? 0,
+    volume: bar.volume,
     adjClose: bar.adjclose ?? bar.close,
   } satisfies EquityCandle;
 }

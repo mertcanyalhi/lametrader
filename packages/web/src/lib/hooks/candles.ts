@@ -1,6 +1,9 @@
 import { type Candle, type CandlePage, type Period, periodMillis } from '@lametrader/core';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
 import { apiFetch } from '../api-fetch.js';
+import { type CandleEvent, StreamKind } from '../stream/stream-client.types.js';
+import { useStreamSubscription } from '../stream/use-stream-subscription.js';
 
 /**
  * Bars per fetch window. The window is sized as `CHART_PAGE_BARS × periodMillis`
@@ -66,12 +69,40 @@ export function usePagedCandles({ id, period }: { id: string; period: Period }):
         : { from: lastParam.from - span, to: lastParam.from },
   });
 
-  // Pages arrive newest-window-first; reversing then flattening yields one
-  // series ascending by time (each page is already ascending internally).
-  const candles = (query.data?.pages ?? [])
-    .slice()
-    .reverse()
-    .flatMap((page) => page.candles);
+  // The infinite query freezes its newest page's `to` at the first open, so bars
+  // that form while the chart is unmounted are never fetched when it reopens —
+  // leaving a gap on screen-switch. A plain query for the recent window refetches
+  // on mount/focus with a fresh `now` (a `useQuery` re-reads its queryFn each
+  // refetch, unlike infinite-query page params), catching up to the present; its
+  // bars are merged over the paged history. Best-effort: a failure just leaves the
+  // paged data, so its error/loading state doesn't gate the chart.
+  const latest = useQuery({
+    queryKey: ['candles', id, period, 'latest'],
+    queryFn: () =>
+      apiFetch<CandlePage>(
+        `/symbols/${id}/candles?period=${period}&from=${now - span}&to=${now}&limit=${CHART_CANDLE_LIMIT}`,
+      ),
+  });
+
+  // Pages arrive newest-window-first; reversing then flattening yields one series
+  // ascending by time, then the catch-up window is merged over it (deduped by
+  // time, newest data winning). Memoized on the query data so the array identity
+  // is stable across re-renders that don't change it — consumers (the chart) key
+  // effects on this reference, and a fresh array each render would re-run them
+  // (and clobber live updates).
+  const pages = query.data?.pages;
+  const latestCandles = latest.data?.candles;
+  const candles = useMemo(
+    () =>
+      mergeCandlesByTime(
+        (pages ?? [])
+          .slice()
+          .reverse()
+          .flatMap((page) => page.candles),
+        latestCandles ?? [],
+      ),
+    [pages, latestCandles],
+  );
 
   return {
     candles,
@@ -84,4 +115,52 @@ export function usePagedCandles({ id, period }: { id: string; period: Period }):
     isError: query.isError,
     error: query.error,
   };
+}
+
+/**
+ * Subscribe to a symbol's live candle feed over the shared `/stream` client and
+ * return the latest candle event, or `null` before the first frame. The feed
+ * spans every period the symbol is polled on — callers filter to the period
+ * they chart via {@link liveCandleForPeriod}. The latest event is stored with
+ * the id it arrived for, so changing `id` reads back `null` until the new
+ * symbol's first frame; the subscription is torn down on unmount.
+ *
+ * @param id - canonical symbol id to stream candles for.
+ */
+export function useCandleStream(id: string): CandleEvent | null {
+  const [latest, setLatest] = useState<{ id: string; event: CandleEvent } | null>(null);
+
+  useStreamSubscription(StreamKind.Candle, id, (event) => setLatest({ id, event }));
+
+  return latest?.id === id ? latest.event : null;
+}
+
+/**
+ * The candle from a live {@link CandleEvent} when it belongs to `period`, else
+ * `null`. The candle feed carries every polled period for a symbol; the chart
+ * renders one, so it keeps only the matching event's bar (and `null` when there
+ * is no event yet or it is for another period).
+ *
+ * @param event - the latest live candle event, or `null`.
+ * @param period - the period the chart is rendering.
+ */
+export function liveCandleForPeriod(event: CandleEvent | null, period: Period): Candle | null {
+  return event && event.period === period ? event.candle : null;
+}
+
+/**
+ * Merge two time-ascending candle series into one, deduped by `time`, with the
+ * `latest` series winning on overlap (it carries the fresher reading). Used to
+ * fold the catch-up recent window over the paged history so reopening the chart
+ * fills any gap. The result is sorted ascending by `time`.
+ *
+ * @param paged - the backward-paged history, ascending by time.
+ * @param latest - the recent catch-up window, ascending by time.
+ */
+export function mergeCandlesByTime(paged: Candle[], latest: Candle[]): Candle[] {
+  if (latest.length === 0) return paged;
+  const byTime = new Map<number, Candle>();
+  for (const candle of paged) byTime.set(candle.time, candle);
+  for (const candle of latest) byTime.set(candle.time, candle);
+  return [...byTime.values()].sort((a, b) => a.time - b.time);
 }

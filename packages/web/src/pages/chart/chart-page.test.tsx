@@ -18,6 +18,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // The canvas wrapper is mocked — page tests assert data/URL/state, not pixels.
 vi.mock('./candle-chart.js', () => ({ CandleChart: () => <div>candle-chart</div> }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
+// The chart subscribes to the live candle stream; stub the shared client so the
+// page tests don't open a (jsdom-absent) WebSocket.
+vi.mock('../../lib/stream/stream-client.js', () => ({
+  streamClient: { subscribe: () => () => {}, onReconnect: () => () => {} },
+}));
 
 import { ChartPage } from './chart-page.js';
 

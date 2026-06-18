@@ -4,7 +4,7 @@ import { type ReactNode, useEffect } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router';
 import { getStoredPeriod, setStoredPeriod } from '../../lib/chart-period.js';
 import { formatChange, formatChangePct, formatPrice } from '../../lib/format.js';
-import { usePagedCandles } from '../../lib/hooks/candles.js';
+import { liveCandleForPeriod, useCandleStream, usePagedCandles } from '../../lib/hooks/candles.js';
 import { useWatchlist } from '../../lib/hooks/symbols.js';
 import { useConfig } from '../../lib/hooks/use-config.js';
 import { CandleChart } from './candle-chart.js';
@@ -163,8 +163,17 @@ function ChartView({
   symbol: EnrichedSymbol;
 }): ReactNode {
   const feed = usePagedCandles({ id, period });
-  const latest = feed.candles.at(-1) ?? null;
-  const previous = feed.candles.at(-2) ?? null;
+  // The chart applies live bars itself; here the live bar only drives the tab
+  // title's latest close (display, so the latest frame is enough).
+  const liveCandle = liveCandleForPeriod(useCandleStream(id), period);
+  const lastLoaded = feed.candles.at(-1) ?? null;
+  // The live bar is the freshest "latest"; when it opens a new bar the last
+  // loaded one becomes the title's previous-close baseline.
+  const latest = liveCandle ?? lastLoaded;
+  const previous =
+    liveCandle && lastLoaded && liveCandle.time > lastLoaded.time
+      ? lastLoaded
+      : (feed.candles.at(-2) ?? null);
   const body = feed.isPending ? (
     <ChartLoading />
   ) : feed.isError ? (
