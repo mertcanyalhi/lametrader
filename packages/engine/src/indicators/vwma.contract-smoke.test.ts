@@ -1,10 +1,4 @@
-import {
-  type Candle,
-  IndicatorError,
-  PriceSource,
-  SymbolType,
-  validateIndicatorInputs,
-} from '@lametrader/core';
+import { type Candle, IndicatorError, SymbolType, validateIndicatorInputs } from '@lametrader/core';
 import { describe, expect, it } from 'vitest';
 import { defaultIndicators } from './default-indicators.js';
 

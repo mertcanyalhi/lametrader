@@ -100,7 +100,7 @@ export function ProfilePickerDialog(): ReactNode {
     <>
       <Dialog.Root open={open} onOpenChange={handleOpenChange}>
         <Dialog.Trigger>
-          <Button variant="soft" color="gray">
+          <Button variant="soft" color="gray" className="min-w-32 justify-center">
             <User size={14} aria-hidden="true" />
             {triggerLabel}
           </Button>
@@ -212,7 +212,12 @@ function ProfileRow({
   onDelete: (profile: Profile) => void;
 }): ReactNode {
   return (
-    <Flex align="center" gap="2" className="rounded-md hover:bg-[var(--gray-a3)]">
+    <Flex
+      align="center"
+      gap="2"
+      pr="2"
+      className="rounded-md border border-[var(--gray-a6)] hover:bg-[var(--gray-a3)]"
+    >
       <button
         type="button"
         onClick={() => onSelect(profile)}

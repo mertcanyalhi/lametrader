@@ -2,10 +2,10 @@ import type { EnrichedSymbol, Instrument } from '@lametrader/core';
 import { Button, Dialog, Flex, Popover, ScrollArea, Text, TextField } from '@radix-ui/themes';
 import { CandlestickChart, Search } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
+import { SymbolIdCode } from '../../components/symbol-type-badge.js';
 import { cn } from '../../lib/cn.js';
 import { useSearchInstruments } from '../../lib/hooks/symbols.js';
 import { useDebouncedValue } from '../../lib/use-debounced-value.js';
-import { SymbolIdCode } from '../watchlist/symbol-type-badge.js';
 
 /** Quiet period before a keystroke triggers an instrument search. */
 const SEARCH_DEBOUNCE_MS = 250;
@@ -59,7 +59,7 @@ export function SymbolPickerDialog({
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Trigger>
-        <Button variant="soft" color="gray">
+        <Button variant="soft" color="gray" className="min-w-32 justify-center">
           <CandlestickChart size={14} aria-hidden="true" />
           {currentId}
         </Button>
@@ -133,7 +133,7 @@ function SymbolRow({
       data-watched={watched ? 'true' : 'false'}
       onClick={watched ? () => onWatchedSelect(instrument.id) : undefined}
       className={cn(
-        'flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left',
+        'flex w-full items-center justify-between gap-3 rounded-md border border-[var(--gray-a6)] px-3 py-2 text-left',
         watched ? 'hover:bg-[var(--gray-a3)]' : 'cursor-help opacity-50',
       )}
       aria-label={instrument.id}

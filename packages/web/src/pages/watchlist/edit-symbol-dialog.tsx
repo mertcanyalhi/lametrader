@@ -4,11 +4,11 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { FieldLabel } from '../../components/field-label.js';
 import { PeriodToggleGroup } from '../../components/period-toggle-group.js';
+import { SymbolIdCode } from '../../components/symbol-type-badge.js';
 import { ApiError } from '../../lib/api-fetch.js';
 import { useUpdatePeriods } from '../../lib/hooks/symbols.js';
 import { getLogger } from '../../lib/log.js';
 import { sortPeriods } from '../../lib/periods.js';
-import { SymbolIdCode } from './symbol-type-badge.js';
 
 /** Scoped logger for the edit-symbol flow. */
 const log = getLogger('edit-symbol-dialog');

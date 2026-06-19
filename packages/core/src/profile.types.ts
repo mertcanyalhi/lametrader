@@ -55,6 +55,8 @@ export interface ProfileFields {
  * `version` is the `IndicatorDefinition.version` recorded at attach/replace time so future migrations can run if the indicator's schema bumps.
  *
  * No period is stored: at compute time the indicator runs at each of the symbol's watched periods.
+ *
+ * `summary` is a derived display string (e.g. `"SMA 14 close"`), produced from the module's `summary(inputs)` function — it is **never persisted**, only added at read time so callers can render an instance without re-running the formatter.
  */
 export interface IndicatorInstance {
   /** Generated, stable id (so actions can address this attachment). */
@@ -67,6 +69,8 @@ export interface IndicatorInstance {
   inputs: Record<string, unknown>;
   /** Optional alias (e.g. to tell two attachments of the same indicator apart). */
   label?: string;
+  /** Derived display summary (e.g. `"SMA 14 close"`). Set on read by the service, never persisted. */
+  summary?: string;
 }
 
 /**

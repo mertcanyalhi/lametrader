@@ -89,6 +89,7 @@ describe('runProfiles indicators sub-group', () => {
       version: 1,
       inputs: { length: 5, source: 'close' },
       label: 'Fast',
+      summary: 'SMA 5 close',
     });
   });
 
@@ -97,7 +98,13 @@ describe('runProfiles indicators sub-group', () => {
     await runProfiles(['create', '--name', 'Scalper'], service);
     await runProfiles(['indicators', 'add', 'p1', '--indicator-key', 'sma'], service);
     expect(JSON.parse(await runProfiles(['indicators', 'list', 'p1'], service))).toEqual([
-      { id: 'p2', indicatorKey: 'sma', version: 1, inputs: { length: 14, source: 'close' } },
+      {
+        id: 'p2',
+        indicatorKey: 'sma',
+        version: 1,
+        inputs: { length: 14, source: 'close' },
+        summary: 'SMA 14 close',
+      },
     ]);
   });
 
@@ -116,6 +123,7 @@ describe('runProfiles indicators sub-group', () => {
       indicatorKey: 'sma',
       version: 1,
       inputs: { length: 21, source: 'close' },
+      summary: 'SMA 21 close',
     });
   });
 

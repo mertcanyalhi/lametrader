@@ -31,6 +31,7 @@ export const movingAverage = defineIndicator({
       type: FieldType.Number,
       key: 'length',
       label: 'Length',
+      description: 'Number of candles included in the moving average (longer = smoother, slower).',
       integer: true,
       min: 1,
       max: 1_000,
@@ -40,6 +41,8 @@ export const movingAverage = defineIndicator({
       type: FieldType.Source,
       key: 'source',
       label: 'Source',
+      description:
+        'Which price the average is taken over (typically `close`; `hl2` / `hlc3` / `ohlc4` average within the bar).',
       default: PriceSource.Close,
     },
   ] as const,
@@ -52,6 +55,7 @@ export const movingAverage = defineIndicator({
       pane: Pane.Overlay,
     },
   ] as const,
+  summary: ({ length, source }) => `SMA ${length} ${source}`,
   compute: ({ length, source }, candles: Candle[]) => {
     return candles.map((candle, i) => {
       if (i + 1 < length) {

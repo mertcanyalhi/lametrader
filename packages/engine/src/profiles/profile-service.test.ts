@@ -197,6 +197,7 @@ describe('ProfileService.addIndicator', () => {
       indicatorKey: 'sma',
       version: 1,
       inputs: { length: 14, source: 'close' },
+      summary: 'SMA 14 close',
     });
     const list = await service.listIndicators('p1');
     expect(list).toEqual([instance]);
@@ -216,6 +217,7 @@ describe('ProfileService.addIndicator', () => {
       version: 1,
       inputs: { length: 5, source: 'close' },
       label: 'Fast',
+      summary: 'SMA 5 close',
     });
   });
 
@@ -271,6 +273,7 @@ describe('ProfileService.replaceIndicator', () => {
       indicatorKey: 'sma',
       version: 1,
       inputs: { length: 21, source: 'close' },
+      summary: 'SMA 21 close',
     });
     expect(await service.listIndicators('p1')).toEqual([replaced]);
   });
