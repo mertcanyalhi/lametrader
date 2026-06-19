@@ -215,6 +215,7 @@ function ProfileRow({
     <Flex
       align="center"
       gap="2"
+      pr="2"
       className="rounded-md border border-[var(--gray-a6)] hover:bg-[var(--gray-a3)]"
     >
       <button
