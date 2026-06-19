@@ -77,9 +77,9 @@ function ShellChrome({ children }: { children: ReactNode }): ReactNode {
   return (
     <div className="flex h-dvh w-full bg-background text-foreground">
       <Sidebar collapsed={sidebarCollapsed} />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Topbar sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />
-        <main className="flex-1 overflow-auto p-4">{children}</main>
+        <main className="min-h-0 flex-1 overflow-auto p-4">{children}</main>
       </div>
       <Toaster richColors position="top-right" />
     </div>

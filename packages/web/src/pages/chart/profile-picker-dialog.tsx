@@ -12,7 +12,7 @@ import {
   TextArea,
   TextField,
 } from '@radix-ui/themes';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2, User } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ApiError } from '../../lib/api-fetch.js';
@@ -101,6 +101,7 @@ export function ProfilePickerDialog(): ReactNode {
       <Dialog.Root open={open} onOpenChange={handleOpenChange}>
         <Dialog.Trigger>
           <Button variant="soft" color="gray">
+            <User size={14} aria-hidden="true" />
             {triggerLabel}
           </Button>
         </Dialog.Trigger>

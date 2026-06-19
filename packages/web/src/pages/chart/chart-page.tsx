@@ -92,6 +92,7 @@ export function ChartPage(): ReactNode {
         role="group"
         aria-label="Chart actions"
       >
+        <ProfilePickerDialog />
         <SymbolPickerDialog currentId={id} watched={symbols} onSelect={selectSymbol} />
         <PeriodRangeDialog
           period={period}
@@ -99,7 +100,6 @@ export function ChartPage(): ReactNode {
           watchedPeriods={selected.periods}
           onApply={applyPeriodRange}
         />
-        <ProfilePickerDialog />
       </Flex>
     </div>
   );
