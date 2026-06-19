@@ -4,7 +4,7 @@ import type {
   IndicatorStatePoint,
   Profile,
 } from '@lametrader/core';
-import { Flex, IconButton, Text } from '@radix-ui/themes';
+import { Flex, IconButton } from '@radix-ui/themes';
 import { Eye, EyeOff, X } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { DetachIndicatorDialog } from './detach-indicator-dialog.js';
@@ -132,21 +132,18 @@ function LegendRow({
 
   return (
     <li aria-label={label}>
-      <Flex align="center" gap="2">
+      {/* Same typographic stack as the OHLCV row above — `text-xs` + `tabular-nums`,
+          default sans inherited (no font-mono), neutral foreground colour. The
+          swatch is the only per-overlay colour cue. */}
+      <Flex align="center" gap="2" className="text-xs tabular-nums text-[var(--gray-12)]">
         <span
           data-testid="overlay-swatch"
           aria-hidden="true"
           className="inline-block h-2 w-2 rounded-full"
           style={{ backgroundColor: overlay.color }}
         />
-        <Text size="2" className="font-mono">
-          {label}
-        </Text>
-        {value !== '' ? (
-          <Text size="2" className="font-mono tabular-nums">
-            {value}
-          </Text>
-        ) : null}
+        <span>{label}</span>
+        {value !== '' ? <span>{value}</span> : null}
         <IconButton
           type="button"
           variant="ghost"
