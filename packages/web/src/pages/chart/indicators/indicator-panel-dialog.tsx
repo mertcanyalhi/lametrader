@@ -247,14 +247,12 @@ function InstanceRow({
       className={`rounded-md border border-[var(--gray-a6)] px-3 py-2 hover:bg-[var(--gray-a3)] ${applicable ? '' : 'opacity-60'}`}
     >
       <Flex direction="column" className="flex-1 min-w-0">
-        <Flex gap="2" align="baseline" wrap="wrap">
-          <Text size="2">{displayName}</Text>
-          {instance.summary ? (
-            <Text size="1" color="gray" className="font-mono">
-              {instance.summary}
-            </Text>
-          ) : null}
-        </Flex>
+        <Text size="2">{displayName}</Text>
+        {instance.summary ? (
+          <Text size="1" color="gray" className="font-mono">
+            {instance.summary}
+          </Text>
+        ) : null}
         {!applicable ? (
           <Text size="1" color="gray">
             n/a for {symbolType}
