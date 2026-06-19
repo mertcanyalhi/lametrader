@@ -157,11 +157,18 @@ export class IndicatorStreamService {
     subscription: Subscription,
     event: CandleEvent,
   ): Promise<IndicatorStateEvent | null> {
+    // Scope the compute to the single event candle — the service's load is
+    // `[from - warmup*span, to)`, so passing the bar's `[time, time+1)`
+    // pulls only the warm-up window + this bar instead of every stored
+    // candle for the symbol+period. Without this, every candle event triggers
+    // a full-history scan, spiking API CPU under any non-trivial subscription
+    // fan-out.
     const result = await this.compute.compute(
       subscription.symbolId,
       subscription.indicatorKey,
       subscription.inputs,
       subscription.period,
+      { from: event.candle.time, to: event.candle.time + 1 },
     );
     const row = result.state.find((point) => point.time === event.candle.time);
     if (!row) return null;

@@ -8,7 +8,7 @@ import {
   SymbolType,
   type WatchedSymbol,
 } from '@lametrader/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { InMemoryCandleRepository } from '../candles/in-memory-candle-repository.js';
 import type { CandleEvent } from '../candles/polling-service.types.js';
 import { InMemoryWatchlistRepository } from '../symbols/in-memory-watchlist-repository.js';
@@ -224,6 +224,31 @@ describe('IndicatorStreamService.handleCandle', () => {
     });
 
     expect(events.map((e) => e.subscriptionId).sort()).toEqual([a, b].sort());
+  });
+
+  it('scopes the candle load to a warm-up + single-bar window around the event time — no full-history scan', async () => {
+    const { stream, candles } = await build();
+    const rangeSpy = vi.spyOn(candles, 'range');
+    await stream.subscribe({
+      id: BTC.id,
+      period: Period.OneHour,
+      indicatorKey: 'sma',
+      inputs: { length: 3 },
+    });
+
+    await stream.handleCandle({
+      id: BTC.id,
+      period: Period.OneHour,
+      candle: candle(4, 50),
+      final: true,
+    });
+
+    // `from` is clamped at 0 by Math.max when the warm-up margin would push
+    // it negative (this fixture's `time` is artificially small).
+    // `to` must be bounded just past the event candle — `MAX_SAFE_INTEGER`
+    // means we're scanning the full stored history per event, which is the
+    // CPU bug this guards against.
+    expect(rangeSpy.mock.calls).toEqual([[BTC.id, Period.OneHour, 0, 5]]);
   });
 
   it('confirmed live state at a candles time equals IndicatorComputeService.compute (consistency)', async () => {
