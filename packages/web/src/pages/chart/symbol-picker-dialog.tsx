@@ -1,6 +1,6 @@
 import type { EnrichedSymbol, Instrument } from '@lametrader/core';
 import { Button, Dialog, Flex, Popover, ScrollArea, Text, TextField } from '@radix-ui/themes';
-import { Search } from 'lucide-react';
+import { CandlestickChart, Search } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
 import { cn } from '../../lib/cn.js';
 import { useSearchInstruments } from '../../lib/hooks/symbols.js';
@@ -60,6 +60,7 @@ export function SymbolPickerDialog({
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Trigger>
         <Button variant="soft" color="gray">
+          <CandlestickChart size={14} aria-hidden="true" />
           {currentId}
         </Button>
       </Dialog.Trigger>

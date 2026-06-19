@@ -1,5 +1,6 @@
 import type { Period } from '@lametrader/core';
 import { Button, Dialog, Flex, Text } from '@radix-ui/themes';
+import { Clock } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { cn } from '../../lib/cn.js';
 import { PERIOD_ORDER } from '../../lib/periods.js';
@@ -59,6 +60,7 @@ export function PeriodRangeDialog({
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger>
         <Button variant="soft" color="gray">
+          <Clock size={14} aria-hidden="true" />
           {triggerLabel}
         </Button>
       </Dialog.Trigger>

@@ -4,16 +4,20 @@ import {
   type Config,
   type EnrichedSymbol,
   Period,
+  type Profile,
+  ProfileScope,
   SymbolType,
 } from '@lametrader/core';
 import { Theme } from '@radix-ui/themes';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SELECTED_PROFILE_STORAGE_KEY } from '../../lib/selected-profile.js';
+import { SelectedProfileProvider } from '../../lib/selected-profile-context.js';
 
 // The canvas wrapper is mocked — page tests assert data/URL/state, not pixels.
 vi.mock('./candle-chart.js', () => ({ CandleChart: () => <div>candle-chart</div> }));
@@ -92,13 +96,15 @@ describe('ChartPage', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <Theme>
-          <MemoryRouter initialEntries={[path]}>
-            <LocationProbe />
-            <Routes>
-              <Route path="/" element={<div>watchlist-home</div>} />
-              <Route path="/chart" element={<ChartPage />} />
-            </Routes>
-          </MemoryRouter>
+          <SelectedProfileProvider>
+            <MemoryRouter initialEntries={[path]}>
+              <LocationProbe />
+              <Routes>
+                <Route path="/" element={<div>watchlist-home</div>} />
+                <Route path="/chart" element={<ChartPage />} />
+              </Routes>
+            </MemoryRouter>
+          </SelectedProfileProvider>
         </Theme>
       </QueryClientProvider>,
     );
@@ -130,6 +136,7 @@ describe('ChartPage', () => {
   it('shows a "not watched" hint instead of the chart when the period is not in the symbol', async () => {
     onRequest('/symbols?enrich=true', () => [BTC]);
     onRequest('/config', () => CONFIG);
+    onRequest('/profiles', () => []);
 
     renderAt('/chart?id=crypto:BTCUSDT&period=4h');
 
@@ -143,6 +150,7 @@ describe('ChartPage', () => {
   it("reflects the latest loaded candle's close and change (current period) in document.title", async () => {
     onRequest('/symbols?enrich=true', () => [BTC]);
     onRequest('/config', () => CONFIG);
+    onRequest('/profiles', () => []);
     // Latest close 102 vs previous close 100 → +2.00 (+2.00%), on the charted 1h.
     onRequest('/candles', () => ({
       candles: [candle(1000, 100), candle(2000, 102)],
@@ -172,9 +180,76 @@ describe('ChartPage', () => {
     ).not.toBeNull();
   });
 
+  const SCALPER: Profile = {
+    id: 'p-1',
+    name: 'Scalper',
+    description: '',
+    enabled: true,
+    scope: { type: ProfileScope.All },
+    createdAt: 1,
+    updatedAt: 1,
+    indicators: [],
+  };
+  const DISABLED_PROFILE: Profile = {
+    id: 'p-0',
+    name: 'Retired',
+    description: '',
+    enabled: false,
+    scope: { type: ProfileScope.All },
+    createdAt: 1,
+    updatedAt: 1,
+    indicators: [],
+  };
+
+  it('hosts the profile picker trigger in the bottom-bar Chart actions group', async () => {
+    onRequest('/symbols?enrich=true', () => [BTC]);
+    onRequest('/config', () => CONFIG);
+    onRequest('/candles', () => ({ candles: [], nextCursor: null }));
+    onRequest('/profiles', () => [SCALPER]);
+
+    renderAt('/chart?id=crypto:BTCUSDT&period=1h');
+
+    const actions = await screen.findByRole('group', { name: 'Chart actions' });
+    await waitFor(() =>
+      expect(within(actions).queryByRole('button', { name: SCALPER.name })).not.toBeNull(),
+    );
+  });
+
+  it('defaults the selection to the first enabled profile on first run and persists it', async () => {
+    onRequest('/symbols?enrich=true', () => [BTC]);
+    onRequest('/config', () => CONFIG);
+    onRequest('/candles', () => ({ candles: [], nextCursor: null }));
+    onRequest('/profiles', () => [DISABLED_PROFILE, SCALPER]);
+
+    renderAt('/chart?id=crypto:BTCUSDT&period=1h');
+
+    const actions = await screen.findByRole('group', { name: 'Chart actions' });
+    await waitFor(() =>
+      expect(within(actions).queryByRole('button', { name: SCALPER.name })).not.toBeNull(),
+    );
+    expect(window.localStorage.getItem(SELECTED_PROFILE_STORAGE_KEY)).toEqual(SCALPER.id);
+  });
+
+  it('treats a stored id missing from GET /profiles as "No profile" without wiping the stored value', async () => {
+    window.localStorage.setItem(SELECTED_PROFILE_STORAGE_KEY, 'p-stale');
+    onRequest('/symbols?enrich=true', () => [BTC]);
+    onRequest('/config', () => CONFIG);
+    onRequest('/candles', () => ({ candles: [], nextCursor: null }));
+    onRequest('/profiles', () => [SCALPER]);
+
+    renderAt('/chart?id=crypto:BTCUSDT&period=1h');
+
+    const actions = await screen.findByRole('group', { name: 'Chart actions' });
+    await waitFor(() =>
+      expect(within(actions).queryByRole('button', { name: 'No profile' })).not.toBeNull(),
+    );
+    expect(window.localStorage.getItem(SELECTED_PROFILE_STORAGE_KEY)).toEqual('p-stale');
+  });
+
   it('persists the selected period to localStorage when applied', async () => {
     onRequest('/symbols?enrich=true', () => [BTC]);
     onRequest('/config', () => CONFIG);
+    onRequest('/profiles', () => []);
     onRequest('/candles', () => ({ candles: [], nextCursor: null }));
     renderAt('/chart?id=crypto:BTCUSDT&period=1h');
     const user = userEvent.setup();

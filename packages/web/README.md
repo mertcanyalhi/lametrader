@@ -24,7 +24,9 @@ If the socket drops, the shared client reconnects with backoff and replays the a
 A candlestick chart of one watched symbol on one timeframe, rendered with `lightweight-charts`.
 The symbol and period live in the URL (`/chart?id=&period=&range=`), so a chart is shareable and the browser's back/forward buttons navigate between views; a bare `/chart` opens the first watched symbol on your last-selected period (falling back to the config default), or sends you to the watchlist when nothing is watched.
 A top-left overlay shows the symbol summary (description · period · exchange) and the inspected candle's open/high/low/close, change, and volume — the candle under the crosshair, or the latest one otherwise.
-A bottom action bar holds the symbol picker (a searchable dialog; instruments outside your watchlist appear faded and can't be charted) and the period + date-range dialog.
+A bottom action bar holds the symbol picker (a searchable dialog; instruments outside your watchlist appear faded and can't be charted), the period + date-range dialog, and the profile picker — a single modal that both **selects** the active profile and **manages** them (create / edit / delete from inside the same dialog).
+The selected profile is per-user state persisted to `localStorage` (`lametrader.selectedProfileId`), not URL state — sharing a chart link does not share a profile.
+First-run defaulting picks the first enabled profile when nothing is stored; a stored id missing from `GET /profiles` is treated as "No profile" and is not proactively wiped (so a profile re-created elsewhere re-binds).
 Crypto and equities get a volume sub-pane; FX (no volume) omits it.
 Candle and volume colors follow the app theme and update live when you toggle it.
 Scrolling back in time loads older history a window at a time until the start of what's stored; a symbol with no stored candles shows a "Run backfill" card that fetches history without leaving the page.
@@ -68,6 +70,9 @@ A thrown `ConfigError` becomes a form-level error rendered inline as a Radix The
 - `useUpdateConfig()` — `PUT /api/config`; on success, writes the response straight into the `['config']` cache so any subscriber re-renders without a follow-up round-trip.
 
 `src/lib/hooks/symbols.ts` exposes the watchlist data layer (read the watched symbols, search instruments, add/edit-periods/remove).
+
+`src/lib/hooks/profiles.ts` exposes the profile data layer for the chart's profile picker — `useProfiles` (`GET /profiles`), `useCreateProfile` (`POST`), `useUpdateProfile` (`PATCH /profiles/:id` — only `name/description/enabled`, so the server preserves `scope` and `indicators`), and `useDeleteProfile` (`DELETE`).
+The global selection lives in `src/lib/selected-profile-context.tsx` (Context + Provider, mounted at the app shell) and is persisted via `src/lib/selected-profile.ts` (the only module that touches `localStorage` for this concern).
 
 `src/lib/hooks/candles.ts` exposes `usePagedCandles` — the chart's historical candle feed, which loads a symbol/period's bars a time window at a time and walks the window backward through history as you scroll.
 

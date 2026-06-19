@@ -3,6 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { type ReactNode, useCallback, useState } from 'react';
 import { Toaster } from 'sonner';
 import { createQueryClient } from '../../lib/query-client.js';
+import { SelectedProfileProvider } from '../../lib/selected-profile-context.js';
 import {
   getStoredSidebarCollapsed,
   setSidebarCollapsed as persistSidebarCollapsed,
@@ -34,7 +35,9 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <RadixThemeBridge>
-          <ShellChrome>{children}</ShellChrome>
+          <SelectedProfileProvider>
+            <ShellChrome>{children}</ShellChrome>
+          </SelectedProfileProvider>
         </RadixThemeBridge>
       </ThemeProvider>
     </QueryClientProvider>
@@ -74,9 +77,9 @@ function ShellChrome({ children }: { children: ReactNode }): ReactNode {
   return (
     <div className="flex h-dvh w-full bg-background text-foreground">
       <Sidebar collapsed={sidebarCollapsed} />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Topbar sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />
-        <main className="flex-1 overflow-auto p-4">{children}</main>
+        <main className="min-h-0 flex-1 overflow-auto p-4">{children}</main>
       </div>
       <Toaster richColors position="top-right" />
     </div>

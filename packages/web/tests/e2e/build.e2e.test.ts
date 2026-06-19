@@ -60,4 +60,16 @@ describe('web boilerplate build (e2e)', () => {
       markerFound: bundlesContainingMarker.length > 0,
     }).toEqual({ hasAtLeastOneJsBundle: true, markerFound: true });
   });
+
+  it('emits a JS bundle whose contents include the profile picker trigger label', () => {
+    // "No profile" is the profile-picker trigger's empty-state label; its
+    // presence in the bundle confirms the chart's profile-picker module is
+    // wired into the live route tree and ships with the deployable artifact.
+    const assets = readdirSync(join(distDir, 'assets'));
+    const jsFiles = assets.filter((file) => file.endsWith('.js'));
+    const bundlesContainingMarker = jsFiles.filter((file) =>
+      readFileSync(join(distDir, 'assets', file), 'utf8').includes('No profile'),
+    );
+    expect(bundlesContainingMarker.length > 0).toEqual(true);
+  });
 });
