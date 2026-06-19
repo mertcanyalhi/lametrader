@@ -157,11 +157,11 @@ function InputRow({
         max={descriptor.max}
         step={descriptor.integer ? 1 : descriptor.step}
         onChange={(event) => onChange(event.target.value)}
-        className="w-40 rounded-md border border-[var(--gray-a6)] bg-[var(--color-surface)] px-3 py-1.5 text-right text-sm text-[var(--gray-12)]"
+        className="block w-full rounded-md border border-[var(--gray-a6)] bg-[var(--color-surface)] px-3 py-1.5 text-right text-sm text-[var(--gray-12)]"
       />
     ) : descriptor.type === FieldType.Source ? (
       <Select.Root value={String(value)} onValueChange={onChange}>
-        <Select.Trigger aria-label={descriptor.label} className="w-40" />
+        <Select.Trigger aria-label={descriptor.label} className="w-full" />
         <Select.Content>
           {Object.values(PriceSource).map((source) => (
             <Select.Item key={source} value={source}>
@@ -172,7 +172,7 @@ function InputRow({
       </Select.Root>
     ) : (
       <Select.Root value={String(value)} onValueChange={onChange}>
-        <Select.Trigger aria-label={descriptor.label} className="w-40" />
+        <Select.Trigger aria-label={descriptor.label} className="w-full" />
         <Select.Content>
           {descriptor.options.map((option) => (
             <Select.Item key={option.value} value={option.value}>
@@ -185,7 +185,11 @@ function InputRow({
   return (
     <Flex align="center" justify="between" gap="3">
       <Box>{labelNode}</Box>
-      <Box>{control}</Box>
+      {/* Fixed-width column so the Number input + the Select triggers all align
+          on the right edge. Radix Themes `Select.Trigger` is `inline-flex` and
+          ignores width utilities applied directly; the wrapping `w-40` forces
+          the column, and the trigger fills it via `w-full`. */}
+      <Box className="w-40 shrink-0">{control}</Box>
     </Flex>
   );
 }
