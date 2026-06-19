@@ -7,6 +7,7 @@ import type {
 import { Flex, IconButton } from '@radix-ui/themes';
 import { Eye, EyeOff, X } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import { formatPrice } from '../../../lib/format.js';
 import { DetachIndicatorDialog } from './detach-indicator-dialog.js';
 
 /**
@@ -94,8 +95,10 @@ export function IndicatorLegend({
 
 /**
  * Render the value to show in the row: the state row at the hovered time when
- * one is set, the latest non-null row otherwise. Numbers render with two
- * decimals; enum values render verbatim.
+ * one is set, the latest non-null row otherwise. Numbers go through
+ * `formatPrice` so the legend honours the same magnitude-aware decimal scale
+ * as the price axis — a low-unit value like `0.022693` reads as `0.02269`
+ * instead of collapsing to `0.02` (which `toFixed(2)` would do).
  */
 function displayValue(overlay: LegendOverlay, hoveredTime: number | null): string {
   const stateKey = overlay.definition.state[0]?.key;
@@ -106,7 +109,7 @@ function displayValue(overlay: LegendOverlay, hoveredTime: number | null): strin
       : [...overlay.state].reverse().find((point) => point[stateKey] !== null);
   if (!row) return '';
   const value = (row as Record<string, unknown>)[stateKey];
-  if (typeof value === 'number') return value.toFixed(2);
+  if (typeof value === 'number') return formatPrice(value);
   if (typeof value === 'string') return value;
   return '';
 }

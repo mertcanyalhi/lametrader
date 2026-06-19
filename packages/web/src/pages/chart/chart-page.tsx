@@ -88,10 +88,61 @@ export function ChartPage(): ReactNode {
   }
 
   return (
+    <ChartLayout
+      id={id}
+      period={period}
+      range={range}
+      symbol={selected}
+      symbols={symbols}
+      selectSymbol={selectSymbol}
+      applyPeriodRange={applyPeriodRange}
+    />
+  );
+}
+
+/**
+ * Splits `ChartPage`'s layout from its routing/guards so the page-level
+ * `hidden` visibility state can be shared between the chart canvas's legend
+ * AND the bottom-bar `IndicatorPanelDialog` (both need to read + toggle it).
+ */
+function ChartLayout({
+  id,
+  period,
+  range,
+  symbol,
+  symbols,
+  selectSymbol,
+  applyPeriodRange,
+}: {
+  id: string;
+  period: Period;
+  range: ChartRange | null;
+  symbol: EnrichedSymbol;
+  symbols: EnrichedSymbol[];
+  selectSymbol: (nextId: string) => void;
+  applyPeriodRange: (next: { period: Period; range: ChartRange | null }) => void;
+}): ReactNode {
+  const [hidden, setHidden] = useState<Record<string, true>>({});
+  const toggleVisible = useCallback((instanceId: string) => {
+    setHidden((current) => {
+      const next = { ...current };
+      if (next[instanceId]) delete next[instanceId];
+      else next[instanceId] = true;
+      return next;
+    });
+  }, []);
+  return (
     <div className="grid h-full grid-rows-[minmax(0,1fr)_auto] gap-3">
       <div className="min-h-0">
-        {selected.periods.includes(period) ? (
-          <ChartView id={id} period={period} range={range} symbol={selected} />
+        {symbol.periods.includes(period) ? (
+          <ChartView
+            id={id}
+            period={period}
+            range={range}
+            symbol={symbol}
+            hidden={hidden}
+            toggleVisible={toggleVisible}
+          />
         ) : (
           <>
             <DocumentTitle id={id} latest={null} previous={null} />
@@ -111,10 +162,14 @@ export function ChartPage(): ReactNode {
         <PeriodRangeDialog
           period={period}
           range={range}
-          watchedPeriods={selected.periods}
+          watchedPeriods={symbol.periods}
           onApply={applyPeriodRange}
         />
-        <IndicatorPanelDialog symbolType={selected.type} />
+        <IndicatorPanelDialog
+          symbolType={symbol.type}
+          hidden={hidden}
+          onToggleVisible={toggleVisible}
+        />
       </Flex>
     </div>
   );
@@ -174,11 +229,15 @@ function ChartView({
   period,
   range,
   symbol,
+  hidden,
+  toggleVisible,
 }: {
   id: string;
   period: Period;
   range: ChartRange | null;
   symbol: EnrichedSymbol;
+  hidden: Record<string, true>;
+  toggleVisible: (instanceId: string) => void;
 }): ReactNode {
   const feed = usePagedCandles({ id, period });
   // The chart applies live bars itself; here the live bar only drives the tab
@@ -192,17 +251,6 @@ function ChartView({
     liveCandle && lastLoaded && liveCandle.time > lastLoaded.time
       ? lastLoaded
       : (feed.candles.at(-2) ?? null);
-  // Visibility lives at the page so the legend's eye toggle can mirror through
-  // to the canvas's overlay series. Chart-local — not persisted across reloads.
-  const [hidden, setHidden] = useState<Record<string, true>>({});
-  const toggleVisible = useCallback((instanceId: string) => {
-    setHidden((current) => {
-      const next = { ...current };
-      if (next[instanceId]) delete next[instanceId];
-      else next[instanceId] = true;
-      return next;
-    });
-  }, []);
   // Bound the indicator-compute window to the candle feed the chart actually
   // loaded — the engine then scopes its candle scan to roughly that span plus
   // the indicator's warm-up margin, instead of the symbol's full history.

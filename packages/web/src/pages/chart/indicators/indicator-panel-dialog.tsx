@@ -11,7 +11,7 @@ import {
   Text,
   TextField,
 } from '@radix-ui/themes';
-import { LineChart, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
+import { Eye, EyeOff, LineChart, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { SymbolTypeBadge } from '../../../components/symbol-type-badge.js';
@@ -34,6 +34,10 @@ const log = getLogger('indicator-panel');
 export interface IndicatorPanelDialogProps {
   /** The currently charted symbol's asset class — drives the n/a-row check. */
   symbolType: SymbolType;
+  /** Set of instance ids currently hidden on the canvas (chart-local state). */
+  hidden?: Record<string, true>;
+  /** Toggle an instance's chart-local visibility — mirrors the legend's eye. */
+  onToggleVisible?: (instanceId: string) => void;
 }
 
 /**
@@ -52,7 +56,11 @@ type View =
  * instance and lets the user add / edit / detach. When no profile is selected,
  * the dialog renders a warning callout pointing to the profile picker.
  */
-export function IndicatorPanelDialog({ symbolType }: IndicatorPanelDialogProps): ReactNode {
+export function IndicatorPanelDialog({
+  symbolType,
+  hidden = {},
+  onToggleVisible,
+}: IndicatorPanelDialogProps): ReactNode {
   const { profileId } = useSelectedProfile();
   const profilesQuery = useProfiles();
   const catalogQuery = useIndicatorCatalog();
@@ -104,6 +112,8 @@ export function IndicatorPanelDialog({ symbolType }: IndicatorPanelDialogProps):
               instances={instances}
               catalog={catalog}
               symbolType={symbolType}
+              hidden={hidden}
+              onToggleVisible={onToggleVisible}
               onAdd={() => setView({ kind: 'add' })}
               onEdit={(instance, definition) => setView({ kind: 'edit', instance, definition })}
               onDetach={(instance) => setToDetach(instance)}
@@ -181,6 +191,8 @@ function InstanceListView({
   instances,
   catalog,
   symbolType,
+  hidden,
+  onToggleVisible,
   onAdd,
   onEdit,
   onDetach,
@@ -188,6 +200,8 @@ function InstanceListView({
   instances: IndicatorInstance[];
   catalog: IndicatorDefinition[];
   symbolType: SymbolType;
+  hidden: Record<string, true>;
+  onToggleVisible?: (instanceId: string) => void;
   onAdd: () => void;
   onEdit: (instance: IndicatorInstance, definition: IndicatorDefinition) => void;
   onDetach: (instance: IndicatorInstance) => void;
@@ -223,6 +237,8 @@ function InstanceListView({
                   definition={definition}
                   applicable={applicable}
                   symbolType={symbolType}
+                  visible={!hidden[instance.id]}
+                  onToggleVisible={onToggleVisible}
                   onEdit={onEdit}
                   onDetach={onDetach}
                 />
@@ -248,6 +264,8 @@ function InstanceRow({
   definition,
   applicable,
   symbolType,
+  visible,
+  onToggleVisible,
   onEdit,
   onDetach,
 }: {
@@ -255,10 +273,13 @@ function InstanceRow({
   definition: IndicatorDefinition | null;
   applicable: boolean;
   symbolType: SymbolType;
+  visible: boolean;
+  onToggleVisible?: (instanceId: string) => void;
   onEdit: (instance: IndicatorInstance, definition: IndicatorDefinition) => void;
   onDetach: (instance: IndicatorInstance) => void;
 }): ReactNode {
   const displayName = instance.label ?? definition?.name ?? instance.indicatorKey;
+  const visibilityLabel = visible ? `Hide ${displayName}` : `Show ${displayName}`;
   return (
     <Flex
       align="center"
@@ -278,6 +299,16 @@ function InstanceRow({
           </Text>
         ) : null}
       </Flex>
+      <IconButton
+        type="button"
+        variant="ghost"
+        color="gray"
+        aria-label={visibilityLabel}
+        disabled={onToggleVisible === undefined || !applicable}
+        onClick={() => onToggleVisible?.(instance.id)}
+      >
+        {visible ? <Eye size={14} aria-hidden="true" /> : <EyeOff size={14} aria-hidden="true" />}
+      </IconButton>
       <IconButton
         type="button"
         variant="ghost"
