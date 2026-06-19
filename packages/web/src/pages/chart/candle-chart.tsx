@@ -7,6 +7,7 @@ import {
   type IndicatorDefinition,
   Pane,
   type Period,
+  type Profile,
   RenderKind,
 } from '@lametrader/core';
 import {
@@ -48,6 +49,10 @@ import { ChartOverlay } from './chart-overlay.js';
 import type { ChartRange } from './chart-range.js';
 import { rangeMillis } from './chart-range.js';
 import { type ChartColors, chartColors, showsVolume } from './chart-series.js';
+import type { LegendOverlay } from './indicators/indicator-legend.js';
+
+/** No-op callback used when no `onToggleLegendVisible` is passed (read-only legend). */
+const noop = (): void => {};
 
 /**
  * One indicator's data + presentation, as passed to the chart canvas.
@@ -125,7 +130,9 @@ export function CandleChart({
   loadOlder,
   hasMore,
   overlays = [],
-  onHoveredTimeChange,
+  legendOverlays = [],
+  onToggleLegendVisible,
+  legendProfile = null,
 }: {
   candles: Candle[];
   symbol: EnrichedSymbol;
@@ -134,12 +141,12 @@ export function CandleChart({
   loadOlder: () => void;
   hasMore: boolean;
   overlays?: ReadonlyArray<IndicatorOverlay>;
-  /**
-   * Notify when the crosshair moves to a new candle (or off the chart). The
-   * page lifts this to drive the legend's per-overlay value at the hovered
-   * time. Mirrors the chart's internal `hoveredTime` state — see `onCrosshair`.
-   */
-  onHoveredTimeChange?: (time: number | null) => void;
+  /** One row per applicable indicator instance, rendered in the top-left overlay column. */
+  legendOverlays?: LegendOverlay[];
+  /** Dispatched when an indicator row's eye toggle is clicked. */
+  onToggleLegendVisible?: (instanceId: string) => void;
+  /** The selected profile — passed through to the legend so its remove `x` can detach. */
+  legendProfile?: Profile | null;
 }): ReactNode {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -170,13 +177,6 @@ export function CandleChart({
    * created in a chart's lifetime; resets when the chart is re-created.
    */
   const nextPaneIndexRef = useRef(1);
-  /**
-   * Latest `onHoveredTimeChange` prop, mirrored into a ref so the long-lived
-   * crosshair subscriber (registered once per chart) calls the current
-   * listener — not the one captured at the time of subscription.
-   */
-  const hoveredTimeListenerRef = useRef(onHoveredTimeChange);
-  hoveredTimeListenerRef.current = onHoveredTimeChange;
   const { theme } = useTheme();
   /** Time (epoch ms) of the candle under the crosshair, or `null` when none. */
   const [hoveredTime, setHoveredTime] = useState<number | null>(null);
@@ -273,9 +273,7 @@ export function CandleChart({
     chart.timeScale().subscribeVisibleTimeRangeChange(onTimeRange);
     const onCrosshair = (param: MouseEventParams): void => {
       const time = typeof param.time === 'number' ? param.time : null;
-      const timeMs = time === null ? null : time * 1000;
-      setHoveredTime(timeMs);
-      hoveredTimeListenerRef.current?.(timeMs);
+      setHoveredTime(time === null ? null : time * 1000);
     };
     chart.subscribeCrosshairMove(onCrosshair);
     // Signal the overlay-sync effect that the chart is freshly created and the
@@ -450,7 +448,15 @@ export function CandleChart({
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="absolute inset-0" />
-      <ChartOverlay symbol={symbol} period={period} candle={inspected} />
+      <ChartOverlay
+        symbol={symbol}
+        period={period}
+        candle={inspected}
+        legendOverlays={legendOverlays}
+        hoveredTime={hoveredTime}
+        onToggleVisible={onToggleLegendVisible ?? noop}
+        profile={legendProfile}
+      />
     </div>
   );
 }

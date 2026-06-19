@@ -22,7 +22,7 @@ import { CandleChart, type IndicatorOverlay } from './candle-chart.js';
 import { ChartLoading } from './chart-loading.js';
 import { CHART_RANGE_ORDER, type ChartRange } from './chart-range.js';
 import { ChartEmptyState } from './empty-state.js';
-import { IndicatorLegend, type LegendOverlay } from './indicators/indicator-legend.js';
+import type { LegendOverlay } from './indicators/indicator-legend.js';
 import { IndicatorPanelDialog } from './indicators/indicator-panel-dialog.js';
 import { paletteColor } from './indicators/overlay-palette.js';
 import { PeriodRangeDialog } from './period-range-dialog.js';
@@ -203,9 +203,6 @@ function ChartView({
       return next;
     });
   }, []);
-  // The chart's crosshair time, lifted so the legend can show each overlay's
-  // value at the hovered bar (and fall back to the latest when off-chart).
-  const [hoveredTime, setHoveredTime] = useState<number | null>(null);
   // Bound the indicator-compute window to the candle feed the chart actually
   // loaded — the engine then scopes its candle scan to roughly that span plus
   // the indicator's warm-up margin, instead of the symbol's full history.
@@ -234,19 +231,15 @@ function ChartView({
       loadOlder={feed.loadOlder}
       hasMore={feed.hasMore}
       overlays={canvasOverlays}
-      onHoveredTimeChange={setHoveredTime}
+      legendOverlays={legendOverlays}
+      onToggleLegendVisible={toggleVisible}
+      legendProfile={profile}
     />
   );
   return (
     <>
       <DocumentTitle id={id} latest={latest} previous={previous} />
       {body}
-      <IndicatorLegend
-        overlays={legendOverlays}
-        hoveredTime={hoveredTime}
-        onToggleVisible={toggleVisible}
-        profile={profile}
-      />
     </>
   );
 }

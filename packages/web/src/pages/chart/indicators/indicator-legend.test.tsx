@@ -125,18 +125,19 @@ describe('IndicatorLegend', () => {
     );
   }
 
-  it('renders one row per overlay with the instance name, summary, and a coloured swatch', () => {
+  it("renders one row per overlay with the instance's summary as the label, plus a coloured swatch (no separate indicator title)", () => {
     renderLegend({ overlays: [smaOverlay()] });
 
-    const row = screen.getByRole('listitem', { name: /Simple Moving Average/i });
+    const row = screen.getByRole('listitem', { name: 'SMA 14 close' });
     const swatch = within(row).getByTestId('overlay-swatch');
     expect({
-      name: within(row).queryByText('Simple Moving Average') !== null,
       summary: within(row).queryByText('SMA 14 close') !== null,
+      // The indicator's `name` is no longer shown — the summary is the label.
+      indicatorName: within(row).queryByText('Simple Moving Average'),
       swatchColor: swatch.style.backgroundColor,
     }).toEqual({
-      name: true,
       summary: true,
+      indicatorName: null,
       // jsdom normalizes `#3aa3ff` to `rgb(58, 163, 255)`.
       swatchColor: 'rgb(58, 163, 255)',
     });
@@ -145,14 +146,14 @@ describe('IndicatorLegend', () => {
   it('renders the state value at the hovered time formatted with two decimals', () => {
     renderLegend({ overlays: [smaOverlay()], hoveredTime: 2000 });
 
-    const row = screen.getByRole('listitem', { name: /Simple Moving Average/i });
+    const row = screen.getByRole('listitem', { name: 'SMA 14 close' });
     expect(within(row).getByText('105.50')).toBeInTheDocument();
   });
 
   it('renders the latest state value when no crosshair time is set', () => {
     renderLegend({ overlays: [smaOverlay()], hoveredTime: null });
 
-    const row = screen.getByRole('listitem', { name: /Simple Moving Average/i });
+    const row = screen.getByRole('listitem', { name: 'SMA 14 close' });
     expect(within(row).getByText('106.25')).toBeInTheDocument();
   });
 

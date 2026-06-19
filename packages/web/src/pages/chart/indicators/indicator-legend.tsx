@@ -14,9 +14,9 @@ import { DetachIndicatorDialog } from './detach-indicator-dialog.js';
  * the row can render the value at the hovered time without re-querying.
  */
 export interface LegendOverlay {
-  /** The attached profile instance (drives the display name + summary). */
+  /** The attached profile instance (drives the summary string). */
   instance: IndicatorInstance;
-  /** The indicator's definition (drives which state field to display). */
+  /** The indicator's definition (drives which state field to display, plus the fallback label). */
   definition: IndicatorDefinition;
   /** Palette colour assigned to the overlay — matches the canvas series. */
   color: string;
@@ -27,9 +27,10 @@ export interface LegendOverlay {
 }
 
 /**
- * The chart's per-overlay legend. One row per applicable instance, showing the
- * coloured swatch, display name + summary, the crosshair value (or latest when
- * no crosshair), a show/hide eye, and a remove `x` that opens the existing
+ * The chart's per-overlay legend. Renders inside the top-left overlay column
+ * (under the OHLCV), one row per applicable instance: coloured swatch + the
+ * instance's `summary` (e.g. `"SMA 14 close"`), the crosshair value, a
+ * show/hide eye, and a remove `x` that opens the existing
  * `DetachIndicatorDialog` confirm flow.
  *
  * The `visible` state is owned by the parent (chart page) so the canvas can
@@ -58,13 +59,7 @@ export function IndicatorLegend({
 
   return (
     <>
-      <Flex
-        asChild
-        gap="3"
-        wrap="wrap"
-        align="center"
-        className="border-t border-[var(--gray-a5)] pt-2"
-      >
+      <Flex asChild direction="column" gap="0">
         <ul aria-label="Chart indicator overlays">
           {overlays.map((overlay) => (
             <LegendRow
@@ -116,7 +111,7 @@ function displayValue(overlay: LegendOverlay, hoveredTime: number | null): strin
   return '';
 }
 
-/** One legend row — keyed by instance id; the parent owns the layout container. */
+/** One legend row: swatch + summary + value + eye + x, on a single line. */
 function LegendRow({
   overlay,
   hoveredTime,
@@ -128,12 +123,15 @@ function LegendRow({
   onToggleVisible: (instanceId: string) => void;
   onRemove: () => void;
 }): ReactNode {
-  const displayName = overlay.instance.label ?? overlay.definition.name;
+  // `summary` is the primary label; fall back to the definition's name when an
+  // indicator doesn't declare one. `instance.label` (custom alias) wins over
+  // both if ever set — no UI exposes that today, but the field is reserved.
+  const label = overlay.instance.label ?? overlay.instance.summary ?? overlay.definition.name;
   const value = displayValue(overlay, hoveredTime);
   const visibilityLabel = overlay.visible ? 'Hide overlay' : 'Show overlay';
 
   return (
-    <li aria-label={displayName}>
+    <li aria-label={label}>
       <Flex align="center" gap="2">
         <span
           data-testid="overlay-swatch"
@@ -141,14 +139,9 @@ function LegendRow({
           className="inline-block h-2 w-2 rounded-full"
           style={{ backgroundColor: overlay.color }}
         />
-        <Flex direction="column" className="leading-tight">
-          <Text size="2">{displayName}</Text>
-          {overlay.instance.summary ? (
-            <Text size="1" color="gray" className="font-mono">
-              {overlay.instance.summary}
-            </Text>
-          ) : null}
-        </Flex>
+        <Text size="2" className="font-mono">
+          {label}
+        </Text>
         {value !== '' ? (
           <Text size="2" className="font-mono tabular-nums">
             {value}
@@ -158,23 +151,25 @@ function LegendRow({
           type="button"
           variant="ghost"
           color="gray"
+          size="1"
           aria-label={visibilityLabel}
           onClick={() => onToggleVisible(overlay.instance.id)}
         >
           {overlay.visible ? (
-            <Eye size={14} aria-hidden="true" />
+            <Eye size={12} aria-hidden="true" />
           ) : (
-            <EyeOff size={14} aria-hidden="true" />
+            <EyeOff size={12} aria-hidden="true" />
           )}
         </IconButton>
         <IconButton
           type="button"
           variant="ghost"
           color="gray"
+          size="1"
           aria-label="Remove overlay"
           onClick={onRemove}
         >
-          <X size={14} aria-hidden="true" />
+          <X size={12} aria-hidden="true" />
         </IconButton>
       </Flex>
     </li>

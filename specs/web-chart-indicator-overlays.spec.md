@@ -124,6 +124,14 @@ Asserted in the chart-page jsdom test by responding `500` for one of two configu
 - Re-rendering or re-seeding existing series on a theme switch via path other than the existing chart-recreate effect — the canvas already tears down on theme change, so we ride that.
 - A standalone "indicators" page or any panel-side change — the panel ships as #40 and is untouched here.
 
+## Follow-up additions (post-review polish, same PR)
+
+- **Legend moves into the top-left overlay** — instead of a separate strip below the canvas, the per-overlay rows render directly under the OHLCV stack inside the chart's existing top-left absolute container.
+  Reads as one info column ("symbol summary → OHLCV → indicators"), keeps the area below the canvas for the bottom-bar actions only, and removes the page-level `hoveredTime` lift (the legend now lives inside `CandleChart`'s render and reads the canvas's local `hoveredTime` directly).
+- **Indicator title removed from the legend row** — each row now reads `[swatch] [summary] [value] [eye] [x]`.
+  With every reference indicator declaring a `summary` ("SMA 14 close", "VWMA 20 close ±1/1000 both"), the indicator's full name was duplicative.
+  The row's accessible name is the summary string; when no summary is set (a future indicator without one), the indicator definition's `name` is the fallback.
+
 ## Surprises
 
 (filled in retroactively)
