@@ -35,7 +35,10 @@ The visible date range and selected period persist (localStorage), so switching 
 
 The chart ticks live: it subscribes to the symbol's candle feed over the shared `/stream` socket and applies each candle for the charted period to the series in place — updating the forming bar when the time matches, appending when it's newer — so the latest bar (and the overlay's price header / document title) track the stream. Changing symbol or period re-subscribes; leaving the page tears the subscription down.
 
-Indicator overlay rendering on the canvas lands in a follow-up issue (#43); the panel manages the profile's attached instances, and the overlay task will draw them.
+The selected profile's **applicable** indicator instances (those whose definition's `appliesTo` covers the chart's symbol type) render directly on the canvas: numeric state fields with `Pane.Overlay` draw as price-pane lines, `Pane.Separate` draws into a stacked sub-pane (coexisting with the volume pane), and enum state fields with `RenderKind.Markers` draw as price-pane markers at firing bars (`null` rows render as gaps).
+Each applicable instance gets a deterministic palette colour, fetched once per `(symbol, period, inputs)` via `GET /symbols/:id/indicators/:key`.
+A legend below the canvas lists every overlay with its display name + summary, the value at the crosshair (or the latest non-null when no crosshair), a show/hide eye (chart-local view state), and a remove `x` that opens the same `AlertDialog` detach confirm the panel uses.
+Live updates land in a follow-up issue.
 
 ### `/settings` — Settings (this README's focus)
 
@@ -75,7 +78,7 @@ A thrown `ConfigError` becomes a form-level error rendered inline as a Radix The
 `src/lib/hooks/profiles.ts` exposes the profile data layer for the chart's profile picker — `useProfiles` (`GET /profiles`), `useCreateProfile` (`POST`), `useUpdateProfile` (`PATCH /profiles/:id` — only `name/description/enabled`, so the server preserves `scope` and `indicators`), and `useDeleteProfile` (`DELETE`).
 The global selection lives in `src/lib/selected-profile-context.tsx` (Context + Provider, mounted at the app shell) and is persisted via `src/lib/selected-profile.ts` (the only module that touches `localStorage` for this concern).
 
-`src/lib/hooks/indicators.ts` exposes the indicator-management surface used by the chart's indicator panel — `useIndicatorCatalog` (`GET /indicators`), `useAttachIndicator(profileId)` (`POST /profiles/:id/indicators`), `useUpdateIndicator(profileId)` (`PUT /profiles/:id/indicators/:instanceId`, full-replace), and `useDetachIndicator(profileId)` (`DELETE /profiles/:id/indicators/:instanceId`).
+`src/lib/hooks/indicators.ts` exposes the indicator-management surface used by the chart's indicator panel — `useIndicatorCatalog` (`GET /indicators`), `useAttachIndicator(profileId)` (`POST /profiles/:id/indicators`), `useUpdateIndicator(profileId)` (`PUT /profiles/:id/indicators/:instanceId`, full-replace), and `useDetachIndicator(profileId)` (`DELETE /profiles/:id/indicators/:instanceId`), plus `useComputeIndicator({ id, key, period, inputs })` for the chart-overlay compute call (`GET /symbols/:id/indicators/:key?period=&<inputs>`) — exported alongside `computeIndicatorQueryOptions` so the chart page can drive an array of these through `useQueries` (one per applicable instance).
 The mutations invalidate `['profiles']` so the profile's embedded `indicators[]` array refetches.
 
 `src/lib/hooks/candles.ts` exposes `usePagedCandles` — the chart's historical candle feed, which loads a symbol/period's bars a time window at a time and walks the window backward through history as you scroll.

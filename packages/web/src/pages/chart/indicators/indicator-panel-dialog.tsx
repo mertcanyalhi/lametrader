@@ -1,6 +1,5 @@
 import type { IndicatorDefinition, IndicatorInstance, Profile, SymbolType } from '@lametrader/core';
 import {
-  AlertDialog,
   Badge,
   Box,
   Button,
@@ -19,13 +18,13 @@ import { SymbolTypeBadge } from '../../../components/symbol-type-badge.js';
 import { ApiError } from '../../../lib/api-fetch.js';
 import {
   useAttachIndicator,
-  useDetachIndicator,
   useIndicatorCatalog,
   useUpdateIndicator,
 } from '../../../lib/hooks/indicators.js';
 import { useProfiles } from '../../../lib/hooks/profiles.js';
 import { getLogger } from '../../../lib/log.js';
 import { useSelectedProfile } from '../../../lib/selected-profile-context.js';
+import { DetachIndicatorDialog } from './detach-indicator-dialog.js';
 import { IndicatorInputsForm } from './indicator-inputs-form.js';
 
 /** Scoped logger for panel lifecycle / mutation failures. */
@@ -486,68 +485,5 @@ function EditView({
         />
       </Box>
     </>
-  );
-}
-
-/**
- * Detach confirmation `AlertDialog`. Controlled by the parent — the parent
- * owns the `instance` being detached and decides what to do after the
- * DELETE returns (currently just closes the alert; the row disappears via
- * the profiles-query invalidation).
- */
-function DetachIndicatorDialog({
-  profile,
-  instance,
-  definitionName,
-  onOpenChange,
-  onDetached,
-}: {
-  profile: Profile;
-  instance: IndicatorInstance;
-  definitionName: string;
-  onOpenChange: (open: boolean) => void;
-  onDetached: () => void;
-}): ReactNode {
-  const detach = useDetachIndicator(profile.id);
-
-  async function handleConfirm(): Promise<void> {
-    try {
-      await detach.mutateAsync(instance.id);
-      toast.success(`Detached ${definitionName}`);
-      onDetached();
-      onOpenChange(false);
-    } catch (cause) {
-      const message = cause instanceof ApiError ? cause.message : 'failed to detach indicator';
-      log.warn({ err: cause, instanceId: instance.id }, 'detach indicator failed');
-      toast.error(message);
-    }
-  }
-
-  return (
-    <AlertDialog.Root open={true} onOpenChange={onOpenChange}>
-      <AlertDialog.Content maxWidth="420px">
-        <AlertDialog.Title>Detach indicator</AlertDialog.Title>
-        <AlertDialog.Description size="2">
-          <Text>
-            Detach “{definitionName}” from “{profile.name}”?
-          </Text>
-        </AlertDialog.Description>
-        <Flex gap="3" mt="4" justify="end">
-          <AlertDialog.Cancel>
-            <Button variant="soft" color="gray">
-              Cancel
-            </Button>
-          </AlertDialog.Cancel>
-          {/* NOT wrapped in `AlertDialog.Action`: Action's default `onSelect`
-              dispatches a click that bubbles through Radix's portal stack and
-              also closes the *parent* Dialog (the panel itself).
-              Instead, drive the close ourselves from `handleConfirm` so only
-              this AlertDialog dismisses — the panel stays open. */}
-          <Button color="red" onClick={handleConfirm} loading={detach.isPending}>
-            Detach
-          </Button>
-        </Flex>
-      </AlertDialog.Content>
-    </AlertDialog.Root>
   );
 }

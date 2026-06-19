@@ -3,9 +3,16 @@ import {
   type Candle,
   type Config,
   type EnrichedSymbol,
+  FieldType,
+  type IndicatorComputeResult,
+  type IndicatorDefinition,
+  type IndicatorInstance,
+  Pane,
   Period,
+  PriceSource,
   type Profile,
   ProfileScope,
+  RenderKind,
   SymbolType,
 } from '@lametrader/core';
 import { Theme } from '@radix-ui/themes';
@@ -18,6 +25,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SELECTED_PROFILE_STORAGE_KEY } from '../../lib/selected-profile.js';
 import { SelectedProfileProvider } from '../../lib/selected-profile-context.js';
+import { ThemeProvider } from '../../lib/theme-context.js';
 
 // The canvas wrapper is mocked — page tests assert data/URL/state, not pixels.
 vi.mock('./candle-chart.js', () => ({ CandleChart: () => <div>candle-chart</div> }));
@@ -96,15 +104,17 @@ describe('ChartPage', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <Theme>
-          <SelectedProfileProvider>
-            <MemoryRouter initialEntries={[path]}>
-              <LocationProbe />
-              <Routes>
-                <Route path="/" element={<div>watchlist-home</div>} />
-                <Route path="/chart" element={<ChartPage />} />
-              </Routes>
-            </MemoryRouter>
-          </SelectedProfileProvider>
+          <ThemeProvider>
+            <SelectedProfileProvider>
+              <MemoryRouter initialEntries={[path]}>
+                <LocationProbe />
+                <Routes>
+                  <Route path="/" element={<div>watchlist-home</div>} />
+                  <Route path="/chart" element={<ChartPage />} />
+                </Routes>
+              </MemoryRouter>
+            </SelectedProfileProvider>
+          </ThemeProvider>
         </Theme>
       </QueryClientProvider>,
     );
@@ -268,6 +278,149 @@ describe('ChartPage', () => {
       expect(within(actions).queryByRole('button', { name: 'No profile' })).not.toBeNull(),
     );
     expect(window.localStorage.getItem(SELECTED_PROFILE_STORAGE_KEY)).toEqual('p-stale');
+  });
+
+  const SMA_DEFINITION: IndicatorDefinition = {
+    key: 'sma',
+    name: 'Simple Moving Average',
+    description: '',
+    version: 1,
+    appliesTo: [SymbolType.Crypto, SymbolType.Stock, SymbolType.Fund, SymbolType.Fx],
+    inputs: [
+      { type: FieldType.Number, key: 'length', label: 'Length', default: 14 },
+      { type: FieldType.Source, key: 'source', label: 'Source', default: PriceSource.Close },
+    ],
+    state: [
+      {
+        type: FieldType.Number,
+        key: 'value',
+        label: 'SMA',
+        render: RenderKind.Line,
+        pane: Pane.Overlay,
+      },
+    ],
+  };
+
+  /** A crypto-only definition used to assert the n/a-skip on a non-crypto chart. */
+  const VWMA_DEFINITION: IndicatorDefinition = {
+    key: 'vwma',
+    name: 'Volume-Weighted Moving Average',
+    description: '',
+    version: 1,
+    appliesTo: [SymbolType.Crypto],
+    inputs: [{ type: FieldType.Number, key: 'length', label: 'Length', default: 20 }],
+    state: [
+      {
+        type: FieldType.Number,
+        key: 'value',
+        label: 'VWMA',
+        render: RenderKind.Line,
+        pane: Pane.Overlay,
+      },
+    ],
+  };
+
+  const SMA_INSTANCE: IndicatorInstance = {
+    id: 'inst-sma',
+    indicatorKey: 'sma',
+    version: 1,
+    inputs: { length: 14, source: PriceSource.Close },
+    summary: 'SMA 14 close',
+  };
+
+  const VWMA_INSTANCE: IndicatorInstance = {
+    id: 'inst-vwma',
+    indicatorKey: 'vwma',
+    version: 1,
+    inputs: { length: 20 },
+    summary: 'VWMA 20',
+  };
+
+  /**
+   * The chart-page integration tests need the captured request URLs, not just
+   * the response bodies — assert which compute calls fired and which didn't.
+   */
+  /** Compact JSON response — saved a few lines in the multi-route fetch stubs below. */
+  function json(body: unknown): Response {
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  it('issues GET /symbols/:id/indicators/:key once per applicable instance with the inputs as querystring', async () => {
+    const captured: string[] = [];
+    const fetchSpy = vi.fn(async (url: string) => {
+      captured.push(String(url));
+      const u = String(url);
+      if (u.includes('/symbols?enrich=true')) return json([BTC]);
+      if (u.endsWith('/api/config')) return json(CONFIG);
+      if (u.includes('/profiles')) {
+        return json([{ ...SCALPER, indicators: [SMA_INSTANCE] }]);
+      }
+      if (u.endsWith('/api/indicators')) return json([SMA_DEFINITION]);
+      if (u.includes('/candles')) return json({ candles: [], nextCursor: null });
+      if (u.includes('/symbols/crypto:BTCUSDT/indicators/sma')) {
+        const result: IndicatorComputeResult = {
+          indicatorKey: 'sma',
+          version: 1,
+          period: Period.OneHour,
+          state: [{ time: 1000, value: 100 }],
+        };
+        return json(result);
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    renderAt('/chart?id=crypto:BTCUSDT&period=1h');
+
+    await waitFor(() =>
+      expect(
+        captured.some((u) =>
+          u.endsWith('/api/symbols/crypto:BTCUSDT/indicators/sma?period=1h&length=14&source=close'),
+        ),
+      ).toEqual(true),
+    );
+    const computeUrls = captured.filter((u) => u.includes('/indicators/sma?'));
+    expect(computeUrls).toEqual([
+      '/api/symbols/crypto:BTCUSDT/indicators/sma?period=1h&length=14&source=close',
+    ]);
+  });
+
+  it('skips the compute call for an instance whose definition does not apply to the chart symbol type', async () => {
+    const FX: EnrichedSymbol = {
+      id: 'fx:EURUSD',
+      type: SymbolType.Fx,
+      description: 'EUR / USD',
+      exchange: 'FX',
+      currency: 'USD',
+      periods: [Period.OneHour],
+      quote: null,
+    };
+    const captured: string[] = [];
+    const fetchSpy = vi.fn(async (url: string) => {
+      captured.push(String(url));
+      const u = String(url);
+      if (u.includes('/symbols?enrich=true')) return json([FX]);
+      if (u.endsWith('/api/config')) return json(CONFIG);
+      if (u.includes('/profiles')) {
+        return json([{ ...SCALPER, indicators: [VWMA_INSTANCE] }]);
+      }
+      if (u.endsWith('/api/indicators')) return json([VWMA_DEFINITION]);
+      if (u.includes('/candles')) return json({ candles: [], nextCursor: null });
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    renderAt('/chart?id=fx:EURUSD&period=1h');
+
+    // Wait for the page to settle (profile + catalog + candles all loaded);
+    // any compute call would already have fired by then.
+    await screen.findByRole('group', { name: 'Chart actions' });
+    await waitFor(() => expect(captured.some((u) => u.endsWith('/api/indicators'))).toEqual(true));
+    const computeUrls = captured.filter((u) => u.includes('/indicators/vwma?'));
+    expect(computeUrls).toEqual([]);
   });
 
   it('persists the selected period to localStorage when applied', async () => {

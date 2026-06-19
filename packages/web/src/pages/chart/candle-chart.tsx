@@ -1,17 +1,35 @@
-import type { Candle, EnrichedSymbol, Period } from '@lametrader/core';
+import {
+  type Candle,
+  type EnrichedSymbol,
+  type EnumStateFieldDescriptor,
+  FieldType,
+  type IndicatorComputeResult,
+  type IndicatorDefinition,
+  Pane,
+  type Period,
+  RenderKind,
+} from '@lametrader/core';
 import {
   type CandlestickData,
   CandlestickSeries,
   createChart,
+  createSeriesMarkers,
   type HistogramData,
   HistogramSeries,
   type IChartApi,
   type IRange,
   type ISeriesApi,
+  type ISeriesMarkersPluginApi,
+  type LineData,
+  LineSeries,
   type LogicalRange,
   type MouseEventParams,
+  type SeriesMarker,
+  type SeriesMarkerBarPosition,
+  type SeriesMarkerShape,
   type Time,
   type UTCTimestamp,
+  type WhitespaceData,
 } from 'lightweight-charts';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -30,6 +48,26 @@ import { ChartOverlay } from './chart-overlay.js';
 import type { ChartRange } from './chart-range.js';
 import { rangeMillis } from './chart-range.js';
 import { type ChartColors, chartColors, showsVolume } from './chart-series.js';
+
+/**
+ * One indicator's data + presentation, as passed to the chart canvas.
+ *
+ * The chart mirrors the array into per-state-descriptor series (line or markers),
+ * keyed by `instanceId+stateKey`, so the same overlay can re-render new data
+ * without re-creating its series.
+ */
+export interface IndicatorOverlay {
+  /** Stable id — the attached profile instance's id; keys the chart's series map. */
+  instanceId: string;
+  /** Definition for the indicator (provides state descriptors driving render). */
+  definition: IndicatorDefinition;
+  /** Computed historical state series; `null` while pending or after a failure. */
+  result: IndicatorComputeResult | null;
+  /** Whether the overlay's series are currently shown (legend eye toggle). */
+  visible: boolean;
+  /** Palette-derived colour applied to every series belonging to this overlay. */
+  color: string;
+}
 
 /** Map a domain candle to a `lightweight-charts` candlestick point (time in seconds). */
 function toCandlestick(candle: Candle): CandlestickData {
@@ -86,6 +124,8 @@ export function CandleChart({
   range,
   loadOlder,
   hasMore,
+  overlays = [],
+  onHoveredTimeChange,
 }: {
   candles: Candle[];
   symbol: EnrichedSymbol;
@@ -93,16 +133,61 @@ export function CandleChart({
   range: ChartRange | null;
   loadOlder: () => void;
   hasMore: boolean;
+  overlays?: ReadonlyArray<IndicatorOverlay>;
+  /**
+   * Notify when the crosshair moves to a new candle (or off the chart). The
+   * page lifts this to drive the legend's per-overlay value at the hovered
+   * time. Mirrors the chart's internal `hoveredTime` state — see `onCrosshair`.
+   */
+  onHoveredTimeChange?: (time: number | null) => void;
 }): ReactNode {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+  /**
+   * Per-instance line series for overlay descriptors (Pane.Overlay + Pane.Separate),
+   * keyed by `instanceId+stateKey` so each state field carries its own series.
+   */
+  const overlayLineRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
+  /** Per-instance marker plugins for `RenderKind.Markers` descriptors. */
+  const overlayMarkersRef = useRef<Map<string, ISeriesMarkersPluginApi<Time>>>(new Map());
+  /**
+   * Last applied `visible` per series key, so the sync only calls `applyOptions`
+   * on a change — never on initial create (the initial state ships with
+   * `options.visible`) and never twice for the same value.
+   */
+  const overlayVisibilityRef = useRef<Map<string, boolean>>(new Map());
+  /**
+   * Last applied compute-result reference per series key. A re-sync with the
+   * same `overlay.result` reference (e.g. the `chartVersion` bump triggers a
+   * second run on the same chart) is a no-op rather than a redundant setData /
+   * setMarkers call.
+   */
+  const overlayLastResultRef = useRef<Map<string, IndicatorComputeResult | null>>(new Map());
+  /**
+   * Next `paneIndex` for a separate-pane series. Bumps per separate descriptor
+   * created in a chart's lifetime; resets when the chart is re-created.
+   */
+  const nextPaneIndexRef = useRef(1);
+  /**
+   * Latest `onHoveredTimeChange` prop, mirrored into a ref so the long-lived
+   * crosshair subscriber (registered once per chart) calls the current
+   * listener — not the one captured at the time of subscription.
+   */
+  const hoveredTimeListenerRef = useRef(onHoveredTimeChange);
+  hoveredTimeListenerRef.current = onHoveredTimeChange;
   const { theme } = useTheme();
   /** Time (epoch ms) of the candle under the crosshair, or `null` when none. */
   const [hoveredTime, setHoveredTime] = useState<number | null>(null);
   /** The latest live bar applied to the series, surfaced to the overlay legend. */
   const [liveLatest, setLiveLatest] = useState<Candle | null>(null);
+  /**
+   * Bumps each time the chart is re-created (theme / symbol-type change). The
+   * overlay-sync effect lists it as a dep so it re-runs after a recreate (the
+   * maps are cleared, so every overlay gets re-added to the fresh chart).
+   */
+  const [chartVersion, setChartVersion] = useState(0);
   // Latest paging callbacks for the visible-range listener (avoids stale closures).
   const paging = useRef({ loadOlder, hasMore });
   paging.current = { loadOlder, hasMore };
@@ -188,16 +273,52 @@ export function CandleChart({
     chart.timeScale().subscribeVisibleTimeRangeChange(onTimeRange);
     const onCrosshair = (param: MouseEventParams): void => {
       const time = typeof param.time === 'number' ? param.time : null;
-      setHoveredTime(time === null ? null : time * 1000);
+      const timeMs = time === null ? null : time * 1000;
+      setHoveredTime(timeMs);
+      hoveredTimeListenerRef.current?.(timeMs);
     };
     chart.subscribeCrosshairMove(onCrosshair);
+    // Signal the overlay-sync effect that the chart is freshly created and the
+    // overlay maps (cleared in the cleanup below) need to be repopulated.
+    setChartVersion((v) => v + 1);
     return () => {
       chart.remove();
       chartRef.current = null;
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
+      // The chart's destruction takes every series with it — clear the per-overlay
+      // bookkeeping so the next overlay-sync treats every overlay as new on the
+      // freshly-created chart.
+      overlayLineRef.current.clear();
+      overlayMarkersRef.current.clear();
+      overlayVisibilityRef.current.clear();
+      overlayLastResultRef.current.clear();
+      nextPaneIndexRef.current = 1;
     };
   }, [theme, symbol.type]);
+
+  // Mirror the `overlays[]` prop into per-state-descriptor series, diffing the
+  // current set against the previous one. `chartVersion` bumps after each chart
+  // re-creation (theme / symbol-type change), so this effect re-runs against
+  // the fresh chart and treats every overlay as new. The body reads the chart
+  // through a ref (not a render value), so Biome can't see the coupling —
+  // hence the ignore on the next line.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: chartVersion is a signal-only dep that drives re-sync after chart recreate.
+  useEffect(() => {
+    const chart = chartRef.current;
+    const candle = candleSeriesRef.current;
+    if (!chart || !candle) return;
+    syncOverlays({
+      chart,
+      candle,
+      overlays,
+      lineMap: overlayLineRef.current,
+      markersMap: overlayMarkersRef.current,
+      visibilityMap: overlayVisibilityRef.current,
+      lastResultMap: overlayLastResultRef.current,
+      paneCursor: nextPaneIndexRef,
+    });
+  }, [overlays, chartVersion]);
 
   // Push data whenever the candles (or theme-derived volume colors) change.
   useEffect(() => {
@@ -333,3 +454,220 @@ export function CandleChart({
     </div>
   );
 }
+
+/**
+ * Compose a unique series key from an instance id and a state descriptor key,
+ * so the overlay maps can hold one entry per `(instance, state-field)` pair.
+ */
+function seriesKey(instanceId: string, stateKey: string): string {
+  return `${instanceId}::${stateKey}`;
+}
+
+/**
+ * Diff the latest `overlays[]` against the chart's current series:
+ *   1. Remove series belonging to instances no longer in the list (`removeSeries`
+ *      for line series, `detach()` for marker plugins).
+ *   2. For each remaining overlay, create any missing series + plugin (initial
+ *      `visible` baked into options so no extra `applyOptions` fires), push the
+ *      latest data, and `applyOptions({ visible })` only when visibility changed
+ *      since the previous sync.
+ */
+function syncOverlays(args: {
+  chart: IChartApi;
+  candle: ISeriesApi<'Candlestick'>;
+  overlays: ReadonlyArray<IndicatorOverlay>;
+  lineMap: Map<string, ISeriesApi<'Line'>>;
+  markersMap: Map<string, ISeriesMarkersPluginApi<Time>>;
+  visibilityMap: Map<string, boolean>;
+  lastResultMap: Map<string, IndicatorComputeResult | null>;
+  paneCursor: { current: number };
+}): void {
+  const { chart, candle, overlays, lineMap, markersMap, visibilityMap, lastResultMap, paneCursor } =
+    args;
+  const liveIds = new Set(overlays.map((o) => o.instanceId));
+
+  // Drop any series belonging to an instance that left the overlay list.
+  for (const [key, series] of [...lineMap.entries()]) {
+    const instanceId = key.split('::')[0] ?? '';
+    if (!liveIds.has(instanceId)) {
+      chart.removeSeries(series);
+      lineMap.delete(key);
+      visibilityMap.delete(key);
+      lastResultMap.delete(key);
+    }
+  }
+  for (const [key, plugin] of [...markersMap.entries()]) {
+    const instanceId = key.split('::')[0] ?? '';
+    if (!liveIds.has(instanceId)) {
+      plugin.detach();
+      markersMap.delete(key);
+      visibilityMap.delete(key);
+      lastResultMap.delete(key);
+    }
+  }
+
+  // Add / refresh each desired overlay's series.
+  for (const overlay of overlays) {
+    if (!overlay.result) continue;
+    for (const descriptor of overlay.definition.state) {
+      const key = seriesKey(overlay.instanceId, descriptor.key);
+      const isMarkers = descriptor.render === RenderKind.Markers;
+      if (isMarkers && descriptor.type === FieldType.Enum) {
+        syncMarkers({
+          candle,
+          overlay,
+          descriptor,
+          key,
+          markersMap,
+          visibilityMap,
+          lastResultMap,
+        });
+      } else if (descriptor.type === FieldType.Number) {
+        syncLine({
+          chart,
+          overlay,
+          descriptor,
+          key,
+          lineMap,
+          visibilityMap,
+          lastResultMap,
+          paneCursor,
+        });
+      }
+    }
+  }
+}
+
+/**
+ * Ensure a `LineSeries` exists for the descriptor, set its data (warm-up nulls
+ * mapped to whitespace gaps), and toggle visibility only when it changed.
+ */
+function syncLine(args: {
+  chart: IChartApi;
+  overlay: IndicatorOverlay;
+  descriptor: { key: string; pane?: Pane };
+  key: string;
+  lineMap: Map<string, ISeriesApi<'Line'>>;
+  visibilityMap: Map<string, boolean>;
+  lastResultMap: Map<string, IndicatorComputeResult | null>;
+  paneCursor: { current: number };
+}): void {
+  const { chart, overlay, descriptor, key, lineMap, visibilityMap, lastResultMap, paneCursor } =
+    args;
+  if (!overlay.result) return;
+  let series = lineMap.get(key);
+  const isNew = !series;
+  if (!series) {
+    const paneIndex = descriptor.pane === Pane.Separate ? paneCursor.current++ : undefined;
+    series = chart.addSeries(
+      LineSeries,
+      { color: overlay.color, visible: overlay.visible },
+      paneIndex,
+    );
+    lineMap.set(key, series);
+    visibilityMap.set(key, overlay.visible);
+  }
+  // Skip setData when the result reference hasn't moved since the last sync —
+  // avoids redundant work (and redundant mock calls in tests) when the
+  // overlay-sync effect re-runs from a `chartVersion` bump alone.
+  if (isNew || lastResultMap.get(key) !== overlay.result) {
+    const data: (LineData<Time> | WhitespaceData<Time>)[] = overlay.result.state.map((row) => {
+      const value = (row as Record<string, unknown>)[descriptor.key];
+      const time = (row.time / 1000) as Time;
+      if (typeof value === 'number') return { time, value };
+      return { time };
+    });
+    series.setData(data);
+    lastResultMap.set(key, overlay.result);
+  }
+  const wasVisible = visibilityMap.get(key);
+  if (wasVisible !== overlay.visible) {
+    series.applyOptions({ visible: overlay.visible });
+    visibilityMap.set(key, overlay.visible);
+  }
+}
+
+/**
+ * Ensure a marker plugin is attached to the candle series for this descriptor,
+ * and apply the firing-bar markers (skipping `null` rows). Visibility is mapped
+ * to "show markers" vs "clear markers" — `lightweight-charts`'s plugin API has
+ * no `visible` option, so an invisible markers overlay is one with an empty list.
+ */
+function syncMarkers(args: {
+  candle: ISeriesApi<'Candlestick'>;
+  overlay: IndicatorOverlay;
+  descriptor: EnumStateFieldDescriptor;
+  key: string;
+  markersMap: Map<string, ISeriesMarkersPluginApi<Time>>;
+  visibilityMap: Map<string, boolean>;
+  lastResultMap: Map<string, IndicatorComputeResult | null>;
+}): void {
+  const { candle, overlay, descriptor, key, markersMap, visibilityMap, lastResultMap } = args;
+  if (!overlay.result) return;
+  const plugin = markersMap.get(key);
+  const isNew = !plugin;
+  const visibilityChanged = visibilityMap.get(key) !== overlay.visible;
+  const resultChanged = lastResultMap.get(key) !== overlay.result;
+  // Skip the create / setMarkers call when nothing observable changed — a
+  // re-sync from a `chartVersion` bump alone would otherwise emit a redundant
+  // marker call (the test asserts exactly one).
+  if (!isNew && !visibilityChanged && !resultChanged) return;
+  const markers = overlay.visible ? buildMarkers(overlay.result, descriptor, overlay.color) : [];
+  if (!plugin) {
+    markersMap.set(key, createSeriesMarkers(candle, markers));
+  } else {
+    plugin.setMarkers(markers);
+  }
+  visibilityMap.set(key, overlay.visible);
+  lastResultMap.set(key, overlay.result);
+}
+
+/**
+ * Map an enum state series to `lightweight-charts` markers — one per firing
+ * bar. The first option in the descriptor (by index) renders as an up-arrow
+ * below the bar, the second as a down-arrow above the bar; further options
+ * fall back to a neutral circle in the bar.
+ */
+function buildMarkers(
+  result: IndicatorComputeResult,
+  descriptor: EnumStateFieldDescriptor,
+  color: string,
+): SeriesMarker<Time>[] {
+  const optionIndex = new Map<string, number>();
+  for (const [idx, option] of descriptor.options.entries()) {
+    optionIndex.set(option.value, idx);
+  }
+  const markers: SeriesMarker<Time>[] = [];
+  for (const row of result.state) {
+    const value = (row as Record<string, unknown>)[descriptor.key];
+    if (typeof value !== 'string') continue;
+    const idx = optionIndex.get(value);
+    if (idx === undefined) continue;
+    const option = descriptor.options[idx];
+    if (!option) continue;
+    const placement = MARKER_PLACEMENTS[idx] ?? NEUTRAL_PLACEMENT;
+    markers.push({
+      time: (row.time / 1000) as Time,
+      position: placement.position,
+      shape: placement.shape,
+      color,
+      text: option.label,
+    });
+  }
+  return markers;
+}
+
+/** Position + shape per option index — kept short and readable. */
+const MARKER_PLACEMENTS: ReadonlyArray<{
+  position: SeriesMarkerBarPosition;
+  shape: SeriesMarkerShape;
+}> = [
+  { position: 'belowBar', shape: 'arrowUp' },
+  { position: 'aboveBar', shape: 'arrowDown' },
+];
+
+/** Fallback for any option beyond the first two — a neutral in-bar circle. */
+const NEUTRAL_PLACEMENT: { position: SeriesMarkerBarPosition; shape: SeriesMarkerShape } = {
+  position: 'inBar',
+  shape: 'circle',
+};
