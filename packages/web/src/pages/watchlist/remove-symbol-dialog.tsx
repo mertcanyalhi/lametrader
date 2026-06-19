@@ -2,10 +2,10 @@ import type { SymbolType } from '@lametrader/core';
 import { AlertDialog, Button, Flex, Text } from '@radix-ui/themes';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
+import { SymbolIdCode } from '../../components/symbol-type-badge.js';
 import { ApiError } from '../../lib/api-fetch.js';
 import { useRemoveSymbol } from '../../lib/hooks/symbols.js';
 import { getLogger } from '../../lib/log.js';
-import { SymbolIdCode } from './symbol-type-badge.js';
 
 /** Scoped logger for the remove flow. */
 const log = getLogger('remove-symbol-dialog');

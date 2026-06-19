@@ -3,13 +3,13 @@ import { Badge, DropdownMenu, Flex, IconButton, Table, Text } from '@radix-ui/th
 import { MoreHorizontal } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { Link } from 'react-router';
+import { SymbolIdCode, SymbolTypeBadge } from '../../components/symbol-type-badge.js';
 import { sortPeriods } from '../../lib/periods.js';
 import { useQuoteStream } from '../../lib/stream/use-quote-stream.js';
 import { BackfillDialog } from './backfill-dialog.js';
 import { EditSymbolDialog } from './edit-symbol-dialog.js';
 import { PriceCells } from './price-cell.js';
 import { RemoveSymbolDialog } from './remove-symbol-dialog.js';
-import { SymbolIdCode, SymbolTypeBadge } from './symbol-type-badge.js';
 
 /**
  * One watchlist table row: the symbol identity (colour-coded by asset class),

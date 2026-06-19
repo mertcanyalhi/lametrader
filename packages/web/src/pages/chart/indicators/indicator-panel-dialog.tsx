@@ -1,7 +1,6 @@
 import type { IndicatorDefinition, IndicatorInstance, Profile, SymbolType } from '@lametrader/core';
 import {
   AlertDialog,
-  Badge,
   Box,
   Button,
   Callout,
@@ -15,6 +14,7 @@ import {
 import { LineChart, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { SymbolTypeBadge } from '../../../components/symbol-type-badge.js';
 import { ApiError } from '../../../lib/api-fetch.js';
 import {
   useAttachIndicator,
@@ -365,9 +365,7 @@ function AddView({
                       {definition.name}
                     </Text>
                     {definition.appliesTo.map((symbolType) => (
-                      <Badge key={symbolType} variant="soft" color="gray" radius="full">
-                        {symbolType}
-                      </Badge>
+                      <SymbolTypeBadge key={symbolType} type={symbolType} />
                     ))}
                   </Flex>
                   <Text size="1" color="gray">

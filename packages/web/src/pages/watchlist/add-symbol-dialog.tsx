@@ -13,12 +13,12 @@ import {
 import { Search } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { toast } from 'sonner';
+import { SymbolIdCode, SymbolTypeBadge } from '../../components/symbol-type-badge.js';
 import { ApiError } from '../../lib/api-fetch.js';
 import { useAddSymbol, useSearchInstruments } from '../../lib/hooks/symbols.js';
 import { getLogger } from '../../lib/log.js';
 import { useDebouncedValue } from '../../lib/use-debounced-value.js';
 import { BackfillDialog } from './backfill-dialog.js';
-import { SymbolIdCode, SymbolTypeBadge } from './symbol-type-badge.js';
 
 /** Scoped logger for the add-symbol flow. */
 const log = getLogger('add-symbol-dialog');

@@ -2,10 +2,10 @@ import type { EnrichedSymbol, Instrument } from '@lametrader/core';
 import { Button, Dialog, Flex, Popover, ScrollArea, Text, TextField } from '@radix-ui/themes';
 import { CandlestickChart, Search } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
+import { SymbolIdCode } from '../../components/symbol-type-badge.js';
 import { cn } from '../../lib/cn.js';
 import { useSearchInstruments } from '../../lib/hooks/symbols.js';
 import { useDebouncedValue } from '../../lib/use-debounced-value.js';
-import { SymbolIdCode } from '../watchlist/symbol-type-badge.js';
 
 /** Quiet period before a keystroke triggers an instrument search. */
 const SEARCH_DEBOUNCE_MS = 250;
