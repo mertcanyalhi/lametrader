@@ -114,6 +114,8 @@ describe('ChartPage', () => {
     onRequest('/symbols?enrich=true', () => [BTC]);
     onRequest('/config', () => CONFIG);
     onRequest('/candles', () => ({ candles: [], nextCursor: null }));
+    onRequest('/profiles', () => []);
+    onRequest('/indicators', () => []);
 
     renderAt('/chart');
 
@@ -137,6 +139,7 @@ describe('ChartPage', () => {
     onRequest('/symbols?enrich=true', () => [BTC]);
     onRequest('/config', () => CONFIG);
     onRequest('/profiles', () => []);
+    onRequest('/indicators', () => []);
 
     renderAt('/chart?id=crypto:BTCUSDT&period=4h');
 
@@ -151,6 +154,7 @@ describe('ChartPage', () => {
     onRequest('/symbols?enrich=true', () => [BTC]);
     onRequest('/config', () => CONFIG);
     onRequest('/profiles', () => []);
+    onRequest('/indicators', () => []);
     // Latest close 102 vs previous close 100 → +2.00 (+2.00%), on the charted 1h.
     onRequest('/candles', () => ({
       candles: [candle(1000, 100), candle(2000, 102)],
@@ -170,6 +174,8 @@ describe('ChartPage', () => {
     onRequest('/symbols?enrich=true', () => [BTC]);
     onRequest('/config', () => CONFIG);
     onRequest('/candles', () => ({ candles: [], nextCursor: null }));
+    onRequest('/profiles', () => []);
+    onRequest('/indicators', () => []);
 
     renderAt('/chart');
 
@@ -206,6 +212,7 @@ describe('ChartPage', () => {
     onRequest('/config', () => CONFIG);
     onRequest('/candles', () => ({ candles: [], nextCursor: null }));
     onRequest('/profiles', () => [SCALPER]);
+    onRequest('/indicators', () => []);
 
     renderAt('/chart?id=crypto:BTCUSDT&period=1h');
 
@@ -215,11 +222,27 @@ describe('ChartPage', () => {
     );
   });
 
+  it("hosts the indicator-panel trigger in the bottom-bar Chart actions group, labeled with the selected profile's instance count", async () => {
+    onRequest('/symbols?enrich=true', () => [BTC]);
+    onRequest('/config', () => CONFIG);
+    onRequest('/candles', () => ({ candles: [], nextCursor: null }));
+    onRequest('/profiles', () => [SCALPER]);
+    onRequest('/indicators', () => []);
+
+    renderAt('/chart?id=crypto:BTCUSDT&period=1h');
+
+    const actions = await screen.findByRole('group', { name: 'Chart actions' });
+    await waitFor(() =>
+      expect(within(actions).queryByRole('button', { name: 'Indicators (0)' })).not.toBeNull(),
+    );
+  });
+
   it('defaults the selection to the first enabled profile on first run and persists it', async () => {
     onRequest('/symbols?enrich=true', () => [BTC]);
     onRequest('/config', () => CONFIG);
     onRequest('/candles', () => ({ candles: [], nextCursor: null }));
     onRequest('/profiles', () => [DISABLED_PROFILE, SCALPER]);
+    onRequest('/indicators', () => []);
 
     renderAt('/chart?id=crypto:BTCUSDT&period=1h');
 
@@ -236,6 +259,7 @@ describe('ChartPage', () => {
     onRequest('/config', () => CONFIG);
     onRequest('/candles', () => ({ candles: [], nextCursor: null }));
     onRequest('/profiles', () => [SCALPER]);
+    onRequest('/indicators', () => []);
 
     renderAt('/chart?id=crypto:BTCUSDT&period=1h');
 
@@ -250,6 +274,7 @@ describe('ChartPage', () => {
     onRequest('/symbols?enrich=true', () => [BTC]);
     onRequest('/config', () => CONFIG);
     onRequest('/profiles', () => []);
+    onRequest('/indicators', () => []);
     onRequest('/candles', () => ({ candles: [], nextCursor: null }));
     renderAt('/chart?id=crypto:BTCUSDT&period=1h');
     const user = userEvent.setup();

@@ -72,4 +72,19 @@ describe('web boilerplate build (e2e)', () => {
     );
     expect(bundlesContainingMarker.length > 0).toEqual(true);
   });
+
+  it("emits a JS bundle whose contents include the indicator panel's no-profile warning", () => {
+    // "Select or create a profile to add indicators" is the indicator-panel
+    // dialog's warning copy when no profile is selected; its presence in the
+    // bundle confirms the chart's indicator-panel module is wired into the
+    // live route tree and ships with the deployable artifact.
+    const assets = readdirSync(join(distDir, 'assets'));
+    const jsFiles = assets.filter((file) => file.endsWith('.js'));
+    const bundlesContainingMarker = jsFiles.filter((file) =>
+      readFileSync(join(distDir, 'assets', file), 'utf8').includes(
+        'Select or create a profile to add indicators',
+      ),
+    );
+    expect(bundlesContainingMarker.length > 0).toEqual(true);
+  });
 });

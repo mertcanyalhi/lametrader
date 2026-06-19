@@ -1,7 +1,7 @@
 # Spec: web chart indicator panel (manage selected profile's indicators)
 
 - Status: draft
-- Touches: `@lametrader/web` driving adapter — new `lib/hooks/indicators.ts` (TanStack Query over `GET /indicators`, `GET/POST /profiles/:id/indicators`, `PUT/DELETE /profiles/:id/indicators/:instanceId`), new `pages/chart/indicators/indicator-panel-dialog.tsx` (the bottom-bar trigger + Dialog shell), `pages/chart/indicators/indicator-panel.tsx` (the list/empty body), `pages/chart/indicators/add-indicator-dialog.tsx` (two-step catalog → inputs nested dialog, also reused for edit), `pages/chart/indicators/indicator-inputs-form.tsx` (descriptor-driven form), `pages/chart/indicators/detach-indicator-dialog.tsx` (confirmation `AlertDialog`).
+- Touches: `@lametrader/web` driving adapter — new `lib/hooks/indicators.ts` (TanStack Query over `GET /indicators`, `POST /profiles/:id/indicators`, `PUT/DELETE /profiles/:id/indicators/:instanceId`), new `pages/chart/indicators/indicator-panel-dialog.tsx` (the bottom-bar trigger + Dialog shell), `pages/chart/indicators/indicator-panel.tsx` (the list/empty body), `pages/chart/indicators/add-indicator-dialog.tsx` (two-step catalog → inputs nested dialog, also reused for edit), `pages/chart/indicators/indicator-inputs-form.tsx` (descriptor-driven form), `pages/chart/indicators/detach-indicator-dialog.tsx` (confirmation `AlertDialog`).
   Modifies `pages/chart/chart-page.tsx` to mount the trigger in the bottom-bar `Flex` and pass the current symbol's `type` for the n/a check.
   Reads the existing REST surface (`/indicators`, `/profiles/:id/indicators` sub-resource).
   No backend change.
@@ -20,7 +20,7 @@ No web-side redeclaration.
 The panel reads:
 
 - `useIndicatorCatalog()` → `GET /indicators` — array of every registered definition.
-- `useProfileIndicators(profileId)` → `GET /profiles/:id/indicators` — embedded instances on the selected profile.
+- The selected profile's embedded `indicators[]` (from the existing `useProfiles` cache) — single source of truth, refetched together with the rest of the profile state.
 
 The mutations all carry the profile id in the path:
 
@@ -28,7 +28,7 @@ The mutations all carry the profile id in the path:
 - `useUpdateIndicator(profileId)` → `PUT /profiles/:id/indicators/:instanceId` (full-replace — same body as attach; matches the server's `PUT`).
 - `useDetachIndicator(profileId)` → `DELETE /profiles/:id/indicators/:instanceId`.
 
-A successful mutation invalidates `['profile-indicators', profileId]`.
+A successful mutation invalidates the `['profiles']` query (the single source of truth for the embedded `indicators[]`).
 
 The form **only edits `inputs` and (optionally) `label`** — `indicatorKey` is fixed by the catalog pick on create, and immutable on edit.
 On `PUT`, the body still carries `indicatorKey` (the server requires it on full-replace) but it's the same one — the form doesn't expose it as editable.
@@ -101,8 +101,8 @@ The existing `packages/web/tests/e2e/build.e2e.test.ts` is the only `*.e2e.test.
 For this feature, the e2e tier adds **one bundle-marker assertion**: the built JS bundle contains the static copy `"Select or create a profile to add indicators"`, confirming the indicator-panel module is wired into the live route tree and ships with the deployable artifact.
 The build is shared with the existing markers via the same `beforeAll`.
 
-Critical failure mode: `GET /profiles/:id/indicators` failing on chart load — the indicator-panel trigger still renders (labeled `"Indicators"`, count omitted because the data didn't load), and the rest of the chart page is unaffected.
-Asserted in the panel-dialog jsdom test by responding `500` for `/profiles/:id/indicators`.
+Critical failure mode: `GET /indicators` (the catalog) failing on chart load — the indicator-panel trigger still renders (the count still works because it comes from the cached profiles), opening the panel lists the profile's existing instances with their `indicatorKey` (no n/a check, since the catalog isn't available), and the rest of the chart page is unaffected.
+Asserted in the panel-dialog jsdom test by responding `500` for `/indicators`.
 
 ## Out of scope
 
