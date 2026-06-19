@@ -59,7 +59,7 @@ export function SymbolPickerDialog({
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Trigger>
-        <Button variant="soft" color="gray">
+        <Button variant="soft" color="gray" className="min-w-32 justify-center">
           <CandlestickChart size={14} aria-hidden="true" />
           {currentId}
         </Button>

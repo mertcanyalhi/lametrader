@@ -100,7 +100,7 @@ export function ProfilePickerDialog(): ReactNode {
     <>
       <Dialog.Root open={open} onOpenChange={handleOpenChange}>
         <Dialog.Trigger>
-          <Button variant="soft" color="gray">
+          <Button variant="soft" color="gray" className="min-w-32 justify-center">
             <User size={14} aria-hidden="true" />
             {triggerLabel}
           </Button>

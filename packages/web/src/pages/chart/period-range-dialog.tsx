@@ -59,7 +59,7 @@ export function PeriodRangeDialog({
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger>
-        <Button variant="soft" color="gray">
+        <Button variant="soft" color="gray" className="min-w-32 justify-center">
           <Clock size={14} aria-hidden="true" />
           {triggerLabel}
         </Button>

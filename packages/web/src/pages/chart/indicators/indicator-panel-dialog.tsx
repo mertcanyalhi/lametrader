@@ -78,7 +78,7 @@ export function IndicatorPanelDialog({ symbolType }: IndicatorPanelDialogProps):
     <>
       <Dialog.Root open={open} onOpenChange={handleOpenChange}>
         <Dialog.Trigger>
-          <Button variant="soft" color="gray">
+          <Button variant="soft" color="gray" className="min-w-32 justify-center">
             <LineChart size={14} aria-hidden="true" />
             {triggerLabel}
           </Button>
