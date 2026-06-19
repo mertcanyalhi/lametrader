@@ -1,6 +1,7 @@
 import type { IndicatorDefinition, IndicatorInstance, Profile, SymbolType } from '@lametrader/core';
 import {
   AlertDialog,
+  Badge,
   Box,
   Button,
   Callout,
@@ -67,7 +68,10 @@ export function IndicatorPanelDialog({ symbolType }: IndicatorPanelDialogProps):
   const instances = profile?.indicators ?? [];
   const catalog = catalogQuery.data ?? [];
 
-  const triggerLabel = profile ? `Indicators (${instances.length})` : 'Indicators';
+  // The accessible name carries the count too (e.g. "Indicators (2)") so the
+  // existing role+name queries in tests + screen readers still surface a
+  // single, scannable label; visually the count rides in a Badge.
+  const triggerAriaLabel = profile ? `Indicators (${instances.length})` : 'Indicators';
 
   function handleOpenChange(next: boolean): void {
     setOpen(next);
@@ -78,9 +82,19 @@ export function IndicatorPanelDialog({ symbolType }: IndicatorPanelDialogProps):
     <>
       <Dialog.Root open={open} onOpenChange={handleOpenChange}>
         <Dialog.Trigger>
-          <Button variant="soft" color="gray" className="min-w-32 justify-center">
+          <Button
+            variant="soft"
+            color="gray"
+            className="min-w-32 justify-center"
+            aria-label={triggerAriaLabel}
+          >
             <LineChart size={14} aria-hidden="true" />
-            {triggerLabel}
+            Indicators
+            {profile ? (
+              <Badge variant="soft" color="gray" radius="full">
+                {instances.length}
+              </Badge>
+            ) : null}
           </Button>
         </Dialog.Trigger>
         <Dialog.Content maxWidth="520px">
@@ -191,23 +205,29 @@ function InstanceListView({
         </Box>
         <ScrollArea type="auto" scrollbars="vertical" style={{ maxHeight: '22rem' }}>
           <Flex direction="column" gap="1">
-            {instances.map((instance) => {
-              const definition = catalog.find(
-                (candidate) => candidate.key === instance.indicatorKey,
-              );
-              const applicable = definition ? definition.appliesTo.includes(symbolType) : true;
-              return (
+            {instances
+              .map((instance) => {
+                const definition =
+                  catalog.find((candidate) => candidate.key === instance.indicatorKey) ?? null;
+                return {
+                  instance,
+                  definition,
+                  applicable: definition ? definition.appliesTo.includes(symbolType) : true,
+                  displayName: instance.label ?? definition?.name ?? instance.indicatorKey,
+                };
+              })
+              .sort((a, b) => a.displayName.localeCompare(b.displayName))
+              .map(({ instance, definition, applicable }) => (
                 <InstanceRow
                   key={instance.id}
                   instance={instance}
-                  definition={definition ?? null}
+                  definition={definition}
                   applicable={applicable}
                   symbolType={symbolType}
                   onEdit={onEdit}
                   onDetach={onDetach}
                 />
-              );
-            })}
+              ))}
           </Flex>
         </ScrollArea>
       </Flex>
@@ -307,12 +327,14 @@ function AddView({
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return catalog;
-    return catalog.filter(
-      (definition) =>
-        definition.name.toLowerCase().includes(needle) ||
-        definition.description.toLowerCase().includes(needle),
-    );
+    const matched = needle
+      ? catalog.filter(
+          (definition) =>
+            definition.name.toLowerCase().includes(needle) ||
+            definition.description.toLowerCase().includes(needle),
+        )
+      : catalog;
+    return [...matched].sort((a, b) => a.name.localeCompare(b.name));
   }, [catalog, query]);
 
   async function handleSubmit({ inputs }: { inputs: Record<string, unknown> }): Promise<void> {
