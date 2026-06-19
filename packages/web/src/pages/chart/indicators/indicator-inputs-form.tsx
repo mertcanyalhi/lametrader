@@ -157,11 +157,11 @@ function InputRow({
         max={descriptor.max}
         step={descriptor.integer ? 1 : descriptor.step}
         onChange={(event) => onChange(event.target.value)}
-        className="w-32 rounded-md border border-[var(--gray-a6)] bg-[var(--color-surface)] px-3 py-1.5 text-right text-sm text-[var(--gray-12)]"
+        className="w-40 rounded-md border border-[var(--gray-a6)] bg-[var(--color-surface)] px-3 py-1.5 text-right text-sm text-[var(--gray-12)]"
       />
     ) : descriptor.type === FieldType.Source ? (
       <Select.Root value={String(value)} onValueChange={onChange}>
-        <Select.Trigger aria-label={descriptor.label} className="w-32" />
+        <Select.Trigger aria-label={descriptor.label} className="w-40" />
         <Select.Content>
           {Object.values(PriceSource).map((source) => (
             <Select.Item key={source} value={source}>
