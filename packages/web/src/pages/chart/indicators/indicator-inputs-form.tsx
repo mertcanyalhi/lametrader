@@ -161,7 +161,7 @@ function InputRow({
       />
     ) : descriptor.type === FieldType.Source ? (
       <Select.Root value={String(value)} onValueChange={onChange}>
-        <Select.Trigger aria-label={descriptor.label} className={SELECT_TRIGGER_CLASS} />
+        <Select.Trigger aria-label={descriptor.label} className={CONTROL_WIDTH_CLASS} />
         <Select.Content>
           {Object.values(PriceSource).map((source) => (
             <Select.Item key={source} value={source}>
@@ -172,7 +172,7 @@ function InputRow({
       </Select.Root>
     ) : (
       <Select.Root value={String(value)} onValueChange={onChange}>
-        <Select.Trigger aria-label={descriptor.label} className={SELECT_TRIGGER_CLASS} />
+        <Select.Trigger aria-label={descriptor.label} className={CONTROL_WIDTH_CLASS} />
         <Select.Content>
           {descriptor.options.map((option) => (
             <Select.Item key={option.value} value={option.value}>
@@ -192,11 +192,3 @@ function InputRow({
 
 /** Important to win over Radix Themes' own `rt-SelectTrigger` width rules. */
 const CONTROL_WIDTH_CLASS = '!w-40';
-
-/**
- * Select trigger styling — right-aligns the selected value so it lines up
- * with the right-aligned numeric inputs in the same form. Radix's default
- * `rt-SelectTrigger` uses `justify-content: space-between` (text left, chevron
- * right); `!justify-end` flips it to `[..... text chevron]` for consistency.
- */
-const SELECT_TRIGGER_CLASS = `${CONTROL_WIDTH_CLASS} !justify-end`;
