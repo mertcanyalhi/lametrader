@@ -30,6 +30,8 @@ export interface DefineIndicatorSpec<
   compute: (inputs: InferInputs<I>, candles: Candle[]) => InferStateSeries<S>;
   /** Short, user-readable summary of a configured instance — e.g. `"SMA 14 close"`. */
   summary: (inputs: InferInputs<I>) => string;
+  /** Optional warm-up bar count — forwarded to the module so the compute service can scope candle loads. */
+  warmup?: (inputs: InferInputs<I>) => number;
 }
 
 /**
@@ -43,7 +45,7 @@ export function defineIndicator<
   I extends readonly FieldDescriptor[],
   S extends readonly StateFieldDescriptor[],
 >(spec: DefineIndicatorSpec<I, S>): IndicatorModule<I, S> {
-  const { compute, summary, appliesTo, ...definitionWithoutAppliesTo } = spec;
+  const { compute, summary, warmup, appliesTo, ...definitionWithoutAppliesTo } = spec;
   return {
     definition: {
       ...definitionWithoutAppliesTo,
@@ -51,5 +53,6 @@ export function defineIndicator<
     },
     compute,
     summary,
+    warmup,
   };
 }

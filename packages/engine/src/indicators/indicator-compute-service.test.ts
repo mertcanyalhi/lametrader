@@ -1,17 +1,21 @@
 import {
   type Candle,
+  type CandleRepository,
   IndicatorError,
   IndicatorNotFoundError,
   Period,
+  periodMillis,
   SymbolNotFoundError,
   SymbolType,
   type WatchedSymbol,
 } from '@lametrader/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { InMemoryCandleRepository } from '../candles/in-memory-candle-repository.js';
 import { InMemoryWatchlistRepository } from '../symbols/in-memory-watchlist-repository.js';
 import { defaultIndicators } from './default-indicators.js';
+import { defineIndicator } from './define-indicator.js';
 import { IndicatorComputeService } from './indicator-compute-service.js';
+import { IndicatorRegistry } from './indicator-registry.js';
 
 const BTC: WatchedSymbol = {
   id: 'crypto:BTCUSDT',
@@ -123,5 +127,73 @@ describe('IndicatorComputeService.compute', () => {
     await expect(
       service.compute(BTC.id, 'sma', { length: 0 }, Period.OneHour),
     ).rejects.toBeInstanceOf(IndicatorError);
+  });
+
+  it('loads `[from - warmup*periodMillis, to)` from the candle repo when both `from` and `to` and the module declares warmup', async () => {
+    const { service, candles } = await build();
+    const spy = vi.spyOn(candles, 'range');
+    // `from` chosen large enough that `from - 14*1h` stays positive — the
+    // clamp-at-zero case is covered by a separate test below.
+    const from = 100 * periodMillis(Period.OneHour);
+    const to = from + periodMillis(Period.OneHour);
+    await candles.save(BTC.id, Period.OneHour, [candle(from, 100)]);
+
+    await service.compute(BTC.id, 'sma', { length: 14 }, Period.OneHour, { from, to });
+
+    expect(spy.mock.calls).toEqual([
+      [BTC.id, Period.OneHour, from - 14 * periodMillis(Period.OneHour), to],
+    ]);
+  });
+
+  it('loads `[0, MAX_SAFE_INTEGER)` from the candle repo when neither `from` nor `to` is supplied', async () => {
+    const { service, candles } = await build();
+    const spy = vi.spyOn(candles, 'range');
+    await candles.save(BTC.id, Period.OneHour, [candle(0, 100)]);
+
+    await service.compute(BTC.id, 'sma', { length: 14 }, Period.OneHour);
+
+    expect(spy.mock.calls).toEqual([[BTC.id, Period.OneHour, 0, Number.MAX_SAFE_INTEGER]]);
+  });
+
+  it('loads exactly `[from, to)` when the module does not declare a `warmup`', async () => {
+    const watchlist = new InMemoryWatchlistRepository([BTC]);
+    const candles = new InMemoryCandleRepository();
+    const registry = new IndicatorRegistry();
+    // A module without `warmup` — the service must use 0 as the margin.
+    registry.register(
+      defineIndicator({
+        key: 'noop',
+        name: 'No-op',
+        description: '',
+        version: 1,
+        inputs: [] as const,
+        state: [] as const,
+        summary: () => 'noop',
+        compute: (_inputs, candleArray) => candleArray.map((c) => ({ time: c.time })),
+      }),
+    );
+    await candles.save(BTC.id, Period.OneHour, [candle(1_500_000, 100)]);
+    const service = new IndicatorComputeService(registry, watchlist, candles);
+    const spy = vi.spyOn(candles, 'range');
+
+    await service.compute(BTC.id, 'noop', {}, Period.OneHour, {
+      from: 1_000_000,
+      to: 2_000_000,
+    });
+
+    expect(spy.mock.calls).toEqual([[BTC.id, Period.OneHour, 1_000_000, 2_000_000]]);
+  });
+
+  it('clamps a negative warm-up margin at 0 — the load `from` never goes below 0', async () => {
+    const { service, candles } = await build();
+    const spy = vi.spyOn(candles, 'range');
+    await candles.save(BTC.id, Period.OneHour, [candle(0, 100)]);
+
+    await service.compute(BTC.id, 'sma', { length: 14 }, Period.OneHour, {
+      from: 0,
+      to: 1_000_000,
+    });
+
+    expect(spy.mock.calls).toEqual([[BTC.id, Period.OneHour, 0, 1_000_000]]);
   });
 });

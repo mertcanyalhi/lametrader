@@ -1,17 +1,30 @@
-import type { Candle, EnrichedSymbol, Period } from '@lametrader/core';
+import type {
+  Candle,
+  EnrichedSymbol,
+  IndicatorDefinition,
+  IndicatorInstance,
+  Period,
+} from '@lametrader/core';
 import { Callout, Flex, Link as RadixLink } from '@radix-ui/themes';
-import { type ReactNode, useEffect } from 'react';
+import { useQueries } from '@tanstack/react-query';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router';
 import { getStoredPeriod, setStoredPeriod } from '../../lib/chart-period.js';
 import { formatChange, formatChangePct, formatPrice } from '../../lib/format.js';
 import { liveCandleForPeriod, useCandleStream, usePagedCandles } from '../../lib/hooks/candles.js';
+import { computeIndicatorQueryOptions, useIndicatorCatalog } from '../../lib/hooks/indicators.js';
+import { useProfiles } from '../../lib/hooks/profiles.js';
 import { useWatchlist } from '../../lib/hooks/symbols.js';
 import { useConfig } from '../../lib/hooks/use-config.js';
-import { CandleChart } from './candle-chart.js';
+import { useSelectedProfile } from '../../lib/selected-profile-context.js';
+import { useTheme } from '../../lib/theme-context.js';
+import { CandleChart, type IndicatorOverlay } from './candle-chart.js';
 import { ChartLoading } from './chart-loading.js';
 import { CHART_RANGE_ORDER, type ChartRange } from './chart-range.js';
 import { ChartEmptyState } from './empty-state.js';
+import type { LegendOverlay } from './indicators/indicator-legend.js';
 import { IndicatorPanelDialog } from './indicators/indicator-panel-dialog.js';
+import { paletteColor } from './indicators/overlay-palette.js';
 import { PeriodRangeDialog } from './period-range-dialog.js';
 import { ProfilePickerDialog } from './profile-picker-dialog.js';
 import { SymbolPickerDialog } from './symbol-picker-dialog.js';
@@ -75,10 +88,61 @@ export function ChartPage(): ReactNode {
   }
 
   return (
+    <ChartLayout
+      id={id}
+      period={period}
+      range={range}
+      symbol={selected}
+      symbols={symbols}
+      selectSymbol={selectSymbol}
+      applyPeriodRange={applyPeriodRange}
+    />
+  );
+}
+
+/**
+ * Splits `ChartPage`'s layout from its routing/guards so the page-level
+ * `hidden` visibility state can be shared between the chart canvas's legend
+ * AND the bottom-bar `IndicatorPanelDialog` (both need to read + toggle it).
+ */
+function ChartLayout({
+  id,
+  period,
+  range,
+  symbol,
+  symbols,
+  selectSymbol,
+  applyPeriodRange,
+}: {
+  id: string;
+  period: Period;
+  range: ChartRange | null;
+  symbol: EnrichedSymbol;
+  symbols: EnrichedSymbol[];
+  selectSymbol: (nextId: string) => void;
+  applyPeriodRange: (next: { period: Period; range: ChartRange | null }) => void;
+}): ReactNode {
+  const [hidden, setHidden] = useState<Record<string, true>>({});
+  const toggleVisible = useCallback((instanceId: string) => {
+    setHidden((current) => {
+      const next = { ...current };
+      if (next[instanceId]) delete next[instanceId];
+      else next[instanceId] = true;
+      return next;
+    });
+  }, []);
+  return (
     <div className="grid h-full grid-rows-[minmax(0,1fr)_auto] gap-3">
       <div className="min-h-0">
-        {selected.periods.includes(period) ? (
-          <ChartView id={id} period={period} range={range} symbol={selected} />
+        {symbol.periods.includes(period) ? (
+          <ChartView
+            id={id}
+            period={period}
+            range={range}
+            symbol={symbol}
+            hidden={hidden}
+            toggleVisible={toggleVisible}
+          />
         ) : (
           <>
             <DocumentTitle id={id} latest={null} previous={null} />
@@ -98,10 +162,14 @@ export function ChartPage(): ReactNode {
         <PeriodRangeDialog
           period={period}
           range={range}
-          watchedPeriods={selected.periods}
+          watchedPeriods={symbol.periods}
           onApply={applyPeriodRange}
         />
-        <IndicatorPanelDialog symbolType={selected.type} />
+        <IndicatorPanelDialog
+          symbolType={symbol.type}
+          hidden={hidden}
+          onToggleVisible={toggleVisible}
+        />
       </Flex>
     </div>
   );
@@ -161,11 +229,15 @@ function ChartView({
   period,
   range,
   symbol,
+  hidden,
+  toggleVisible,
 }: {
   id: string;
   period: Period;
   range: ChartRange | null;
   symbol: EnrichedSymbol;
+  hidden: Record<string, true>;
+  toggleVisible: (instanceId: string) => void;
 }): ReactNode {
   const feed = usePagedCandles({ id, period });
   // The chart applies live bars itself; here the live bar only drives the tab
@@ -179,6 +251,19 @@ function ChartView({
     liveCandle && lastLoaded && liveCandle.time > lastLoaded.time
       ? lastLoaded
       : (feed.candles.at(-2) ?? null);
+  // Bound the indicator-compute window to the candle feed the chart actually
+  // loaded — the engine then scopes its candle scan to roughly that span plus
+  // the indicator's warm-up margin, instead of the symbol's full history.
+  const computeFrom = feed.candles[0]?.time;
+  const computeTo = feed.candles.length > 0 ? (feed.candles.at(-1) as Candle).time + 1 : undefined;
+  const { canvasOverlays, legendOverlays, profile } = useChartOverlays({
+    id,
+    period,
+    symbol,
+    hidden,
+    from: computeFrom,
+    to: computeTo,
+  });
   const body = feed.isPending ? (
     <ChartLoading />
   ) : feed.isError ? (
@@ -193,6 +278,10 @@ function ChartView({
       range={range}
       loadOlder={feed.loadOlder}
       hasMore={feed.hasMore}
+      overlays={canvasOverlays}
+      legendOverlays={legendOverlays}
+      onToggleLegendVisible={toggleVisible}
+      legendProfile={profile}
     />
   );
   return (
@@ -201,6 +290,110 @@ function ChartView({
       {body}
     </>
   );
+}
+
+/**
+ * Collect the selected profile's **applicable** indicator instances (those whose
+ * definition's `appliesTo` covers the chart's symbol type), issue one compute
+ * call per instance via `useQueries`, and fold the results into the
+ * canvas-side `IndicatorOverlay[]` and the legend-side `LegendOverlay[]`.
+ *
+ * Visibility is currently view-only (always `true`) — the legend's eye toggle
+ * ships as a follow-up wiring; the prop drilling is in place so the legend's
+ * own contract is exercised end-to-end.
+ */
+function useChartOverlays({
+  id,
+  period,
+  symbol,
+  hidden,
+  from,
+  to,
+}: {
+  id: string;
+  period: Period;
+  symbol: EnrichedSymbol;
+  hidden: Record<string, true>;
+  from?: number;
+  to?: number;
+}): {
+  canvasOverlays: IndicatorOverlay[];
+  legendOverlays: LegendOverlay[];
+  profile: ReturnType<typeof useProfiles>['data'] extends Array<infer P> | undefined
+    ? P | null
+    : null;
+} {
+  const { profileId } = useSelectedProfile();
+  const profilesQuery = useProfiles();
+  const catalogQuery = useIndicatorCatalog();
+  const { theme } = useTheme();
+
+  const profile = useMemo(
+    () => profilesQuery.data?.find((candidate) => candidate.id === profileId) ?? null,
+    [profilesQuery.data, profileId],
+  );
+  const catalog = catalogQuery.data ?? [];
+
+  /** Instances whose definition's `appliesTo` covers the current symbol type. */
+  const applicable = useMemo<
+    Array<{ instance: IndicatorInstance; definition: IndicatorDefinition }>
+  >(() => {
+    const instances = profile?.indicators ?? [];
+    const rows: Array<{ instance: IndicatorInstance; definition: IndicatorDefinition }> = [];
+    for (const instance of instances) {
+      const definition = catalog.find((entry) => entry.key === instance.indicatorKey);
+      if (!definition) continue;
+      if (!definition.appliesTo.includes(symbol.type)) continue;
+      rows.push({ instance, definition });
+    }
+    return rows;
+  }, [profile, catalog, symbol.type]);
+
+  // Hold the compute fan-out until both `from` and `to` are known — otherwise a
+  // race between profile/catalog (light, resolves first) and candles (heavy,
+  // resolves later) would briefly fire each compute call with no window and
+  // the engine would fall back to a full-history scan, defeating this PR's fix.
+  const scoped = from !== undefined && to !== undefined;
+  const computeQueries = useQueries({
+    queries: scoped
+      ? applicable.map(({ instance }) =>
+          computeIndicatorQueryOptions({
+            id,
+            key: instance.indicatorKey,
+            period,
+            inputs: instance.inputs,
+            from,
+            to,
+          }),
+        )
+      : [],
+  });
+
+  const canvasOverlays = useMemo<IndicatorOverlay[]>(
+    () =>
+      applicable.map(({ instance, definition }, index) => ({
+        instanceId: instance.id,
+        definition,
+        result: computeQueries[index]?.data ?? null,
+        visible: !hidden[instance.id],
+        color: paletteColor(index, theme),
+      })),
+    [applicable, computeQueries, theme, hidden],
+  );
+
+  const legendOverlays = useMemo<LegendOverlay[]>(
+    () =>
+      applicable.map(({ instance, definition }, index) => ({
+        instance,
+        definition,
+        color: paletteColor(index, theme),
+        visible: !hidden[instance.id],
+        state: computeQueries[index]?.data?.state ?? [],
+      })),
+    [applicable, computeQueries, theme, hidden],
+  );
+
+  return { canvasOverlays, legendOverlays, profile };
 }
 
 /**

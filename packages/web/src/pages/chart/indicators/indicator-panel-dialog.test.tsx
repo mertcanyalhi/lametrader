@@ -166,12 +166,19 @@ describe('IndicatorPanelDialog', () => {
     window.localStorage.clear();
   });
 
-  function renderPanel(symbolType: SymbolType = SymbolType.Crypto): void {
+  function renderPanel(
+    symbolType: SymbolType = SymbolType.Crypto,
+    opts: { hidden?: Record<string, true>; onToggleVisible?: (id: string) => void } = {},
+  ): void {
     render(
       <QueryClientProvider client={queryClient}>
         <Theme>
           <SelectedProfileProvider>
-            <IndicatorPanelDialog symbolType={symbolType} />
+            <IndicatorPanelDialog
+              symbolType={symbolType}
+              hidden={opts.hidden ?? {}}
+              onToggleVisible={opts.onToggleVisible}
+            />
           </SelectedProfileProvider>
         </Theme>
       </QueryClientProvider>,
@@ -250,6 +257,27 @@ describe('IndicatorPanelDialog', () => {
       expect(within(dialog).queryByText(CRYPTO_ONLY_DEFINITION.name)).not.toBeNull(),
     );
     expect(within(dialog).queryByText(/n\/a for fx/i)).not.toBeNull();
+  });
+
+  it("renders an eye/eye-off toggle per row that fires onToggleVisible with the instance's id", async () => {
+    setStoredProfileId(PROFILE.id);
+    const onToggleVisible = vi.fn();
+    renderPanel(SymbolType.Crypto, { hidden: { [VWMA_INSTANCE.id]: true }, onToggleVisible });
+    await openPanel('Indicators (2)');
+    const user = userEvent.setup();
+
+    const dialog = await screen.findByRole('dialog');
+    // SMA is visible → button reads "Hide …"; VWMA is hidden → button reads "Show …".
+    const hideSma = within(dialog).getByRole('button', {
+      name: `Hide ${SMA_DEFINITION.name}`,
+    });
+    const showVwma = within(dialog).getByRole('button', {
+      name: `Show ${CRYPTO_ONLY_DEFINITION.name}`,
+    });
+    await user.click(hideSma);
+    await user.click(showVwma);
+
+    expect(onToggleVisible.mock.calls).toEqual([[SMA_INSTANCE.id], [VWMA_INSTANCE.id]]);
   });
 
   it('attaches a new indicator via POST /profiles/:id/indicators when "Add indicator" → catalog pick → submit', async () => {

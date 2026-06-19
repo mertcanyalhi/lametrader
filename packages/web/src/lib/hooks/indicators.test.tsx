@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import {
   FieldType,
+  type IndicatorComputeResult,
   type IndicatorDefinition,
   type IndicatorInstance,
   Pane,
+  Period,
   PriceSource,
   RenderKind,
   SymbolType,
@@ -12,7 +14,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useAttachIndicator, useIndicatorCatalog } from './indicators.js';
+import { useAttachIndicator, useComputeIndicator, useIndicatorCatalog } from './indicators.js';
 
 /**
  * The shape of a single recorded `fetch` call so the assertion can pin down
@@ -123,5 +125,74 @@ describe('indicators hooks', () => {
         },
       ],
     });
+  });
+
+  it('useComputeIndicator GETs /symbols/:id/indicators/:key?period=&<inputs> and returns the parsed result', async () => {
+    const result: IndicatorComputeResult = {
+      indicatorKey: 'sma',
+      version: 1,
+      period: Period.OneHour,
+      state: [
+        { time: 1000, value: null },
+        { time: 2000, value: 105.5 },
+        { time: 3000, value: 106 },
+      ],
+    };
+    stubFetch(() => ({ status: 200, body: result }));
+
+    const { result: hook } = renderHook(
+      () =>
+        useComputeIndicator({
+          id: 'crypto:BTCUSDT',
+          key: 'sma',
+          period: Period.OneHour,
+          inputs: { length: 14, source: PriceSource.Close },
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(hook.current.isSuccess).toEqual(true));
+    expect({ data: hook.current.data, calls }).toEqual({
+      data: result,
+      calls: [
+        {
+          url: '/api/symbols/crypto:BTCUSDT/indicators/sma?period=1h&length=14&source=close',
+          method: 'GET',
+          body: undefined,
+        },
+      ],
+    });
+  });
+
+  it('useComputeIndicator appends from/to to the query when provided', async () => {
+    const result: IndicatorComputeResult = {
+      indicatorKey: 'sma',
+      version: 1,
+      period: Period.OneHour,
+      state: [{ time: 1_500_000, value: 105.5 }],
+    };
+    stubFetch(() => ({ status: 200, body: result }));
+
+    const { result: hook } = renderHook(
+      () =>
+        useComputeIndicator({
+          id: 'crypto:BTCUSDT',
+          key: 'sma',
+          period: Period.OneHour,
+          inputs: { length: 14, source: PriceSource.Close },
+          from: 1_000_000,
+          to: 2_000_000,
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(hook.current.isSuccess).toEqual(true));
+    expect(calls).toEqual([
+      {
+        url: '/api/symbols/crypto:BTCUSDT/indicators/sma?period=1h&from=1000000&to=2000000&length=14&source=close',
+        method: 'GET',
+        body: undefined,
+      },
+    ]);
   });
 });

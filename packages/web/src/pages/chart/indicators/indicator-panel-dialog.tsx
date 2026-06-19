@@ -1,6 +1,5 @@
 import type { IndicatorDefinition, IndicatorInstance, Profile, SymbolType } from '@lametrader/core';
 import {
-  AlertDialog,
   Badge,
   Box,
   Button,
@@ -12,20 +11,20 @@ import {
   Text,
   TextField,
 } from '@radix-ui/themes';
-import { LineChart, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
+import { Eye, EyeOff, LineChart, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { SymbolTypeBadge } from '../../../components/symbol-type-badge.js';
 import { ApiError } from '../../../lib/api-fetch.js';
 import {
   useAttachIndicator,
-  useDetachIndicator,
   useIndicatorCatalog,
   useUpdateIndicator,
 } from '../../../lib/hooks/indicators.js';
 import { useProfiles } from '../../../lib/hooks/profiles.js';
 import { getLogger } from '../../../lib/log.js';
 import { useSelectedProfile } from '../../../lib/selected-profile-context.js';
+import { DetachIndicatorDialog } from './detach-indicator-dialog.js';
 import { IndicatorInputsForm } from './indicator-inputs-form.js';
 
 /** Scoped logger for panel lifecycle / mutation failures. */
@@ -35,6 +34,10 @@ const log = getLogger('indicator-panel');
 export interface IndicatorPanelDialogProps {
   /** The currently charted symbol's asset class — drives the n/a-row check. */
   symbolType: SymbolType;
+  /** Set of instance ids currently hidden on the canvas (chart-local state). */
+  hidden?: Record<string, true>;
+  /** Toggle an instance's chart-local visibility — mirrors the legend's eye. */
+  onToggleVisible?: (instanceId: string) => void;
 }
 
 /**
@@ -53,7 +56,11 @@ type View =
  * instance and lets the user add / edit / detach. When no profile is selected,
  * the dialog renders a warning callout pointing to the profile picker.
  */
-export function IndicatorPanelDialog({ symbolType }: IndicatorPanelDialogProps): ReactNode {
+export function IndicatorPanelDialog({
+  symbolType,
+  hidden = {},
+  onToggleVisible,
+}: IndicatorPanelDialogProps): ReactNode {
   const { profileId } = useSelectedProfile();
   const profilesQuery = useProfiles();
   const catalogQuery = useIndicatorCatalog();
@@ -105,6 +112,8 @@ export function IndicatorPanelDialog({ symbolType }: IndicatorPanelDialogProps):
               instances={instances}
               catalog={catalog}
               symbolType={symbolType}
+              hidden={hidden}
+              onToggleVisible={onToggleVisible}
               onAdd={() => setView({ kind: 'add' })}
               onEdit={(instance, definition) => setView({ kind: 'edit', instance, definition })}
               onDetach={(instance) => setToDetach(instance)}
@@ -182,6 +191,8 @@ function InstanceListView({
   instances,
   catalog,
   symbolType,
+  hidden,
+  onToggleVisible,
   onAdd,
   onEdit,
   onDetach,
@@ -189,6 +200,8 @@ function InstanceListView({
   instances: IndicatorInstance[];
   catalog: IndicatorDefinition[];
   symbolType: SymbolType;
+  hidden: Record<string, true>;
+  onToggleVisible?: (instanceId: string) => void;
   onAdd: () => void;
   onEdit: (instance: IndicatorInstance, definition: IndicatorDefinition) => void;
   onDetach: (instance: IndicatorInstance) => void;
@@ -224,6 +237,8 @@ function InstanceListView({
                   definition={definition}
                   applicable={applicable}
                   symbolType={symbolType}
+                  visible={!hidden[instance.id]}
+                  onToggleVisible={onToggleVisible}
                   onEdit={onEdit}
                   onDetach={onDetach}
                 />
@@ -249,6 +264,8 @@ function InstanceRow({
   definition,
   applicable,
   symbolType,
+  visible,
+  onToggleVisible,
   onEdit,
   onDetach,
 }: {
@@ -256,10 +273,13 @@ function InstanceRow({
   definition: IndicatorDefinition | null;
   applicable: boolean;
   symbolType: SymbolType;
+  visible: boolean;
+  onToggleVisible?: (instanceId: string) => void;
   onEdit: (instance: IndicatorInstance, definition: IndicatorDefinition) => void;
   onDetach: (instance: IndicatorInstance) => void;
 }): ReactNode {
   const displayName = instance.label ?? definition?.name ?? instance.indicatorKey;
+  const visibilityLabel = visible ? `Hide ${displayName}` : `Show ${displayName}`;
   return (
     <Flex
       align="center"
@@ -279,6 +299,16 @@ function InstanceRow({
           </Text>
         ) : null}
       </Flex>
+      <IconButton
+        type="button"
+        variant="ghost"
+        color="gray"
+        aria-label={visibilityLabel}
+        disabled={onToggleVisible === undefined || !applicable}
+        onClick={() => onToggleVisible?.(instance.id)}
+      >
+        {visible ? <Eye size={14} aria-hidden="true" /> : <EyeOff size={14} aria-hidden="true" />}
+      </IconButton>
       <IconButton
         type="button"
         variant="ghost"
@@ -486,68 +516,5 @@ function EditView({
         />
       </Box>
     </>
-  );
-}
-
-/**
- * Detach confirmation `AlertDialog`. Controlled by the parent — the parent
- * owns the `instance` being detached and decides what to do after the
- * DELETE returns (currently just closes the alert; the row disappears via
- * the profiles-query invalidation).
- */
-function DetachIndicatorDialog({
-  profile,
-  instance,
-  definitionName,
-  onOpenChange,
-  onDetached,
-}: {
-  profile: Profile;
-  instance: IndicatorInstance;
-  definitionName: string;
-  onOpenChange: (open: boolean) => void;
-  onDetached: () => void;
-}): ReactNode {
-  const detach = useDetachIndicator(profile.id);
-
-  async function handleConfirm(): Promise<void> {
-    try {
-      await detach.mutateAsync(instance.id);
-      toast.success(`Detached ${definitionName}`);
-      onDetached();
-      onOpenChange(false);
-    } catch (cause) {
-      const message = cause instanceof ApiError ? cause.message : 'failed to detach indicator';
-      log.warn({ err: cause, instanceId: instance.id }, 'detach indicator failed');
-      toast.error(message);
-    }
-  }
-
-  return (
-    <AlertDialog.Root open={true} onOpenChange={onOpenChange}>
-      <AlertDialog.Content maxWidth="420px">
-        <AlertDialog.Title>Detach indicator</AlertDialog.Title>
-        <AlertDialog.Description size="2">
-          <Text>
-            Detach “{definitionName}” from “{profile.name}”?
-          </Text>
-        </AlertDialog.Description>
-        <Flex gap="3" mt="4" justify="end">
-          <AlertDialog.Cancel>
-            <Button variant="soft" color="gray">
-              Cancel
-            </Button>
-          </AlertDialog.Cancel>
-          {/* NOT wrapped in `AlertDialog.Action`: Action's default `onSelect`
-              dispatches a click that bubbles through Radix's portal stack and
-              also closes the *parent* Dialog (the panel itself).
-              Instead, drive the close ourselves from `handleConfirm` so only
-              this AlertDialog dismisses — the panel stays open. */}
-          <Button color="red" onClick={handleConfirm} loading={detach.isPending}>
-            Detach
-          </Button>
-        </Flex>
-      </AlertDialog.Content>
-    </AlertDialog.Root>
   );
 }

@@ -56,6 +56,7 @@ export const movingAverage = defineIndicator({
     },
   ] as const,
   summary: ({ length, source }) => `SMA ${length} ${source}`,
+  warmup: ({ length }) => length,
   compute: ({ length, source }, candles: Candle[]) => {
     return candles.map((candle, i) => {
       if (i + 1 < length) {

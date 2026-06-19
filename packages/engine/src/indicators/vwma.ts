@@ -101,6 +101,7 @@ export const volumeWeightedMovingAverage = defineIndicator({
   ] as const,
   summary: ({ length, source, multiplier, direction }) =>
     `VWMA ${length} ${source} ±${multiplier}/1000 ${direction}`,
+  warmup: ({ length }) => length,
   compute: ({ length, source, multiplier, direction }, candles: Candle[]) => {
     const threshold = multiplier * 0.001;
     // First pass: compute the VWMA line per bar.

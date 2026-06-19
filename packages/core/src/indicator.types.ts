@@ -330,4 +330,13 @@ export interface IndicatorModule<
   compute: (inputs: InferInputs<I>, candles: Candle[]) => InferStateSeries<S>;
   /** Short, user-readable summary of a configured instance — e.g. `"SMA 14 close"`. */
   summary: (inputs: InferInputs<I>) => string;
+  /**
+   * Optional warm-up bar count for the configured inputs.
+   *
+   * The compute service uses it to scope the candle-repo load to `[from - warmup*periodMillis, to)` instead of the full stored history, so a sub-range request doesn't load every candle ever stored just to honour a few-bar visible window.
+   *
+   * When omitted (or returning `0`), the load is exactly `[from, to)`.
+   * When the symbol's stored history doesn't reach back the warm-up margin, the returned series's leading rows are `null` — same silent-warm-up contract as before.
+   */
+  warmup?: (inputs: InferInputs<I>) => number;
 }
