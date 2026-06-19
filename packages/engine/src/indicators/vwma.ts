@@ -36,6 +36,8 @@ export const volumeWeightedMovingAverage = defineIndicator({
       type: FieldType.Number,
       key: 'length',
       label: 'Length',
+      description:
+        'Number of candles weighted into the moving average (longer = smoother, slower).',
       integer: true,
       min: 1,
       max: 1_000,
@@ -45,12 +47,16 @@ export const volumeWeightedMovingAverage = defineIndicator({
       type: FieldType.Source,
       key: 'source',
       label: 'Source',
+      description:
+        'Which price the average is taken over (typically `close`; `hl2` / `hlc3` / `ohlc4` average within the bar).',
       default: PriceSource.Close,
     },
     {
       type: FieldType.Number,
       key: 'multiplier',
       label: 'Deviation threshold (×0.1%)',
+      description:
+        'Minimum deviation from the line before a crossover fires a signal — expressed in tenths of a percent (1.0 = 0.1%).',
       min: 0,
       default: 1,
     },
@@ -58,6 +64,7 @@ export const volumeWeightedMovingAverage = defineIndicator({
       type: FieldType.Enum,
       key: 'direction',
       label: 'Direction',
+      description: '`Long Only` suppresses sell signals; `Long & Short` emits both buys and sells.',
       options: [
         { value: 'long-only', label: 'Long Only' },
         { value: 'both', label: 'Long & Short' },
@@ -92,6 +99,8 @@ export const volumeWeightedMovingAverage = defineIndicator({
       pane: Pane.Separate,
     },
   ] as const,
+  summary: ({ length, source, multiplier, direction }) =>
+    `VWMA ${length} ${source} ±${multiplier}/1000 ${direction}`,
   compute: ({ length, source, multiplier, direction }, candles: Candle[]) => {
     const threshold = multiplier * 0.001;
     // First pass: compute the VWMA line per bar.

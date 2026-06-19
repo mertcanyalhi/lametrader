@@ -161,6 +161,7 @@ describe('profile indicator sub-resource', () => {
       indicatorKey: 'sma',
       version: 1,
       inputs: { length: 14, source: 'close' },
+      summary: 'SMA 14 close',
     });
   });
 
@@ -175,7 +176,13 @@ describe('profile indicator sub-resource', () => {
     const res = await app.inject({ method: 'GET', url: '/profiles/p1/indicators' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual([
-      { id: 'p2', indicatorKey: 'sma', version: 1, inputs: { length: 5, source: 'close' } },
+      {
+        id: 'p2',
+        indicatorKey: 'sma',
+        version: 1,
+        inputs: { length: 5, source: 'close' },
+        summary: 'SMA 5 close',
+      },
     ]);
   });
 
@@ -209,6 +216,7 @@ describe('profile indicator sub-resource', () => {
       indicatorKey: 'sma',
       version: 1,
       inputs: { length: 21, source: 'close' },
+      summary: 'SMA 21 close',
     });
   });
 

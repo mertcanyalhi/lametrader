@@ -185,6 +185,7 @@ describe('profiles API (e2e)', () => {
         version: 1,
         inputs: { length: 5, source: 'close' },
         label: 'Fast',
+        summary: 'SMA 5 close',
       },
     ]);
 
@@ -199,6 +200,7 @@ describe('profiles API (e2e)', () => {
       indicatorKey: 'sma',
       version: 1,
       inputs: { length: 21, source: 'close' },
+      summary: 'SMA 21 close',
     });
 
     expect(

@@ -28,6 +28,8 @@ export const IndicatorInstanceSchema = Type.Object(
     version: Type.Number(),
     inputs: Type.Record(Type.String(), Type.Unknown()),
     label: Type.Optional(Type.String()),
+    /** Derived display summary added by the service on read (e.g. `"SMA 14 close"`). */
+    summary: Type.Optional(Type.String()),
   },
   { $id: 'IndicatorInstance', additionalProperties: false },
 );

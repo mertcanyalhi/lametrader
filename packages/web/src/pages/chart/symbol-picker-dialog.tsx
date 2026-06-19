@@ -133,7 +133,7 @@ function SymbolRow({
       data-watched={watched ? 'true' : 'false'}
       onClick={watched ? () => onWatchedSelect(instrument.id) : undefined}
       className={cn(
-        'flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left',
+        'flex w-full items-center justify-between gap-3 rounded-md border border-[var(--gray-a6)] px-3 py-2 text-left',
         watched ? 'hover:bg-[var(--gray-a3)]' : 'cursor-help opacity-50',
       )}
       aria-label={instrument.id}

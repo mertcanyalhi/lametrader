@@ -115,6 +115,20 @@ Asserted in the panel-dialog jsdom test by responding `500` for `/indicators`.
 - A standalone `/profiles/:id/indicators` page — chart-side management is enough for now.
 - Migrating stored instances when an indicator's `version` bumps (handled at attach time on the server; nothing for the panel to do).
 
+## Follow-up additions (post-review polish, same PR)
+
+- **Bug fix**: detaching an indicator was closing both the AlertDialog and the parent panel Dialog, because `AlertDialog.Action`'s default `onSelect` dispatches a click that bubbles through Radix's portal stack.
+  The Detach button is no longer wrapped in `AlertDialog.Action`; `handleConfirm` drives the close itself so only the AlertDialog dismisses.
+- **Helper-text removal**: the panel Dialog no longer prints "Indicators attached to '<profile>'" — the title alone is enough.
+- **Bordered list rows**: instance rows, profile-picker rows, and symbol-picker rows all gain a 1px gray-token border for visual grouping (unified style across all three chart-bottom-bar pickers).
+- **`Badge`-rendered asset class**: the catalog picker shows each definition's `appliesTo[]` as soft-gray `Badge`s instead of bare grey text.
+- **Input descriptors carry an optional `description`**: `NumberFieldDescriptor` / `SourceFieldDescriptor` / `EnumFieldDescriptor` in `@lametrader/core` gain `description?: string`; the API schema and the SMA / VWMA reference modules carry text for every input; the inputs form renders the existing `FieldLabel` (info icon → popover) when a descriptor declares one, falling back to a plain label otherwise.
+- **Indicator modules gain a `summary(inputs) → string` function**: declared on `IndicatorModule` (not the serializable `IndicatorDefinition` — it's a function), implemented on `sma` (`"SMA <length> <source>"`) and `vwma` (`"VWMA <length> <source> ±<multiplier>/1000 <direction>"`).
+  `IndicatorInstance` gains `summary?: string` as a transport-only field, set by `ProfileService` on every read path (`list`, `get`, `listIndicators`, `getIndicator`, `addIndicator`, `replaceIndicator`, `create`, `replace`, `update`) via a private `enrichInstance` helper.
+  The field is **never persisted** — mutators read via a new `getStored` that skips enrichment, so the stored profile shape is unchanged.
+  The panel's `InstanceRow` displays `instance.summary` next to the display name in a small monospaced font, so the user sees "Simple Moving Average · SMA 14 close" at a glance.
+  The chart's top-left overlay will reuse the same string in a follow-up (#43).
+
 ## Surprises
 
 (filled in retroactively)

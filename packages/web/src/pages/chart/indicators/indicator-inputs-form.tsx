@@ -6,6 +6,7 @@ import {
 } from '@lametrader/core';
 import { Box, Button, Flex, Select, Text } from '@radix-ui/themes';
 import { type ReactNode, useState } from 'react';
+import { FieldLabel } from '../../../components/field-label.js';
 
 /** Props for the descriptor-driven inputs form. */
 export interface IndicatorInputsFormProps {
@@ -129,12 +130,27 @@ function InputRow({
   onChange: (next: unknown) => void;
 }): ReactNode {
   const inputId = `indicator-input-${descriptor.key}`;
+  const labelNode = descriptor.description ? (
+    <FieldLabel
+      label={descriptor.label}
+      hint={descriptor.description}
+      hintLabel={`About ${descriptor.label}`}
+      htmlFor={descriptor.type === FieldType.Number ? inputId : undefined}
+    />
+  ) : (
+    <Text
+      as="label"
+      htmlFor={descriptor.type === FieldType.Number ? inputId : undefined}
+      size="2"
+      weight="medium"
+    >
+      {descriptor.label}
+    </Text>
+  );
   if (descriptor.type === FieldType.Number) {
     return (
       <Box>
-        <Text as="label" htmlFor={inputId} size="2" weight="medium">
-          {descriptor.label}
-        </Text>
+        {labelNode}
         <input
           id={inputId}
           type="number"
@@ -151,9 +167,7 @@ function InputRow({
   if (descriptor.type === FieldType.Source) {
     return (
       <Box>
-        <Text as="label" size="2" weight="medium">
-          {descriptor.label}
-        </Text>
+        {labelNode}
         <Box mt="1">
           <Select.Root value={String(value)} onValueChange={onChange}>
             <Select.Trigger aria-label={descriptor.label} />
@@ -171,9 +185,7 @@ function InputRow({
   }
   return (
     <Box>
-      <Text as="label" size="2" weight="medium">
-        {descriptor.label}
-      </Text>
+      {labelNode}
       <Box mt="1">
         <Select.Root value={String(value)} onValueChange={onChange}>
           <Select.Trigger aria-label={descriptor.label} />

@@ -212,7 +212,11 @@ function ProfileRow({
   onDelete: (profile: Profile) => void;
 }): ReactNode {
   return (
-    <Flex align="center" gap="2" className="rounded-md hover:bg-[var(--gray-a3)]">
+    <Flex
+      align="center"
+      gap="2"
+      className="rounded-md border border-[var(--gray-a6)] hover:bg-[var(--gray-a3)]"
+    >
       <button
         type="button"
         onClick={() => onSelect(profile)}

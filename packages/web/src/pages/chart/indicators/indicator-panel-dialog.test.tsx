@@ -15,7 +15,6 @@ import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setStoredProfileId } from '../../../lib/selected-profile.js';
 import { SelectedProfileProvider } from '../../../lib/selected-profile-context.js';
@@ -91,6 +90,7 @@ const SMA_INSTANCE: IndicatorInstance = {
   indicatorKey: 'sma',
   version: 1,
   inputs: { length: 14, source: PriceSource.Close },
+  summary: 'SMA 14 close',
 };
 
 const VWMA_INSTANCE: IndicatorInstance = {
@@ -98,6 +98,7 @@ const VWMA_INSTANCE: IndicatorInstance = {
   indicatorKey: 'vwma',
   version: 1,
   inputs: { length: 20 },
+  summary: 'VWMA 20 close',
 };
 
 const PROFILE: Profile = {
@@ -223,6 +224,19 @@ describe('IndicatorPanelDialog', () => {
     expect({
       sma: within(dialog).queryByText(SMA_DEFINITION.name) !== null,
       vwma: within(dialog).queryByText(CRYPTO_ONLY_DEFINITION.name) !== null,
+    }).toEqual({ sma: true, vwma: true });
+  });
+
+  it("renders each instance's `summary` next to its display name in the list", async () => {
+    setStoredProfileId(PROFILE.id);
+    renderPanel();
+    await openPanel('Indicators (2)');
+
+    const dialog = screen.getByRole('dialog');
+    await waitFor(() => expect(within(dialog).queryByText('SMA 14 close')).not.toBeNull());
+    expect({
+      sma: within(dialog).queryByText('SMA 14 close') !== null,
+      vwma: within(dialog).queryByText('VWMA 20 close') !== null,
     }).toEqual({ sma: true, vwma: true });
   });
 

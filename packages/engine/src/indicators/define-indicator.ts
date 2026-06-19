@@ -28,6 +28,8 @@ export interface DefineIndicatorSpec<
   appliesTo?: SymbolType[];
   /** Pure per-candle compute returning an aligned state series. */
   compute: (inputs: InferInputs<I>, candles: Candle[]) => InferStateSeries<S>;
+  /** Short, user-readable summary of a configured instance — e.g. `"SMA 14 close"`. */
+  summary: (inputs: InferInputs<I>) => string;
 }
 
 /**
@@ -41,12 +43,13 @@ export function defineIndicator<
   I extends readonly FieldDescriptor[],
   S extends readonly StateFieldDescriptor[],
 >(spec: DefineIndicatorSpec<I, S>): IndicatorModule<I, S> {
-  const { compute, appliesTo, ...definitionWithoutAppliesTo } = spec;
+  const { compute, summary, appliesTo, ...definitionWithoutAppliesTo } = spec;
   return {
     definition: {
       ...definitionWithoutAppliesTo,
       appliesTo: appliesTo ?? ALL_SYMBOL_TYPES,
     },
     compute,
+    summary,
   };
 }

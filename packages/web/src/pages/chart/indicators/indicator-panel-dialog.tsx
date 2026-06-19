@@ -1,6 +1,7 @@
 import type { IndicatorDefinition, IndicatorInstance, Profile, SymbolType } from '@lametrader/core';
 import {
   AlertDialog,
+  Badge,
   Box,
   Button,
   Callout,
@@ -87,7 +88,6 @@ export function IndicatorPanelDialog({ symbolType }: IndicatorPanelDialogProps):
             <NoProfileView />
           ) : view.kind === 'list' ? (
             <InstanceListView
-              profile={profile}
               instances={instances}
               catalog={catalog}
               symbolType={symbolType}
@@ -165,7 +165,6 @@ function NoProfileView(): ReactNode {
  * compute on this symbol).
  */
 function InstanceListView({
-  profile,
   instances,
   catalog,
   symbolType,
@@ -173,7 +172,6 @@ function InstanceListView({
   onEdit,
   onDetach,
 }: {
-  profile: Profile;
   instances: IndicatorInstance[];
   catalog: IndicatorDefinition[];
   symbolType: SymbolType;
@@ -184,9 +182,6 @@ function InstanceListView({
   return (
     <>
       <Dialog.Title>Indicators</Dialog.Title>
-      <Dialog.Description size="2" color="gray">
-        Indicators attached to “{profile.name}”.
-      </Dialog.Description>
       <Flex direction="column" gap="2" mt="4">
         <Box>
           <Button variant="soft" color="gray" onClick={onAdd}>
@@ -249,10 +244,17 @@ function InstanceRow({
     <Flex
       align="center"
       gap="2"
-      className={`rounded-md px-3 py-2 hover:bg-[var(--gray-a3)] ${applicable ? '' : 'opacity-60'}`}
+      className={`rounded-md border border-[var(--gray-a6)] px-3 py-2 hover:bg-[var(--gray-a3)] ${applicable ? '' : 'opacity-60'}`}
     >
       <Flex direction="column" className="flex-1 min-w-0">
-        <Text size="2">{displayName}</Text>
+        <Flex gap="2" align="baseline" wrap="wrap">
+          <Text size="2">{displayName}</Text>
+          {instance.summary ? (
+            <Text size="1" color="gray" className="font-mono">
+              {instance.summary}
+            </Text>
+          ) : null}
+        </Flex>
         {!applicable ? (
           <Text size="1" color="gray">
             n/a for {symbolType}
@@ -356,16 +358,16 @@ function AddView({
                   type="button"
                   onClick={() => setPick(definition)}
                   aria-label={definition.name}
-                  className="flex flex-col gap-1 rounded-md px-3 py-2 text-left hover:bg-[var(--gray-a3)]"
+                  className="flex flex-col gap-1 rounded-md border border-[var(--gray-a6)] px-3 py-2 text-left hover:bg-[var(--gray-a3)]"
                 >
-                  <Flex gap="2" align="center">
+                  <Flex gap="2" align="center" wrap="wrap">
                     <Text size="2" weight="medium">
                       {definition.name}
                     </Text>
                     {definition.appliesTo.map((symbolType) => (
-                      <Text key={symbolType} size="1" color="gray">
+                      <Badge key={symbolType} variant="soft" color="gray" radius="full">
                         {symbolType}
-                      </Text>
+                      </Badge>
                     ))}
                   </Flex>
                   <Text size="1" color="gray">
@@ -521,11 +523,14 @@ function DetachIndicatorDialog({
               Cancel
             </Button>
           </AlertDialog.Cancel>
-          <AlertDialog.Action>
-            <Button color="red" onClick={handleConfirm} loading={detach.isPending}>
-              Detach
-            </Button>
-          </AlertDialog.Action>
+          {/* NOT wrapped in `AlertDialog.Action`: Action's default `onSelect`
+              dispatches a click that bubbles through Radix's portal stack and
+              also closes the *parent* Dialog (the panel itself).
+              Instead, drive the close ourselves from `handleConfirm` so only
+              this AlertDialog dismisses — the panel stays open. */}
+          <Button color="red" onClick={handleConfirm} loading={detach.isPending}>
+            Detach
+          </Button>
         </Flex>
       </AlertDialog.Content>
     </AlertDialog.Root>

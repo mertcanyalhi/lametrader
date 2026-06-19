@@ -106,6 +106,33 @@ describe('IndicatorInputsForm', () => {
     });
   });
 
+  it('renders an info popover next to a labeled field when the descriptor has a description', async () => {
+    render(
+      <Theme>
+        <IndicatorInputsForm
+          inputs={[
+            {
+              type: FieldType.Number,
+              key: 'length',
+              label: 'Length',
+              description: 'Number of candles in the window.',
+              integer: true,
+              default: 14,
+            },
+          ]}
+          state={STATE_EMPTY}
+          initialValues={{}}
+          onSubmit={() => {}}
+        />
+      </Theme>,
+    );
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: /about length/i }));
+
+    expect(await screen.findByText('Number of candles in the window.')).not.toBeNull();
+  });
+
   it('calls onSubmit with the current field values (defaults included) when the form is submitted', async () => {
     const onSubmit = vi.fn();
     render(

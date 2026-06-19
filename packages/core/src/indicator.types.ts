@@ -52,6 +52,8 @@ export interface NumberFieldDescriptor {
   key: string;
   /** Human-readable label for UI forms. */
   label: string;
+  /** Optional one-line explanation, shown in UI info popovers next to the label. */
+  description?: string;
   /** When true, the value must be an integer. */
   integer?: boolean;
   /** Inclusive lower bound. */
@@ -74,6 +76,8 @@ export interface SourceFieldDescriptor {
   key: string;
   /** Human-readable label for UI forms. */
   label: string;
+  /** Optional one-line explanation, shown in UI info popovers next to the label. */
+  description?: string;
   /** Default selector applied when omitted (typically `Close`). */
   default?: PriceSource;
 }
@@ -102,6 +106,8 @@ export interface EnumFieldDescriptor<O extends readonly EnumOption[] = readonly 
   key: string;
   /** Human-readable label for UI forms. */
   label: string;
+  /** Optional one-line explanation, shown in UI info popovers next to the label. */
+  description?: string;
   /** The closed set of allowed options. */
   options: O;
   /** Default applied when the value is omitted at validation; must be one of `options`. */
@@ -310,6 +316,9 @@ export interface IndicatorDefinition<
  * It returns one state row per input candle, with state fields `null` during warm-up.
  *
  * When the input is shorter than the indicator's warm-up needs, the whole series is all-`null` (silent — no error).
+ *
+ * `summary` produces a short, user-readable label for a configured instance (e.g. `"SMA 14 close"` for a moving-average with `length: 14, source: 'close'`) — used in chart legends and the indicator-management panel.
+ * It lives on the module (not the serializable `IndicatorDefinition`) because it's a function; the driving adapters call it and ship the resulting string over the wire.
  */
 export interface IndicatorModule<
   I extends readonly FieldDescriptor[] = readonly FieldDescriptor[],
@@ -319,4 +328,6 @@ export interface IndicatorModule<
   definition: IndicatorDefinition<I, S>;
   /** Pure compute over a candle series. */
   compute: (inputs: InferInputs<I>, candles: Candle[]) => InferStateSeries<S>;
+  /** Short, user-readable summary of a configured instance — e.g. `"SMA 14 close"`. */
+  summary: (inputs: InferInputs<I>) => string;
 }
