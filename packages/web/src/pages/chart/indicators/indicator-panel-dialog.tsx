@@ -340,9 +340,6 @@ function AddView({
     return (
       <>
         <Dialog.Title>Add indicator</Dialog.Title>
-        <Dialog.Description size="2" color="gray">
-          Pick an indicator to attach to “{profile.name}”.
-        </Dialog.Description>
         <Flex direction="column" gap="3" mt="3">
           <TextField.Root
             value={query}

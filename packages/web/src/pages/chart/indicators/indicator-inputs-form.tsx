@@ -147,57 +147,45 @@ function InputRow({
       {descriptor.label}
     </Text>
   );
-  if (descriptor.type === FieldType.Number) {
-    return (
-      <Box>
-        {labelNode}
-        <input
-          id={inputId}
-          type="number"
-          value={String(value ?? '')}
-          min={descriptor.min}
-          max={descriptor.max}
-          step={descriptor.integer ? 1 : descriptor.step}
-          onChange={(event) => onChange(event.target.value)}
-          className="mt-1 block w-full rounded-md border border-[var(--gray-a6)] bg-[var(--color-surface)] px-3 py-1.5 text-sm text-[var(--gray-12)]"
-        />
-      </Box>
+  const control =
+    descriptor.type === FieldType.Number ? (
+      <input
+        id={inputId}
+        type="number"
+        value={String(value ?? '')}
+        min={descriptor.min}
+        max={descriptor.max}
+        step={descriptor.integer ? 1 : descriptor.step}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-32 rounded-md border border-[var(--gray-a6)] bg-[var(--color-surface)] px-3 py-1.5 text-right text-sm text-[var(--gray-12)]"
+      />
+    ) : descriptor.type === FieldType.Source ? (
+      <Select.Root value={String(value)} onValueChange={onChange}>
+        <Select.Trigger aria-label={descriptor.label} className="w-32" />
+        <Select.Content>
+          {Object.values(PriceSource).map((source) => (
+            <Select.Item key={source} value={source}>
+              {source}
+            </Select.Item>
+          ))}
+        </Select.Content>
+      </Select.Root>
+    ) : (
+      <Select.Root value={String(value)} onValueChange={onChange}>
+        <Select.Trigger aria-label={descriptor.label} className="w-40" />
+        <Select.Content>
+          {descriptor.options.map((option) => (
+            <Select.Item key={option.value} value={option.value}>
+              {option.label}
+            </Select.Item>
+          ))}
+        </Select.Content>
+      </Select.Root>
     );
-  }
-  if (descriptor.type === FieldType.Source) {
-    return (
-      <Box>
-        {labelNode}
-        <Box mt="1">
-          <Select.Root value={String(value)} onValueChange={onChange}>
-            <Select.Trigger aria-label={descriptor.label} />
-            <Select.Content>
-              {Object.values(PriceSource).map((source) => (
-                <Select.Item key={source} value={source}>
-                  {source}
-                </Select.Item>
-              ))}
-            </Select.Content>
-          </Select.Root>
-        </Box>
-      </Box>
-    );
-  }
   return (
-    <Box>
-      {labelNode}
-      <Box mt="1">
-        <Select.Root value={String(value)} onValueChange={onChange}>
-          <Select.Trigger aria-label={descriptor.label} />
-          <Select.Content>
-            {descriptor.options.map((option) => (
-              <Select.Item key={option.value} value={option.value}>
-                {option.label}
-              </Select.Item>
-            ))}
-          </Select.Content>
-        </Select.Root>
-      </Box>
-    </Box>
+    <Flex align="center" justify="between" gap="3">
+      <Box>{labelNode}</Box>
+      <Box>{control}</Box>
+    </Flex>
   );
 }
