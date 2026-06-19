@@ -7,6 +7,12 @@ Implement a feature using this repo's spec-driven TDD flow (see CLAUDE.md).
 
 Feature: $ARGUMENTS
 
+**Branch — do this BEFORE step 1.**
+Check the current branch with `git branch --show-current`.
+If it doesn't already follow `<type>/<kebab-summary>` (the same `<type>` vocabulary as Conventional Commits: `feat/`, `fix/`, `docs/`, `chore/`, …), rename it now via `git branch -m <new-name>` to one that describes this feature.
+If a session-assigned auto-generated branch (e.g. `claude/<adjective>-<name>-<hash>`) is in use, rename it BEFORE the first commit — never push the auto-generated name.
+The branch's name is part of the deliverable; the same kebab summary will typically anchor the spec filename, commit subject, and PR title.
+
 Follow these steps, in order, and do not skip any:
 
 1. **Spec** — Create `specs/<kebab-name>.spec.md` from `specs/_template.md`.
