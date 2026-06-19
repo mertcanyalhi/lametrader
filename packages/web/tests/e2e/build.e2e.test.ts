@@ -88,6 +88,19 @@ describe('web boilerplate build (e2e)', () => {
     expect(bundlesContainingMarker.length > 0).toEqual(true);
   });
 
+  it("emits a JS bundle whose contents include the indicator stream's subscribe-indicator wire verb", () => {
+    // `subscribe-indicator` is the control verb the chart's live overlay
+    // subscription sends over `/stream`. Its presence in the bundle confirms
+    // the chart's live indicator-overlay path ships with the deployable
+    // artifact.
+    const assets = readdirSync(join(distDir, 'assets'));
+    const jsFiles = assets.filter((file) => file.endsWith('.js'));
+    const bundlesContainingMarker = jsFiles.filter((file) =>
+      readFileSync(join(distDir, 'assets', file), 'utf8').includes('subscribe-indicator'),
+    );
+    expect(bundlesContainingMarker.length > 0).toEqual(true);
+  });
+
   it("emits a JS bundle whose contents include the indicator legend's hide-overlay label", () => {
     // "Hide overlay" is the legend's eye-toggle accessible name (rendered when
     // the overlay is visible). Its presence in the bundle confirms the chart's

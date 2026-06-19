@@ -5,6 +5,7 @@ import {
   FieldType,
   type IndicatorComputeResult,
   type IndicatorDefinition,
+  type IndicatorStatePoint,
   Pane,
   type Period,
   type Profile,
@@ -32,7 +33,7 @@ import {
   type UTCTimestamp,
   type WhitespaceData,
 } from 'lightweight-charts';
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   captureViewport,
   DEFAULT_VISIBLE_BARS,
@@ -66,6 +67,8 @@ export interface IndicatorOverlay {
   instanceId: string;
   /** Definition for the indicator (provides state descriptors driving render). */
   definition: IndicatorDefinition;
+  /** Validated input values — keys the live `subscribe-indicator` tuple alongside `(symbol, period, definition.key)`. */
+  inputs: Record<string, unknown>;
   /** Computed historical state series; `null` while pending or after a failure. */
   result: IndicatorComputeResult | null;
   /** Whether the overlay's series are currently shown (legend eye toggle). */
@@ -152,6 +155,13 @@ export function CandleChart({
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+  /**
+   * Latest live state row per instance, keyed by `instanceId`. Bumps the legend
+   * value column when no crosshair is active (the legend reads the latest
+   * non-null row); the chart's line series is updated imperatively via
+   * `series.update(...)` at event time, so this is legend-only state.
+   */
+  const [liveStates, setLiveStates] = useState<Record<string, IndicatorStatePoint>>({});
   /**
    * Per-instance line series for overlay descriptors (Pane.Overlay + Pane.Separate),
    * keyed by `instanceId+stateKey` so each state field carries its own series.
@@ -445,20 +455,95 @@ export function CandleChart({
     return latestCandle;
   }, [candles, hoveredTime, latestCandle]);
 
+  // Apply one live indicator-state event for `overlay`: update each Number state
+  // descriptor's line series via `series.update(...)` and bump the per-instance
+  // map the legend reads its latest value from.
+  const handleLiveState = useCallback(
+    (overlay: IndicatorOverlay, state: IndicatorStatePoint): void => {
+      for (const descriptor of overlay.definition.state) {
+        if (descriptor.type !== FieldType.Number) continue;
+        const series = overlayLineRef.current.get(seriesKey(overlay.instanceId, descriptor.key));
+        const value = (state as Record<string, unknown>)[descriptor.key];
+        if (series && typeof value === 'number') {
+          series.update({ time: (state.time / 1000) as Time, value });
+        }
+      }
+      setLiveStates((current) => ({ ...current, [overlay.instanceId]: state }));
+    },
+    [],
+  );
+
+  // Augment the historical legend rows with each instance's latest live state,
+  // so the legend's value column ticks live (mirrors the OHLCV row's live tick).
+  // Appending at the end places the live point at the tail of the reverse-find
+  // for "latest non-null row", which is what the legend picks for no-crosshair.
+  const liveLegendOverlays = useMemo(
+    () =>
+      legendOverlays.map((legendOverlay) => {
+        const live = liveStates[legendOverlay.instance.id];
+        if (!live) return legendOverlay;
+        return { ...legendOverlay, state: [...legendOverlay.state, live] };
+      }),
+    [legendOverlays, liveStates],
+  );
+
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="absolute inset-0" />
+      {overlays.map((overlay) => (
+        <OverlayLive
+          key={overlay.instanceId}
+          overlay={overlay}
+          symbolId={symbol.id}
+          period={period}
+          onState={handleLiveState}
+        />
+      ))}
       <ChartOverlay
         symbol={symbol}
         period={period}
         candle={inspected}
-        legendOverlays={legendOverlays}
+        legendOverlays={liveLegendOverlays}
         hoveredTime={hoveredTime}
         onToggleVisible={onToggleLegendVisible ?? noop}
         profile={legendProfile}
       />
     </div>
   );
+}
+
+/**
+ * One overlay's `subscribe-indicator` lifecycle — opens the subscription for the
+ * overlay's `(symbol, period, definition.key, inputs)` tuple over the shared
+ * stream client and reports each frame back to `onState`. Renders nothing.
+ *
+ * Sits as a child so its hook lives inside a stable position in the render
+ * tree (hooks-in-loops rule). Unmounting it (overlay removed from the prop)
+ * releases the upstream subscription via the client's ref-counted teardown.
+ */
+function OverlayLive({
+  overlay,
+  symbolId,
+  period,
+  onState,
+}: {
+  overlay: IndicatorOverlay;
+  symbolId: string;
+  period: Period;
+  onState: (overlay: IndicatorOverlay, state: IndicatorStatePoint) => void;
+}): ReactNode {
+  const inputsHash = JSON.stringify(overlay.inputs);
+  useStreamSubscription(
+    StreamKind.Indicator,
+    {
+      id: symbolId,
+      period,
+      indicator: { key: overlay.definition.key, inputs: overlay.inputs },
+    },
+    (event) => onState(overlay, event.state),
+    [symbolId, period, overlay.definition.key, inputsHash],
+  );
+  return null;
 }
 
 /**

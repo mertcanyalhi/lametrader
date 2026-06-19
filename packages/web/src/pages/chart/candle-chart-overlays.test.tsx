@@ -5,18 +5,24 @@ import {
   FieldType,
   type IndicatorComputeResult,
   type IndicatorDefinition,
+  type IndicatorStateEvent,
   Pane,
   Period,
   PriceSource,
+  type Profile,
+  ProfileScope,
   RenderKind,
   SymbolType,
 } from '@lametrader/core';
 import { Theme } from '@radix-ui/themes';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { StreamKind } from '../../lib/stream/stream-client.types.js';
 import { ThemeProvider } from '../../lib/theme-context.js';
 import { CandleChart, type IndicatorOverlay } from './candle-chart.js';
+import type { LegendOverlay } from './indicators/indicator-legend.js';
 
 /**
  * The mock records every series created with its `(definition, options, paneIndex)`,
@@ -72,9 +78,25 @@ vi.mock('lightweight-charts', () => ({
   },
 }));
 
+/** All active subscriptions opened against the mocked stream client, in call order. */
+const { streamSubscriptions } = vi.hoisted(() => ({
+  streamSubscriptions: [] as Array<{
+    kind: unknown;
+    key: unknown;
+    listener: (event: unknown) => void;
+    released: boolean;
+  }>,
+}));
+
 vi.mock('../../lib/stream/stream-client.js', () => ({
   streamClient: {
-    subscribe: () => () => {},
+    subscribe: (kind: unknown, key: unknown, listener: (event: unknown) => void) => {
+      const entry = { kind, key, listener, released: false };
+      streamSubscriptions.push(entry);
+      return () => {
+        entry.released = true;
+      };
+    },
     onReconnect: () => () => {},
   },
 }));
@@ -173,6 +195,7 @@ const SIGNAL_DEFINITION: IndicatorDefinition = {
 const SMA_OVERLAY: IndicatorOverlay = {
   instanceId: 'inst-sma',
   definition: SMA_DEFINITION,
+  inputs: { length: 14, source: PriceSource.Close },
   result: {
     indicatorKey: 'sma',
     version: 1,
@@ -190,6 +213,7 @@ const SMA_OVERLAY: IndicatorOverlay = {
 const RSI_OVERLAY: IndicatorOverlay = {
   instanceId: 'inst-rsi',
   definition: RSI_DEFINITION,
+  inputs: { length: 14 },
   result: {
     indicatorKey: 'rsi',
     version: 1,
@@ -206,6 +230,7 @@ const RSI_OVERLAY: IndicatorOverlay = {
 const SIGNAL_OVERLAY: IndicatorOverlay = {
   instanceId: 'inst-signal',
   definition: SIGNAL_DEFINITION,
+  inputs: {},
   result: {
     indicatorKey: 'signal',
     version: 1,
@@ -238,6 +263,71 @@ function chartElement(overlays: IndicatorOverlay[]) {
   );
 }
 
+const SMA_INSTANCE_FIXTURE = {
+  id: SMA_OVERLAY.instanceId,
+  indicatorKey: 'sma',
+  version: 1,
+  inputs: { length: 14, source: PriceSource.Close },
+  summary: 'SMA 14 close',
+};
+
+const PROFILE_FIXTURE: Profile = {
+  id: 'p-1',
+  name: 'Scalper',
+  description: '',
+  enabled: true,
+  scope: { type: ProfileScope.All },
+  createdAt: 1_700_000_000_000,
+  updatedAt: 1_700_000_000_000,
+  indicators: [SMA_INSTANCE_FIXTURE],
+};
+
+const SMA_LEGEND_OVERLAY: LegendOverlay = {
+  instance: SMA_INSTANCE_FIXTURE,
+  definition: SMA_DEFINITION,
+  color: '#3aa3ff',
+  visible: true,
+  state: SMA_OVERLAY.result?.state ?? [],
+};
+
+/** Wrap the chart in the providers a legend-bearing render needs (QueryClient, Theme, ThemeProvider). */
+function legendChartElement(props: {
+  overlays?: IndicatorOverlay[];
+  legendOverlays?: LegendOverlay[];
+  period?: Period;
+  symbol?: EnrichedSymbol;
+}) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return (
+    <QueryClientProvider client={client}>
+      <ThemeProvider>
+        <Theme>
+          <CandleChart
+            candles={[CANDLE]}
+            symbol={props.symbol ?? SYMBOL}
+            period={props.period ?? Period.OneHour}
+            range={null}
+            loadOlder={() => {}}
+            hasMore={false}
+            overlays={props.overlays ?? [SMA_OVERLAY]}
+            legendOverlays={props.legendOverlays ?? [SMA_LEGEND_OVERLAY]}
+            legendProfile={PROFILE_FIXTURE}
+          />
+        </Theme>
+      </ThemeProvider>
+    </QueryClientProvider>
+  );
+}
+
+/** Find the first indicator subscription opened for the given symbol id. */
+function indicatorSub(id: string) {
+  return streamSubscriptions.find((entry) => {
+    if (entry.kind !== StreamKind.Indicator) return false;
+    const key = entry.key as { id?: string };
+    return key.id === id;
+  });
+}
+
 /** Series created with the `Line` definition only — overlay assertions ignore candle / volume series. */
 function lineSeriesCreated() {
   return createdSeries.filter((entry) => entry.definition === 'Line');
@@ -248,6 +338,7 @@ describe('CandleChart overlays', () => {
     createdSeries.length = 0;
     removedSeries.length = 0;
     markerCalls.length = 0;
+    streamSubscriptions.length = 0;
   });
 
   afterEach(() => {
@@ -324,5 +415,63 @@ describe('CandleChart overlays', () => {
     rerender(chartElement([]));
 
     expect(removedSeries).toEqual([created]);
+  });
+
+  it('subscribes each rendered overlay over the shared stream client and applies a live state event to the matching line series', () => {
+    render(legendChartElement({}));
+
+    const sub = indicatorSub(SYMBOL.id);
+    const event: IndicatorStateEvent = {
+      subscriptionId: 'sub-1',
+      id: SYMBOL.id,
+      period: Period.OneHour,
+      indicatorKey: 'sma',
+      state: { time: 4000, value: 110 },
+      final: false,
+    };
+    act(() => sub?.listener(event));
+
+    const line = lineSeriesCreated()[0];
+    expect({
+      sharedClient: streamSubscriptions.filter((entry) => entry.kind === StreamKind.Indicator)
+        .length,
+      key: sub?.key,
+      updateCalls: line?.api.update.mock.calls,
+    }).toEqual({
+      sharedClient: 1,
+      key: {
+        id: SYMBOL.id,
+        period: Period.OneHour,
+        indicator: { key: 'sma', inputs: { length: 14, source: PriceSource.Close } },
+      },
+      updateCalls: [[{ time: 4, value: 110 }]],
+    });
+  });
+
+  it('updates the legend value column from the live state event when no crosshair is active', () => {
+    render(legendChartElement({}));
+
+    const sub = indicatorSub(SYMBOL.id);
+    const event: IndicatorStateEvent = {
+      subscriptionId: 'sub-1',
+      id: SYMBOL.id,
+      period: Period.OneHour,
+      indicatorKey: 'sma',
+      state: { time: 4000, value: 110.25 },
+      final: false,
+    };
+    act(() => sub?.listener(event));
+
+    const row = screen.getByRole('listitem', { name: 'SMA 14 close' });
+    expect(within(row).getByText('110.25')).toBeInTheDocument();
+  });
+
+  it('tears down an overlay subscription when its instance is removed from the overlays prop', () => {
+    const { rerender } = render(legendChartElement({}));
+    const sub = indicatorSub(SYMBOL.id);
+
+    rerender(legendChartElement({ overlays: [], legendOverlays: [] }));
+
+    expect(sub?.released).toEqual(true);
   });
 });

@@ -2,6 +2,7 @@ import type {
   IndicatorComputeResult,
   IndicatorDefinition,
   IndicatorInstance,
+  IndicatorStatePoint,
   Period,
 } from '@lametrader/core';
 import {
@@ -11,7 +12,10 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import { useState } from 'react';
 import { apiFetch } from '../api-fetch.js';
+import { StreamKind } from '../stream/stream-client.types.js';
+import { useStreamSubscription } from '../stream/use-stream-subscription.js';
 import { PROFILES_QUERY_KEY } from './profiles.js';
 
 /** Stable key for the indicator-catalog query (`GET /indicators`). */
@@ -151,6 +155,71 @@ function buildComputeUrl(
     params.set(k, String(inputs[k]));
   }
   return `/symbols/${id}/indicators/${key}?${params.toString()}`;
+}
+
+/** Input to {@link useIndicatorStream} — uniquely identifies one live subscription. */
+export interface IndicatorStreamInput {
+  /** Canonical symbol id. */
+  id: string;
+  /** Candle period the indicator is computed on. */
+  period: Period;
+  /** Indicator catalog key (e.g. `'sma'`). */
+  key: string;
+  /** Validated input values, keyed by descriptor key. */
+  inputs: Record<string, unknown>;
+}
+
+/** The latest live state row + closed flag for one indicator subscription. */
+export interface IndicatorStreamLatest {
+  /** The state row at the just-arrived candle's time. */
+  state: IndicatorStatePoint;
+  /** Whether the underlying candle is closed (`true`) or still forming (`false`). */
+  final: boolean;
+}
+
+/**
+ * Stable JSON of `inputs` so a fresh `{ length: 14 }` per render still
+ * keys off the same value-stable identity (the effect re-subscribes only when
+ * the *content* changes, not the reference).
+ */
+function inputsKey(inputs: Record<string, unknown>): string {
+  return JSON.stringify(
+    Object.keys(inputs)
+      .sort()
+      .map((k) => [k, inputs[k]] as const),
+  );
+}
+
+/**
+ * Subscribe to a symbol's live indicator-state feed over the shared `/stream`
+ * client for one `(id, period, key, inputs)` tuple, and return the latest
+ * `{ state, final }` — or `null` before the first frame (and after the tuple
+ * changes, until a new frame arrives under the new key).
+ *
+ * The hook keeps the latest frame stamped with the tuple it arrived for, so
+ * a tuple change reads back `null` until the new subscription emits — no stale
+ * state under the new key.
+ */
+export function useIndicatorStream(input: IndicatorStreamInput): IndicatorStreamLatest | null {
+  const { id, period, key, inputs } = input;
+  const [latest, setLatest] = useState<{ tupleKey: string; value: IndicatorStreamLatest } | null>(
+    null,
+  );
+  const stableInputs = inputsKey(inputs);
+  const tupleKey = `${id}:${period}:${key}:${stableInputs}`;
+
+  useStreamSubscription(
+    StreamKind.Indicator,
+    { id, period, indicator: { key, inputs } },
+    (event) =>
+      setLatest({
+        tupleKey,
+        value: { state: event.state, final: event.final },
+      }),
+    [id, period, key, stableInputs],
+  );
+
+  return latest?.tupleKey === tupleKey ? latest.value : null;
 }
 
 /**

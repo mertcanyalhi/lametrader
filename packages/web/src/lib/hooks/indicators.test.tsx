@@ -4,6 +4,7 @@ import {
   type IndicatorComputeResult,
   type IndicatorDefinition,
   type IndicatorInstance,
+  type IndicatorStateEvent,
   Pane,
   Period,
   PriceSource,
@@ -11,10 +12,39 @@ import {
   SymbolType,
 } from '@lametrader/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useAttachIndicator, useComputeIndicator, useIndicatorCatalog } from './indicators.js';
+import { StreamKind } from '../stream/stream-client.types.js';
+import {
+  useAttachIndicator,
+  useComputeIndicator,
+  useIndicatorCatalog,
+  useIndicatorStream,
+} from './indicators.js';
+
+/** Active subscriptions opened against the mocked stream client, kept in declaration order. */
+const { streamSubscriptions } = vi.hoisted(() => ({
+  streamSubscriptions: [] as Array<{
+    kind: unknown;
+    key: unknown;
+    listener: (event: unknown) => void;
+    released: boolean;
+  }>,
+}));
+
+vi.mock('../stream/stream-client.js', () => ({
+  streamClient: {
+    subscribe: (kind: unknown, key: unknown, listener: (event: unknown) => void) => {
+      const entry = { kind, key, listener, released: false };
+      streamSubscriptions.push(entry);
+      return () => {
+        entry.released = true;
+      };
+    },
+    onReconnect: () => () => {},
+  },
+}));
 
 /**
  * The shape of a single recorded `fetch` call so the assertion can pin down
@@ -62,6 +92,7 @@ describe('indicators hooks', () => {
 
   beforeEach(() => {
     calls = [];
+    streamSubscriptions.length = 0;
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   });
 
@@ -162,6 +193,95 @@ describe('indicators hooks', () => {
         },
       ],
     });
+  });
+
+  it('useIndicatorStream returns null before any live state event arrives', () => {
+    const { result } = renderHook(
+      () =>
+        useIndicatorStream({
+          id: 'crypto:BTCUSDT',
+          period: Period.OneHour,
+          key: 'sma',
+          inputs: { length: 14, source: PriceSource.Close },
+        }),
+      { wrapper },
+    );
+
+    expect({
+      latest: result.current,
+      subscription: {
+        kind: streamSubscriptions[0]?.kind,
+        key: streamSubscriptions[0]?.key,
+        count: streamSubscriptions.length,
+      },
+    }).toEqual({
+      latest: null,
+      subscription: {
+        kind: StreamKind.Indicator,
+        key: {
+          id: 'crypto:BTCUSDT',
+          period: Period.OneHour,
+          indicator: { key: 'sma', inputs: { length: 14, source: PriceSource.Close } },
+        },
+        count: 1,
+      },
+    });
+  });
+
+  it('useIndicatorStream returns the latest event { state, final } once a frame arrives for its tuple', () => {
+    const { result } = renderHook(
+      () =>
+        useIndicatorStream({
+          id: 'crypto:BTCUSDT',
+          period: Period.OneHour,
+          key: 'sma',
+          inputs: { length: 14, source: PriceSource.Close },
+        }),
+      { wrapper },
+    );
+    const event: IndicatorStateEvent = {
+      subscriptionId: 'sub-1',
+      id: 'crypto:BTCUSDT',
+      period: Period.OneHour,
+      indicatorKey: 'sma',
+      state: { time: 1000, value: 105.5 },
+      final: false,
+    };
+    act(() => streamSubscriptions[0]?.listener(event));
+
+    expect(result.current).toEqual({
+      state: { time: 1000, value: 105.5 },
+      final: false,
+    });
+  });
+
+  it('useIndicatorStream discards any previous tuple frame when id or period changes — reads null until the new tuple emits', () => {
+    const { result, rerender } = renderHook(
+      ({ id, period }: { id: string; period: Period }) =>
+        useIndicatorStream({
+          id,
+          period,
+          key: 'sma',
+          inputs: { length: 14, source: PriceSource.Close },
+        }),
+      {
+        wrapper,
+        initialProps: { id: 'crypto:BTCUSDT', period: Period.OneHour },
+      },
+    );
+    const firstEvent: IndicatorStateEvent = {
+      subscriptionId: 'sub-old',
+      id: 'crypto:BTCUSDT',
+      period: Period.OneHour,
+      indicatorKey: 'sma',
+      state: { time: 1000, value: 105.5 },
+      final: false,
+    };
+    act(() => streamSubscriptions[0]?.listener(firstEvent));
+
+    rerender({ id: 'crypto:ETHUSDT', period: Period.OneHour });
+
+    expect(result.current).toEqual(null);
   });
 
   it('useComputeIndicator appends from/to to the query when provided', async () => {
