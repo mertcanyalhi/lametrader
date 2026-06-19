@@ -147,12 +147,6 @@ function InputRow({
       {descriptor.label}
     </Text>
   );
-  // Inline width on every control: Radix Themes `Select.Trigger` is
-  // `inline-flex` and sizes to its content even when given `w-40` / `w-full`
-  // via className — the rule loses to Radix's own `rt-SelectTrigger` styles.
-  // An inline `style={{ width: ... }}` wins specificity and lines the
-  // controls up across Number / Source / Enum.
-  const controlStyle = { width: CONTROL_WIDTH };
   const control =
     descriptor.type === FieldType.Number ? (
       <input
@@ -163,12 +157,11 @@ function InputRow({
         max={descriptor.max}
         step={descriptor.integer ? 1 : descriptor.step}
         onChange={(event) => onChange(event.target.value)}
-        style={controlStyle}
-        className="block rounded-md border border-[var(--gray-a6)] bg-[var(--color-surface)] px-3 py-1.5 text-right text-sm text-[var(--gray-12)]"
+        className={`${CONTROL_WIDTH_CLASS} block rounded-md border border-[var(--gray-a6)] bg-[var(--color-surface)] px-3 py-1.5 text-right text-sm text-[var(--gray-12)]`}
       />
     ) : descriptor.type === FieldType.Source ? (
       <Select.Root value={String(value)} onValueChange={onChange}>
-        <Select.Trigger aria-label={descriptor.label} style={controlStyle} />
+        <Select.Trigger aria-label={descriptor.label} className={CONTROL_WIDTH_CLASS} />
         <Select.Content>
           {Object.values(PriceSource).map((source) => (
             <Select.Item key={source} value={source}>
@@ -179,7 +172,7 @@ function InputRow({
       </Select.Root>
     ) : (
       <Select.Root value={String(value)} onValueChange={onChange}>
-        <Select.Trigger aria-label={descriptor.label} style={controlStyle} />
+        <Select.Trigger aria-label={descriptor.label} className={CONTROL_WIDTH_CLASS} />
         <Select.Content>
           {descriptor.options.map((option) => (
             <Select.Item key={option.value} value={option.value}>
@@ -197,5 +190,5 @@ function InputRow({
   );
 }
 
-/** Shared fixed width for every input control so the right edges line up. */
-const CONTROL_WIDTH = '10rem';
+/** Important to win over Radix Themes' own `rt-SelectTrigger` width rules. */
+const CONTROL_WIDTH_CLASS = '!w-40';
