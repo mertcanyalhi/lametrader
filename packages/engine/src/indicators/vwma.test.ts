@@ -146,3 +146,16 @@ describe('defaultIndicators (with VWMA registered)', () => {
     expect(registry.get('vwma')).toEqual(volumeWeightedMovingAverage);
   });
 });
+
+describe('volumeWeightedMovingAverage.warmup', () => {
+  it('returns `length` bars — the count the compute service needs before the first non-null row', () => {
+    expect(
+      volumeWeightedMovingAverage.warmup?.({
+        length: 20,
+        source: PriceSource.Close,
+        multiplier: 1,
+        direction: 'both',
+      }),
+    ).toEqual(20);
+  });
+});

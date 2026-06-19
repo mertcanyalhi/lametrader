@@ -206,11 +206,18 @@ function ChartView({
   // The chart's crosshair time, lifted so the legend can show each overlay's
   // value at the hovered bar (and fall back to the latest when off-chart).
   const [hoveredTime, setHoveredTime] = useState<number | null>(null);
+  // Bound the indicator-compute window to the candle feed the chart actually
+  // loaded — the engine then scopes its candle scan to roughly that span plus
+  // the indicator's warm-up margin, instead of the symbol's full history.
+  const computeFrom = feed.candles[0]?.time;
+  const computeTo = feed.candles.length > 0 ? (feed.candles.at(-1) as Candle).time + 1 : undefined;
   const { canvasOverlays, legendOverlays, profile } = useChartOverlays({
     id,
     period,
     symbol,
     hidden,
+    from: computeFrom,
+    to: computeTo,
   });
   const body = feed.isPending ? (
     <ChartLoading />
@@ -259,11 +266,15 @@ function useChartOverlays({
   period,
   symbol,
   hidden,
+  from,
+  to,
 }: {
   id: string;
   period: Period;
   symbol: EnrichedSymbol;
   hidden: Record<string, true>;
+  from?: number;
+  to?: number;
 }): {
   canvasOverlays: IndicatorOverlay[];
   legendOverlays: LegendOverlay[];
@@ -297,15 +308,24 @@ function useChartOverlays({
     return rows;
   }, [profile, catalog, symbol.type]);
 
+  // Hold the compute fan-out until both `from` and `to` are known — otherwise a
+  // race between profile/catalog (light, resolves first) and candles (heavy,
+  // resolves later) would briefly fire each compute call with no window and
+  // the engine would fall back to a full-history scan, defeating this PR's fix.
+  const scoped = from !== undefined && to !== undefined;
   const computeQueries = useQueries({
-    queries: applicable.map(({ instance }) =>
-      computeIndicatorQueryOptions({
-        id,
-        key: instance.indicatorKey,
-        period,
-        inputs: instance.inputs,
-      }),
-    ),
+    queries: scoped
+      ? applicable.map(({ instance }) =>
+          computeIndicatorQueryOptions({
+            id,
+            key: instance.indicatorKey,
+            period,
+            inputs: instance.inputs,
+            from,
+            to,
+          }),
+        )
+      : [],
   });
 
   const canvasOverlays = useMemo<IndicatorOverlay[]>(

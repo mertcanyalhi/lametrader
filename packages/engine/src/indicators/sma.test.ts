@@ -54,6 +54,12 @@ describe('movingAverage.definition', () => {
   });
 });
 
+describe('movingAverage.warmup', () => {
+  it('returns `length` bars — the count the compute service needs before the first non-null row', () => {
+    expect(movingAverage.warmup?.({ length: 14, source: PriceSource.Close })).toEqual(14);
+  });
+});
+
 describe('defaultIndicators', () => {
   it('returns a registry containing the moving-average module', () => {
     const registry = defaultIndicators();

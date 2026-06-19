@@ -348,7 +348,45 @@ describe('ChartPage', () => {
     });
   }
 
-  it('issues GET /symbols/:id/indicators/:key once per applicable instance with the inputs as querystring', async () => {
+  it('issues GET /symbols/:id/indicators/:key per applicable instance, carrying from/to from the loaded candle feed', async () => {
+    const captured: string[] = [];
+    const candles = [candle(1_000_000, 100), candle(2_000_000, 102)];
+    const fetchSpy = vi.fn(async (url: string) => {
+      captured.push(String(url));
+      const u = String(url);
+      if (u.includes('/symbols?enrich=true')) return json([BTC]);
+      if (u.endsWith('/api/config')) return json(CONFIG);
+      if (u.includes('/profiles')) {
+        return json([{ ...SCALPER, indicators: [SMA_INSTANCE] }]);
+      }
+      if (u.endsWith('/api/indicators')) return json([SMA_DEFINITION]);
+      if (u.includes('/candles')) return json({ candles, nextCursor: null });
+      if (u.includes('/symbols/crypto:BTCUSDT/indicators/sma')) {
+        const result: IndicatorComputeResult = {
+          indicatorKey: 'sma',
+          version: 1,
+          period: Period.OneHour,
+          state: [{ time: 1_000_000, value: 100 }],
+        };
+        return json(result);
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    renderAt('/chart?id=crypto:BTCUSDT&period=1h');
+
+    await waitFor(() => expect(captured.some((u) => u.includes('/indicators/sma?'))).toEqual(true));
+    const computeUrls = captured.filter((u) => u.includes('/indicators/sma?'));
+    expect(computeUrls).toEqual([
+      '/api/symbols/crypto:BTCUSDT/indicators/sma?period=1h&from=1000000&to=2000001&length=14&source=close',
+    ]);
+  });
+
+  it('issues no compute call until the candle feed has loaded a window — closes the full-history race', async () => {
+    // Profile + catalog resolve first; candles are still empty. Without the
+    // explicit gate, the compute call would fire with no `from`/`to` and the
+    // engine would fall back to a full-history scan.
     const captured: string[] = [];
     const fetchSpy = vi.fn(async (url: string) => {
       captured.push(String(url));
@@ -360,32 +398,16 @@ describe('ChartPage', () => {
       }
       if (u.endsWith('/api/indicators')) return json([SMA_DEFINITION]);
       if (u.includes('/candles')) return json({ candles: [], nextCursor: null });
-      if (u.includes('/symbols/crypto:BTCUSDT/indicators/sma')) {
-        const result: IndicatorComputeResult = {
-          indicatorKey: 'sma',
-          version: 1,
-          period: Period.OneHour,
-          state: [{ time: 1000, value: 100 }],
-        };
-        return json(result);
-      }
       throw new Error(`unexpected fetch: ${url}`);
     });
     globalThis.fetch = fetchSpy as unknown as typeof fetch;
 
     renderAt('/chart?id=crypto:BTCUSDT&period=1h');
 
-    await waitFor(() =>
-      expect(
-        captured.some((u) =>
-          u.endsWith('/api/symbols/crypto:BTCUSDT/indicators/sma?period=1h&length=14&source=close'),
-        ),
-      ).toEqual(true),
-    );
+    await screen.findByRole('group', { name: 'Chart actions' });
+    await waitFor(() => expect(captured.some((u) => u.endsWith('/api/indicators'))).toEqual(true));
     const computeUrls = captured.filter((u) => u.includes('/indicators/sma?'));
-    expect(computeUrls).toEqual([
-      '/api/symbols/crypto:BTCUSDT/indicators/sma?period=1h&length=14&source=close',
-    ]);
+    expect(computeUrls).toEqual([]);
   });
 
   it('skips the compute call for an instance whose definition does not apply to the chart symbol type', async () => {

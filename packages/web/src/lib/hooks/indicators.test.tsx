@@ -163,4 +163,36 @@ describe('indicators hooks', () => {
       ],
     });
   });
+
+  it('useComputeIndicator appends from/to to the query when provided', async () => {
+    const result: IndicatorComputeResult = {
+      indicatorKey: 'sma',
+      version: 1,
+      period: Period.OneHour,
+      state: [{ time: 1_500_000, value: 105.5 }],
+    };
+    stubFetch(() => ({ status: 200, body: result }));
+
+    const { result: hook } = renderHook(
+      () =>
+        useComputeIndicator({
+          id: 'crypto:BTCUSDT',
+          key: 'sma',
+          period: Period.OneHour,
+          inputs: { length: 14, source: PriceSource.Close },
+          from: 1_000_000,
+          to: 2_000_000,
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(hook.current.isSuccess).toEqual(true));
+    expect(calls).toEqual([
+      {
+        url: '/api/symbols/crypto:BTCUSDT/indicators/sma?period=1h&from=1000000&to=2000000&length=14&source=close',
+        method: 'GET',
+        body: undefined,
+      },
+    ]);
+  });
 });

@@ -6,6 +6,7 @@ import {
   IndicatorNotFoundError,
   type IndicatorStatePoint,
   type Period,
+  periodMillis,
   SymbolNotFoundError,
   validateIndicatorInputs,
   type WatchlistRepository,
@@ -63,7 +64,15 @@ export class IndicatorComputeService {
     const validated = validateIndicatorInputs(module.definition, inputs);
     const to = range?.to ?? Number.MAX_SAFE_INTEGER;
     const from = range?.from ?? 0;
-    const candles = await this.candles.range(symbolId, period, 0, to);
+    // Scope the load to `[from - warmup*periodMillis, to)` so a sub-range
+    // request doesn't pull every stored candle through compute. Warm-up bars
+    // are the count the module needs before its first non-null row; clamped at
+    // 0 so a near-epoch `from` can't underflow.
+    const warmupBars = module.warmup
+      ? module.warmup(validated as Parameters<NonNullable<typeof module.warmup>>[0])
+      : 0;
+    const loadFrom = Math.max(0, from - warmupBars * periodMillis(period));
+    const candles = await this.candles.range(symbolId, period, loadFrom, to);
     const series = module.compute(validated, candles);
     const state: IndicatorStatePoint[] = series.filter(
       (row) => row.time >= from && row.time < to,

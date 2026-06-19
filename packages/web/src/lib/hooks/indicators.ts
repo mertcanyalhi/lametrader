@@ -92,6 +92,10 @@ export interface ComputeIndicatorInput {
   period: Period;
   /** The indicator's input values, keyed by descriptor key. */
   inputs: Record<string, unknown>;
+  /** Inclusive lower bound (epoch ms) for the returned state rows — scopes the engine's candle load. Omitted ⇒ no lower bound. */
+  from?: number;
+  /** Exclusive upper bound (epoch ms) for the returned state rows. Omitted ⇒ no upper bound. */
+  to?: number;
 }
 
 /**
@@ -100,10 +104,11 @@ export interface ComputeIndicatorInput {
  * instance), while the single-instance form remains a plain hook below.
  */
 export function computeIndicatorQueryOptions(input: ComputeIndicatorInput) {
-  const { id, key, period, inputs } = input;
+  const { id, key, period, inputs, from, to } = input;
   return {
-    queryKey: ['symbol-indicator', id, key, period, inputs] as const,
-    queryFn: () => apiFetch<IndicatorComputeResult>(buildComputeUrl(id, key, period, inputs)),
+    queryKey: ['symbol-indicator', id, key, period, inputs, from, to] as const,
+    queryFn: () =>
+      apiFetch<IndicatorComputeResult>(buildComputeUrl(id, key, period, inputs, from, to)),
     enabled: id !== '' && key !== '' && period !== undefined,
   };
 }
@@ -125,15 +130,23 @@ export function useComputeIndicator(
   return useQuery(computeIndicatorQueryOptions(input));
 }
 
-/** Build the compute URL with inputs sorted into a stable querystring order. */
+/**
+ * Build the compute URL: `period` first, then optional `from` / `to` (so the
+ * scoped-window flag reads left-to-right), then inputs sorted alphabetically
+ * for a stable order across renders + tests.
+ */
 function buildComputeUrl(
   id: string,
   key: string,
   period: Period,
   inputs: Record<string, unknown>,
+  from?: number,
+  to?: number,
 ): string {
   const params = new URLSearchParams();
   params.set('period', period);
+  if (from !== undefined) params.set('from', String(from));
+  if (to !== undefined) params.set('to', String(to));
   for (const k of Object.keys(inputs).sort()) {
     params.set(k, String(inputs[k]));
   }

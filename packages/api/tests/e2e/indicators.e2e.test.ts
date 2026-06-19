@@ -172,4 +172,43 @@ describe('indicators API (e2e)', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it('GET /symbols/:id/indicators/sma with `?from=&to=` returns only rows inside the window, each already warm', async () => {
+    // SMA(length=3): warm-up = 2 prior bars; row at time=3 needs candles 1..3.
+    // The engine's scoped load adds the 3-bar warm-up margin to `from`, so the
+    // slice at [3, 5) is fully warm — the silent-warm-up contract holds.
+    const res = await app.inject({
+      method: 'GET',
+      url: `/symbols/${BTC.id}/indicators/sma?period=1h&from=3&to=5&length=3&source=close`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      indicatorKey: 'sma',
+      version: 1,
+      period: '1h',
+      state: [
+        { time: 3, value: expect.closeTo(8, 6) },
+        { time: 4, value: expect.closeTo(10, 6) },
+      ],
+    });
+  });
+
+  it("GET /symbols/:id/indicators/sma returns leading-null rows when the stored history doesn't reach the warm-up", async () => {
+    // length=10 over 5 stored candles → the whole compute series is null
+    // (silent fallback); the [3, 5) slice surfaces those nulls verbatim.
+    const res = await app.inject({
+      method: 'GET',
+      url: `/symbols/${BTC.id}/indicators/sma?period=1h&from=3&to=5&length=10&source=close`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      indicatorKey: 'sma',
+      version: 1,
+      period: '1h',
+      state: [
+        { time: 3, value: null },
+        { time: 4, value: null },
+      ],
+    });
+  });
 });
