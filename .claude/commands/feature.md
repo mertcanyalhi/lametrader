@@ -7,6 +7,9 @@ Implement a feature using this repo's spec-driven TDD flow (see CLAUDE.md).
 
 Feature: $ARGUMENTS
 
+**Branch — do this BEFORE step 1.**
+If the current branch (`git branch --show-current`) doesn't follow `<type>/<kebab-summary>` (e.g. `feat/`, `fix/`, …), rename it now via `git branch -m <new-name>` — never push an auto-generated `claude/…` name.
+
 Follow these steps, in order, and do not skip any:
 
 1. **Spec** — Create `specs/<kebab-name>.spec.md` from `specs/_template.md`.

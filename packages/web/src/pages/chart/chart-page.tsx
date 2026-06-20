@@ -374,6 +374,7 @@ function useChartOverlays({
       applicable.map(({ instance, definition }, index) => ({
         instanceId: instance.id,
         definition,
+        inputs: instance.inputs,
         result: computeQueries[index]?.data ?? null,
         visible: !hidden[instance.id],
         color: paletteColor(index, theme),

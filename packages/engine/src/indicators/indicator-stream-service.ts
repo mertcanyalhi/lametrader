@@ -157,11 +157,14 @@ export class IndicatorStreamService {
     subscription: Subscription,
     event: CandleEvent,
   ): Promise<IndicatorStateEvent | null> {
+    // Scope to the event bar so the compute service's `[from - warmup*span, to)`
+    // load skips the full-history scan that pegged API CPU under fan-out.
     const result = await this.compute.compute(
       subscription.symbolId,
       subscription.indicatorKey,
       subscription.inputs,
       subscription.period,
+      { from: event.candle.time, to: event.candle.time + 1 },
     );
     const row = result.state.find((point) => point.time === event.candle.time);
     if (!row) return null;

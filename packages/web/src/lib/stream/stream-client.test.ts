@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
-import { type Candle, Period, type SymbolQuoteEvent, SymbolType } from '@lametrader/core';
+import {
+  type Candle,
+  type IndicatorStateEvent,
+  Period,
+  PriceSource,
+  type SymbolQuoteEvent,
+  SymbolType,
+} from '@lametrader/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStreamClient } from './stream-client.js';
 import { type CandleEvent, StreamKind } from './stream-client.types.js';
@@ -169,6 +176,185 @@ describe('createStreamClient', () => {
         { action: 'subscribe-quote', id: ID },
         { action: 'unsubscribe-quote', subscriptionId: 'sub-1' },
       ],
+    });
+  });
+
+  it('subscribes an indicator with structured args and delivers state events keyed by server subscriptionId', () => {
+    const client = createStreamClient();
+    const received: IndicatorStateEvent[] = [];
+
+    const unsubscribe = client.subscribe(
+      StreamKind.Indicator,
+      {
+        id: ID,
+        period: Period.OneHour,
+        indicator: { key: 'sma', inputs: { length: 14, source: PriceSource.Close } },
+      },
+      (event) => received.push(event),
+    );
+    const socket = FakeWebSocket.instances[0];
+    socket?.open();
+    socket?.emit({
+      action: 'subscribed-indicator',
+      subscriptionId: 'sub-ind-1',
+      id: ID,
+      period: Period.OneHour,
+      indicatorKey: 'sma',
+    });
+    const event: IndicatorStateEvent = {
+      subscriptionId: 'sub-ind-1',
+      id: ID,
+      period: Period.OneHour,
+      indicatorKey: 'sma',
+      state: { time: 1000, value: 105.5 },
+      final: false,
+    };
+    socket?.emit(event);
+    unsubscribe();
+
+    expect({ received, lastSent: socket?.sent.at(-1), firstSent: socket?.sent[0] }).toEqual({
+      received: [event],
+      firstSent: {
+        action: 'subscribe-indicator',
+        id: ID,
+        period: Period.OneHour,
+        indicator: { key: 'sma', inputs: { length: 14, source: PriceSource.Close } },
+      },
+      lastSent: { action: 'unsubscribe-indicator', subscriptionId: 'sub-ind-1' },
+    });
+  });
+
+  it('only sends unsubscribe-indicator once the server reply has bound a subscriptionId', () => {
+    const client = createStreamClient();
+
+    const unsubscribe = client.subscribe(
+      StreamKind.Indicator,
+      { id: ID, period: Period.OneHour, indicator: { key: 'sma', inputs: { length: 14 } } },
+      () => {},
+    );
+    const socket = FakeWebSocket.instances[0];
+    socket?.open();
+    // No subscribed-indicator reply yet — releasing must not send an unbound unsubscribe.
+    unsubscribe();
+
+    expect(socket?.sent).toEqual([
+      {
+        action: 'subscribe-indicator',
+        id: ID,
+        period: Period.OneHour,
+        indicator: { key: 'sma', inputs: { length: 14 } },
+      },
+    ]);
+  });
+
+  it('shares one upstream indicator subscription across listeners on the same tuple', () => {
+    const client = createStreamClient();
+    const args = {
+      id: ID,
+      period: Period.OneHour,
+      indicator: { key: 'sma', inputs: { length: 14 } },
+    };
+
+    const unsubscribeA = client.subscribe(StreamKind.Indicator, args, () => {});
+    const socket = FakeWebSocket.instances[0];
+    socket?.open();
+    const unsubscribeB = client.subscribe(StreamKind.Indicator, args, () => {});
+    socket?.emit({
+      action: 'subscribed-indicator',
+      subscriptionId: 'sub-ind-1',
+      id: ID,
+      period: Period.OneHour,
+      indicatorKey: 'sma',
+    });
+    unsubscribeA();
+    const afterFirstRelease = [...(socket?.sent ?? [])];
+    unsubscribeB();
+
+    expect({ afterFirstRelease, finalSent: socket?.sent }).toEqual({
+      afterFirstRelease: [
+        {
+          action: 'subscribe-indicator',
+          id: ID,
+          period: Period.OneHour,
+          indicator: { key: 'sma', inputs: { length: 14 } },
+        },
+      ],
+      finalSent: [
+        {
+          action: 'subscribe-indicator',
+          id: ID,
+          period: Period.OneHour,
+          indicator: { key: 'sma', inputs: { length: 14 } },
+        },
+        { action: 'unsubscribe-indicator', subscriptionId: 'sub-ind-1' },
+      ],
+    });
+  });
+
+  it('replays each active indicator subscription on reconnect and re-binds the new subscriptionId so frames keep routing', () => {
+    vi.useFakeTimers();
+    const client = createStreamClient({ reconnectBaseMs: 1000 });
+    const received: IndicatorStateEvent[] = [];
+
+    client.subscribe(
+      StreamKind.Indicator,
+      { id: ID, period: Period.OneHour, indicator: { key: 'sma', inputs: { length: 14 } } },
+      (event) => received.push(event),
+    );
+    const first = FakeWebSocket.instances[0];
+    first?.open();
+    first?.emit({
+      action: 'subscribed-indicator',
+      subscriptionId: 'sub-old',
+      id: ID,
+      period: Period.OneHour,
+      indicatorKey: 'sma',
+    });
+    first?.close();
+    vi.advanceTimersByTime(1000);
+    const second = FakeWebSocket.instances[1];
+    second?.open();
+    second?.emit({
+      action: 'subscribed-indicator',
+      subscriptionId: 'sub-new',
+      id: ID,
+      period: Period.OneHour,
+      indicatorKey: 'sma',
+    });
+    const event: IndicatorStateEvent = {
+      subscriptionId: 'sub-new',
+      id: ID,
+      period: Period.OneHour,
+      indicatorKey: 'sma',
+      state: { time: 2000, value: 110 },
+      final: true,
+    };
+    second?.emit(event);
+    // A stale frame for the old id must be dropped after rebind.
+    second?.emit({
+      subscriptionId: 'sub-old',
+      id: ID,
+      period: Period.OneHour,
+      indicatorKey: 'sma',
+      state: { time: 1500, value: 99 },
+      final: false,
+    });
+
+    expect({
+      instances: FakeWebSocket.instances.length,
+      replayed: second?.sent,
+      received,
+    }).toEqual({
+      instances: 2,
+      replayed: [
+        {
+          action: 'subscribe-indicator',
+          id: ID,
+          period: Period.OneHour,
+          indicator: { key: 'sma', inputs: { length: 14 } },
+        },
+      ],
+      received: [event],
     });
   });
 
