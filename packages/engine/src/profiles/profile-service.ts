@@ -1,4 +1,5 @@
 import {
+  type FiringStateRepository,
   IndicatorError,
   type IndicatorInstance,
   IndicatorInstanceNotFoundError,
@@ -11,6 +12,7 @@ import {
   ProfileScope,
   type ProfileScopeSpec,
   parseProfileFields,
+  type RuleRepository,
   validateIndicatorInputs,
   type WatchlistRepository,
 } from '@lametrader/core';
@@ -46,12 +48,16 @@ export class ProfileService {
   private readonly newId: () => string;
   /** Current clock (injectable; defaults to `Date.now`). */
   private readonly now: () => number;
+  /** Rule store consulted by the profile-delete cascade (optional). */
+  private readonly rules?: RuleRepository;
+  /** Firing-state store consulted by the profile-delete cascade (optional). */
+  private readonly firingState?: FiringStateRepository;
 
   /**
    * @param profiles - the profile persistence port.
    * @param watchlist - the watchlist persistence port (for scope validation).
    * @param indicators - the indicator registry (for attached-instance validation).
-   * @param options - injectable id generator and clock.
+   * @param options - injectable id generator, clock, and cascade ports.
    */
   constructor(
     private readonly profiles: ProfileRepository,
@@ -61,6 +67,8 @@ export class ProfileService {
   ) {
     this.newId = options.newId ?? (() => nanoid());
     this.now = options.now ?? Date.now;
+    this.rules = options.rules;
+    this.firingState = options.firingState;
   }
 
   /**
@@ -156,10 +164,22 @@ export class ProfileService {
   /**
    * Delete a profile by id.
    *
+   * When the optional `rules` + `firingState` ports are wired in, every rule
+   * belonging to the profile is removed and the rules' persisted firing-state
+   * entries are purged — same pattern as the candle cascade in ADR-0009.
+   *
    * @throws {@link ProfileNotFoundError} when the id is unknown.
    */
   async remove(id: string): Promise<void> {
     await this.getStored(id);
+    if (this.rules !== undefined) {
+      const removedRuleIds = await this.rules.removeForProfile(id);
+      if (this.firingState !== undefined) {
+        for (const ruleId of removedRuleIds) {
+          await this.firingState.removeByRule(ruleId);
+        }
+      }
+    }
     await this.profiles.remove(id);
   }
 

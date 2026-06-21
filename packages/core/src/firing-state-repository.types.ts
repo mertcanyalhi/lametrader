@@ -17,4 +17,9 @@ export interface FiringStateRepository {
    * Persist whether the rule's condition is currently true for `symbolId`.
    */
   setActive(ruleId: string, symbolId: string, active: boolean): Promise<void>;
+  /**
+   * Delete every firing-state entry for `ruleId` (all symbols). Idempotent —
+   * a no-op when the rule has no recorded state.
+   */
+  removeByRule(ruleId: string): Promise<void>;
 }

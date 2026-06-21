@@ -40,4 +40,20 @@ export function runFiringStateRepositoryContract(
     await repo.setActive('r', 's1', true);
     expect(await repo.getActive('r', 's2')).toBe(false);
   });
+
+  it('removeByRule clears every (ruleId, symbolId) entry for that rule', async () => {
+    const repo = await make();
+    await repo.setActive('r1', 's1', true);
+    await repo.setActive('r1', 's2', true);
+    await repo.setActive('r2', 's1', true);
+    await repo.removeByRule('r1');
+    expect(await repo.getActive('r1', 's1')).toBe(false);
+    expect(await repo.getActive('r1', 's2')).toBe(false);
+    expect(await repo.getActive('r2', 's1')).toBe(true);
+  });
+
+  it('removeByRule is idempotent (no-op when the rule has no entries)', async () => {
+    const repo = await make();
+    await expect(repo.removeByRule('missing')).resolves.toBeUndefined();
+  });
 }

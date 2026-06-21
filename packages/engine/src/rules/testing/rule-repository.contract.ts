@@ -141,4 +141,21 @@ export function runRuleRepositoryContract(
       'p2-aapl',
     ]);
   });
+
+  it('removeForProfile deletes every rule with that profileId and returns their ids', async () => {
+    const repo = await make();
+    await repo.save(rule({ id: 'p1-a', order: 1, profileId: 'profile-1' }));
+    await repo.save(rule({ id: 'p1-b', order: 2, profileId: 'profile-1' }));
+    await repo.save(rule({ id: 'p2-a', order: 1, profileId: 'profile-2' }));
+    const removed = (await repo.removeForProfile('profile-1')).sort();
+    expect(removed).toEqual(['p1-a', 'p1-b']);
+    expect((await repo.list()).map((r) => r.id)).toEqual(['p2-a']);
+  });
+
+  it('removeForProfile is idempotent (returns [] when the profile has no rules)', async () => {
+    const repo = await make();
+    await repo.save(rule({ id: 'p1-a', order: 1, profileId: 'profile-1' }));
+    expect(await repo.removeForProfile('profile-other')).toEqual([]);
+    expect((await repo.list()).map((r) => r.id)).toEqual(['p1-a']);
+  });
 }
