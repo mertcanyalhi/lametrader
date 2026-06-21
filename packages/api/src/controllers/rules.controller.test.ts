@@ -312,6 +312,64 @@ describe('PUT /rules/:id', () => {
   });
 });
 
+describe('POST /rules/:id/enable', () => {
+  it('flips enabled to true and appends an Enabled history entry (200)', async () => {
+    const seed = rule({
+      id: 'r1',
+      profileId: 'p1',
+      order: 1,
+      enabled: false,
+      history: [{ type: 'created' as const, ts: 500 }],
+      createdAt: 500,
+      updatedAt: 500,
+    });
+    const { app } = buildApp([seed]);
+
+    const res = await app.inject({ method: 'POST', url: '/rules/r1/enable' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      ...seed,
+      enabled: true,
+      history: [
+        { type: 'created', ts: 500 },
+        { type: 'enabled', ts: 1000 },
+      ],
+      updatedAt: 1000,
+    });
+  });
+
+  it('returns 404 for an unknown id', async () => {
+    const { app } = buildApp();
+    const res = await app.inject({ method: 'POST', url: '/rules/missing/enable' });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('POST /rules/:id/disable', () => {
+  it('flips enabled to false and appends a Disabled history entry (200)', async () => {
+    const seed = rule({
+      id: 'r1',
+      profileId: 'p1',
+      order: 1,
+      enabled: true,
+      history: [{ type: 'created' as const, ts: 500 }],
+      createdAt: 500,
+      updatedAt: 500,
+    });
+    const { app } = buildApp([seed]);
+
+    const res = await app.inject({ method: 'POST', url: '/rules/r1/disable' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<Rule>().enabled).toBe(false);
+    expect(res.json<Rule>().history).toEqual([
+      { type: 'created', ts: 500 },
+      { type: 'disabled', ts: 1000 },
+    ]);
+  });
+});
+
 describe('DELETE /rules/:id', () => {
   it('removes the rule and its firing state, returns 204', async () => {
     const seed = rule({ id: 'r1', profileId: 'p1', order: 1 });
