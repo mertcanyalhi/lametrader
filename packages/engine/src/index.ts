@@ -45,6 +45,7 @@ export { type IndicatorInstanceInput, ProfileService } from './profiles/profile-
 export type { ProfileServiceOptions } from './profiles/profile-service.types.js';
 export { loadSettings } from './settings.js';
 export type { Settings } from './settings.types.js';
+export { InMemoryStateRepository } from './state/in-memory-state-repository.js';
 export { BinanceMarketDataSource } from './symbols/binance-market-data-source.js';
 export { defaultMarketDataSources } from './symbols/default-sources.js';
 export {
