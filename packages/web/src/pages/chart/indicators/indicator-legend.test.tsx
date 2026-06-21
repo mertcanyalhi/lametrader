@@ -4,7 +4,6 @@ import {
   type IndicatorDefinition,
   type IndicatorInstance,
   Pane,
-  Period,
   PriceSource,
   type Profile,
   ProfileScope,

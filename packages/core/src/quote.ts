@@ -18,7 +18,9 @@ export function computeQuote(
   return {
     price: latest.close,
     change,
-    changePct: change / previous.close,
+    // A 0 prior close has no defined percentage change (would be Infinity/NaN,
+    // which fast-json-stringify emits as contract-violating `null`) — report flat.
+    changePct: previous.close === 0 ? 0 : change / previous.close,
     time: latest.time,
   };
 }

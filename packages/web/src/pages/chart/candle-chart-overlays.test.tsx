@@ -3,7 +3,6 @@ import {
   type Candle,
   type EnrichedSymbol,
   FieldType,
-  type IndicatorComputeResult,
   type IndicatorDefinition,
   type IndicatorStateEvent,
   Pane,
