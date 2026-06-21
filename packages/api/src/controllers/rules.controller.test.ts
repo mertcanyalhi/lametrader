@@ -312,6 +312,46 @@ describe('PUT /rules/:id', () => {
   });
 });
 
+describe('POST /rules/reorder', () => {
+  it("renumbers `order` to the input ids' 1-based positions (200)", async () => {
+    const a = rule({ id: 'a', profileId: 'p1', order: 5 });
+    const b = rule({ id: 'b', profileId: 'p1', order: 3 });
+    const c = rule({ id: 'c', profileId: 'p1', order: 1 });
+    const { app, ruleRepo } = buildApp([a, b, c]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/rules/reorder',
+      payload: { ids: ['b', 'c', 'a'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<Rule[]>().map((r) => ({ id: r.id, order: r.order }))).toEqual([
+      { id: 'b', order: 1 },
+      { id: 'c', order: 2 },
+      { id: 'a', order: 3 },
+    ]);
+    const stored = await ruleRepo.list();
+    expect(
+      stored.map((r) => ({ id: r.id, order: r.order })).sort((x, y) => x.order - y.order),
+    ).toEqual([
+      { id: 'b', order: 1 },
+      { id: 'c', order: 2 },
+      { id: 'a', order: 3 },
+    ]);
+  });
+
+  it('returns 404 when any id is unknown', async () => {
+    const { app } = buildApp([rule({ id: 'a', profileId: 'p1', order: 1 })]);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/rules/reorder',
+      payload: { ids: ['a', 'missing'] },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
 describe('POST /rules/:id/enable', () => {
   it('flips enabled to true and appends an Enabled history entry (200)', async () => {
     const seed = rule({
