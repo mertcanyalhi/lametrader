@@ -26,6 +26,8 @@ export type {
 } from './candle.types.js';
 export { operandValueType } from './condition-operand.js';
 export { type ConditionOperand, OperandKind } from './condition-operand.types.js';
+export { RuleConditionError, validateConditionTree } from './condition-tree.js';
+export { type ConditionNode, ConditionNodeKind } from './condition-tree.types.js';
 export { ConfigError, defaultConfig, mergeConfig, parseConfig } from './config.js';
 export { type Config, ConfigKey, type ConfigRepository, Period } from './config.types.js';
 export {
