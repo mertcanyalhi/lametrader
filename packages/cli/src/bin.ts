@@ -30,8 +30,15 @@ if (
   // `error: <message>` rather than escaping as an unhandled rejection.
   let close: (() => Promise<void>) | undefined;
   try {
-    const { config, symbols, profiles, backfill, indicators, indicatorCompute, close: disconnect } =
-      await connectServices(mongoUri, { pollIntervals });
+    const {
+      config,
+      symbols,
+      profiles,
+      backfill,
+      indicators,
+      indicatorCompute,
+      close: disconnect,
+    } = await connectServices(mongoUri, { pollIntervals });
     close = disconnect;
     switch (command) {
       case 'config':
