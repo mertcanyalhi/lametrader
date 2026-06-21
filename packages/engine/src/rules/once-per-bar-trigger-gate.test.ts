@@ -6,6 +6,7 @@ import { mayFireOncePerBar, mayFireOncePerBarClose } from './once-per-bar-trigge
 const fired = (symbolId: string, ts: number): RuleEventEntry => ({
   type: RuleEventType.Fired,
   ts,
+  ruleId: 'rule-1',
   symbolId,
 });
 

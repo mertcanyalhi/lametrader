@@ -40,6 +40,7 @@ export { RuleConditionError, validateConditionTree } from './condition-tree.js';
 export { type ConditionNode, ConditionNodeKind } from './condition-tree.types.js';
 export { ConfigError, defaultConfig, mergeConfig, parseConfig } from './config.js';
 export { type Config, ConfigKey, type ConfigRepository, Period } from './config.types.js';
+export type { EventLog } from './event-log.types.js';
 export { ExpirationError, validateExpiration } from './expiration.js';
 export type { Expiration } from './expiration.types.js';
 export {
@@ -111,6 +112,8 @@ export {
   RuleHistoryType,
   type RuleScope,
   RuleScopeKind,
+  type StateRemovedRuleEvent,
+  type StateSetRuleEvent,
   type SymbolRuleScope,
 } from './rule.types.js';
 export {

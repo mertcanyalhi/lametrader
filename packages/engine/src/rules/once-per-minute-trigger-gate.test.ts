@@ -6,6 +6,7 @@ import { mayFireOncePerMinute } from './once-per-minute-trigger-gate.js';
 const fired = (symbolId: string, ts: number): RuleEventEntry => ({
   type: RuleEventType.Fired,
   ts,
+  ruleId: 'rule-1',
   symbolId,
 });
 

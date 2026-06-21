@@ -54,6 +54,8 @@ export { type CrossingOperator, evaluateCrossing } from './rules/crossing-evalua
 export { CycleGuard, CycleOverflowError } from './rules/cycle-guard.js';
 export { buildEvaluationContext } from './rules/evaluation-context.js';
 export type { EvaluationContext, EvaluationLookups } from './rules/evaluation-context.types.js';
+export { appendStateActionEvent } from './rules/event-appender.js';
+export { InMemoryEventLog } from './rules/in-memory-event-log.js';
 export { IndicatorRuleEventBridge } from './rules/indicator-rule-event-bridge.js';
 export { MinuteTimerSource } from './rules/minute-timer-source.js';
 export {
