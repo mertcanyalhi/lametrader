@@ -79,7 +79,7 @@ export function usePagedCandles({ id, period }: { id: string; period: Period }):
   });
 
   // Empty at `now` but history exists earlier → re-anchor once and refetch.
-  // ponytail: `+ 1` because the read window is `[from, to)` — anchoring `to` at
+  // `+ 1` because the read window is `[from, to)` — anchoring `to` at
   // exactly latestTime would exclude that very bar.
   const firstPage = query.data?.pages[0];
   const needsReanchor =

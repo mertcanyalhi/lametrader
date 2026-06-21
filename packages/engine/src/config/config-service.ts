@@ -23,7 +23,7 @@ export class ConfigService {
    * The last-seen config, memoized to avoid re-reading the store on every
    * {@link get}. Populated on first read, overwritten on every write.
    *
-   * ponytail: per-process memo. Config is read-often/write-rarely and every
+   * Per-process memo. Config is read-often/write-rarely and every
    * write here refreshes it, so a single instance is always fresh. With
    * multiple API instances, one won't see another's change until restart —
    * acceptable for config; add a TTL or change-stream invalidation if not.
