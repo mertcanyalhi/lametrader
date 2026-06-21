@@ -6,12 +6,14 @@ import { mayFireOnce } from './once-trigger-gate.js';
 const fired = (symbolId: string, ts: number): RuleEventEntry => ({
   type: RuleEventType.Fired,
   ts,
+  ruleId: 'rule-1',
   symbolId,
 });
 
 const overflow = (symbolId: string, ts: number): RuleEventEntry => ({
   type: RuleEventType.CycleOverflow,
   ts,
+  ruleId: 'rule-1',
   symbolId,
   cycleLimit: 4,
 });

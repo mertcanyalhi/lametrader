@@ -1,6 +1,8 @@
 import type { Action } from './action.types.js';
 import type { ConditionNode } from './condition-tree.types.js';
 import type { Expiration } from './expiration.types.js';
+import type { StateValue } from './state.types.js';
+import type { StateScope } from './state-repository.types.js';
 import type { Trigger } from './trigger.types.js';
 
 /**
@@ -48,30 +50,68 @@ export enum RuleEventType {
   Fired = 'fired',
   /** A cycle-limit overflow halted further cascading on this rule. */
   CycleOverflow = 'cycleOverflow',
+  /** A `SetSymbolState` / `SetGlobalState` action wrote a value. */
+  StateSet = 'stateSet',
+  /** A `RemoveSymbolState` / `RemoveGlobalState` action removed a key. */
+  StateRemoved = 'stateRemoved',
 }
 
 /**
- * A `Fired` event on the embedded events log.
+ * Common fields on every {@link RuleEventEntry}.
+ *
+ * `ruleId` is carried even though `Rule.events[]` is implicitly scoped to its
+ * parent rule, because the same entry is mirrored onto the affected
+ * `Symbol.events[]` per ADR 0012 — and there it's the only way to identify
+ * which rule produced the event.
  */
-export interface FiredRuleEvent {
-  type: RuleEventType.Fired;
+interface BaseRuleEventEntry {
   /** The event timestamp (epoch ms). */
   ts: number;
-  /** The watched symbol the rule fired on. */
+  /** The rule that produced the event. */
+  ruleId: string;
+  /** The watched symbol the event applies to. */
   symbolId: string;
+}
+
+/**
+ * A `Fired` event on the embedded events log — the umbrella entry written
+ * once per fire alongside one per-action entry.
+ */
+export interface FiredRuleEvent extends BaseRuleEventEntry {
+  type: RuleEventType.Fired;
 }
 
 /**
  * A `CycleOverflow` event — the cascade hit the engine's cycle limit.
  */
-export interface CycleOverflowRuleEvent {
+export interface CycleOverflowRuleEvent extends BaseRuleEventEntry {
   type: RuleEventType.CycleOverflow;
-  /** The event timestamp (epoch ms). */
-  ts: number;
-  /** The watched symbol on which the cascade overflowed. */
-  symbolId: string;
   /** The cycle limit that was breached. */
   cycleLimit: number;
+}
+
+/**
+ * A `StateSet` event — a state-write action stored a value.
+ */
+export interface StateSetRuleEvent extends BaseRuleEventEntry {
+  type: RuleEventType.StateSet;
+  /** Whether the write targeted symbol-scoped or global state. */
+  scope: StateScope;
+  /** The state key written. */
+  key: string;
+  /** The value written. */
+  value: StateValue;
+}
+
+/**
+ * A `StateRemoved` event — a state-remove action deleted a key.
+ */
+export interface StateRemovedRuleEvent extends BaseRuleEventEntry {
+  type: RuleEventType.StateRemoved;
+  /** Whether the remove targeted symbol-scoped or global state. */
+  scope: StateScope;
+  /** The state key removed. */
+  key: string;
 }
 
 /**
@@ -80,7 +120,11 @@ export interface CycleOverflowRuleEvent {
  * Tagged union over {@link RuleEventType}; mirrored onto `Symbol.events[]` per
  * ADR 0012.
  */
-export type RuleEventEntry = FiredRuleEvent | CycleOverflowRuleEvent;
+export type RuleEventEntry =
+  | FiredRuleEvent
+  | CycleOverflowRuleEvent
+  | StateSetRuleEvent
+  | StateRemovedRuleEvent;
 
 /**
  * The kind of a {@link RuleHistoryEntry} — a lifecycle change to the rule
