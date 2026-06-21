@@ -16,7 +16,7 @@ import type { IndicatorRegistry } from './indicator-registry.js';
 /**
  * The persisted shape of one live-stream subscription.
  *
- * Lives in-process — the subscription map is non-durable (same boundary as `BackfillJobService` and `CandleStreamHub`).
+ * Lives in-process — the subscription map is non-durable (same boundary as `BackfillJobService` and the API's `StreamHub`).
  */
 interface Subscription {
   /** Generated id for routing emitted events. */

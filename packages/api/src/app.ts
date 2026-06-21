@@ -18,16 +18,16 @@ import {
   SymbolError,
   SymbolNotFoundError,
 } from '@lametrader/core';
-import { BackfillJobService } from '@lametrader/engine';
+import { type BackfillJob, BackfillJobService } from '@lametrader/engine';
 import Fastify, { type FastifyError } from 'fastify';
 import type { AppDependencies, AppOptions } from './app.types.js';
-import { BackfillJobHub } from './backfill-job-hub.js';
 import { candlesController } from './controllers/candles.controller.js';
 import { configController } from './controllers/config.controller.js';
 import { indicatorsController } from './controllers/indicators.controller.js';
 import { profilesController } from './controllers/profiles.controller.js';
 import { streamController } from './controllers/stream.controller.js';
 import { symbolsController } from './controllers/symbols.controller.js';
+import { StreamHub } from './stream-hub.js';
 
 /**
  * The API's own package version, read from its `package.json` so the OpenAPI
@@ -121,7 +121,7 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
   if (deps.backfill) {
     // Wire the async backfill-job use-case to a per-job hub: the application
     // pushes job updates via onUpdate, the hub fans them to WebSocket subscribers.
-    const backfillHub = new BackfillJobHub();
+    const backfillHub = new StreamHub<BackfillJob>();
     const backfillJobs = new BackfillJobService(deps.backfill, (job) =>
       backfillHub.publish(job.id, job),
     );

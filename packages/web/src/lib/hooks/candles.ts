@@ -1,6 +1,6 @@
 import { type Candle, type CandlePage, type Period, periodMillis } from '@lametrader/core';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../api-fetch.js';
 import { type CandleEvent, StreamKind } from '../stream/stream-client.types.js';
 import { useStreamSubscription } from '../stream/use-stream-subscription.js';
@@ -56,18 +56,39 @@ export function usePagedCandles({ id, period }: { id: string; period: Period }):
   const span = CHART_PAGE_BARS * periodMillis(period);
   const now = Date.now();
 
+  // Re-anchor target (issue #70): when the window at `now` is empty but the
+  // symbol has older stored history, jump the anchor to just past the latest
+  // stored bar and refetch. Tagged with the symbol/period it belongs to so a
+  // switch to another symbol/period falls back to `now` with no reset effect.
+  const [anchor, setAnchor] = useState<{ key: string; to: number } | null>(null);
+  const target = `${id}:${period}`;
+  const anchoredTo = anchor?.key === target ? anchor.to : null;
+  const to = anchoredTo ?? now;
+
   const query = useInfiniteQuery({
-    queryKey: ['candles', id, period],
+    queryKey: ['candles', id, period, anchoredTo],
     queryFn: ({ pageParam }) =>
       apiFetch<CandlePage>(
         `/symbols/${id}/candles?period=${period}&from=${pageParam.from}&to=${pageParam.to}&limit=${CHART_CANDLE_LIMIT}`,
       ),
-    initialPageParam: { from: now - span, to: now } as CandleWindow,
+    initialPageParam: { from: to - span, to } as CandleWindow,
     getNextPageParam: (lastPage, _allPages, lastParam): CandleWindow | undefined =>
       lastPage.candles.length === 0
         ? undefined
         : { from: lastParam.from - span, to: lastParam.from },
   });
+
+  // Empty at `now` but history exists earlier → re-anchor once and refetch.
+  // ponytail: `+ 1` because the read window is `[from, to)` — anchoring `to` at
+  // exactly latestTime would exclude that very bar.
+  const firstPage = query.data?.pages[0];
+  const needsReanchor =
+    anchoredTo === null && firstPage?.candles.length === 0 && firstPage.latestTime != null;
+  useEffect(() => {
+    if (needsReanchor && firstPage?.latestTime != null) {
+      setAnchor({ key: target, to: firstPage.latestTime + 1 });
+    }
+  }, [needsReanchor, firstPage, target]);
 
   // The infinite query freezes its newest page's `to` at the first open, so bars
   // that form while the chart is unmounted are never fetched when it reopens —
@@ -110,7 +131,8 @@ export function usePagedCandles({ id, period }: { id: string; period: Period }):
       query.fetchNextPage();
     },
     hasMore: query.hasNextPage,
-    isPending: query.isPending,
+    // Keep "loading" through the re-anchor handoff so the empty state never flashes.
+    isPending: query.isPending || needsReanchor,
     isFetchingOlder: query.isFetchingNextPage,
     isError: query.isError,
     error: query.error,

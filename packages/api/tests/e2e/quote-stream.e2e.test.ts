@@ -1,8 +1,9 @@
-import { CandleStreamHub, createApp, IndicatorStreamHub, QuoteStreamHub } from '@lametrader/api';
+import { createApp, StreamHub } from '@lametrader/api';
 import {
   type BackfillRange,
   type CandleBatch,
   type CryptoCandle,
+  type IndicatorStateEvent,
   type Instrument,
   type MarketDataSource,
   Period,
@@ -10,6 +11,7 @@ import {
   SymbolType,
 } from '@lametrader/core';
 import {
+  type CandleEvent,
   ConfigService,
   defaultIndicators,
   IndicatorComputeService,
@@ -151,14 +153,14 @@ describe('quote live streaming (e2e)', () => {
       periods: [Period.OneHour],
       defaultPeriod: Period.OneHour,
     });
-    const candleStream = new CandleStreamHub();
-    const quoteStream = new QuoteStreamHub();
+    const candleStream = new StreamHub<CandleEvent>();
+    const quoteStream = new StreamHub<SymbolQuoteEvent>();
     const quoteStreamService = new QuoteStreamService(watchlist, config, candleRepo, {
-      onQuote: (event) => quoteStream.publish(event),
+      onQuote: (event) => quoteStream.publish(event.subscriptionId, event),
     });
     polling = new PollingService([stub], candleRepo, watchlist, {
       onCandle: (event) => {
-        candleStream.publish(event);
+        candleStream.publish(event.id, event);
         quoteStreamService.handleCandle(event);
       },
       intervals: allIntervals(1000),
@@ -182,9 +184,9 @@ describe('quote live streaming (e2e)', () => {
 
     const registry = defaultIndicators();
     const compute = new IndicatorComputeService(registry, watchlist, candleRepo);
-    const indicatorStream = new IndicatorStreamHub();
+    const indicatorStream = new StreamHub<IndicatorStateEvent>();
     const indicatorStreamService = new IndicatorStreamService(registry, watchlist, compute, {
-      onState: (event) => indicatorStream.publish(event),
+      onState: (event) => indicatorStream.publish(event.subscriptionId, event),
     });
 
     app = createApp({

@@ -234,7 +234,7 @@ describe('GET /symbols/:id/candles', () => {
       url: `/symbols/${BTC.id}/candles?period=1h&from=0&to=4000`,
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ candles: SERIES, nextCursor: null });
+    expect(res.json()).toEqual({ candles: SERIES, nextCursor: null, latestTime: 3000 });
   });
 
   it('paginates by keyset cursor with limit → 200', async () => {
@@ -245,7 +245,11 @@ describe('GET /symbols/:id/candles', () => {
       url: `/symbols/${BTC.id}/candles?period=1h&limit=2`,
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ candles: [SERIES[0], SERIES[1]], nextCursor: 3000 });
+    expect(res.json()).toEqual({
+      candles: [SERIES[0], SERIES[1]],
+      nextCursor: 3000,
+      latestTime: 3000,
+    });
   });
 
   it('returns an empty page when nothing is stored → 200', async () => {
@@ -254,7 +258,7 @@ describe('GET /symbols/:id/candles', () => {
       url: `/symbols/${BTC.id}/candles?period=1h`,
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ candles: [], nextCursor: null });
+    expect(res.json()).toEqual({ candles: [], nextCursor: null, latestTime: null });
   });
 
   it('rejects a limit over the maximum → 400', async () => {

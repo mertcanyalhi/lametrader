@@ -117,11 +117,15 @@ export class BackfillService {
     query: { from: number; to: number; limit: number },
   ): Promise<CandlePage> {
     const { from, to, limit } = query;
-    const rows = await this.candles.range(id, period, from, to, limit + 1);
+    const [rows, latest] = await Promise.all([
+      this.candles.range(id, period, from, to, limit + 1),
+      this.candles.latest(id, period),
+    ]);
+    const latestTime = latest?.time ?? null;
     if (rows.length > limit) {
       const candles = rows.slice(0, limit);
-      return { candles, nextCursor: rows[limit]?.time ?? null };
+      return { candles, nextCursor: rows[limit]?.time ?? null, latestTime };
     }
-    return { candles: rows, nextCursor: null };
+    return { candles: rows, nextCursor: null, latestTime };
   }
 }

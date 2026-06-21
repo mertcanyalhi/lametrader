@@ -49,6 +49,7 @@ export function Sidebar({ collapsed }: { collapsed: boolean }): ReactNode {
         collapsed ? 'lg:w-14' : 'lg:w-56',
       )}
     >
+      <BrandMark collapsed={collapsed} />
       <nav aria-label="Primary navigation" className="flex flex-1 flex-col gap-1 p-2">
         {NAV_ITEMS.map((item) => (
           <NavLink
@@ -75,5 +76,24 @@ export function Sidebar({ collapsed }: { collapsed: boolean }): ReactNode {
         ))}
       </nav>
     </aside>
+  );
+}
+
+function BrandMark({ collapsed }: { collapsed: boolean }): ReactNode {
+  return (
+    <div
+      role="img"
+      aria-label="lametrader"
+      className="flex h-12 shrink-0 items-center border-b border-border px-3 text-lg tracking-tight text-foreground"
+    >
+      <span aria-hidden="true" className={cn('hidden', collapsed ? 'lg:hidden' : 'lg:inline')}>
+        <span className="font-light">lame</span>
+        <span className="font-bold">trader</span>
+      </span>
+      <span aria-hidden="true" className={cn('inline', collapsed ? 'lg:inline' : 'lg:hidden')}>
+        <span className="font-light">l</span>
+        <span className="font-bold">t</span>
+      </span>
+    </div>
   );
 }

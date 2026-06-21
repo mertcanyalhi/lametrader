@@ -1,5 +1,7 @@
+import type { IndicatorStateEvent, SymbolQuoteEvent } from '@lametrader/core';
 import {
   BackfillService,
+  type CandleEvent,
   ConfigService,
   defaultIndicators,
   IndicatorComputeService,
@@ -14,9 +16,7 @@ import {
   SymbolService,
 } from '@lametrader/engine';
 import type { AppDependencies } from '../app.types.js';
-import { CandleStreamHub } from '../candle-stream-hub.js';
-import { IndicatorStreamHub } from '../indicator-stream-hub.js';
-import { QuoteStreamHub } from '../quote-stream-hub.js';
+import { StreamHub } from '../stream-hub.js';
 
 /**
  * Override shape accepted by `buildAppDeps`.
@@ -52,18 +52,19 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
   // Default live-stream wiring: the in-memory candle + indicator hubs and a stream
   // service the controller talks to. Tests that don't exercise streaming get the
   // route registered but inert (no candles flow through unless they publish).
-  const candleStream = overrides.liveStream?.candleStream ?? new CandleStreamHub();
-  const indicatorStream = overrides.liveStream?.indicatorStream ?? new IndicatorStreamHub();
+  const candleStream = overrides.liveStream?.candleStream ?? new StreamHub<CandleEvent>();
+  const indicatorStream =
+    overrides.liveStream?.indicatorStream ?? new StreamHub<IndicatorStateEvent>();
   const indicatorStreamService =
     overrides.liveStream?.indicatorStreamService ??
     new IndicatorStreamService(registry, watchlist, compute, {
-      onState: (event) => indicatorStream.publish(event),
+      onState: (event) => indicatorStream.publish(event.subscriptionId, event),
     });
-  const quoteStream = overrides.liveStream?.quoteStream ?? new QuoteStreamHub();
+  const quoteStream = overrides.liveStream?.quoteStream ?? new StreamHub<SymbolQuoteEvent>();
   const quoteStreamService =
     overrides.liveStream?.quoteStreamService ??
     new QuoteStreamService(watchlist, config, candles, {
-      onQuote: (event) => quoteStream.publish(event),
+      onQuote: (event) => quoteStream.publish(event.subscriptionId, event),
     });
 
   return {

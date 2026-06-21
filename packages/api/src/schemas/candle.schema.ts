@@ -26,13 +26,15 @@ export const CandleSchema = Type.Object(
 );
 
 /**
- * One page of candles: the candles plus the keyset cursor (`time` to use as the
- * next page's `from`, or `null` when this is the last page).
+ * One page of candles: the candles, the keyset cursor (`time` to use as the
+ * next page's `from`, or `null` when this is the last page), and the latest
+ * stored candle's `time` for the whole `(symbol, period)` (`null` when none).
  */
 export const CandlePageSchema = Type.Object(
   {
     candles: Type.Array(CandleSchema),
     nextCursor: Type.Union([Type.Number(), Type.Null()]),
+    latestTime: Type.Union([Type.Number(), Type.Null()]),
   },
   { $id: 'CandlePage', additionalProperties: false },
 );

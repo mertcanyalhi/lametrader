@@ -23,13 +23,9 @@ export function buildIndicatorInputsSchema(
     if (descriptor.type === FieldType.Number) {
       let schema = yup
         .number()
-        .transform((value, originalValue) => {
-          if (originalValue === '' || originalValue === null || originalValue === undefined) {
-            return undefined;
-          }
-          const parsed = typeof originalValue === 'number' ? originalValue : Number(originalValue);
-          return Number.isFinite(parsed) ? parsed : undefined;
-        })
+        .transform((_value, originalValue) =>
+          originalValue === '' || originalValue == null ? undefined : Number(originalValue),
+        )
         .typeError(({ label }) => `${label} must be a number.`)
         .required(({ label }) => `${label} is required.`)
         .label(descriptor.label);

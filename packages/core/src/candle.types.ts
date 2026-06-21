@@ -99,6 +99,13 @@ export interface CandlePage {
   candles: Candle[];
   /** The next page's `from` (`time` of the first excluded candle), or `null`. */
   nextCursor: number | null;
+  /**
+   * The `time` of the latest stored candle for this `(symbol, period)`,
+   * regardless of the request window — or `null` when none is stored at all.
+   * Lets the chart tell "no history anywhere" from "history outside this window"
+   * and re-anchor to it instead of showing the empty state.
+   */
+  latestTime: number | null;
 }
 
 /**
