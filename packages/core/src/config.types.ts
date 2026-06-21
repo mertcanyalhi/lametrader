@@ -37,16 +37,30 @@ export interface Config {
 }
 
 /**
- * Port for persisting the singleton {@link Config}. Implemented by driven
+ * The keys under which a {@link Config}'s fields are persisted in the
+ * key-value store. One field per key, so the repository stays a dumb store and
+ * all assembly/validation lives in the application layer.
+ */
+export enum ConfigKey {
+  /** Holds the `periods` array. */
+  Periods = 'periods',
+  /** Holds the `defaultPeriod` string. */
+  DefaultPeriod = 'defaultPeriod',
+}
+
+/**
+ * Port for a key-value store the config is persisted in. A dumb store: it knows
+ * nothing about {@link Config} shape or validity — assembly and validation are
+ * the application layer's job (see `ConfigService`). Implemented by driven
  * adapters (e.g. MongoDB); faked in the unit tier.
  */
 export interface ConfigRepository {
   /**
-   * Load the persisted config, or `null` if none has been stored yet.
+   * Read the value stored at `key`, or `undefined` if nothing is stored there.
    */
-  load(): Promise<Config | null>;
+  get(key: ConfigKey): Promise<unknown>;
   /**
-   * Persist (replace) the singleton config.
+   * Store (replace) the value at `key`.
    */
-  save(config: Config): Promise<void>;
+  set(key: ConfigKey, value: unknown): Promise<void>;
 }

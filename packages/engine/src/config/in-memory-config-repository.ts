@@ -1,28 +1,28 @@
-import type { Config, ConfigRepository } from '@lametrader/core';
+import type { ConfigKey, ConfigRepository } from '@lametrader/core';
 
 /**
- * A {@link ConfigRepository} backed by a single in-memory slot.
+ * A {@link ConfigRepository} backed by an in-memory map.
  *
- * Real (not a test double): backs the unit tier and offline/demo wiring, replacing the ad-hoc `{ load, save }` stubs scattered through the tests.
+ * Real (not a test double): backs the unit tier and offline/demo wiring, replacing the ad-hoc `{ get, set }` stubs scattered through the tests.
  */
 export class InMemoryConfigRepository implements ConfigRepository {
   /**
-   * The stored singleton config, or `null` until first saved.
+   * The stored key-value pairs.
    */
-  private current: Config | null;
+  private readonly store: Map<ConfigKey, unknown>;
 
   /**
-   * @param seed - an initial config to pre-populate with (default: none stored).
+   * @param seed - initial key-value pairs to pre-populate with (default: empty).
    */
-  constructor(seed: Config | null = null) {
-    this.current = seed;
+  constructor(seed: Iterable<readonly [ConfigKey, unknown]> = []) {
+    this.store = new Map(seed);
   }
 
-  async load(): Promise<Config | null> {
-    return this.current;
+  async get(key: ConfigKey): Promise<unknown> {
+    return this.store.get(key);
   }
 
-  async save(config: Config): Promise<void> {
-    this.current = config;
+  async set(key: ConfigKey, value: unknown): Promise<void> {
+    this.store.set(key, value);
   }
 }

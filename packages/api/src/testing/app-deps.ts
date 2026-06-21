@@ -8,6 +8,7 @@ import {
   type IndicatorRegistry,
   IndicatorStreamService,
   InMemoryCandleRepository,
+  InMemoryConfigRepository,
   InMemoryMarketDataSource,
   InMemoryProfileRepository,
   InMemoryWatchlistRepository,
@@ -38,8 +39,7 @@ export interface BuildAppDepsOverrides extends Partial<Omit<AppDependencies, 'in
  * @param overrides - services to use instead of the in-memory defaults.
  */
 export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependencies {
-  const config =
-    overrides.config ?? new ConfigService({ load: async () => null, save: async () => {} });
+  const config = overrides.config ?? new ConfigService(new InMemoryConfigRepository());
   const watchlist = new InMemoryWatchlistRepository();
   const candles = new InMemoryCandleRepository();
   const sources = [new InMemoryMarketDataSource([])];

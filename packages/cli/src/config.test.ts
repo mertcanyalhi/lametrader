@@ -1,5 +1,4 @@
-import type { Config, ConfigRepository } from '@lametrader/core';
-import { ConfigService } from '@lametrader/engine';
+import { ConfigService, InMemoryConfigRepository } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 import { runConfig } from './config';
 
@@ -7,15 +6,8 @@ import { runConfig } from './config';
  * Real `ConfigService` over an in-memory repository, for testing the CLI
  * command wiring without I/O.
  */
-function buildService(initial: Config | null = null) {
-  let stored: Config | null = initial;
-  const repo: ConfigRepository = {
-    load: async () => stored,
-    save: async (config) => {
-      stored = config;
-    },
-  };
-  return new ConfigService(repo);
+function buildService() {
+  return new ConfigService(new InMemoryConfigRepository());
 }
 
 describe('runConfig get', () => {

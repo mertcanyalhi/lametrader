@@ -12,6 +12,7 @@ import {
   defaultIndicators,
   IndicatorComputeService,
   MongoCandleRepository,
+  MongoConfigRepository,
   MongoWatchlistRepository,
   movingAverage,
   volumeWeightedMovingAverage,
@@ -70,12 +71,7 @@ describe('indicators API (e2e)', () => {
     await client.connect();
     db = client.db('lametrader');
 
-    const config = new ConfigService({
-      load: async () => db.collection('config').findOne({ _id: 'singleton' as never }) as never,
-      save: async () => {
-        /* unused */
-      },
-    });
+    const config = new ConfigService(new MongoConfigRepository(db));
     const registry = defaultIndicators();
     const watchlist = new MongoWatchlistRepository(db);
     const candles = new MongoCandleRepository(db);

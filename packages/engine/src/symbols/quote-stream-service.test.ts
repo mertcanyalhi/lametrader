@@ -1,6 +1,6 @@
 import {
   type Candle,
-  type Config,
+  ConfigKey,
   computeQuote,
   Period,
   type Period as PeriodType,
@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { InMemoryCandleRepository } from '../candles/in-memory-candle-repository.js';
 import type { CandleEvent } from '../candles/polling-service.types.js';
 import { ConfigService } from '../config/config-service.js';
+import { InMemoryConfigRepository } from '../config/in-memory-config-repository.js';
 import { InMemoryMarketDataSource } from './in-memory-market-data-source.js';
 import { InMemoryWatchlistRepository } from './in-memory-watchlist-repository.js';
 import { QuoteStreamService } from './quote-stream-service.js';
@@ -52,8 +53,12 @@ function sequentialIds(): () => string {
 
 /** A ConfigService whose stored config is fixed. */
 function configService(periods: PeriodType[], defaultPeriod: PeriodType): ConfigService {
-  const stored: Config = { periods, defaultPeriod };
-  return new ConfigService({ load: async () => stored, save: async () => {} });
+  return new ConfigService(
+    new InMemoryConfigRepository([
+      [ConfigKey.Periods, periods],
+      [ConfigKey.DefaultPeriod, defaultPeriod],
+    ]),
+  );
 }
 
 /**

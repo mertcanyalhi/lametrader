@@ -1,5 +1,4 @@
-import type { Config, ConfigRepository } from '@lametrader/core';
-import { ConfigService } from '@lametrader/engine';
+import { ConfigService, InMemoryConfigRepository } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../app';
 import { buildAppDeps } from '../testing/app-deps';
@@ -9,15 +8,8 @@ import { buildAppDeps } from '../testing/app-deps';
  * so the config routes are exercised through the use-case (and the app's shared
  * error handler) without I/O.
  */
-function buildApp(initial: Config | null = null) {
-  let stored: Config | null = initial;
-  const repo: ConfigRepository = {
-    load: async () => stored,
-    save: async (config) => {
-      stored = config;
-    },
-  };
-  return createApp(buildAppDeps({ config: new ConfigService(repo) }));
+function buildApp() {
+  return createApp(buildAppDeps({ config: new ConfigService(new InMemoryConfigRepository()) }));
 }
 
 describe('GET /config', () => {

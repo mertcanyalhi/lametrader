@@ -1,5 +1,5 @@
 import {
-  type Config,
+  ConfigKey,
   type IndicatorStateEvent,
   Period,
   type SymbolQuoteEvent,
@@ -13,6 +13,7 @@ import {
   IndicatorComputeService,
   IndicatorStreamService,
   InMemoryCandleRepository,
+  InMemoryConfigRepository,
   InMemoryWatchlistRepository,
   QuoteStreamService,
 } from '@lametrader/engine';
@@ -92,8 +93,12 @@ async function buildApp(): Promise<TestApp> {
       indicatorStream.publish(event.subscriptionId, event);
     },
   });
-  const stored: Config = { periods: [Period.OneHour], defaultPeriod: Period.OneHour };
-  const config = new ConfigService({ load: async () => stored, save: async () => {} });
+  const config = new ConfigService(
+    new InMemoryConfigRepository([
+      [ConfigKey.Periods, [Period.OneHour]],
+      [ConfigKey.DefaultPeriod, Period.OneHour],
+    ]),
+  );
   const quoteStream = new StreamHub<SymbolQuoteEvent>();
   const capturedQuotes: SymbolQuoteEvent[] = [];
   const quoteService = new QuoteStreamService(watchlist, config, candles, {
