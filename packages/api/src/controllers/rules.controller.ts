@@ -1,8 +1,13 @@
 import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
-import type { RuleService } from '@lametrader/engine';
+import type { RuleCreateInput, RuleService } from '@lametrader/engine';
 import type { FastifyInstance } from 'fastify';
 import { ErrorSchema } from '../schemas/common.schema.js';
-import { ConditionNodeSchema, RuleIdParamSchema, RuleSchema } from '../schemas/rule.schema.js';
+import {
+  ConditionNodeSchema,
+  RuleIdParamSchema,
+  RuleInputSchema,
+  RuleSchema,
+} from '../schemas/rule.schema.js';
 
 /**
  * Optional `?profileId=&symbolId=` query filter for `GET /rules`. Both are
@@ -47,6 +52,26 @@ export function rulesController(service: RuleService) {
         },
       },
       async (request) => service.list(request.query),
+    );
+
+    app.post(
+      '/rules',
+      {
+        schema: {
+          tags: ['rules'],
+          summary: 'Create a rule',
+          body: RuleInputSchema,
+          response: { 201: RuleSchema, 400: ErrorSchema },
+        },
+      },
+      async (request, reply) => {
+        // The TypeBox schema validates the transport-level (flat) shape; the
+        // domain's `validateRule` (run inside `service.create`) enforces the
+        // discriminated-union cross-field invariants.
+        const rule = await service.create(request.body as unknown as RuleCreateInput);
+        reply.code(201);
+        return rule;
+      },
     );
 
     app.get(
