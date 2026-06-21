@@ -1,13 +1,8 @@
-import {
-  type ConfigRepository,
-  Period,
-  SymbolType,
-  type WatchedSymbol,
-  type WatchlistRepository,
-} from '@lametrader/core';
+import { Period, SymbolType, type WatchedSymbol, type WatchlistRepository } from '@lametrader/core';
 import {
   ConfigService,
   InMemoryCandleRepository,
+  InMemoryConfigRepository,
   InMemoryMarketDataSource,
   SymbolService,
 } from '@lametrader/engine';
@@ -36,8 +31,7 @@ function buildApp() {
     add: async (symbol) => void items.set(symbol.id, symbol),
     remove: async (id) => void items.delete(id),
   };
-  const configRepo: ConfigRepository = { load: async () => null, save: async () => {} };
-  const config = new ConfigService(configRepo);
+  const config = new ConfigService(new InMemoryConfigRepository());
   const symbols = new SymbolService(
     [new InMemoryMarketDataSource([BTC])],
     watchlist,
@@ -59,8 +53,7 @@ function buildAppWithDailyCandles() {
     add: async (symbol) => void items.set(symbol.id, symbol),
     remove: async (id) => void items.delete(id),
   };
-  const configRepo: ConfigRepository = { load: async () => null, save: async () => {} };
-  const config = new ConfigService(configRepo);
+  const config = new ConfigService(new InMemoryConfigRepository());
   const candles = new InMemoryCandleRepository();
   const bar = (time: number, close: number) => ({
     type: SymbolType.Crypto as const,

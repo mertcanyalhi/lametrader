@@ -2,6 +2,7 @@ import { Period, SymbolType, type WatchedSymbol, type WatchlistRepository } from
 import {
   ConfigService,
   InMemoryCandleRepository,
+  InMemoryConfigRepository,
   InMemoryMarketDataSource,
   SymbolService,
 } from '@lametrader/engine';
@@ -28,7 +29,7 @@ function buildService() {
     add: async (symbol) => void items.set(symbol.id, symbol),
     remove: async (id) => void items.delete(id),
   };
-  const config = new ConfigService({ load: async () => null, save: async () => {} });
+  const config = new ConfigService(new InMemoryConfigRepository());
   return new SymbolService(
     [new InMemoryMarketDataSource([BTC])],
     watchlist,
@@ -82,7 +83,7 @@ describe('runSymbols list', () => {
       add: async (symbol) => void items.set(symbol.id, symbol),
       remove: async (id) => void items.delete(id),
     };
-    const config = new ConfigService({ load: async () => null, save: async () => {} });
+    const config = new ConfigService(new InMemoryConfigRepository());
     const service = new SymbolService(
       [new InMemoryMarketDataSource([BTC])],
       watchlist,

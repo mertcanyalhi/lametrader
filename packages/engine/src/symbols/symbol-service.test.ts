@@ -1,5 +1,6 @@
 import {
   type Config,
+  ConfigKey,
   type Instrument,
   type MarketDataSource,
   Period,
@@ -13,6 +14,7 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 import { InMemoryCandleRepository } from '../candles/in-memory-candle-repository.js';
 import { ConfigService } from '../config/config-service.js';
+import { InMemoryConfigRepository } from '../config/in-memory-config-repository.js';
 import { SymbolService } from './symbol-service.js';
 
 /**
@@ -58,7 +60,13 @@ class FakeWatchlist implements WatchlistRepository {
  * A ConfigService whose stored config is `stored` (default `[1h,1d]`).
  */
 function configService(stored?: Config): ConfigService {
-  return new ConfigService({ load: async () => stored ?? null, save: async () => {} });
+  const seed = stored
+    ? ([
+        [ConfigKey.Periods, stored.periods],
+        [ConfigKey.DefaultPeriod, stored.defaultPeriod],
+      ] as const)
+    : [];
+  return new ConfigService(new InMemoryConfigRepository(seed));
 }
 
 const BTC: Instrument = {

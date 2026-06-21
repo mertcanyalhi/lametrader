@@ -42,7 +42,7 @@ describe('config persistence (e2e)', () => {
       'defaultPeriod 1d is not in periods',
     );
 
-    expect(await new MongoConfigRepository(db).load()).toEqual({
+    expect(await new ConfigService(new MongoConfigRepository(db)).get()).toEqual({
       periods: [Period.OneHour, Period.OneDay],
       defaultPeriod: Period.OneDay,
     });

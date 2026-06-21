@@ -149,7 +149,7 @@ describe('quote live streaming (e2e)', () => {
     const candleRepo = new MongoCandleRepository(db);
     const config = new ConfigService(new MongoConfigRepository(db));
     // Quote everything on 1h (the default period for this run).
-    await new MongoConfigRepository(db).save({
+    await config.replace({
       periods: [Period.OneHour],
       defaultPeriod: Period.OneHour,
     });

@@ -1,5 +1,4 @@
-import type { Config, ConfigRepository } from '@lametrader/core';
-import { ConfigService } from '@lametrader/engine';
+import { ConfigService, InMemoryConfigRepository } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 import { createApp } from './app';
 import { buildAppDeps } from './testing/app-deps';
@@ -9,14 +8,7 @@ import { buildAppDeps } from './testing/app-deps';
  * app-level concerns (docs, not-found handling) without I/O.
  */
 function buildApp() {
-  let stored: Config | null = null;
-  const repo: ConfigRepository = {
-    load: async () => stored,
-    save: async (config) => {
-      stored = config;
-    },
-  };
-  return createApp(buildAppDeps({ config: new ConfigService(repo) }));
+  return createApp(buildAppDeps({ config: new ConfigService(new InMemoryConfigRepository()) }));
 }
 
 describe('app', () => {

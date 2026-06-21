@@ -1,15 +1,11 @@
-import { type Config, type ConfigRepository, parseConfig } from '@lametrader/core';
+import type { ConfigKey, ConfigRepository } from '@lametrader/core';
 import type { Db } from 'mongodb';
 import type { ConfigDocument } from './mongo-config-repository.types.js';
 
 /**
- * The fixed `_id` of the singleton config document.
- */
-const CONFIG_ID = 'singleton';
-
-/**
- * MongoDB-backed {@link ConfigRepository}. Stores the global config as a single
- * upserted document in the `config` collection.
+ * MongoDB-backed {@link ConfigRepository}. A dumb key-value store: each
+ * {@link ConfigKey} is one upserted document in the `config` collection, keyed
+ * by `_id`. Knows nothing about config shape or validity.
  */
 export class MongoConfigRepository implements ConfigRepository {
   /**
@@ -25,26 +21,19 @@ export class MongoConfigRepository implements ConfigRepository {
   }
 
   /**
-   * Load and validate the persisted config, or `null` if absent.
+   * Read the value stored at `key`, or `undefined` if absent.
    */
-  async load(): Promise<Config | null> {
-    const doc = await this.db.collection<ConfigDocument>('config').findOne({ _id: CONFIG_ID });
-    if (!doc) {
-      return null;
-    }
-    return parseConfig({ periods: doc.periods, defaultPeriod: doc.defaultPeriod });
+  async get(key: ConfigKey): Promise<unknown> {
+    const doc = await this.db.collection<ConfigDocument>('config').findOne({ _id: key });
+    return doc?.value;
   }
 
   /**
-   * Upsert the singleton config document.
+   * Upsert the value at `key`.
    */
-  async save(config: Config): Promise<void> {
+  async set(key: ConfigKey, value: unknown): Promise<void> {
     await this.db
       .collection<ConfigDocument>('config')
-      .replaceOne(
-        { _id: CONFIG_ID },
-        { periods: config.periods, defaultPeriod: config.defaultPeriod },
-        { upsert: true },
-      );
+      .replaceOne({ _id: key }, { value }, { upsert: true });
   }
 }

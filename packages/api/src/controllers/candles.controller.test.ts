@@ -1,6 +1,5 @@
 import {
   type CandleBatch,
-  type ConfigRepository,
   type CryptoCandle,
   type Instrument,
   MarketDataError,
@@ -13,6 +12,7 @@ import {
   BackfillService,
   ConfigService,
   InMemoryCandleRepository,
+  InMemoryConfigRepository,
   InMemoryMarketDataSource,
   InMemoryWatchlistRepository,
 } from '@lametrader/engine';
@@ -90,8 +90,8 @@ function buildApp() {
     new InMemoryCandleRepository(),
     new InMemoryWatchlistRepository([WATCHED]),
   );
-  const configRepo: ConfigRepository = { load: async () => null, save: async () => {} };
-  return createApp(buildAppDeps({ config: new ConfigService(configRepo), backfill }));
+  const config = new ConfigService(new InMemoryConfigRepository());
+  return createApp(buildAppDeps({ config, backfill }));
 }
 
 describe('POST /symbols/:id/backfill', () => {

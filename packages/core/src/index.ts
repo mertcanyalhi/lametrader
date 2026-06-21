@@ -25,7 +25,7 @@ export type {
   FxCandle,
 } from './candle.types.js';
 export { ConfigError, defaultConfig, mergeConfig, parseConfig } from './config.js';
-export { type Config, type ConfigRepository, Period } from './config.types.js';
+export { type Config, ConfigKey, type ConfigRepository, Period } from './config.types.js';
 export {
   IndicatorError,
   IndicatorInstanceNotFoundError,
