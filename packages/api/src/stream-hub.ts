@@ -18,6 +18,11 @@ export class StreamHub<T> {
   private readonly subscribers = new Map<string, Set<StreamSubscriber<T>>>();
 
   /**
+   * @param onError - notified when a subscriber throws during fan-out (e.g. a send to a socket that closed mid-publish). The throw stays isolated — other subscribers still run — but it's reported here instead of vanishing. Defaults to a no-op for embedding/tests.
+   */
+  constructor(private readonly onError: (error: unknown, key: string) => void = () => {}) {}
+
+  /**
    * Subscribe to a key's payloads.
    *
    * @returns an unsubscribe function.
@@ -34,10 +39,18 @@ export class StreamHub<T> {
 
   /**
    * Publish a payload to the subscribers of `key`.
+   *
+   * Each subscriber is isolated: one that throws (e.g. a send to a socket that
+   * closed mid-fan-out) can't starve the rest. The throw is routed to `onError`
+   * rather than propagated, so the failure is surfaced without aborting fan-out.
    */
   publish(key: string, payload: T): void {
     for (const subscriber of this.subscribers.get(key) ?? []) {
-      subscriber(payload);
+      try {
+        subscriber(payload);
+      } catch (error) {
+        this.onError(error, key);
+      }
     }
   }
 }

@@ -11,9 +11,13 @@ const { mongoUri, apiPort, pollIntervals } = loadSettings();
 
 // Hubs bridge the engine's transport-agnostic `onCandle` / `onIndicatorState` /
 // `onSymbolQuote` callbacks to the `/stream` WebSocket route (see ADR-0005).
-const candleStream = new StreamHub<CandleEvent>();
-const indicatorStream = new StreamHub<IndicatorStateEvent>();
-const quoteStream = new StreamHub<SymbolQuoteEvent>();
+// A subscriber that throws (a send racing socket close) is logged, not swallowed;
+// `app` is referenced lazily — fan-out only runs once polling starts, well after it's assigned.
+const onSubscriberError = (scope: string) => (error: unknown, key: string) =>
+  app.log.error({ err: error, scope, key }, 'stream subscriber threw during fan-out');
+const candleStream = new StreamHub<CandleEvent>(onSubscriberError('candle'));
+const indicatorStream = new StreamHub<IndicatorStateEvent>(onSubscriberError('indicator'));
+const quoteStream = new StreamHub<SymbolQuoteEvent>(onSubscriberError('quote'));
 
 const {
   config,

@@ -10,7 +10,7 @@
 #
 # Build context is the repo root (see infra/docker-compose.yml).
 
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json tsconfig.base.json tsconfig.json ./
@@ -20,7 +20,7 @@ RUN npm ci
 RUN npm run build -w @lametrader/core
 RUN npm run build -w @lametrader/web
 
-FROM nginx:1.27-alpine AS run
+FROM nginx:1.31.2-alpine AS run
 COPY packages/web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/packages/web/dist /usr/share/nginx/html
 EXPOSE 8080

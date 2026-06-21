@@ -1,0 +1,37 @@
+version: 2
+updates:
+  # npm — one root lockfile covers every workspace under packages/*
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    versioning-strategy: increase
+    # Let a release age before we touch it — yanked/malicious versions surface within days.
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    groups:
+      # Batch routine bumps into one PR; security fixes still open on their own.
+      dev-dependencies:
+        dependency-type: development
+        update-types: [minor, patch]
+      production-minor-patch:
+        dependency-type: production
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directories:
+      - /packages/web
+      - /packages/api
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
