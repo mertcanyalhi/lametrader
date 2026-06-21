@@ -30,6 +30,8 @@ export { RuleConditionError, validateConditionTree } from './condition-tree.js';
 export { type ConditionNode, ConditionNodeKind } from './condition-tree.types.js';
 export { ConfigError, defaultConfig, mergeConfig, parseConfig } from './config.js';
 export { type Config, ConfigKey, type ConfigRepository, Period } from './config.types.js';
+export { ExpirationError, validateExpiration } from './expiration.js';
+export type { Expiration } from './expiration.types.js';
 export {
   IndicatorError,
   IndicatorInstanceNotFoundError,
