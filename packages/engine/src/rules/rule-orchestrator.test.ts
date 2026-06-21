@@ -1,0 +1,247 @@
+import {
+  ActionKind,
+  ConditionNodeKind,
+  NumericOperator,
+  OperandKind,
+  type Rule,
+  RuleEventKind,
+  RuleEventType,
+  RuleScopeKind,
+  StateOperator,
+  StateValueType,
+  TriggerKind,
+} from '@lametrader/core';
+import { describe, expect, it } from 'vitest';
+
+import { InMemoryStateRepository } from '../state/in-memory-state-repository.js';
+import type { EvaluationLookups } from './evaluation-context.types.js';
+import { InMemoryEventLog } from './in-memory-event-log.js';
+import { InMemoryNotifier } from './in-memory-notifier.js';
+import { InMemoryRuleRepository } from './in-memory-rule-repository.js';
+import { RuleOrchestrator } from './rule-orchestrator.js';
+
+/** Baseline lookups that return null for everything. */
+function emptyLookups(): EvaluationLookups {
+  return {
+    getCurrentValue: () => null,
+    getOpenValue: () => null,
+    getHighValue: () => null,
+    getLowValue: () => null,
+    getCloseValue: () => null,
+    getVolumeValue: () => null,
+    getIndicatorValue: () => null,
+    getSymbolState: () => null,
+    getGlobalState: () => null,
+  };
+}
+
+/** Build a minimally-valid rule with overrides. */
+function rule(overrides: Partial<Rule> & Pick<Rule, 'id' | 'order'>): Rule {
+  return {
+    profileId: 'profile-1',
+    name: overrides.id,
+    scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+    condition: {
+      kind: ConditionNodeKind.Leaf,
+      left: { kind: OperandKind.CurrentValue, valueType: StateValueType.Number },
+      operator: NumericOperator.Gt,
+      right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 0 } },
+    },
+    trigger: { kind: TriggerKind.Once },
+    expiration: null,
+    actions: [
+      {
+        kind: ActionKind.NotifyTelegram,
+        destinationName: 'main',
+        template: overrides.id,
+      },
+    ],
+    enabled: true,
+    events: [],
+    history: [],
+    createdAt: 0,
+    updatedAt: 0,
+    ...overrides,
+  };
+}
+
+/** A CurrentValueChanged event that makes the baseline condition fire. */
+function priceEvent(ts = 1000) {
+  return {
+    kind: RuleEventKind.CurrentValueChanged as const,
+    ts,
+    symbolId: 'AAPL',
+    prev: null,
+    current: 100,
+    final: false,
+  };
+}
+
+/** Lookups where AAPL's current value is 100 (matches `priceEvent`). */
+function priceLookups(): EvaluationLookups {
+  return {
+    ...emptyLookups(),
+    getCurrentValue: (id) => (id === 'AAPL' ? 100 : null),
+  };
+}
+
+describe('RuleOrchestrator', () => {
+  it('fires enabled rules in `order` against one event', async () => {
+    const rules = new InMemoryRuleRepository([
+      rule({ id: 'rule-b', order: 2 }),
+      rule({ id: 'rule-a', order: 1 }),
+    ]);
+    const notifier = new InMemoryNotifier(['main']);
+    const orchestrator = new RuleOrchestrator(
+      rules,
+      priceLookups(),
+      new InMemoryStateRepository(),
+      notifier,
+      new InMemoryEventLog(),
+    );
+
+    await orchestrator.process(priceEvent());
+
+    expect(notifier.sent.map((sent) => sent.body)).toEqual(['rule-a', 'rule-b']);
+  });
+
+  it('cascades state changes into downstream rules in the same tick', async () => {
+    const trigger = rule({
+      id: 'trigger',
+      order: 1,
+      actions: [
+        {
+          kind: ActionKind.SetSymbolState,
+          key: 'armed',
+          value: { type: StateValueType.Bool, value: true },
+        },
+      ],
+    });
+    const downstream = rule({
+      id: 'downstream',
+      order: 2,
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        left: { kind: OperandKind.SymbolStateRef, key: 'armed', valueType: StateValueType.Bool },
+        operator: StateOperator.Equals,
+        right: { kind: OperandKind.Literal, value: { type: StateValueType.Bool, value: true } },
+      },
+      actions: [{ kind: ActionKind.NotifyTelegram, destinationName: 'main', template: 'cascaded' }],
+    });
+    const rules = new InMemoryRuleRepository([trigger, downstream]);
+    const state = new InMemoryStateRepository();
+    const lookups: EvaluationLookups = {
+      ...priceLookups(),
+      getSymbolState: async (symbolId, key) => state.getSymbolState(symbolId, key),
+    } as EvaluationLookups;
+    // The lookups interface expects sync; bridge via a small Map updated by the cascade subscription.
+    const stateCache = new Map<string, boolean>();
+    state.onStateChanged((event) => {
+      if (event.scope.kind === 'symbol' && event.current !== null) {
+        stateCache.set(`${event.scope.symbolId}|${event.key}`, true);
+      }
+    });
+    const syncLookups: EvaluationLookups = {
+      ...priceLookups(),
+      getSymbolState: (symbolId, key) =>
+        stateCache.get(`${symbolId}|${key}`) === true
+          ? { type: StateValueType.Bool, value: true }
+          : null,
+    };
+    const notifier = new InMemoryNotifier(['main']);
+    const orchestrator = new RuleOrchestrator(
+      rules,
+      syncLookups,
+      state,
+      notifier,
+      new InMemoryEventLog(),
+    );
+
+    await orchestrator.process(priceEvent());
+
+    expect(notifier.sent.map((sent) => sent.body)).toEqual(['cascaded']);
+  });
+
+  it('stops cascading and records one CycleOverflow event when the cycle limit is breached', async () => {
+    // Two always-firing rules whose actions write distinct state keys; each
+    // initial fire produces one cascade event, so the second cascade event's
+    // `guard.enter()` (count=2) breaches a limit of 1 and the orchestrator
+    // records exactly one CycleOverflow event before stopping.
+    const a = rule({
+      id: 'A',
+      order: 1,
+      actions: [
+        {
+          kind: ActionKind.SetSymbolState,
+          key: 'a',
+          value: { type: StateValueType.Number, value: 1 },
+        },
+      ],
+    });
+    const b = rule({
+      id: 'B',
+      order: 2,
+      actions: [
+        {
+          kind: ActionKind.SetSymbolState,
+          key: 'b',
+          value: { type: StateValueType.Number, value: 1 },
+        },
+      ],
+    });
+    const rules = new InMemoryRuleRepository([a, b]);
+    const log = new InMemoryEventLog();
+    const orchestrator = new RuleOrchestrator(
+      rules,
+      priceLookups(),
+      new InMemoryStateRepository(),
+      new InMemoryNotifier(),
+      log,
+      { cycleLimit: 1 },
+    );
+
+    await orchestrator.process(priceEvent());
+
+    const events = await log.symbolEvents('AAPL');
+    const overflows = events.filter((event) => event.type === RuleEventType.CycleOverflow);
+    expect(overflows).toEqual([
+      {
+        type: RuleEventType.CycleOverflow,
+        ts: 1000,
+        ruleId: '',
+        symbolId: 'AAPL',
+        cycleLimit: 1,
+      },
+    ]);
+  });
+
+  it('skips a rule whose expiration has passed and emits one Expired event exactly once per symbol', async () => {
+    const expired = rule({ id: 'expired', order: 1, expiration: { at: 500 } });
+    const rules = new InMemoryRuleRepository([expired]);
+    const notifier = new InMemoryNotifier(['main']);
+    const log = new InMemoryEventLog();
+    const orchestrator = new RuleOrchestrator(
+      rules,
+      priceLookups(),
+      new InMemoryStateRepository(),
+      notifier,
+      log,
+    );
+
+    await orchestrator.process(priceEvent(1000));
+    await orchestrator.process(priceEvent(2000));
+
+    expect(notifier.sent).toEqual([]);
+    const expiredEvents = (await log.ruleEvents('expired')).filter(
+      (event) => event.type === RuleEventType.Expired,
+    );
+    expect(expiredEvents).toEqual([
+      {
+        type: RuleEventType.Expired,
+        ts: 1000,
+        ruleId: 'expired',
+        symbolId: 'AAPL',
+      },
+    ]);
+  });
+});
