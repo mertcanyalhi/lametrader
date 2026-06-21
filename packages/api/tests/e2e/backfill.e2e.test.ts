@@ -160,20 +160,24 @@ describe('backfill API (e2e)', () => {
       url: `/symbols/${BTC.id}/candles?period=1h&from=0&to=4000`,
     });
     expect(read.statusCode).toBe(200);
-    expect(read.json()).toEqual({ candles: SERIES, nextCursor: null });
+    expect(read.json()).toEqual({ candles: SERIES, nextCursor: null, latestTime: 3000 });
 
     // Keyset pagination: first page of 2, then the remainder from the cursor.
     const page1 = await app.inject({
       method: 'GET',
       url: `/symbols/${BTC.id}/candles?period=1h&limit=2`,
     });
-    expect(page1.json()).toEqual({ candles: [SERIES[0], SERIES[1]], nextCursor: 3000 });
+    expect(page1.json()).toEqual({
+      candles: [SERIES[0], SERIES[1]],
+      nextCursor: 3000,
+      latestTime: 3000,
+    });
 
     const page2 = await app.inject({
       method: 'GET',
       url: `/symbols/${BTC.id}/candles?period=1h&from=3000&limit=2`,
     });
-    expect(page2.json()).toEqual({ candles: [SERIES[2]], nextCursor: null });
+    expect(page2.json()).toEqual({ candles: [SERIES[2]], nextCursor: null, latestTime: 3000 });
   });
 
   it('returns 404 and persists nothing when backfilling an unwatched symbol', async () => {
@@ -189,7 +193,7 @@ describe('backfill API (e2e)', () => {
       url: '/symbols/crypto:ETHUSDT/candles?period=1h&from=0&to=4000',
     });
     expect(read.statusCode).toBe(200);
-    expect(read.json()).toEqual({ candles: [], nextCursor: null });
+    expect(read.json()).toEqual({ candles: [], nextCursor: null, latestTime: null });
   });
 
   it('records an upstream failure as a failed job carrying the reason', async () => {
@@ -243,6 +247,6 @@ describe('backfill API (e2e)', () => {
       method: 'GET',
       url: `/symbols/${BTC.id}/candles?period=1h`,
     });
-    expect(after.json()).toEqual({ candles: [], nextCursor: null });
+    expect(after.json()).toEqual({ candles: [], nextCursor: null, latestTime: null });
   });
 });

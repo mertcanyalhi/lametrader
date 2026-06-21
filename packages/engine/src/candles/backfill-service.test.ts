@@ -157,6 +157,7 @@ describe('BackfillService', () => {
     expect(await service.read(BTC.id, Period.OneHour, { from: 0, to: 4000, limit: 100 })).toEqual({
       candles: [candle(1000), candle(2000), candle(3000)],
       nextCursor: null,
+      latestTime: 3000,
     });
   });
 
@@ -165,13 +166,36 @@ describe('BackfillService', () => {
     await service.backfill(BTC.id, Period.OneHour);
 
     const page1 = await service.read(BTC.id, Period.OneHour, { from: 0, to: 4000, limit: 2 });
-    expect(page1).toEqual({ candles: [candle(1000), candle(2000)], nextCursor: 3000 });
+    expect(page1).toEqual({
+      candles: [candle(1000), candle(2000)],
+      nextCursor: 3000,
+      latestTime: 3000,
+    });
 
     const page2 = await service.read(BTC.id, Period.OneHour, {
       from: page1.nextCursor ?? 0,
       to: 4000,
       limit: 2,
     });
-    expect(page2).toEqual({ candles: [candle(3000)], nextCursor: null });
+    expect(page2).toEqual({ candles: [candle(3000)], nextCursor: null, latestTime: 3000 });
+  });
+
+  it('read reports latestTime for the whole symbol+period even when the window holds no candles', async () => {
+    const service = serviceWith([candle(1000), candle(2000), candle(3000)]);
+    await service.backfill(BTC.id, Period.OneHour);
+
+    expect(
+      await service.read(BTC.id, Period.OneHour, { from: 100000, to: 200000, limit: 100 }),
+    ).toEqual({ candles: [], nextCursor: null, latestTime: 3000 });
+  });
+
+  it('read reports a null latestTime when nothing is stored for the symbol+period', async () => {
+    const service = serviceWith([]);
+
+    expect(await service.read(BTC.id, Period.OneHour, { from: 0, to: 4000, limit: 100 })).toEqual({
+      candles: [],
+      nextCursor: null,
+      latestTime: null,
+    });
   });
 });
