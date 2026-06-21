@@ -1,0 +1,72 @@
+# 0012. Rules engine architecture: timestamp-per-event, cascading with cycle-limit, embedded events
+
+- Status: accepted
+- Date: 2026-06-21
+
+## Context
+
+The rules engine (parent issue #91) needs to react to live market events, evaluate condition trees against current and historical values, fire actions (state writes, notifications), and feed state changes back into the same evaluation pass so a downstream rule can react in the same tick.
+
+Three design choices fork the rest of the work and aren't obvious from the spec alone:
+
+1. **Where does the clock live?**
+   The evaluator needs to know "when" each event happened — for `OncePerBar` gating, for the `timestamp` template variable, for the persisted `lastFiredAt`.
+   Reading `Date.now()` inside the evaluator works for live mode but forks the code path the moment a backtest needs to replay historical candles with synthetic timestamps.
+
+2. **How do action-produced state changes propagate?**
+   A rule that sets `state.trend = 'up'` should be able to immediately fire a downstream rule that conditions on `state.trend == 'up'`.
+   Without a feedback loop they don't compose; with an unbounded loop they hang.
+
+3. **Where do rule events live?**
+   The spec describes embedded `events` arrays on the rule and on each symbol.
+   The alternative is a standalone `rule_events` collection indexed by `ruleId` and `symbolId`, which scales better but diverges from the spec wording and adds a second source of truth for the same data.
+
+## Decision
+
+**1. Every `RuleEvent` carries its own `ts`.**
+The evaluator never reads `Date.now()`; the orchestrator never calls a clock port either.
+The timestamp travels with each inbound event (timer ticks, OHLCV changes, indicator updates, state changes) and is the only "now" the engine sees.
+Live mode passes the wall-clock; backtests pass the candle's own timestamp.
+The engine doesn't need to know which mode it's in.
+
+**2. State-change events re-enter the engine in the same tick, bounded by a cycle-limit guard.**
+When an action writes to the state store, the resulting `change:symbol_state` / `change:global_state` event is enqueued and processed in the same evaluation pass (after the rule that produced it).
+A `CycleGuard(limit)` counts entries per tick.
+Hitting the limit halts the cascade and emits one `cycle_overflow` error event on the offending rule + affected symbol; the next external event resets the counter.
+Default limit is small (e.g. 16) — large enough for realistic cascades, small enough to surface accidental loops fast.
+
+**3. Rule events live as embedded arrays on the rule and symbol documents.**
+Each fired event is appended both to `Rule.events[]` and to the affected `Symbol.events[]`.
+Reads for "events for this rule" and "events for this symbol" are single-document fetches.
+Pagination uses `before` cursors on the event `ts`.
+
+## Consequences
+
+**Timestamp-per-event**
+
+- Backtesting needs no engine changes — replaying candles with their own timestamps is the whole story.
+- The pure evaluator is trivially testable: tests construct events with explicit timestamps, no fake clock needed.
+- Streams that don't natively carry a timestamp (none today) would need one decorated on; this is a constraint on every new event source, called out in the `RuleEvent` types.
+
+**Cascading with cycle-limit**
+
+- Two rules that legitimately chain (`A sets state.x → B reads state.x → fires`) compose without an extra orchestration layer.
+- A pair of rules that set each other's state can't hang the engine; the guard catches them and surfaces the cycle as data the user can see in the events list (no silent failure, no log-only error).
+- The default limit is a magic number; it's settable per-engine-instance for users with deep legitimate cascades.
+- Cascading is bounded to one tick — a rule can't queue work for a future tick by writing state.
+  If asynchronous follow-up is ever needed (a delayed action, a scheduled re-evaluation), it'll need its own primitive, not this pass.
+
+**Embedded events**
+
+- One document read covers a rule's full event history or a symbol's full event history — no join, no cross-collection cursor.
+- Document size grows over time; the single-tenant scope of this app makes that acceptable for the foreseeable future.
+  When it stops being acceptable, the read API stays the same and we migrate to a `rule_events` collection behind it.
+- Rule delete cleans up its embedded events in one operation; symbol delete the same.
+  No orphan-cleanup job needed.
+- Events are mirrored on two documents (rule + symbol), so an event write is two updates.
+  Mongo doesn't guarantee these atomically; an interleaved failure between writes leaves one side missing an entry.
+  Acceptable for an events log (where occasional gaps don't change correctness) and called out in the event-append helper.
+
+## Closes
+
+#98.
