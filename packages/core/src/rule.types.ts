@@ -54,6 +54,10 @@ export enum RuleEventType {
   StateSet = 'stateSet',
   /** A `RemoveSymbolState` / `RemoveGlobalState` action removed a key. */
   StateRemoved = 'stateRemoved',
+  /** A `NotifyTelegram` action sent a message via the notifier. */
+  NotificationSent = 'notificationSent',
+  /** An action failed (unknown destination, bad template token, transport error). */
+  Error = 'error',
 }
 
 /**
@@ -115,6 +119,27 @@ export interface StateRemovedRuleEvent extends BaseRuleEventEntry {
 }
 
 /**
+ * A `NotificationSent` event — a `NotifyTelegram` action delivered a message.
+ */
+export interface NotificationSentRuleEvent extends BaseRuleEventEntry {
+  type: RuleEventType.NotificationSent;
+  /** The notifier destination the body was sent to. */
+  destinationName: string;
+  /** The rendered message body. */
+  body: string;
+}
+
+/**
+ * An `Error` event — an action failed (unknown destination, bad template
+ * token, transport error, etc.).
+ */
+export interface ErrorRuleEvent extends BaseRuleEventEntry {
+  type: RuleEventType.Error;
+  /** Human-readable reason. */
+  reason: string;
+}
+
+/**
  * One entry in a {@link Rule}'s embedded events log.
  *
  * Tagged union over {@link RuleEventType}; mirrored onto `Symbol.events[]` per
@@ -124,7 +149,9 @@ export type RuleEventEntry =
   | FiredRuleEvent
   | CycleOverflowRuleEvent
   | StateSetRuleEvent
-  | StateRemovedRuleEvent;
+  | StateRemovedRuleEvent
+  | NotificationSentRuleEvent
+  | ErrorRuleEvent;
 
 /**
  * The kind of a {@link RuleHistoryEntry} — a lifecycle change to the rule

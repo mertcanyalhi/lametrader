@@ -75,6 +75,7 @@ export {
   type SourceFieldDescriptor,
   type StateFieldDescriptor,
 } from './indicator.types.js';
+export { type Notifier, UnknownDestinationError } from './notifier.types.js';
 export {
   mergeProfileFields,
   ProfileConflictError,
@@ -104,7 +105,9 @@ export { RuleError, validateRule } from './rule.js';
 export {
   type AllSymbolsRuleScope,
   type CycleOverflowRuleEvent,
+  type ErrorRuleEvent,
   type FiredRuleEvent,
+  type NotificationSentRuleEvent,
   type Rule,
   type RuleEventEntry,
   RuleEventType,
