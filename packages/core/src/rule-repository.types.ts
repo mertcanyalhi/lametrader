@@ -34,4 +34,10 @@ export interface RuleRepository {
    * Delete a rule by id. Idempotent (no-op when absent).
    */
   remove(id: string): Promise<void>;
+  /**
+   * Delete every rule belonging to `profileId`; returns the removed rule ids
+   * so callers can cascade dependent state (e.g. firing-state entries).
+   * Idempotent — returns `[]` when the profile has no rules.
+   */
+  removeForProfile(profileId: string): Promise<string[]>;
 }

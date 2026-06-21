@@ -70,6 +70,15 @@ export class MongoRuleRepository implements RuleRepository {
   async remove(id: string): Promise<void> {
     await this.collection.deleteOne({ _id: id });
   }
+
+  async removeForProfile(profileId: string): Promise<string[]> {
+    const docs = await this.collection.find({ profileId }, { projection: { _id: 1 } }).toArray();
+    const ids = docs.map((doc) => doc._id);
+    if (ids.length > 0) {
+      await this.collection.deleteMany({ profileId });
+    }
+    return ids;
+  }
 }
 
 /** Map a stored document to a domain {@link Rule}. */

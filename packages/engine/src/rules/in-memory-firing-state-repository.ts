@@ -15,4 +15,11 @@ export class InMemoryFiringStateRepository implements FiringStateRepository {
   async setActive(ruleId: string, symbolId: string, active: boolean): Promise<void> {
     this.active.set(`${ruleId}|${symbolId}`, active);
   }
+
+  async removeByRule(ruleId: string): Promise<void> {
+    const prefix = `${ruleId}|`;
+    for (const key of this.active.keys()) {
+      if (key.startsWith(prefix)) this.active.delete(key);
+    }
+  }
 }

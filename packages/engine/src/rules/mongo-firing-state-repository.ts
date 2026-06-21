@@ -33,4 +33,8 @@ export class MongoFiringStateRepository implements FiringStateRepository {
   async setActive(ruleId: string, symbolId: string, active: boolean): Promise<void> {
     await this.collection.replaceOne({ _id: { ruleId, symbolId } }, { active }, { upsert: true });
   }
+
+  async removeByRule(ruleId: string): Promise<void> {
+    await this.collection.deleteMany({ '_id.ruleId': ruleId });
+  }
 }

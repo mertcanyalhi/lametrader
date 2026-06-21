@@ -48,4 +48,13 @@ export class InMemoryRuleRepository implements RuleRepository {
   async remove(id: string): Promise<void> {
     this.store.delete(id);
   }
+
+  async removeForProfile(profileId: string): Promise<string[]> {
+    const removed: string[] = [];
+    for (const rule of this.store.values()) {
+      if (rule.profileId === profileId) removed.push(rule.id);
+    }
+    for (const id of removed) this.store.delete(id);
+    return removed;
+  }
 }
