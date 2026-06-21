@@ -101,5 +101,21 @@ export function rulesController(service: RuleService) {
       async (request) =>
         service.replace(request.params.id, request.body as unknown as RuleCreateInput),
     );
+
+    app.delete(
+      '/rules/:id',
+      {
+        schema: {
+          tags: ['rules'],
+          summary: 'Delete a rule',
+          params: RuleIdParamSchema,
+          response: { 204: Type.Null(), 404: ErrorSchema },
+        },
+      },
+      async (request, reply) => {
+        await service.remove(request.params.id);
+        return reply.code(204).send(null);
+      },
+    );
   };
 }
