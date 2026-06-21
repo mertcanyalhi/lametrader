@@ -1,11 +1,18 @@
 name: CI
 
-# Mirrors the repo's gates (see CLAUDE.md):
-# - every push        -> `check`       (typecheck + lint + unit)
-# - every pull request -> `check:full`  (+ e2e, Testcontainers/Mongo)
+# Gates (see CLAUDE.md), arranged so each commit runs CI once:
+# - pull_request -> `check:full` (+ e2e, Testcontainers/Mongo) — the pre-merge gate
+# - push to main -> `check`      (typecheck + lint + unit) — cheap post-merge safety net
+#
+# `push` is scoped to main so a PR commit triggers only the pull_request run
+# (previously push + pull_request both fired, duplicating the unit/typecheck/lint
+# work that check:full already covers). Docs-only changes skip CI entirely.
 on:
-  push:
   pull_request:
+    paths-ignore: ['**.md', 'docs/**', 'specs/**']
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**', 'specs/**']
 
 # Cancel superseded runs on the same ref (saves minutes on rapid pushes).
 concurrency:
