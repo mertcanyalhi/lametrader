@@ -217,3 +217,90 @@ describe('GET /rules/:id', () => {
     expect(res.json()).toEqual({ error: 'rule not found: missing' });
   });
 });
+
+describe('PUT /rules/:id', () => {
+  it('replaces the mutable fields, preserves embedded events + createdAt, appends an Updated history entry (200)', async () => {
+    const seed = rule({
+      id: 'r1',
+      profileId: 'p1',
+      order: 1,
+      name: 'old',
+      history: [{ type: 'created' as const, ts: 500 }],
+      events: [],
+      createdAt: 500,
+      updatedAt: 500,
+    });
+    const app = buildApp([seed]);
+    const body = {
+      profileId: 'p1',
+      name: 'renamed',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        left: { kind: OperandKind.CurrentValue, valueType: StateValueType.Number },
+        operator: NumericOperator.Gt,
+        right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 0 } },
+      },
+      trigger: { kind: TriggerKind.Once },
+      expiration: null,
+      actions: [{ kind: ActionKind.NotifyTelegram, destinationName: 'main', template: 'hi' }],
+      enabled: false,
+      order: 2,
+    };
+
+    const res = await app.inject({ method: 'PUT', url: '/rules/r1', payload: body });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      ...body,
+      id: 'r1',
+      events: [],
+      history: [
+        { type: 'created', ts: 500 },
+        { type: 'updated', ts: 1000 },
+      ],
+      createdAt: 500,
+      updatedAt: 1000,
+    });
+  });
+
+  it('returns 404 for an unknown id', async () => {
+    const app = buildApp();
+    const body = {
+      profileId: 'p1',
+      name: 'x',
+      scope: { kind: RuleScopeKind.AllSymbols },
+      condition: { kind: ConditionNodeKind.And, children: [] },
+      trigger: { kind: TriggerKind.Once },
+      expiration: null,
+      actions: [{ kind: ActionKind.NotifyTelegram, destinationName: 'main', template: 'hi' }],
+      enabled: true,
+      order: 1,
+    };
+    const res = await app.inject({ method: 'PUT', url: '/rules/missing', payload: body });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 400 when the body fails domain validation', async () => {
+    const seed = rule({ id: 'r1', profileId: 'p1', order: 1 });
+    const app = buildApp([seed]);
+    const body = {
+      profileId: 'p1',
+      name: '   ',
+      scope: { kind: RuleScopeKind.AllSymbols },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        left: { kind: OperandKind.CurrentValue, valueType: StateValueType.Number },
+        operator: NumericOperator.Gt,
+        right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 0 } },
+      },
+      trigger: { kind: TriggerKind.Once },
+      expiration: null,
+      actions: [{ kind: ActionKind.NotifyTelegram, destinationName: 'main', template: 'hi' }],
+      enabled: true,
+      order: 1,
+    };
+    const res = await app.inject({ method: 'PUT', url: '/rules/r1', payload: body });
+    expect(res.statusCode).toBe(400);
+  });
+});

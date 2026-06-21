@@ -102,4 +102,28 @@ export class RuleService {
     await this.rules.save(rule);
     return rule;
   }
+
+  /**
+   * Replace a rule's mutable fields by id. Preserves `id`, `events`,
+   * `history` (with a new `Updated` entry appended), and `createdAt`; bumps
+   * `updatedAt`. Validates the assembled rule via {@link validateRule}.
+   *
+   * @throws {@link RuleNotFoundError} when the id is unknown.
+   * @throws `RuleError` / per-piece validators on invalid input.
+   */
+  async replace(id: string, input: RuleCreateInput): Promise<Rule> {
+    const existing = await this.get(id);
+    const ts = this.now();
+    const rule: Rule = {
+      ...input,
+      id,
+      events: existing.events,
+      history: [...existing.history, { type: RuleHistoryType.Updated, ts }],
+      createdAt: existing.createdAt,
+      updatedAt: ts,
+    };
+    validateRule(rule, ts);
+    await this.rules.save(rule);
+    return rule;
+  }
 }
