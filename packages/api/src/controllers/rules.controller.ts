@@ -86,5 +86,20 @@ export function rulesController(service: RuleService) {
       },
       async (request) => service.get(request.params.id),
     );
+
+    app.put(
+      '/rules/:id',
+      {
+        schema: {
+          tags: ['rules'],
+          summary: 'Replace a rule (full update)',
+          params: RuleIdParamSchema,
+          body: RuleInputSchema,
+          response: { 200: RuleSchema, 400: ErrorSchema, 404: ErrorSchema },
+        },
+      },
+      async (request) =>
+        service.replace(request.params.id, request.body as unknown as RuleCreateInput),
+    );
   };
 }
