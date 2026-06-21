@@ -33,16 +33,13 @@ export interface CryptoCandle extends BaseCandle {
 }
 
 /**
- * An equity (stock/fund) candle: OHLC plus share volume and a split/dividend
- * adjusted close.
+ * An equity (stock/fund) candle: OHLC plus share volume.
  */
 export interface EquityCandle extends BaseCandle {
   /** Discriminant: a listed-equity or fund candle. */
   type: SymbolType.Stock | SymbolType.Fund;
   /** Shares/units traded in the interval. */
   volume: number;
-  /** Close adjusted for splits and dividends. */
-  adjClose: number;
 }
 
 /**

@@ -36,6 +36,4 @@ export interface CandleDocument {
   quoteVolume?: number;
   /** Trade count (crypto only). */
   trades?: number;
-  /** Adjusted close (equity only). */
-  adjClose?: number;
 }

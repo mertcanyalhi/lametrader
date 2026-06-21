@@ -109,7 +109,7 @@ function toDocument(symbolId: string, period: Period, candle: Candle): CandleDoc
       };
     case SymbolType.Stock:
     case SymbolType.Fund:
-      return { ...base, volume: candle.volume, adjClose: candle.adjClose };
+      return { ...base, volume: candle.volume };
     default:
       return base;
   }
@@ -142,7 +142,6 @@ function toCandle(doc: CandleDocument): Candle {
         ...base,
         type: doc.type,
         volume: doc.volume ?? 0,
-        adjClose: doc.adjClose ?? doc.close,
       };
     default:
       return { ...base, type: SymbolType.Fx };

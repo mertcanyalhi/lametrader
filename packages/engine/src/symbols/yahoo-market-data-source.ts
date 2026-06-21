@@ -234,7 +234,6 @@ interface YahooBar {
   high?: number | null;
   low?: number | null;
   close?: number | null;
-  adjclose?: number | null;
   volume?: number | null;
 }
 
@@ -313,7 +312,6 @@ function placeLiveBar(
     high: nanMax(existing.high, live.high),
     low: nanMin(existing.low, live.low),
     close: live.close ?? existing.close,
-    adjclose: live.adjclose ?? existing.adjclose,
     volume: (existing.volume ?? 0) + (live.volume ?? 0),
   };
 }
@@ -367,7 +365,6 @@ function toCandle(type: SymbolType, bar: YahooBar): Candle | null {
     ...base,
     type: type === SymbolType.Fund ? SymbolType.Fund : SymbolType.Stock,
     volume: bar.volume,
-    adjClose: bar.adjclose ?? bar.close,
   } satisfies EquityCandle;
 }
 

@@ -155,7 +155,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 9,
           close: 10,
           volume: 100,
-          adjClose: 10,
         },
         {
           type: SymbolType.Stock,
@@ -165,7 +164,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 10,
           close: 11,
           volume: 100,
-          adjClose: 11,
         },
         {
           type: SymbolType.Stock,
@@ -175,7 +173,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 10,
           close: 13,
           volume: 100,
-          adjClose: 13,
         },
       ],
       complete: true,
@@ -239,7 +236,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 9,
           close: 10,
           volume: 50,
-          adjClose: 10,
         },
         {
           type: SymbolType.Stock,
@@ -249,7 +245,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 10,
           close: 11,
           volume: 50,
-          adjClose: 11,
         },
         {
           type: SymbolType.Stock,
@@ -259,7 +254,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 12.5,
           close: 12.5,
           volume: 0,
-          adjClose: 12.5,
         },
       ],
       complete: true,
@@ -311,7 +305,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 9,
           close: 10,
           volume: 100,
-          adjClose: 10,
         },
         {
           type: SymbolType.Stock,
@@ -321,7 +314,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 10,
           close: 11,
           volume: 100,
-          adjClose: 11,
         },
         {
           type: SymbolType.Stock,
@@ -331,7 +323,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 11,
           close: 12,
           volume: 100,
-          adjClose: 12,
         },
       ],
       complete: true,
@@ -377,7 +368,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 9,
           close: 10,
           volume: 100,
-          adjClose: 10,
         },
         {
           type: SymbolType.Stock,
@@ -387,7 +377,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 10,
           close: 11,
           volume: 0,
-          adjClose: 11,
         },
       ],
       complete: true,
@@ -453,7 +442,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 11,
           close: 12,
           volume: 200,
-          adjClose: 12,
         },
         {
           type: SymbolType.Stock,
@@ -463,7 +451,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 12,
           close: 13,
           volume: 300,
-          adjClose: 13,
         },
       ],
       complete: true,
@@ -518,7 +505,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 9,
           close: 10,
           volume: 50,
-          adjClose: 10,
         },
         {
           type: SymbolType.Stock,
@@ -528,7 +514,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 10,
           close: 11,
           volume: 50,
-          adjClose: 11,
         },
         {
           type: SymbolType.Stock,
@@ -538,7 +523,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 12.5,
           close: 12.5,
           volume: 0,
-          adjClose: 12.5,
         },
       ],
       complete: true,
@@ -593,7 +577,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 9,
           close: 10,
           volume: 100,
-          adjClose: 10,
         },
         {
           type: SymbolType.Stock,
@@ -603,7 +586,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 10,
           close: 13,
           volume: 100,
-          adjClose: 13,
         },
       ],
       complete: true,
@@ -644,7 +626,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 9,
           close: 10,
           volume: 50,
-          adjClose: 10,
         },
         {
           type: SymbolType.Stock,
@@ -654,7 +635,6 @@ describe('YahooMarketDataSource.fetchCandles', () => {
           low: 12.5,
           close: 12.5,
           volume: 0,
-          adjClose: 12.5,
         },
       ],
       complete: true,
