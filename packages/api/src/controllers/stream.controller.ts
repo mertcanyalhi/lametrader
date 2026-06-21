@@ -57,6 +57,7 @@ export function streamController(liveStream: LiveStream) {
       const candleUnsubscribes = new Map<string, () => void>();
       const indicatorUnsubscribes = new Map<string, () => void>();
       const quoteUnsubscribes = new Map<string, () => void>();
+      let closed = false;
       log.info('stream client connected');
 
       socket.on('message', (raw: Buffer) => {
@@ -95,6 +96,7 @@ export function streamController(liveStream: LiveStream) {
       });
 
       socket.on('close', () => {
+        closed = true;
         for (const unsubscribe of candleUnsubscribes.values()) unsubscribe();
         candleUnsubscribes.clear();
         for (const [subscriptionId, unsubscribe] of indicatorUnsubscribes) {
@@ -163,6 +165,10 @@ export function streamController(liveStream: LiveStream) {
           socket.send(JSON.stringify({ error: 'subscribe-indicator failed' }));
           return;
         }
+        if (closed) {
+          indicatorStreamService.unsubscribe(subscriptionId);
+          return;
+        }
         indicatorUnsubscribes.set(
           subscriptionId,
           indicatorStream.subscribe(subscriptionId, (event) => socket.send(JSON.stringify(event))),
@@ -210,6 +216,10 @@ export function streamController(liveStream: LiveStream) {
             return;
           }
           socket.send(JSON.stringify({ error: 'subscribe-quote failed' }));
+          return;
+        }
+        if (closed) {
+          quoteStreamService.unsubscribe(subscriptionId);
           return;
         }
         quoteUnsubscribes.set(
