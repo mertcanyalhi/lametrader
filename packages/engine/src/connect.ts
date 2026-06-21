@@ -12,6 +12,8 @@ import type { IndicatorRegistry } from './indicators/indicator-registry.js';
 import { IndicatorStreamService } from './indicators/indicator-stream-service.js';
 import { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 import { ProfileService } from './profiles/profile-service.js';
+import { MongoRuleRepository } from './rules/mongo-rule-repository.js';
+import { RuleService } from './rules/rule-service.js';
 import { defaultMarketDataSources } from './symbols/default-sources.js';
 import { MongoWatchlistRepository } from './symbols/mongo-watchlist-repository.js';
 import { QuoteStreamService } from './symbols/quote-stream-service.js';
@@ -42,6 +44,8 @@ export interface ConnectedServices {
   symbols: SymbolService;
   /** The profiles use-case (CRUD + attached indicators). */
   profiles: ProfileService;
+  /** The rules use-case (read-only for now; CRUD lands in later issues). */
+  rules: RuleService;
   /** The shared indicator catalog registry (read-only at runtime). */
   indicators: IndicatorRegistry;
   /** Ad-hoc indicator compute over a symbol's stored candles. */
@@ -91,7 +95,10 @@ export async function connectServices(
   const quoteStream = new QuoteStreamService(watchlist, config, candleRepo, {
     onQuote: options.onSymbolQuote ?? (() => {}),
   });
+  const ruleRepo = new MongoRuleRepository(db);
+  await ruleRepo.ensureIndexes();
   const profiles = new ProfileService(new MongoProfileRepository(db), watchlist, indicators);
+  const rules = new RuleService(ruleRepo);
   const symbols = new SymbolService(sources, watchlist, config, candleRepo, profiles);
   const backfill = new BackfillService(sources, candleRepo, watchlist);
 
@@ -112,6 +119,7 @@ export async function connectServices(
     config,
     symbols,
     profiles,
+    rules,
     indicators,
     indicatorCompute,
     indicatorStream,

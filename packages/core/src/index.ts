@@ -102,7 +102,7 @@ export type {
   SymbolQuoteEvent,
   SymbolQuoteListener,
 } from './quote.types.js';
-export { RuleError, validateRule } from './rule.js';
+export { RuleError, RuleNotFoundError, validateRule } from './rule.js';
 export {
   type AllSymbolsRuleScope,
   type CycleOverflowRuleEvent,

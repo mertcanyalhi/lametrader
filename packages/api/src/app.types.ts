@@ -8,6 +8,7 @@ import type {
   IndicatorStreamService,
   ProfileService,
   QuoteStreamService,
+  RuleService,
   SymbolService,
 } from '@lametrader/engine';
 import type { StreamHub } from './stream-hub.js';
@@ -52,6 +53,12 @@ export interface AppDependencies {
    * When present, the `/profiles` routes are registered.
    */
   profiles?: ProfileService;
+  /**
+   * The rules use-case (read-only for now; CRUD lands in later issues).
+   *
+   * When present, the `/rules` routes are registered.
+   */
+  rules?: RuleService;
   /**
    * The backfill use-case (historical candles).
    */

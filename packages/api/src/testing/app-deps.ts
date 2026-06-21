@@ -11,9 +11,11 @@ import {
   InMemoryConfigRepository,
   InMemoryMarketDataSource,
   InMemoryProfileRepository,
+  InMemoryRuleRepository,
   InMemoryWatchlistRepository,
   ProfileService,
   QuoteStreamService,
+  RuleService,
   SymbolService,
 } from '@lametrader/engine';
 import type { AppDependencies } from '../app.types.js';
@@ -48,6 +50,7 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
     overrides.indicators?.compute ?? new IndicatorComputeService(registry, watchlist, candles);
   const profiles =
     overrides.profiles ?? new ProfileService(new InMemoryProfileRepository(), watchlist, registry);
+  const rules = overrides.rules ?? new RuleService(new InMemoryRuleRepository());
 
   // Default live-stream wiring: the in-memory candle + indicator hubs and a stream
   // service the controller talks to. Tests that don't exercise streaming get the
@@ -71,6 +74,7 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
     config,
     symbols: overrides.symbols ?? new SymbolService(sources, watchlist, config, candles, profiles),
     profiles,
+    rules,
     backfill: overrides.backfill ?? new BackfillService(sources, candles, watchlist),
     indicators: { registry, compute },
     liveStream: {

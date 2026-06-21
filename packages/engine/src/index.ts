@@ -75,6 +75,7 @@ export {
   RuleOrchestrator,
   type RuleOrchestratorOptions,
 } from './rules/rule-orchestrator.js';
+export { RuleService } from './rules/rule-service.js';
 export {
   executeStateAction,
   type StateMutationAction,

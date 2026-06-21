@@ -23,6 +23,7 @@ const {
   config,
   symbols,
   profiles,
+  rules,
   backfill,
   polling,
   indicators,
@@ -42,6 +43,7 @@ const app = createApp(
     config,
     symbols,
     profiles,
+    rules,
     backfill,
     indicators: { registry: indicators, compute: indicatorCompute },
     liveStream: {
