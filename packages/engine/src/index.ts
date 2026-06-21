@@ -64,6 +64,10 @@ export { mayFireOncePerMinute } from './rules/once-per-minute-trigger-gate.js';
 export { mayFireOnce } from './rules/once-trigger-gate.js';
 export { type PrevCurrent, PrevCurrentCache } from './rules/prev-current-cache.js';
 export { QuoteRuleEventBridge } from './rules/quote-rule-event-bridge.js';
+export {
+  executeStateAction,
+  type StateMutationAction,
+} from './rules/state-action-executor.js';
 export { evaluateState } from './rules/state-evaluator.js';
 export { loadSettings } from './settings.js';
 export type { Settings } from './settings.types.js';
