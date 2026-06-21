@@ -1,3 +1,4 @@
+import { yupResolver } from '@hookform/resolvers/yup';
 import { type Profile, type ProfileFields, ProfileScope } from '@lametrader/core';
 import {
   AlertDialog,
@@ -14,6 +15,7 @@ import {
 } from '@radix-ui/themes';
 import { Pencil, Plus, Trash2, User } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
+import { type SubmitHandler, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { ApiError } from '../../lib/api-fetch.js';
 import {
@@ -23,6 +25,11 @@ import {
   useUpdateProfile,
 } from '../../lib/hooks/profiles.js';
 import { getLogger } from '../../lib/log.js';
+import {
+  FIELD_LABELS,
+  type ProfileFormValues,
+  profileFormSchema,
+} from '../../lib/profile-schema.js';
 import { useSelectedProfile } from '../../lib/selected-profile-context.js';
 
 /** Scoped logger for picker lifecycle / mutation failures. */
@@ -277,20 +284,24 @@ function ProfileForm({
 }): ReactNode {
   const create = useCreateProfile();
   const update = useUpdateProfile();
-  const [name, setName] = useState(profile?.name ?? '');
-  const [description, setDescription] = useState(profile?.description ?? '');
-  const [enabled, setEnabled] = useState(profile?.enabled ?? true);
-  const [nameError, setNameError] = useState<string | null>(null);
+  const { register, handleSubmit, setValue, setError, watch, formState } =
+    useForm<ProfileFormValues>({
+      resolver: yupResolver(profileFormSchema),
+      defaultValues: {
+        name: profile?.name ?? '',
+        description: profile?.description ?? '',
+        enabled: profile?.enabled ?? true,
+      },
+      mode: 'onSubmit',
+    });
   const submitting = create.isPending || update.isPending;
+  const nameError = formState.errors.name?.message;
+  const enabled = watch('enabled');
 
-  async function handleSubmit(event: React.FormEvent): Promise<void> {
-    event.preventDefault();
-    setNameError(null);
+  const onSubmit: SubmitHandler<ProfileFormValues> = async (values) => {
     if (mode === 'create') {
       const fields: ProfileFields = {
-        name,
-        description,
-        enabled,
+        ...values,
         scope: { type: ProfileScope.All },
       };
       try {
@@ -304,21 +315,18 @@ function ProfileForm({
     }
     if (!profile) return;
     try {
-      const saved = await update.mutateAsync({
-        id: profile.id,
-        patch: { name, description, enabled },
-      });
+      const saved = await update.mutateAsync({ id: profile.id, patch: values });
       toast.success(`Saved ${saved.name}`);
       onEdited();
     } catch (cause) {
       handleError(cause, 'failed to save profile');
     }
-  }
+  };
 
   function handleError(cause: unknown, fallbackMessage: string): void {
     log.warn({ err: cause, mode }, fallbackMessage);
     if (cause instanceof ApiError && cause.status === 409) {
-      setNameError(cause.message);
+      setError('name', { type: 'server', message: cause.message });
       return;
     }
     const message = cause instanceof ApiError ? cause.message : fallbackMessage;
@@ -330,22 +338,20 @@ function ProfileForm({
   const nameErrorId = nameError ? 'profile-name-error' : undefined;
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit(onSubmit)} noValidate>
       <Dialog.Title>{title}</Dialog.Title>
       <Flex direction="column" gap="3" mt="4">
         <Box>
           <Text as="label" htmlFor="profile-name" size="2" weight="medium">
-            Name
+            {FIELD_LABELS.name}
           </Text>
           <TextField.Root
             id="profile-name"
-            aria-label="Name"
+            aria-label={FIELD_LABELS.name}
             aria-invalid={nameError ? true : undefined}
             aria-describedby={nameErrorId}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            required
             autoFocus
+            {...register('name')}
           />
           {nameError ? (
             <Text id={nameErrorId} role="alert" color="red" size="1">
@@ -355,20 +361,21 @@ function ProfileForm({
         </Box>
         <Box>
           <Text as="label" htmlFor="profile-description" size="2" weight="medium">
-            Description
+            {FIELD_LABELS.description}
           </Text>
           <TextArea
             id="profile-description"
-            aria-label="Description"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
+            aria-label={FIELD_LABELS.description}
+            {...register('description')}
           />
         </Box>
         <Flex align="center" gap="2">
           <Switch
             id="profile-enabled"
             checked={enabled}
-            onCheckedChange={(next) => setEnabled(next === true)}
+            onCheckedChange={(next) =>
+              setValue('enabled', next === true, { shouldDirty: true, shouldValidate: false })
+            }
           />
           <Text as="label" htmlFor="profile-enabled" size="2">
             Enabled
@@ -379,7 +386,7 @@ function ProfileForm({
         <Button type="button" variant="soft" color="gray" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" loading={submitting} disabled={submitting || name.trim() === ''}>
+        <Button type="submit" loading={submitting} disabled={submitting}>
           {submitLabel}
         </Button>
       </Flex>

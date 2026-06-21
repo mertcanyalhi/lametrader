@@ -215,6 +215,33 @@ describe('ProfilePickerDialog', () => {
     });
   });
 
+  it('renders an inline "Name is required." under the name field and skips the POST when the form is submitted blank', async () => {
+    profiles = [];
+    matchers.push({
+      match: (url, method) => method === 'POST' && url.endsWith('/profiles'),
+      respond: () => ({ status: 201, body: null }),
+    });
+    renderPicker();
+    await openPicker('No profile');
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: /new profile/i }));
+    await user.click(await screen.findByRole('button', { name: 'Create' }));
+
+    const nameField = await screen.findByRole('textbox', { name: 'Name' });
+    const errorId = nameField.getAttribute('aria-describedby');
+    const errorText = errorId ? document.getElementById(errorId)?.textContent : null;
+    expect({
+      ariaInvalid: nameField.getAttribute('aria-invalid'),
+      errorText,
+      postCount: calls.filter((c) => c.method === 'POST' && c.url.endsWith('/profiles')).length,
+    }).toEqual({
+      ariaInvalid: 'true',
+      errorText: 'Name is required.',
+      postCount: 0,
+    });
+  });
+
   it('surfaces a 409 from POST /profiles inline under the name field', async () => {
     profiles = [];
     matchers.push({
