@@ -111,7 +111,15 @@ export function candlesController(
       '/symbols/:id/backfill/jobs/:jobId/progress',
       { websocket: true },
       (socket, request) => {
-        const { jobId } = request.params as { jobId: string };
+        const { id, jobId } = request.params as { id: string; jobId: string };
+        // Same ownership guard as the REST sibling: a job is only streamable under
+        // its own symbol path (symbolId is immutable, so an early read is safe).
+        const job = jobs.get(jobId);
+        if (!job || job.symbolId !== id) {
+          socket.send(JSON.stringify({ error: `backfill job not found: ${jobId}` }));
+          socket.close();
+          return;
+        }
         // Subscribe first, then send the current snapshot — so a terminal update
         // firing in between is delivered (at worst as a duplicate frame) rather
         // than missed. Intermediate progress is not replayed.

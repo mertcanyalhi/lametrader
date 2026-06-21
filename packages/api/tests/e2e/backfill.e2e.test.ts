@@ -180,6 +180,27 @@ describe('backfill API (e2e)', () => {
     expect(page2.json()).toEqual({ candles: [SERIES[2]], nextCursor: null, latestTime: 3000 });
   });
 
+  it('rejects streaming a job progress under a symbol path that does not own it', async () => {
+    await app.inject({ method: 'POST', url: '/symbols', payload: { id: BTC.id } });
+    const run = await app.inject({
+      method: 'POST',
+      url: `/symbols/${BTC.id}/backfill`,
+      payload: { period: '1h' },
+    });
+    const job = run.json() as { id: string };
+
+    // Connect under a different symbol's path carrying BTC's real job id.
+    const wsUrl = `${baseUrl.replace('http', 'ws')}/symbols/crypto:ETHUSDT/backfill/jobs/${job.id}/progress`;
+    const socket = new WebSocket(wsUrl);
+    const frame = await new Promise<unknown>((resolve, reject) => {
+      socket.addEventListener('error', () => reject(new Error('ws failed to open')));
+      socket.addEventListener('message', (event) => resolve(JSON.parse(String(event.data))));
+    });
+    socket.close();
+
+    expect(frame).toEqual({ error: `backfill job not found: ${job.id}` });
+  });
+
   it('returns 404 and persists nothing when backfilling an unwatched symbol', async () => {
     const run = await app.inject({
       method: 'POST',
