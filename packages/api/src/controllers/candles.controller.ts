@@ -1,8 +1,7 @@
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { parseBackfillRange, SymbolNotFoundError } from '@lametrader/core';
-import type { BackfillJobService, BackfillService } from '@lametrader/engine';
+import type { BackfillJob, BackfillJobService, BackfillService } from '@lametrader/engine';
 import type { FastifyInstance } from 'fastify';
-import type { BackfillJobHub } from '../backfill-job-hub.js';
 import {
   BackfillBodySchema,
   BackfillJobParamSchema,
@@ -12,6 +11,7 @@ import {
 } from '../schemas/candle.schema.js';
 import { ErrorSchema } from '../schemas/common.schema.js';
 import { SymbolIdParamSchema } from '../schemas/symbol.schema.js';
+import type { StreamHub } from '../stream-hub.js';
 
 /**
  * Register the RESTful candle/backfill routes.
@@ -33,7 +33,7 @@ import { SymbolIdParamSchema } from '../schemas/symbol.schema.js';
 export function candlesController(
   candles: BackfillService,
   jobs: BackfillJobService,
-  hub: BackfillJobHub,
+  hub: StreamHub<BackfillJob>,
 ) {
   return async (instance: FastifyInstance): Promise<void> => {
     const app = instance.withTypeProvider<TypeBoxTypeProvider>();

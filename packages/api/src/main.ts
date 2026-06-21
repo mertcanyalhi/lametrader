@@ -2,19 +2,18 @@
  * Entry point: wire Mongo-backed config + symbol services, start the continuous
  * polling + live-candle stream, and serve the REST API.
  */
-import { connectServices, loadSettings } from '@lametrader/engine';
+import type { IndicatorStateEvent, SymbolQuoteEvent } from '@lametrader/core';
+import { type CandleEvent, connectServices, loadSettings } from '@lametrader/engine';
 import { createApp } from './app.js';
-import { CandleStreamHub } from './candle-stream-hub.js';
-import { IndicatorStreamHub } from './indicator-stream-hub.js';
-import { QuoteStreamHub } from './quote-stream-hub.js';
+import { StreamHub } from './stream-hub.js';
 
 const { mongoUri, apiPort, pollIntervals } = loadSettings();
 
 // Hubs bridge the engine's transport-agnostic `onCandle` / `onIndicatorState` /
 // `onSymbolQuote` callbacks to the `/stream` WebSocket route (see ADR-0005).
-const candleStream = new CandleStreamHub();
-const indicatorStream = new IndicatorStreamHub();
-const quoteStream = new QuoteStreamHub();
+const candleStream = new StreamHub<CandleEvent>();
+const indicatorStream = new StreamHub<IndicatorStateEvent>();
+const quoteStream = new StreamHub<SymbolQuoteEvent>();
 
 const {
   config,
@@ -28,9 +27,9 @@ const {
   quoteStream: quoteStreamService,
   close,
 } = await connectServices(mongoUri, {
-  onCandle: (event) => candleStream.publish(event),
-  onIndicatorState: (event) => indicatorStream.publish(event),
-  onSymbolQuote: (event) => quoteStream.publish(event),
+  onCandle: (event) => candleStream.publish(event.id, event),
+  onIndicatorState: (event) => indicatorStream.publish(event.subscriptionId, event),
+  onSymbolQuote: (event) => quoteStream.publish(event.subscriptionId, event),
   pollIntervals,
 });
 

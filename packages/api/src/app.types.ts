@@ -1,5 +1,7 @@
+import type { IndicatorStateEvent, SymbolQuoteEvent } from '@lametrader/core';
 import type {
   BackfillService,
+  CandleEvent,
   ConfigService,
   IndicatorComputeService,
   IndicatorRegistry,
@@ -8,9 +10,7 @@ import type {
   QuoteStreamService,
   SymbolService,
 } from '@lametrader/engine';
-import type { CandleStreamHub } from './candle-stream-hub.js';
-import type { IndicatorStreamHub } from './indicator-stream-hub.js';
-import type { QuoteStreamHub } from './quote-stream-hub.js';
+import type { StreamHub } from './stream-hub.js';
 
 /**
  * The live-stream surface — the candle hub the polling loop publishes to, plus the indicator- and quote-stream services + their WS-side hubs.
@@ -19,13 +19,13 @@ import type { QuoteStreamHub } from './quote-stream-hub.js';
  */
 export interface LiveStream {
   /** The live-candle pub/sub the polling loop publishes to. */
-  candleStream: CandleStreamHub;
+  candleStream: StreamHub<CandleEvent>;
   /** The indicator-state pub/sub fed by the indicator stream service's `onState` callback. */
-  indicatorStream: IndicatorStreamHub;
+  indicatorStream: StreamHub<IndicatorStateEvent>;
   /** The engine-side indicator stream service; the route calls its `subscribe`/`unsubscribe`. */
   indicatorStreamService: IndicatorStreamService;
   /** The quote pub/sub fed by the quote stream service's `onQuote` callback. */
-  quoteStream: QuoteStreamHub;
+  quoteStream: StreamHub<SymbolQuoteEvent>;
   /** The engine-side quote stream service; the route calls its `subscribe`/`unsubscribe`. */
   quoteStreamService: QuoteStreamService;
 }
