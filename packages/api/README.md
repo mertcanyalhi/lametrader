@@ -204,7 +204,7 @@ curl -X DELETE http://localhost:3000/profiles/<id>/indicators/<instanceId>
 Backfill historical OHLC candles for a **watched** symbol+period into MongoDB and
 read them back. A candle is the OHLC base `{ type, time, open, high, low, close }`
 plus per-asset-class fields — crypto adds `volume`/`quoteVolume`/`trades`, equities
-add `volume`/`adjClose`, FX adds none. `time` is the open time in epoch ms.
+add `volume`, FX adds none. `time` is the open time in epoch ms.
 
 `from`/`to` are epoch ms; omit both on a backfill to fetch the provider's deepest
 available history. The `period` must be one of the symbol's watched periods.

@@ -6,7 +6,7 @@ import { SymbolTypeSchema } from './symbol.schema.js';
 /**
  * A stored OHLC candle. Modelled as the shared OHLC base plus the optional
  * per-asset-class fields (crypto: `volume`/`quoteVolume`/`trades`; equity:
- * `volume`/`adjClose`; FX: none) — a flat transport view of the domain's typed
+ * `volume`; FX: none) — a flat transport view of the domain's typed
  * `Candle` union, which serializes unambiguously.
  */
 export const CandleSchema = Type.Object(
@@ -20,7 +20,6 @@ export const CandleSchema = Type.Object(
     volume: Type.Optional(Type.Number()),
     quoteVolume: Type.Optional(Type.Number()),
     trades: Type.Optional(Type.Number()),
-    adjClose: Type.Optional(Type.Number()),
   },
   { $id: 'Candle', additionalProperties: false },
 );

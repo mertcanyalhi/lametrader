@@ -24,7 +24,6 @@ const candle: Candle = {
   low: 122.0,
   close: 123.3,
   volume: 258_270,
-  adjClose: 123.3,
 };
 
 describe('ChartOverlay', () => {

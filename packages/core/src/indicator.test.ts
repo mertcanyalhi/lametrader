@@ -41,7 +41,7 @@ const cryptoCandle: Candle = {
   trades: 3,
 };
 
-/** An equity candle (carries volume + adjClose). */
+/** An equity candle (carries volume). */
 const equityCandle: Candle = {
   type: SymbolType.Stock,
   time: 1_000,
@@ -50,7 +50,6 @@ const equityCandle: Candle = {
   low: 5,
   close: 15,
   volume: 200,
-  adjClose: 14.5,
 };
 
 /** An FX candle (no volume). */
