@@ -37,7 +37,7 @@ export const StateValueSchema = Type.Union(
       { additionalProperties: false },
     ),
   ],
-  { $id: 'StateValue' },
+  {},
 );
 
 /**
@@ -61,7 +61,7 @@ export const ConditionOperandSchema = Type.Object(
     /** Carried by SymbolStateRef / GlobalStateRef: the state-map key. */
     key: Type.Optional(Type.String()),
   },
-  { $id: 'ConditionOperand', additionalProperties: false },
+  { additionalProperties: false },
 );
 
 /**
@@ -97,7 +97,7 @@ export const TriggerSchema = Type.Object(
     period: Type.Optional(Type.Enum(Period)),
     intervalMs: Type.Optional(Type.Number()),
   },
-  { $id: 'Trigger', additionalProperties: false },
+  { additionalProperties: false },
 );
 
 /**
@@ -106,7 +106,7 @@ export const TriggerSchema = Type.Object(
  */
 export const ExpirationSchema = Type.Union(
   [Type.Object({ at: Type.Number() }, { additionalProperties: false }), Type.Null()],
-  { $id: 'Expiration' },
+  {},
 );
 
 /**
@@ -126,7 +126,7 @@ export const ActionSchema = Type.Object(
     /** NotifyTelegram: the message template. */
     template: Type.Optional(Type.String()),
   },
-  { $id: 'Action', additionalProperties: false },
+  { additionalProperties: false },
 );
 
 /**
@@ -138,7 +138,7 @@ export const RuleScopeSchema = Type.Object(
     /** Carried by Symbol scope: the watched symbol id. */
     symbolId: Type.Optional(Type.String()),
   },
-  { $id: 'RuleScope', additionalProperties: false },
+  { additionalProperties: false },
 );
 
 /**
@@ -166,7 +166,7 @@ export const RuleEventEntrySchema = Type.Object(
     /** Error: the human-readable reason. */
     reason: Type.Optional(Type.String()),
   },
-  { $id: 'RuleEventEntry', additionalProperties: false },
+  { additionalProperties: false },
 );
 
 /**
@@ -177,7 +177,7 @@ export const RuleHistoryEntrySchema = Type.Object(
     type: Type.Enum(RuleHistoryType),
     ts: Type.Number(),
   },
-  { $id: 'RuleHistoryEntry', additionalProperties: false },
+  { additionalProperties: false },
 );
 
 /**
@@ -202,7 +202,7 @@ export const RuleSchema = Type.Object(
     createdAt: Type.Number(),
     updatedAt: Type.Number(),
   },
-  { $id: 'Rule', additionalProperties: false },
+  { additionalProperties: false },
 );
 
 /**
@@ -223,7 +223,7 @@ export const RuleInputSchema = Type.Object(
     enabled: Type.Boolean(),
     order: Type.Number(),
   },
-  { $id: 'RuleInput', additionalProperties: false },
+  { additionalProperties: false },
 );
 
 /**

@@ -24,6 +24,21 @@ export class RuleError extends Error {
 }
 
 /**
+ * Raised when a {@link Rule} does not exist (on get / replace / remove).
+ *
+ * Driving adapters map it to HTTP 404.
+ */
+export class RuleNotFoundError extends Error {
+  /**
+   * @param message - human-readable not-found reason.
+   */
+  constructor(message: string) {
+    super(message);
+    this.name = 'RuleNotFoundError';
+  }
+}
+
+/**
  * Reject empty / whitespace-only strings.
  */
 function requireNonEmpty(value: string, field: string): void {

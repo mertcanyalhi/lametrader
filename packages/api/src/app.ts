@@ -14,6 +14,8 @@ import {
   ProfileConflictError,
   ProfileError,
   ProfileNotFoundError,
+  RuleError,
+  RuleNotFoundError,
   SymbolConflictError,
   SymbolError,
   SymbolNotFoundError,
@@ -25,6 +27,7 @@ import { candlesController } from './controllers/candles.controller.js';
 import { configController } from './controllers/config.controller.js';
 import { indicatorsController } from './controllers/indicators.controller.js';
 import { profilesController } from './controllers/profiles.controller.js';
+import { rulesController } from './controllers/rules.controller.js';
 import { streamController } from './controllers/stream.controller.js';
 import { symbolsController } from './controllers/symbols.controller.js';
 import { StreamHub } from './stream-hub.js';
@@ -58,6 +61,7 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
         { name: 'config', description: 'Global configuration' },
         { name: 'symbols', description: 'Symbol discovery and watchlist' },
         { name: 'profiles', description: 'Profiles (selectable templates)' },
+        { name: 'rules', description: 'Rule definitions, events and state' },
         { name: 'candles', description: 'Historical candle backfill and reads' },
         { name: 'indicators', description: 'Indicator catalog (descriptors only)' },
       ],
@@ -70,6 +74,7 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
     if (
       error instanceof SymbolNotFoundError ||
       error instanceof ProfileNotFoundError ||
+      error instanceof RuleNotFoundError ||
       error instanceof IndicatorNotFoundError ||
       error instanceof IndicatorInstanceNotFoundError
     ) {
@@ -90,6 +95,7 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
       error instanceof SymbolError ||
       error instanceof CandleError ||
       error instanceof ProfileError ||
+      error instanceof RuleError ||
       error instanceof IndicatorError
     ) {
       reply.code(400).send({ error: error.message });
@@ -116,6 +122,9 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
   }
   if (deps.profiles) {
     app.register(profilesController(deps.profiles));
+  }
+  if (deps.rules) {
+    app.register(rulesController(deps.rules));
   }
   app.register(indicatorsController(deps.indicators.registry, deps.indicators.compute));
   if (deps.backfill) {
