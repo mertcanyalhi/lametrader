@@ -18,6 +18,7 @@ import {
   StateScope,
   type Trigger,
   TriggerKind,
+  type WatchlistRepository,
 } from '@lametrader/core';
 import { type ComparisonOperator, evaluateComparison } from './comparison-evaluator.js';
 import { evaluateConditionTree } from './condition-tree-evaluator.js';
@@ -56,12 +57,14 @@ export interface RuleOrchestratorOptions {
  * 4. A cycle overflow stops further cascading and records exactly one
  *    `CycleOverflow` rule event.
  *
- * Lazy-but-functional: this PR covers the core loop. AllSymbols Timer
- * fan-out and indicator subscription wiring land in later issues.
+ * Lazy-but-functional: this covers the core loop plus AllSymbols Timer
+ * fan-out across every watched symbol. Indicator subscription wiring and
+ * profile-aware loading land in later issues.
  */
 export class RuleOrchestrator {
   constructor(
     private readonly rules: RuleRepository,
+    private readonly watchlist: WatchlistRepository,
     private readonly lookups: EvaluationLookups,
     private readonly state: StateRepository,
     private readonly notifier: Notifier,
@@ -120,17 +123,30 @@ export class RuleOrchestrator {
 
   /**
    * Evaluate one rule against one event and fire it if every gate passes.
+   * AllSymbols-scoped rules whose event has no `symbolId` fan out across
+   * every watched symbol, firing once per (rule, symbol).
    */
   private async processRule(rule: Rule, event: RuleEvent): Promise<void> {
-    const firingSymbolId = firingSymbolFor(rule, event);
-    if (firingSymbolId === null) return;
+    const firingSymbolIds = await this.firingSymbolsFor(rule, event);
+    for (const firingSymbolId of firingSymbolIds) {
+      await this.processRuleForSymbol(rule, event, firingSymbolId);
+    }
+  }
 
+  /**
+   * Evaluate one rule against one event for one firing symbol.
+   */
+  private async processRuleForSymbol(
+    rule: Rule,
+    event: RuleEvent,
+    firingSymbolId: string,
+  ): Promise<void> {
     if (rule.expiration !== null && event.ts >= rule.expiration.at) {
       await this.maybeEmitExpired(rule, firingSymbolId, event.ts);
       return;
     }
 
-    const context = buildEvaluationContext(event, this.lookups);
+    const context = buildEvaluationContext(event, this.lookups, firingSymbolId);
     const conditionTrue = evaluateConditionTree(rule.condition, (leaf) =>
       evaluateLeaf(leaf, context),
     );
@@ -189,6 +205,21 @@ export class RuleOrchestrator {
     };
     await this.log.appendRuleEvent(rule.id, fired);
     await this.log.appendSymbolEvent(firingSymbolId, fired);
+  }
+
+  /**
+   * Determine which symbol(s) the rule fires on for `event`.
+   *
+   * - Symbol-scoped rules always fire on `rule.scope.symbolId`.
+   * - AllSymbols-scoped rules fire on the event's `symbolId` when present.
+   * - AllSymbols-scoped rules on a symbol-less event (TimerEvent /
+   *   GlobalStateChanged) fan out across every watched symbol.
+   */
+  private async firingSymbolsFor(rule: Rule, event: RuleEvent): Promise<string[]> {
+    if (rule.scope.kind === RuleScopeKind.Symbol) return [rule.scope.symbolId];
+    if (event.symbolId !== null) return [event.symbolId];
+    const watched = await this.watchlist.list();
+    return watched.map((s) => s.id);
   }
 
   /**
@@ -257,17 +288,6 @@ export class RuleOrchestrator {
     };
     await this.log.appendSymbolEvent(symbolId, entry);
   }
-}
-
-/**
- * Determine which symbol the rule fires on for `event`. Symbol-scoped rules
- * always fire on `rule.scope.symbolId`. AllSymbols-scoped rules fire on the
- * event's `symbolId` when it has one; otherwise (TimerEvent / global state
- * changes) skip — fan-out to every watched symbol lives in a later issue.
- */
-function firingSymbolFor(rule: Rule, event: RuleEvent): string | null {
-  if (rule.scope.kind === RuleScopeKind.Symbol) return rule.scope.symbolId;
-  return event.symbolId;
 }
 
 /**
