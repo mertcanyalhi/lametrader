@@ -53,6 +53,7 @@ export { IndicatorRuleEventBridge } from './rules/indicator-rule-event-bridge.js
 export { MinuteTimerSource } from './rules/minute-timer-source.js';
 export { type PrevCurrent, PrevCurrentCache } from './rules/prev-current-cache.js';
 export { QuoteRuleEventBridge } from './rules/quote-rule-event-bridge.js';
+export { evaluateState } from './rules/state-evaluator.js';
 export { loadSettings } from './settings.js';
 export type { Settings } from './settings.types.js';
 export { InMemoryStateRepository } from './state/in-memory-state-repository.js';
