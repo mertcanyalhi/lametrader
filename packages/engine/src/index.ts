@@ -81,6 +81,11 @@ export {
 } from './rules/state-action-executor.js';
 export { evaluateState } from './rules/state-evaluator.js';
 export { executeTelegramAction } from './rules/telegram-action-executor.js';
+export {
+  TelegramNotifier,
+  type TelegramNotifierOptions,
+  TelegramSendError,
+} from './rules/telegram-notifier.js';
 export { loadSettings } from './settings.js';
 export type { Settings, TelegramDestination } from './settings.types.js';
 export { InMemoryStateRepository } from './state/in-memory-state-repository.js';
