@@ -215,6 +215,137 @@ describe('RuleOrchestrator', () => {
     ]);
   });
 
+  it('does not fire disabled rules', async () => {
+    const r = rule({ id: 'off', order: 1, enabled: false });
+    const notifier = new InMemoryNotifier(['main']);
+    const orchestrator = new RuleOrchestrator(
+      new InMemoryRuleRepository([r]),
+      priceLookups(),
+      new InMemoryStateRepository(),
+      notifier,
+      new InMemoryEventLog(),
+    );
+    await orchestrator.process(priceEvent());
+    expect(notifier.sent).toEqual([]);
+  });
+
+  it('filters out Symbol-scoped rules whose symbolId does not match the event', async () => {
+    const aapl = rule({
+      id: 'aapl',
+      order: 1,
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+    });
+    const msft = rule({
+      id: 'msft',
+      order: 2,
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'MSFT' },
+    });
+    const notifier = new InMemoryNotifier(['main']);
+    const orchestrator = new RuleOrchestrator(
+      new InMemoryRuleRepository([aapl, msft]),
+      priceLookups(),
+      new InMemoryStateRepository(),
+      notifier,
+      new InMemoryEventLog(),
+    );
+    await orchestrator.process(priceEvent());
+    expect(notifier.sent.map((sent) => sent.body)).toEqual(['aapl']);
+  });
+
+  it('AllSymbols-scoped rules fire on the event symbol', async () => {
+    const all = rule({
+      id: 'all',
+      order: 1,
+      scope: { kind: RuleScopeKind.AllSymbols },
+    });
+    const notifier = new InMemoryNotifier(['main']);
+    const orchestrator = new RuleOrchestrator(
+      new InMemoryRuleRepository([all]),
+      priceLookups(),
+      new InMemoryStateRepository(),
+      notifier,
+      new InMemoryEventLog(),
+    );
+    await orchestrator.process(priceEvent());
+    expect(notifier.sent.map((sent) => sent.body)).toEqual(['all']);
+  });
+
+  it('runs actions in declaration order and records one Fired event after them', async () => {
+    const r = rule({
+      id: 'multi',
+      order: 1,
+      actions: [
+        { kind: ActionKind.NotifyTelegram, destinationName: 'main', template: 'first' },
+        { kind: ActionKind.NotifyTelegram, destinationName: 'main', template: 'second' },
+      ],
+    });
+    const notifier = new InMemoryNotifier(['main']);
+    const log = new InMemoryEventLog();
+    const orchestrator = new RuleOrchestrator(
+      new InMemoryRuleRepository([r]),
+      priceLookups(),
+      new InMemoryStateRepository(),
+      notifier,
+      log,
+    );
+    await orchestrator.process(priceEvent());
+    expect(notifier.sent.map((sent) => sent.body)).toEqual(['first', 'second']);
+    const fires = (await log.ruleEvents('multi')).filter(
+      (event) => event.type === RuleEventType.Fired,
+    );
+    expect(fires.length).toBe(1);
+  });
+
+  it('treats expiration.at strictly greater than ts as still-active', async () => {
+    const r = rule({ id: 'active', order: 1, expiration: { at: 1001 } });
+    const notifier = new InMemoryNotifier(['main']);
+    const orchestrator = new RuleOrchestrator(
+      new InMemoryRuleRepository([r]),
+      priceLookups(),
+      new InMemoryStateRepository(),
+      notifier,
+      new InMemoryEventLog(),
+    );
+    await orchestrator.process(priceEvent(1000));
+    expect(notifier.sent.map((sent) => sent.body)).toEqual(['active']);
+  });
+
+  it('OncePerMinute fires on a false→true transition across two events and is suppressed on the second false→true within the interval', async () => {
+    // Condition: current value > 50. First event has current=100 (true), second is below threshold (false), third triggers transition again within 60s.
+    const r = rule({
+      id: 'flap',
+      order: 1,
+      trigger: { kind: TriggerKind.OncePerMinute, intervalMs: 60_000 },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        left: { kind: OperandKind.CurrentValue, valueType: StateValueType.Number },
+        operator: NumericOperator.Gt,
+        right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 50 } },
+      },
+    });
+    let current = 100;
+    const lookups: EvaluationLookups = {
+      ...emptyLookups(),
+      getCurrentValue: () => current,
+    };
+    const notifier = new InMemoryNotifier(['main']);
+    const orchestrator = new RuleOrchestrator(
+      new InMemoryRuleRepository([r]),
+      lookups,
+      new InMemoryStateRepository(),
+      notifier,
+      new InMemoryEventLog(),
+    );
+
+    await orchestrator.process({ ...priceEvent(0), current: 100 });
+    current = 10;
+    await orchestrator.process({ ...priceEvent(1000), current: 10 });
+    current = 100;
+    await orchestrator.process({ ...priceEvent(30_000), current: 100 });
+
+    expect(notifier.sent.length).toBe(1);
+  });
+
   it('skips a rule whose expiration has passed and emits one Expired event exactly once per symbol', async () => {
     const expired = rule({ id: 'expired', order: 1, expiration: { at: 500 } });
     const rules = new InMemoryRuleRepository([expired]);

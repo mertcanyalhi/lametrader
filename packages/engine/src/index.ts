@@ -60,6 +60,7 @@ export { InMemoryNotifier, type SentMessage } from './rules/in-memory-notifier.j
 export { InMemoryRuleRepository } from './rules/in-memory-rule-repository.js';
 export { IndicatorRuleEventBridge } from './rules/indicator-rule-event-bridge.js';
 export { MinuteTimerSource } from './rules/minute-timer-source.js';
+export { MongoRuleRepository } from './rules/mongo-rule-repository.js';
 export {
   mayFireOncePerBar,
   mayFireOncePerBarClose,
