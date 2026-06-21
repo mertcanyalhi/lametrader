@@ -188,6 +188,9 @@ export function CandleChart({
    */
   const nextPaneIndexRef = useRef(1);
   const { theme } = useTheme();
+  // One palette per theme — the live-tick path applies it per frame, so don't
+  // reallocate it on every event.
+  const colors = useMemo(() => chartColors(theme), [theme]);
   /** Time (epoch ms) of the candle under the crosshair, or `null` when none. */
   const [hoveredTime, setHoveredTime] = useState<number | null>(null);
   /** The latest live bar applied to the series, surfaced to the overlay legend. */
@@ -235,7 +238,6 @@ export function CandleChart({
     // A new chart instance starts at its default view and must re-settle.
     captureEnabledRef.current = false;
     settledRef.current = false;
-    const colors = chartColors(theme);
     const chart: IChartApi = createChart(container, {
       autoSize: true,
       layout: { background: { color: colors.background }, textColor: colors.textColor },
@@ -303,7 +305,7 @@ export function CandleChart({
       overlayLastResultRef.current.clear();
       nextPaneIndexRef.current = 1;
     };
-  }, [theme, symbol.type]);
+  }, [colors, symbol.type]);
 
   // Mirror the `overlays[]` prop into per-state-descriptor series, diffing the
   // current set against the previous one. `chartVersion` bumps after each chart
@@ -341,7 +343,6 @@ export function CandleChart({
         priceFormat: { type: 'price', precision, minMove: 10 ** -precision },
       });
     }
-    const colors = chartColors(theme);
     candleSeries.setData(candles.map(toCandlestick));
     if (volumeSeriesRef.current) {
       volumeSeriesRef.current.setData(candles.map((candle) => toVolume(candle, colors)));
@@ -355,7 +356,7 @@ export function CandleChart({
       candleSeries.update(toCandlestick(bar));
       volumeSeriesRef.current?.update(toVolume(bar, colors));
     }
-  }, [candles, theme]);
+  }, [candles, colors]);
 
   // Apply each live candle event to the series the instant it arrives — directly
   // in the subscription callback, not via React state. A poll that crosses an
@@ -372,7 +373,7 @@ export function CandleChart({
     const candleSeries = candleSeriesRef.current;
     if (!candleSeries) return;
     candleSeries.update(toCandlestick(candle));
-    volumeSeriesRef.current?.update(toVolume(candle, chartColors(theme)));
+    volumeSeriesRef.current?.update(toVolume(candle, colors));
   });
 
   // When a range preset is active, drive the visible time scale to its window;
@@ -472,6 +473,17 @@ export function CandleChart({
     },
     [],
   );
+
+  // Drop live state for overlays that have been detached, so the map doesn't
+  // retain entries for instances no longer on the chart.
+  useEffect(() => {
+    const live = new Set(overlays.map((overlay) => overlay.instanceId));
+    setLiveStates((current) => {
+      const kept = Object.entries(current).filter(([instanceId]) => live.has(instanceId));
+      if (kept.length === Object.keys(current).length) return current;
+      return Object.fromEntries(kept);
+    });
+  }, [overlays]);
 
   // Augment the historical legend rows with each instance's latest live state,
   // so the legend's value column ticks live (mirrors the OHLCV row's live tick).

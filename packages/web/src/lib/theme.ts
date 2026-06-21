@@ -1,4 +1,8 @@
+import { getLogger } from './log.js';
 import { Theme } from './theme.types.js';
+
+/** Scoped logger for theme persistence. */
+const log = getLogger('theme');
 
 /**
  * `localStorage` key holding the user's theme choice.
@@ -7,11 +11,15 @@ const STORAGE_KEY = 'theme';
 
 /**
  * Read the persisted theme from `localStorage`, falling back to dark (the
- * app's default).
+ * app's default, also used when `localStorage` is unavailable).
  */
 export function getStoredTheme(): Theme {
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  return raw === Theme.Light ? Theme.Light : Theme.Dark;
+  try {
+    return window.localStorage.getItem(STORAGE_KEY) === Theme.Light ? Theme.Light : Theme.Dark;
+  } catch (cause) {
+    log.warn({ err: cause }, 'failed to read stored theme');
+    return Theme.Dark;
+  }
 }
 
 /**
@@ -31,7 +39,11 @@ export function applyInitialTheme(): void {
  */
 export function setTheme(theme: Theme): void {
   applyTheme(theme);
-  window.localStorage.setItem(STORAGE_KEY, theme);
+  try {
+    window.localStorage.setItem(STORAGE_KEY, theme);
+  } catch (cause) {
+    log.warn({ err: cause }, 'failed to persist theme');
+  }
 }
 
 /**

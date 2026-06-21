@@ -1,8 +1,8 @@
-import type {
-  Candle,
-  EnrichedSymbol,
-  IndicatorDefinition,
-  IndicatorInstance,
+import {
+  type Candle,
+  type EnrichedSymbol,
+  type IndicatorDefinition,
+  type IndicatorInstance,
   Period,
 } from '@lametrader/core';
 import { Callout, Flex, Link as RadixLink } from '@radix-ui/themes';
@@ -53,7 +53,7 @@ export function ChartPage(): ReactNode {
   const symbols = watchlist.data ?? [];
   const cfg = config.data;
   const id = params.get('id');
-  const period = params.get('period') as Period | null;
+  const period = parsePeriod(params.get('period'));
   const range = parseRange(params.get('range'));
 
   // Bare /chart (or a missing half) → resolve a sensible default, or bounce home.
@@ -181,6 +181,12 @@ function parseRange(raw: string | null): ChartRange | null {
   return CHART_RANGE_ORDER.find((value) => value === raw) ?? null;
 }
 
+/** Coerce a URL `?period=…` query into a {@link Period}, or `null` when missing/invalid. */
+function parsePeriod(raw: string | null): Period | null {
+  if (raw === null) return null;
+  return Object.values(Period).find((value) => value === raw) ?? null;
+}
+
 /**
  * Drives the document title to `<id> · <close> <change> (<pct>%) - lametrader`
  * from the chart's latest loaded candle on the current period, so the browser
@@ -255,7 +261,8 @@ function ChartView({
   // loaded — the engine then scopes its candle scan to roughly that span plus
   // the indicator's warm-up margin, instead of the symbol's full history.
   const computeFrom = feed.candles[0]?.time;
-  const computeTo = feed.candles.length > 0 ? (feed.candles.at(-1) as Candle).time + 1 : undefined;
+  const lastLoadedCandle = feed.candles.at(-1);
+  const computeTo = lastLoadedCandle ? lastLoadedCandle.time + 1 : undefined;
   const { canvasOverlays, legendOverlays, profile } = useChartOverlays({
     id,
     period,

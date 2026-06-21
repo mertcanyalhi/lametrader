@@ -7,9 +7,11 @@ Builds via Vite; type-checks via `tsc --noEmit`; not part of the project-refs gr
 
 - **React 19 + TypeScript + Vite** — already in place.
 - **Tailwind CSS v4** via `@tailwindcss/vite`. Tokens live in `src/index.css` under `@theme inline`; **never** add a `tailwind.config.js`.
-- **Radix UI primitives** (`@radix-ui/react-*`) wrapped under `src/components/ui/*` to add our theme tokens.
-  We do **not** hand-roll wrappers for elements the platform already provides (`<button>`, `<input>`, …); see "UI/UX rules" below.
-  Compose Tailwind classes with `cn(...)` (clsx + tailwind-merge).
+- **Radix Themes** (`@radix-ui/themes`) is the design system — import components (`Button`, `IconButton`, `Dialog`, `AlertDialog`, `Select`, `Tooltip`, `Popover`, `DropdownMenu`, `Table`, `Card`, `Flex`, `Text`, …) **directly** from it.
+  There is **no** `src/components/ui/*` wrapper layer; that indirection was removed.
+  Radix Themes' stylesheet is imported once in `main.tsx` (`@radix-ui/themes/styles.css`), and the `<Theme>` root lives in `<AppShell>`.
+  Use Radix's own props (`size`, `variant`, `color`, `gap`, …) for component styling; compose Tailwind utility classes for layout/spacing via `cn(...)` (clsx + tailwind-merge) on `className`.
+- **Toasts** via `sonner` (`toast.success` / `toast.error`).
 - **React Router v7** (`react-router`) for routing.
   Tests use `<MemoryRouter>`.
 - **TanStack Query** (`@tanstack/react-query`) for server state.
@@ -20,49 +22,26 @@ Builds via Vite; type-checks via `tsc --noEmit`; not part of the project-refs gr
 
 These are the rules every PR is held to.
 
-### Use the framework primitive, never the native equivalent (for *behaviour*)
+### Use the Radix Themes component, never an ad-hoc equivalent
 
-When the framework provides a behavioural primitive, use it. **Never** the ad-hoc native fallback.
+When Radix Themes provides a component, use it (imported directly from `@radix-ui/themes`). **Never** the native/hand-rolled fallback.
 
-- Hover label → `<SimpleTooltip>` (Radix). **Never** `title="…"` on any element.
-- Confirmation prompt → `<AlertDialog>` (Radix). **Never** `window.confirm()`.
+- Hover label → `<Tooltip>`. **Never** `title="…"` on any element.
+- Confirmation prompt → `<AlertDialog>`. **Never** `window.confirm()`.
 - Text prompt → `<Dialog>` with a form. **Never** `window.prompt()`.
-- Notifications → a toast component. **Never** `window.alert()`.
-- Select dropdown → `<Select>` (Radix). **Never** a bare `<select>`.
-- Combobox / autocomplete → `<Combobox>` (Radix). **Never** a `datalist`.
-- Tabbed views → `<Tabs>` (Radix). **Never** ad-hoc `useState + classNames`.
-- Floating panel → `<Popover>` (Radix). **Never** an absolutely-positioned `<div>` you toggle yourself.
+- Notifications → `sonner` toast (`toast.success` / `toast.error`). **Never** `window.alert()`.
+- Select dropdown → `<Select>`. **Never** a bare `<select>`.
+- Menu → `<DropdownMenu>`. Floating panel → `<Popover>`. **Never** an absolutely-positioned `<div>` you toggle yourself.
+- Icon-only button → `<IconButton>`; text button → `<Button>`. **Never** a hand-rolled `<button>` + class string for these.
 
-For each of the above, the file under `src/components/ui/<name>.tsx` is a **thin wrapper that re-exports the Radix primitive and adds our theme tokens** — nothing more.
-Add a wrapper only when there is a Radix (or comparable framework) primitive underneath.
-
-### Do NOT hand-roll a wrapper for elements the platform already provides
-
-For plain HTML elements that have no underlying behavioural primitive — `<button>`, `<input>`, `<label>`, `<a>`, `<select>` (when not a Radix Select), `<table>` — **use the native element directly with Tailwind classes** at the call site.
-A "Button.tsx that wraps `<button>` with a class string" is exactly the kind of own-component we avoid: it adds indirection without adding behaviour the framework already gives us.
-
+Do **not** reintroduce a `src/components/ui/*` wrapper layer.
 If a Tailwind class string repeats often enough to be worth a name, extract it as a `const` in a `lib/` module — not as a new component file.
 
-#### Concrete examples
+### Styling
 
-```tsx
-// Good — native button, framework-provided primitive, no hand-rolled wrapper.
-<SimpleTooltip content="Toggle sidebar">
-  <button
-    type="button"
-    aria-label="Toggle sidebar"
-    onClick={onToggle}
-    className="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground"
-  >
-    <PanelLeft className="h-4 w-4" aria-hidden="true" />
-  </button>
-</SimpleTooltip>
-
-// Bad — wrapping <button> in a custom component file just to label classes.
-<Button variant="ghost" size="icon" aria-label="Toggle sidebar" onClick={onToggle}>
-  <PanelLeft />
-</Button>
-```
+- Radix component appearance comes from its own props (`size`, `variant`, `color`, `radius`, …) and the active `<Theme appearance>` (bridged from our theme state in `<AppShell>`).
+- Use Tailwind utility classes (via `className` + `cn(...)`) for the layout/spacing Radix props don't cover.
+- Colours are theme-driven: Radix components follow `<Theme appearance>`; for raw Tailwind colour classes use the theme tokens (`bg-card`, `text-foreground`, `border-border`, `text-muted-foreground`, …) or Radix scale vars (`var(--gray-11)`) — **never** hard-coded `bg-zinc-900` / `text-white` / `#fff`.
 
 ### Layout
 
@@ -79,7 +58,7 @@ If a Tailwind class string repeats often enough to be worth a name, extract it a
 
 ### Accessibility
 
-- Icon-only buttons get a real accessible name via `aria-label` **and** a visible label via `<SimpleTooltip>`.
+- Icon-only buttons (`<IconButton>`) get a real accessible name via `aria-label` **and** a visible label via `<Tooltip>`.
   A tooltip alone is a description, not a name.
 - Active nav links: `react-router`'s `<NavLink>` sets `aria-current="page"` automatically — read it in tests, don't reach for a CSS class.
 
@@ -149,7 +128,7 @@ Do **not** generalize the exception — every other surface has Pino available.
 - Components: `PascalCase`.
 - One component per file when it's exported; tiny internal helpers can live alongside.
 - Folder structure:
-  - `src/components/ui/*` — design-system primitives (Button, Tooltip, …).
+  - design-system primitives come from `@radix-ui/themes` directly — there is no `src/components/ui/*` layer.
   - `src/components/layout/*` — shell pieces (AppShell, Sidebar, Topbar).
   - `src/pages/*` — one file per route.
   - `src/lib/*` — non-component utilities (api-fetch, query-client, theme, …).

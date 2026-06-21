@@ -22,13 +22,15 @@ import type { StreamEventMap, StreamKind, StreamSubscribeKey } from './stream-cl
  * @param onEvent - called with each frame for the subscription.
  * @param keyDeps - dependency tuple that varies when `key`'s identity is unstable
  *   (e.g. a fresh `{ id, period, indicator }` object per render); the effect
- *   re-subscribes when any element changes.
+ *   re-subscribes when any element changes. Defaults to a value-stable key (the
+ *   string itself, or its JSON for object keys) so an object key passed without
+ *   explicit deps still can't churn the subscription every render.
  */
 export function useStreamSubscription<K extends StreamKind>(
   kind: K,
   key: StreamSubscribeKey<K> | null,
   onEvent: (event: StreamEventMap[K]) => void,
-  keyDeps: ReadonlyArray<unknown> = [key],
+  keyDeps: ReadonlyArray<unknown> = [typeof key === 'string' ? key : JSON.stringify(key)],
 ): void {
   const handler = useRef(onEvent);
   handler.current = onEvent;

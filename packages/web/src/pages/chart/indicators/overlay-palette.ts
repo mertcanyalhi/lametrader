@@ -12,7 +12,7 @@ import type { Theme } from '../../../lib/theme.types.js';
  * The palettes wrap modulo length, so a chart with more overlays than entries
  * starts reusing colours rather than producing washed-out filler.
  */
-const PALETTES: Record<Theme, readonly string[]> = {
+const PALETTES: Record<Theme, readonly [string, ...string[]]> = {
   light: ['#1d4ed8', '#b45309', '#15803d', '#9333ea', '#be123c', '#0e7490'],
   dark: ['#3aa3ff', '#ff8c3a', '#21c55d', '#c084fc', '#fb7185', '#22d3ee'],
 };
@@ -28,5 +28,7 @@ const PALETTES: Record<Theme, readonly string[]> = {
 export function paletteColor(index: number, theme: Theme): string {
   const palette = PALETTES[theme];
   const safeIndex = ((index % palette.length) + palette.length) % palette.length;
-  return palette[safeIndex] as string;
+  // `safeIndex` is always in range, but `noUncheckedIndexedAccess` types the read
+  // as possibly-undefined; the first entry is a safe, non-empty-palette fallback.
+  return palette[safeIndex] ?? palette[0];
 }

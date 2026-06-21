@@ -177,12 +177,13 @@ export function createStreamClient(options: StreamClientOptions = {}): StreamCli
       }
       return;
     }
-    if (typeof frame.subscriptionId === 'string' && 'quote' in frame) {
-      deliver(subscriptions.get(subscriptionIdToKey.get(frame.subscriptionId) ?? ''), frame);
-      return;
-    }
-    if (typeof frame.subscriptionId === 'string' && 'state' in frame) {
-      deliver(subscriptions.get(subscriptionIdToKey.get(frame.subscriptionId) ?? ''), frame);
+    if (typeof frame.subscriptionId === 'string' && ('quote' in frame || 'state' in frame)) {
+      const key = subscriptionIdToKey.get(frame.subscriptionId);
+      if (!key) {
+        log.warn({ subscriptionId: frame.subscriptionId }, 'frame for unknown subscription');
+        return;
+      }
+      deliver(subscriptions.get(key), frame);
       return;
     }
     if ('candle' in frame && typeof frame.id === 'string') {
@@ -284,6 +285,9 @@ export function createStreamClient(options: StreamClientOptions = {}): StreamCli
         intentionalClose = true;
         socket?.close();
         socket = null;
+        // A later subscription opens a fresh socket; that first open is a first
+        // connect, not a reconnect, so don't fire onReconnect for it.
+        everOpened = false;
       }
     };
   }

@@ -1,4 +1,4 @@
-import { type Period, periodMillis } from '@lametrader/core';
+import { Period, periodMillis } from '@lametrader/core';
 
 /**
  * The chart's date-range preset — how much history the user wants visible.
@@ -55,7 +55,7 @@ export function rangeLabel(range: ChartRange): string {
   }
 }
 
-const DAY_MS = periodMillis('1d' as Period);
+const DAY_MS = periodMillis(Period.OneDay);
 
 /**
  * The lookback span (epoch-ms duration) for a range preset, anchored at `now`.
