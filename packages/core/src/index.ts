@@ -24,6 +24,8 @@ export type {
   EquityCandle,
   FxCandle,
 } from './candle.types.js';
+export { operandValueType } from './condition-operand.js';
+export { type ConditionOperand, OperandKind } from './condition-operand.types.js';
 export { ConfigError, defaultConfig, mergeConfig, parseConfig } from './config.js';
 export { type Config, ConfigKey, type ConfigRepository, Period } from './config.types.js';
 export {
