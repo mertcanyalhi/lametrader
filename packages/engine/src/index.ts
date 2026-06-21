@@ -46,6 +46,7 @@ export type { ProfileServiceOptions } from './profiles/profile-service.types.js'
 export { CandleRuleEventBridge } from './rules/candle-rule-event-bridge.js';
 export { CycleGuard, CycleOverflowError } from './rules/cycle-guard.js';
 export { IndicatorRuleEventBridge } from './rules/indicator-rule-event-bridge.js';
+export { MinuteTimerSource } from './rules/minute-timer-source.js';
 export { type PrevCurrent, PrevCurrentCache } from './rules/prev-current-cache.js';
 export { QuoteRuleEventBridge } from './rules/quote-rule-event-bridge.js';
 export { loadSettings } from './settings.js';
