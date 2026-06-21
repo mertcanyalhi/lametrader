@@ -33,7 +33,7 @@ The engine doesn't need to know which mode it's in.
 When an action writes to the state store, the resulting `change:symbol_state` / `change:global_state` event is enqueued and processed in the same evaluation pass (after the rule that produced it).
 A `CycleGuard(limit)` counts entries per tick.
 Hitting the limit halts the cascade and emits one `cycle_overflow` error event on the offending rule + affected symbol; the next external event resets the counter.
-Default limit is small (e.g. 16) — large enough for realistic cascades, small enough to surface accidental loops fast.
+Default limit is **4** — large enough for realistic cascades, small enough to surface accidental loops fast.
 
 **3. Rule events live as embedded arrays on the rule and symbol documents.**
 Each fired event is appended both to `Rule.events[]` and to the affected `Symbol.events[]`.
@@ -52,7 +52,7 @@ Pagination uses `before` cursors on the event `ts`.
 
 - Two rules that legitimately chain (`A sets state.x → B reads state.x → fires`) compose without an extra orchestration layer.
 - A pair of rules that set each other's state can't hang the engine; the guard catches them and surfaces the cycle as data the user can see in the events list (no silent failure, no log-only error).
-- The default limit is a magic number; it's settable per-engine-instance for users with deep legitimate cascades.
+- The default limit (4) is settable per-engine-instance for users with deep legitimate cascades.
 - Cascading is bounded to one tick — a rule can't queue work for a future tick by writing state.
   If asynchronous follow-up is ever needed (a delayed action, a scheduled re-evaluation), it'll need its own primitive, not this pass.
 
