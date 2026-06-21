@@ -38,6 +38,13 @@ import { executeTelegramAction } from './telegram-action-executor.js';
 export interface RuleOrchestratorOptions {
   /** Maximum cascading state-change re-entries per tick. Default `4`. */
   cycleLimit?: number;
+  /**
+   * Resolve the active profile id. Called once per inbound event; the result
+   * is passed to `RuleRepository.listForSymbol` so only rules belonging to
+   * the active profile are evaluated. Omit to evaluate rules across every
+   * profile (the default).
+   */
+  getActiveProfileId?: () => Promise<string | undefined> | string | undefined;
 }
 
 /**
@@ -58,8 +65,8 @@ export interface RuleOrchestratorOptions {
  *    `CycleOverflow` rule event.
  *
  * Lazy-but-functional: this covers the core loop plus AllSymbols Timer
- * fan-out across every watched symbol. Indicator subscription wiring and
- * profile-aware loading land in later issues.
+ * fan-out across every watched symbol and profile-aware rule filtering.
+ * Indicator subscription wiring lands in a later issue.
  */
 export class RuleOrchestrator {
   constructor(
@@ -113,12 +120,23 @@ export class RuleOrchestrator {
    * Process one event against every matching enabled rule.
    */
   private async processOneEvent(event: RuleEvent): Promise<void> {
-    const candidates = await this.rules.listForSymbol(event.symbolId);
+    const profileId = await this.resolveActiveProfileId();
+    const candidates = await this.rules.listForSymbol(event.symbolId, profileId);
     const enabled = candidates.filter((rule) => rule.enabled);
     enabled.sort((a, b) => a.order - b.order);
     for (const rule of enabled) {
       await this.processRule(rule, event);
     }
+  }
+
+  /**
+   * Resolve the active profile id from the configured getter (if any);
+   * `undefined` means no profile filter and rules across every profile fire.
+   */
+  private async resolveActiveProfileId(): Promise<string | undefined> {
+    const getter = this.options.getActiveProfileId;
+    if (getter === undefined) return undefined;
+    return await getter();
   }
 
   /**

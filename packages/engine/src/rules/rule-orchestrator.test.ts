@@ -440,4 +440,24 @@ describe('RuleOrchestrator', () => {
       { destinationName: 'main', body: 'tick' },
     ]);
   });
+
+  it('fires only rules belonging to the active profile when getActiveProfileId is configured', async () => {
+    const p1Rule = rule({ id: 'p1', order: 1, profileId: 'profile-1' });
+    const p2Rule = rule({ id: 'p2', order: 1, profileId: 'profile-2' });
+    const notifier = new InMemoryNotifier(['main']);
+    const orchestrator = new RuleOrchestrator(
+      new InMemoryRuleRepository([p1Rule, p2Rule]),
+      new InMemoryWatchlistRepository(),
+      priceLookups(),
+      new InMemoryStateRepository(),
+      notifier,
+      new InMemoryEventLog(),
+      new InMemoryFiringStateRepository(),
+      { getActiveProfileId: () => 'profile-2' },
+    );
+
+    await orchestrator.process(priceEvent());
+
+    expect(notifier.sent.map((sent) => sent.body)).toEqual(['p2']);
+  });
 });

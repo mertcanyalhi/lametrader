@@ -16,8 +16,12 @@ export interface RuleRepository {
    * `symbolId` equals the argument, plus every `AllSymbols`-scoped rule.
    * `null` returns only `AllSymbols`-scoped rules (e.g. for a TimerEvent that
    * doesn't carry a symbol).
+   *
+   * When `profileId` is provided, results are additionally filtered to rules
+   * whose `profileId` matches. Omitting `profileId` returns rules across all
+   * profiles.
    */
-  listForSymbol(symbolId: string | null): Promise<Rule[]>;
+  listForSymbol(symbolId: string | null, profileId?: string): Promise<Rule[]>;
   /**
    * One rule by id, or `null` if none exists.
    */
