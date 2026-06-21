@@ -73,9 +73,18 @@ export class MongoCandleRepository implements CandleRepository {
     return doc ? toCandle(doc) : null;
   }
 
-  async latestN(symbolId: string, period: Period, n: number): Promise<Candle[]> {
+  async latestN(
+    symbolId: string,
+    period: Period,
+    n: number,
+    before = Number.POSITIVE_INFINITY,
+  ): Promise<Candle[]> {
     const docs = await this.collection
-      .find({ '_id.s': symbolId, '_id.p': period })
+      .find(
+        before === Number.POSITIVE_INFINITY
+          ? { '_id.s': symbolId, '_id.p': period }
+          : { '_id.s': symbolId, '_id.p': period, '_id.t': { $lt: before } },
+      )
       .sort({ '_id.t': -1 })
       .limit(n)
       .toArray();

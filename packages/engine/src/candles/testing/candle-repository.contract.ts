@@ -74,6 +74,15 @@ export function runCandleRepositoryContract(
     expect(await repo.latestN(ID, PERIOD, 5)).toEqual([candle(3000), candle(2000), candle(1000)]);
   });
 
+  it('latestN with a `before` bound returns the most recent n candles strictly before it, newest first', async () => {
+    const repo = await make();
+    await repo.save(ID, PERIOD, [candle(1000), candle(2000), candle(3000)]);
+
+    // Only candles with time < 3000 are considered; the bar at the bound is excluded.
+    expect(await repo.latestN(ID, PERIOD, 5, 3000)).toEqual([candle(2000), candle(1000)]);
+    expect(await repo.latestN(ID, PERIOD, 1, 3000)).toEqual([candle(2000)]);
+  });
+
   it('deleteSymbol removes the symbol candles (all periods), leaving others intact', async () => {
     const repo = await make();
     await repo.save(ID, Period.OneHour, [candle(1000)]);

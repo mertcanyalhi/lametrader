@@ -129,23 +129,29 @@ describe('IndicatorComputeService.compute', () => {
     ).rejects.toBeInstanceOf(IndicatorError);
   });
 
-  it('loads `[from - warmup*periodMillis, to)` from the candle repo when both `from` and `to` and the module declares warmup', async () => {
+  it('warms up by candle count, not calendar span, so a single-bar request on a gapped series is non-null', async () => {
     const { service, candles } = await build();
-    const spy = vi.spyOn(candles, 'range');
-    // `from` chosen large enough that `from - 14*1h` stays positive — the
-    // clamp-at-zero case is covered by a separate test below.
-    const from = 100 * periodMillis(Period.OneHour);
-    const to = from + periodMillis(Period.OneHour);
-    await candles.save(BTC.id, Period.OneHour, [candle(from, 100)]);
+    const day = periodMillis(Period.OneDay);
+    // A gapped daily series: Mon–Fri then the *next* Mon (5D, 6D are the
+    // skipped weekend). The live stream computes one bar scoped to its `time`,
+    // so calendar arithmetic (`time - 5*day`) would reach back only 4 stored
+    // candles and emit null; counting back 5 candles loads enough to warm SMA(5).
+    await candles.save(
+      BTC.id,
+      Period.OneDay,
+      [0, 1, 2, 3, 4, 7].map((d) => candle(d * day, 10 + d)),
+    );
 
-    await service.compute(BTC.id, 'sma', { length: 14 }, Period.OneHour, { from, to });
+    const result = await service.compute(BTC.id, 'sma', { length: 5 }, Period.OneDay, {
+      from: 7 * day,
+      to: 7 * day + 1,
+    });
 
-    expect(spy.mock.calls).toEqual([
-      [BTC.id, Period.OneHour, from - 14 * periodMillis(Period.OneHour), to],
-    ]);
+    // mean of closes at D..7D = (11+12+13+14+17)/5 = 13.4
+    expect(result.state).toEqual([{ time: 7 * day, value: expect.closeTo(13.4, 6) }]);
   });
 
-  it('loads `[0, MAX_SAFE_INTEGER)` from the candle repo when neither `from` nor `to` is supplied', async () => {
+  it('loads the full stored series when neither `from` nor `to` is supplied', async () => {
     const { service, candles } = await build();
     const spy = vi.spyOn(candles, 'range');
     await candles.save(BTC.id, Period.OneHour, [candle(0, 100)]);
@@ -184,7 +190,7 @@ describe('IndicatorComputeService.compute', () => {
     expect(spy.mock.calls).toEqual([[BTC.id, Period.OneHour, 1_000_000, 2_000_000]]);
   });
 
-  it('clamps a negative warm-up margin at 0 — the load `from` never goes below 0', async () => {
+  it('loads `[from, to)` with no extra warm-up when nothing is stored before `from`', async () => {
     const { service, candles } = await build();
     const spy = vi.spyOn(candles, 'range');
     await candles.save(BTC.id, Period.OneHour, [candle(0, 100)]);
