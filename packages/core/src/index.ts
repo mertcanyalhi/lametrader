@@ -109,3 +109,12 @@ export {
   type WatchedSymbol,
   type WatchlistRepository,
 } from './symbol.types.js';
+export { DEFAULT_TRIGGER_INTERVAL_MS, TriggerError, validateTrigger } from './trigger.js';
+export {
+  type OncePerBarCloseTrigger,
+  type OncePerBarTrigger,
+  type OncePerMinuteTrigger,
+  type OnceTrigger,
+  type Trigger,
+  TriggerKind,
+} from './trigger.types.js';
