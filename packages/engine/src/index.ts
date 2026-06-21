@@ -44,6 +44,7 @@ export { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 export { type IndicatorInstanceInput, ProfileService } from './profiles/profile-service.js';
 export type { ProfileServiceOptions } from './profiles/profile-service.types.js';
 export { CandleRuleEventBridge } from './rules/candle-rule-event-bridge.js';
+export { type ComparisonOperator, evaluateComparison } from './rules/comparison-evaluator.js';
 export { CycleGuard, CycleOverflowError } from './rules/cycle-guard.js';
 export { buildEvaluationContext } from './rules/evaluation-context.js';
 export type { EvaluationContext, EvaluationLookups } from './rules/evaluation-context.types.js';
