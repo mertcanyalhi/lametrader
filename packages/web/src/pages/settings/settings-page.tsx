@@ -2,7 +2,7 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import type { Config, Period } from '@lametrader/core';
 import { Button, Callout, Card, Heading, Select, Skeleton, Text } from '@radix-ui/themes';
 import { type ReactNode, useEffect } from 'react';
-import { type SubmitHandler, useForm } from 'react-hook-form';
+import { type Resolver, type SubmitHandler, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { FieldLabel } from '../../components/field-label.js';
 import { PeriodToggleGroup } from '../../components/period-toggle-group.js';
@@ -61,13 +61,31 @@ function SettingsSkeleton(): ReactNode {
 }
 
 /**
+ * Form shape: `defaultPeriod` may be transiently empty (cleared) before the user
+ * re-picks, which `Config` (where it is a required `Period`) can't represent.
+ * The Yup resolver still requires a real `Period`, so a submitted value is a
+ * full `Config`.
+ */
+type ConfigForm = Omit<Config, 'defaultPeriod'> & { defaultPeriod: Period | '' };
+
+/**
  * The form bound to the loaded config. Owns the local RHF state and the
  * mutation; the parent decides when to mount it (after the GET succeeds).
  */
 function SettingsForm({ initial }: { initial: Config }): ReactNode {
   const update = useUpdateConfig();
-  const { handleSubmit, watch, setValue, setError, reset, formState } = useForm<Config>({
-    resolver: yupResolver(configSchema),
+  const { handleSubmit, watch, setValue, setError, reset, formState } = useForm<
+    ConfigForm,
+    unknown,
+    Config
+  >({
+    // The form input is `ConfigForm` (its `defaultPeriod` may be transiently
+    // `''`); the schema rejects `''` via `.required()` and validates to a full
+    // `Config`. yupResolver can't infer that input≠output split from an
+    // `ObjectSchema<Config>`, so bridge the resolver shape here once — the only
+    // place the two shapes meet — rather than casting the empty value at each
+    // call site.
+    resolver: yupResolver(configSchema) as unknown as Resolver<ConfigForm, unknown, Config>,
     defaultValues: initial,
     // Validate on every change so field errors appear live and `isValid` can
     // gate the Save button rather than waiting for a submit attempt.
@@ -88,7 +106,7 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
   // surfaces immediately.
   useEffect(() => {
     if (defaultPeriod && !periods.includes(defaultPeriod)) {
-      setValue('defaultPeriod', '' as Period, { shouldDirty: true, shouldValidate: true });
+      setValue('defaultPeriod', '', { shouldDirty: true, shouldValidate: true });
     }
   }, [defaultPeriod, periods, setValue]);
 
@@ -158,6 +176,7 @@ function SettingsForm({ initial }: { initial: Config }): ReactNode {
                   shouldValidate: true,
                 })
               }
+              /* `next` is a Select.Item value, always one of the rendered Period members. */
             >
               <Select.Trigger
                 id="default-period-trigger"

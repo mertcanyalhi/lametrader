@@ -42,9 +42,9 @@ export function toWsUrl(path: string): string {
  */
 export function openJsonSocket<T>(path: string, handlers: JsonSocketHandlers<T>): JsonSocket {
   const socket = new WebSocket(toWsUrl(path));
-  socket.addEventListener('message', (event) => {
+  socket.addEventListener('message', (event: MessageEvent) => {
     try {
-      handlers.onFrame(JSON.parse((event as MessageEvent).data) as T);
+      handlers.onFrame(JSON.parse(event.data) as T);
     } catch (cause) {
       log.warn({ err: cause, path }, 'failed to parse socket frame');
     }
