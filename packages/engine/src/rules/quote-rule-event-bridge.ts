@@ -38,6 +38,7 @@ export class QuoteRuleEventBridge {
       symbolId: event.id,
       prev,
       current,
+      final: event.final,
     });
   }
 }

@@ -43,6 +43,7 @@ export { InMemoryProfileRepository } from './profiles/in-memory-profile-reposito
 export { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 export { type IndicatorInstanceInput, ProfileService } from './profiles/profile-service.js';
 export type { ProfileServiceOptions } from './profiles/profile-service.types.js';
+export { CandleRuleEventBridge } from './rules/candle-rule-event-bridge.js';
 export { CycleGuard, CycleOverflowError } from './rules/cycle-guard.js';
 export { type PrevCurrent, PrevCurrentCache } from './rules/prev-current-cache.js';
 export { QuoteRuleEventBridge } from './rules/quote-rule-event-bridge.js';

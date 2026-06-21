@@ -28,6 +28,7 @@ describe('RuleEvent variants', () => {
       symbolId: 'AAPL',
       prev: 99,
       current: 100,
+      final: false,
     };
     expect(event).toEqual({
       kind: RuleEventKind.CurrentValueChanged,
@@ -35,6 +36,7 @@ describe('RuleEvent variants', () => {
       symbolId: 'AAPL',
       prev: 99,
       current: 100,
+      final: false,
     });
   });
 
@@ -45,6 +47,7 @@ describe('RuleEvent variants', () => {
       symbolId: 'AAPL',
       prev: null,
       current: 100,
+      final: false,
     };
     expect(event).toEqual({
       kind: RuleEventKind.OpenValueChanged,
@@ -52,6 +55,7 @@ describe('RuleEvent variants', () => {
       symbolId: 'AAPL',
       prev: null,
       current: 100,
+      final: false,
     });
   });
 
@@ -62,6 +66,7 @@ describe('RuleEvent variants', () => {
       symbolId: 'AAPL',
       prev: 101,
       current: 105,
+      final: false,
     };
     expect(event).toEqual({
       kind: RuleEventKind.HighValueChanged,
@@ -69,6 +74,7 @@ describe('RuleEvent variants', () => {
       symbolId: 'AAPL',
       prev: 101,
       current: 105,
+      final: false,
     });
   });
 
@@ -79,6 +85,7 @@ describe('RuleEvent variants', () => {
       symbolId: 'AAPL',
       prev: 98,
       current: 95,
+      final: false,
     };
     expect(event).toEqual({
       kind: RuleEventKind.LowValueChanged,
@@ -86,16 +93,18 @@ describe('RuleEvent variants', () => {
       symbolId: 'AAPL',
       prev: 98,
       current: 95,
+      final: false,
     });
   });
 
-  it('constructs a CloseValueChangedEvent', () => {
+  it('constructs a CloseValueChangedEvent with final=true on bar close', () => {
     const event: CloseValueChangedEvent = {
       kind: RuleEventKind.CloseValueChanged,
       ts: 100,
       symbolId: 'AAPL',
       prev: 99,
       current: 100,
+      final: true,
     };
     expect(event).toEqual({
       kind: RuleEventKind.CloseValueChanged,
@@ -103,6 +112,7 @@ describe('RuleEvent variants', () => {
       symbolId: 'AAPL',
       prev: 99,
       current: 100,
+      final: true,
     });
   });
 
@@ -113,6 +123,7 @@ describe('RuleEvent variants', () => {
       symbolId: 'AAPL',
       prev: 1000,
       current: 1500,
+      final: false,
     };
     expect(event).toEqual({
       kind: RuleEventKind.VolumeValueChanged,
@@ -120,6 +131,7 @@ describe('RuleEvent variants', () => {
       symbolId: 'AAPL',
       prev: 1000,
       current: 1500,
+      final: false,
     });
   });
 

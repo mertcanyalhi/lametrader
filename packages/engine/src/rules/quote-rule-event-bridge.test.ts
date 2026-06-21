@@ -36,6 +36,7 @@ describe('QuoteRuleEventBridge', () => {
         symbolId: 'AAPL',
         prev: null,
         current: 100,
+        final: false,
       },
     ]);
   });
@@ -52,6 +53,7 @@ describe('QuoteRuleEventBridge', () => {
         symbolId: 'AAPL',
         prev: null,
         current: 100,
+        final: false,
       },
       {
         kind: RuleEventKind.CurrentValueChanged,
@@ -59,6 +61,7 @@ describe('QuoteRuleEventBridge', () => {
         symbolId: 'AAPL',
         prev: 100,
         current: 101,
+        final: false,
       },
     ]);
   });
@@ -75,6 +78,7 @@ describe('QuoteRuleEventBridge', () => {
         symbolId: 'AAPL',
         prev: null,
         current: 100,
+        final: false,
       },
       {
         kind: RuleEventKind.CurrentValueChanged,
@@ -82,6 +86,7 @@ describe('QuoteRuleEventBridge', () => {
         symbolId: 'MSFT',
         prev: null,
         current: 200,
+        final: false,
       },
     ]);
   });
