@@ -58,6 +58,10 @@ export function streamController(liveStream: LiveStream) {
       const indicatorUnsubscribes = new Map<string, () => void>();
       const quoteUnsubscribes = new Map<string, () => void>();
       let closed = false;
+      /** Send a frame only while the socket is open; one published mid-disconnect is dropped. */
+      const send = (data: string) => {
+        if (socket.readyState === socket.OPEN) socket.send(data);
+      };
       log.info('stream client connected');
 
       socket.on('message', (raw: Buffer) => {
@@ -66,7 +70,7 @@ export function streamController(liveStream: LiveStream) {
           message = JSON.parse(raw.toString()) as StreamControlMessage;
         } catch (error) {
           log.warn({ err: error }, 'rejecting malformed stream message (invalid JSON)');
-          socket.send(JSON.stringify({ error: 'invalid JSON message' }));
+          send(JSON.stringify({ error: 'invalid JSON message' }));
           return;
         }
 
@@ -91,7 +95,7 @@ export function streamController(liveStream: LiveStream) {
             return;
           default:
             log.warn({ message }, 'rejecting invalid stream control message');
-            socket.send(JSON.stringify({ error: 'unknown action' }));
+            send(JSON.stringify({ error: 'unknown action' }));
         }
       });
 
@@ -114,13 +118,13 @@ export function streamController(liveStream: LiveStream) {
 
       function handleCandleSubscribe(id: string): void {
         if (typeof id !== 'string') {
-          socket.send(JSON.stringify({ error: 'subscribe requires id: string' }));
+          send(JSON.stringify({ error: 'subscribe requires id: string' }));
           return;
         }
         if (candleUnsubscribes.has(id)) return;
         candleUnsubscribes.set(
           id,
-          candleStream.subscribe(id, (event) => socket.send(JSON.stringify(event))),
+          candleStream.subscribe(id, (event) => send(JSON.stringify(event))),
         );
         log.info({ id }, 'candle stream subscribed');
       }
@@ -140,7 +144,7 @@ export function streamController(liveStream: LiveStream) {
           !message.indicator ||
           typeof message.indicator.key !== 'string'
         ) {
-          socket.send(JSON.stringify({ error: 'invalid subscribe-indicator message' }));
+          send(JSON.stringify({ error: 'invalid subscribe-indicator message' }));
           return;
         }
         let subscriptionId: string;
@@ -159,10 +163,10 @@ export function streamController(liveStream: LiveStream) {
             error instanceof IndicatorNotFoundError ||
             error instanceof IndicatorError
           ) {
-            socket.send(JSON.stringify({ error: reason }));
+            send(JSON.stringify({ error: reason }));
             return;
           }
-          socket.send(JSON.stringify({ error: 'subscribe-indicator failed' }));
+          send(JSON.stringify({ error: 'subscribe-indicator failed' }));
           return;
         }
         if (closed) {
@@ -171,9 +175,9 @@ export function streamController(liveStream: LiveStream) {
         }
         indicatorUnsubscribes.set(
           subscriptionId,
-          indicatorStream.subscribe(subscriptionId, (event) => socket.send(JSON.stringify(event))),
+          indicatorStream.subscribe(subscriptionId, (event) => send(JSON.stringify(event))),
         );
-        socket.send(
+        send(
           JSON.stringify({
             action: 'subscribed-indicator',
             subscriptionId,
@@ -190,7 +194,7 @@ export function streamController(liveStream: LiveStream) {
 
       function handleIndicatorUnsubscribe(subscriptionId: string): void {
         if (typeof subscriptionId !== 'string') {
-          socket.send(JSON.stringify({ error: 'unsubscribe-indicator requires subscriptionId' }));
+          send(JSON.stringify({ error: 'unsubscribe-indicator requires subscriptionId' }));
           return;
         }
         indicatorUnsubscribes.get(subscriptionId)?.();
@@ -201,7 +205,7 @@ export function streamController(liveStream: LiveStream) {
 
       async function handleQuoteSubscribe(id: string): Promise<void> {
         if (typeof id !== 'string') {
-          socket.send(JSON.stringify({ error: 'subscribe-quote requires id: string' }));
+          send(JSON.stringify({ error: 'subscribe-quote requires id: string' }));
           return;
         }
         let subscriptionId: string;
@@ -212,10 +216,10 @@ export function streamController(liveStream: LiveStream) {
           const reason = (error as Error).message;
           log.warn({ err: error }, 'rejecting quote subscribe');
           if (error instanceof SymbolNotFoundError || error instanceof SymbolError) {
-            socket.send(JSON.stringify({ error: reason }));
+            send(JSON.stringify({ error: reason }));
             return;
           }
-          socket.send(JSON.stringify({ error: 'subscribe-quote failed' }));
+          send(JSON.stringify({ error: 'subscribe-quote failed' }));
           return;
         }
         if (closed) {
@@ -224,15 +228,15 @@ export function streamController(liveStream: LiveStream) {
         }
         quoteUnsubscribes.set(
           subscriptionId,
-          quoteStream.subscribe(subscriptionId, (event) => socket.send(JSON.stringify(event))),
+          quoteStream.subscribe(subscriptionId, (event) => send(JSON.stringify(event))),
         );
-        socket.send(JSON.stringify({ action: 'subscribed-quote', subscriptionId, id, period }));
+        send(JSON.stringify({ action: 'subscribed-quote', subscriptionId, id, period }));
         log.info({ subscriptionId, id, period }, 'quote stream subscribed');
       }
 
       function handleQuoteUnsubscribe(subscriptionId: string): void {
         if (typeof subscriptionId !== 'string') {
-          socket.send(JSON.stringify({ error: 'unsubscribe-quote requires subscriptionId' }));
+          send(JSON.stringify({ error: 'unsubscribe-quote requires subscriptionId' }));
           return;
         }
         quoteUnsubscribes.get(subscriptionId)?.();
