@@ -60,6 +60,7 @@ export {
   mayFireOncePerBar,
   mayFireOncePerBarClose,
 } from './rules/once-per-bar-trigger-gate.js';
+export { mayFireOncePerMinute } from './rules/once-per-minute-trigger-gate.js';
 export { mayFireOnce } from './rules/once-trigger-gate.js';
 export { type PrevCurrent, PrevCurrentCache } from './rules/prev-current-cache.js';
 export { QuoteRuleEventBridge } from './rules/quote-rule-event-bridge.js';
