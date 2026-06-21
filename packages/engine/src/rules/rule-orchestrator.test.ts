@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 import { InMemoryStateRepository } from '../state/in-memory-state-repository.js';
 import type { EvaluationLookups } from './evaluation-context.types.js';
 import { InMemoryEventLog } from './in-memory-event-log.js';
+import { InMemoryFiringStateRepository } from './in-memory-firing-state-repository.js';
 import { InMemoryNotifier } from './in-memory-notifier.js';
 import { InMemoryRuleRepository } from './in-memory-rule-repository.js';
 import { RuleOrchestrator } from './rule-orchestrator.js';
@@ -98,6 +99,7 @@ describe('RuleOrchestrator', () => {
       new InMemoryStateRepository(),
       notifier,
       new InMemoryEventLog(),
+      new InMemoryFiringStateRepository(),
     );
 
     await orchestrator.process(priceEvent());
@@ -155,6 +157,7 @@ describe('RuleOrchestrator', () => {
       state,
       notifier,
       new InMemoryEventLog(),
+      new InMemoryFiringStateRepository(),
     );
 
     await orchestrator.process(priceEvent());
@@ -197,6 +200,7 @@ describe('RuleOrchestrator', () => {
       new InMemoryStateRepository(),
       new InMemoryNotifier(),
       log,
+      new InMemoryFiringStateRepository(),
       { cycleLimit: 1 },
     );
 
@@ -224,6 +228,7 @@ describe('RuleOrchestrator', () => {
       new InMemoryStateRepository(),
       notifier,
       new InMemoryEventLog(),
+      new InMemoryFiringStateRepository(),
     );
     await orchestrator.process(priceEvent());
     expect(notifier.sent).toEqual([]);
@@ -247,6 +252,7 @@ describe('RuleOrchestrator', () => {
       new InMemoryStateRepository(),
       notifier,
       new InMemoryEventLog(),
+      new InMemoryFiringStateRepository(),
     );
     await orchestrator.process(priceEvent());
     expect(notifier.sent.map((sent) => sent.body)).toEqual(['aapl']);
@@ -265,6 +271,7 @@ describe('RuleOrchestrator', () => {
       new InMemoryStateRepository(),
       notifier,
       new InMemoryEventLog(),
+      new InMemoryFiringStateRepository(),
     );
     await orchestrator.process(priceEvent());
     expect(notifier.sent.map((sent) => sent.body)).toEqual(['all']);
@@ -287,6 +294,7 @@ describe('RuleOrchestrator', () => {
       new InMemoryStateRepository(),
       notifier,
       log,
+      new InMemoryFiringStateRepository(),
     );
     await orchestrator.process(priceEvent());
     expect(notifier.sent.map((sent) => sent.body)).toEqual(['first', 'second']);
@@ -305,6 +313,7 @@ describe('RuleOrchestrator', () => {
       new InMemoryStateRepository(),
       notifier,
       new InMemoryEventLog(),
+      new InMemoryFiringStateRepository(),
     );
     await orchestrator.process(priceEvent(1000));
     expect(notifier.sent.map((sent) => sent.body)).toEqual(['active']);
@@ -335,6 +344,7 @@ describe('RuleOrchestrator', () => {
       new InMemoryStateRepository(),
       notifier,
       new InMemoryEventLog(),
+      new InMemoryFiringStateRepository(),
     );
 
     await orchestrator.process({ ...priceEvent(0), current: 100 });
@@ -357,6 +367,7 @@ describe('RuleOrchestrator', () => {
       new InMemoryStateRepository(),
       notifier,
       log,
+      new InMemoryFiringStateRepository(),
     );
 
     await orchestrator.process(priceEvent(1000));

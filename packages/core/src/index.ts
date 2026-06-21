@@ -43,6 +43,7 @@ export { type Config, ConfigKey, type ConfigRepository, Period } from './config.
 export type { EventLog } from './event-log.types.js';
 export { ExpirationError, validateExpiration } from './expiration.js';
 export type { Expiration } from './expiration.types.js';
+export type { FiringStateRepository } from './firing-state-repository.types.js';
 export {
   IndicatorError,
   IndicatorInstanceNotFoundError,

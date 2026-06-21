@@ -2,6 +2,7 @@ import {
   ActionKind,
   type ConditionNode,
   type EventLog,
+  type FiringStateRepository,
   type Notifier,
   NumericOperator,
   type Rule,
@@ -56,19 +57,16 @@ export interface RuleOrchestratorOptions {
  *    `CycleOverflow` rule event.
  *
  * Lazy-but-functional: this PR covers the core loop. AllSymbols Timer
- * fan-out, `OncePerMinute` persistence of `currentlyActive`, and indicator
- * subscription wiring land in later issues.
+ * fan-out and indicator subscription wiring land in later issues.
  */
 export class RuleOrchestrator {
-  /** Per-(rule, symbol) `currentlyActive` flag for `OncePerMinute`. */
-  private readonly active = new Map<string, boolean>();
-
   constructor(
     private readonly rules: RuleRepository,
     private readonly lookups: EvaluationLookups,
     private readonly state: StateRepository,
     private readonly notifier: Notifier,
     private readonly log: EventLog,
+    private readonly firingState: FiringStateRepository,
     private readonly options: RuleOrchestratorOptions = {},
   ) {}
 
@@ -138,8 +136,7 @@ export class RuleOrchestrator {
     );
 
     const events = await this.log.ruleEvents(rule.id);
-    const activeKey = `${rule.id}|${firingSymbolId}`;
-    const prevActive = this.active.get(activeKey) ?? false;
+    const prevActive = await this.firingState.getActive(rule.id, firingSymbolId);
     const triggerAllows = this.checkTrigger(
       rule.trigger,
       events,
@@ -149,7 +146,7 @@ export class RuleOrchestrator {
       conditionTrue,
       eventFinal(event),
     );
-    this.active.set(activeKey, conditionTrue);
+    await this.firingState.setActive(rule.id, firingSymbolId, conditionTrue);
 
     if (!conditionTrue || !triggerAllows) return;
 
