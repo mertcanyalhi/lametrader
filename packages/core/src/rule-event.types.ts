@@ -43,7 +43,8 @@ export interface TimerEvent {
  * Shared shape of every OHLCV change event — only the discriminant differs.
  *
  * `prev` is `null` on the first observation of the value (no prior to compare
- * to).
+ * to). `final` mirrors the underlying bar's `final` flag (the bar that
+ * produced the value is closed); triggers like `OncePerBarClose` use it.
  */
 interface OhlcvChangedEvent<K extends RuleEventKind> {
   kind: K;
@@ -51,6 +52,7 @@ interface OhlcvChangedEvent<K extends RuleEventKind> {
   symbolId: string;
   prev: number | null;
   current: number;
+  final: boolean;
 }
 
 /** A symbol's current ("last") price changed. */
