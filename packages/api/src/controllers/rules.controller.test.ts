@@ -38,11 +38,22 @@ function rule(overrides: Partial<Rule> & Pick<Rule, 'id' | 'profileId' | 'order'
   };
 }
 
+/** Deterministic id generator for the create-endpoint tests. */
+function sequentialIds(): () => string {
+  let n = 0;
+  return () => `r${++n}`;
+}
+
 /**
- * Build an app wired with the given seeded rules.
+ * Build an app wired with the given seeded rules. The service uses a
+ * deterministic id generator + clock so create-response shapes are assertable
+ * in full.
  */
 function buildApp(seed: Rule[] = []) {
-  const rules = new RuleService(new InMemoryRuleRepository(seed));
+  const rules = new RuleService(new InMemoryRuleRepository(seed), {
+    newId: sequentialIds(),
+    now: () => 1000,
+  });
   return createApp(buildAppDeps({ rules }));
 }
 
@@ -121,6 +132,70 @@ describe('GET /rules', () => {
         .map((rl) => rl.id)
         .sort(),
     ).toEqual(['p2-aapl', 'p2-all']);
+  });
+});
+
+describe('POST /rules', () => {
+  it('creates a rule with a generated id, timestamps, and a Created history entry (201)', async () => {
+    const app = buildApp();
+    const body = {
+      profileId: 'p1',
+      name: 'AAPL > 100',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        left: { kind: OperandKind.CurrentValue, valueType: StateValueType.Number },
+        operator: NumericOperator.Gt,
+        right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 100 } },
+      },
+      trigger: { kind: TriggerKind.Once },
+      expiration: null,
+      actions: [{ kind: ActionKind.NotifyTelegram, destinationName: 'main', template: 'hi' }],
+      enabled: true,
+      order: 1,
+    };
+
+    const res = await app.inject({ method: 'POST', url: '/rules', payload: body });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toEqual({
+      ...body,
+      id: 'r1',
+      events: [],
+      history: [{ type: 'created', ts: 1000 }],
+      createdAt: 1000,
+      updatedAt: 1000,
+    });
+  });
+
+  it('returns 400 when validateRule rejects the input (empty name)', async () => {
+    const app = buildApp();
+    const body = {
+      profileId: 'p1',
+      name: '   ',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        left: { kind: OperandKind.CurrentValue, valueType: StateValueType.Number },
+        operator: NumericOperator.Gt,
+        right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 0 } },
+      },
+      trigger: { kind: TriggerKind.Once },
+      expiration: null,
+      actions: [{ kind: ActionKind.NotifyTelegram, destinationName: 'main', template: 'hi' }],
+      enabled: true,
+      order: 1,
+    };
+
+    const res = await app.inject({ method: 'POST', url: '/rules', payload: body });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 400 when the body fails schema validation (missing required field)', async () => {
+    const app = buildApp();
+    const res = await app.inject({ method: 'POST', url: '/rules', payload: { name: 'x' } });
+    expect(res.statusCode).toBe(400);
   });
 });
 
