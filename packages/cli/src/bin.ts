@@ -26,9 +26,13 @@ if (
 } else {
   // One-shot CLI: build the services (the polling loop is never started) and
   // dispatch. connectServices requires poll intervals even though we don't poll.
-  const { config, symbols, profiles, backfill, indicators, indicatorCompute, close } =
-    await connectServices(mongoUri, { pollIntervals });
+  // The connect is inside the try so a failed Mongo connection prints a clean
+  // `error: <message>` rather than escaping as an unhandled rejection.
+  let close: (() => Promise<void>) | undefined;
   try {
+    const { config, symbols, profiles, backfill, indicators, indicatorCompute, close: disconnect } =
+      await connectServices(mongoUri, { pollIntervals });
+    close = disconnect;
     switch (command) {
       case 'config':
         console.log(await runConfig(args, config));
@@ -50,6 +54,6 @@ if (
     console.error(`error: ${(error as Error).message}`);
     process.exitCode = 1;
   } finally {
-    await close();
+    await close?.();
   }
 }
