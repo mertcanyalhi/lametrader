@@ -1,4 +1,4 @@
-import { CandleStreamHub, createApp, IndicatorStreamHub } from '@lametrader/api';
+import { createApp, StreamHub } from '@lametrader/api';
 import {
   type BackfillRange,
   type CandleBatch,
@@ -10,6 +10,7 @@ import {
   SymbolType,
 } from '@lametrader/core';
 import {
+  type CandleEvent,
   ConfigService,
   defaultIndicators,
   IndicatorComputeService,
@@ -151,16 +152,16 @@ describe('indicator live streaming (e2e)', () => {
     const watchlist = new MongoWatchlistRepository(db);
     const candleRepo = new MongoCandleRepository(db);
     const config = new ConfigService(new MongoConfigRepository(db));
-    const candleStream = new CandleStreamHub();
-    const indicatorStream = new IndicatorStreamHub();
+    const candleStream = new StreamHub<CandleEvent>();
+    const indicatorStream = new StreamHub<IndicatorStateEvent>();
     const registry = defaultIndicators();
     const compute = new IndicatorComputeService(registry, watchlist, candleRepo);
     const indicatorStreamService = new IndicatorStreamService(registry, watchlist, compute, {
-      onState: (event) => indicatorStream.publish(event),
+      onState: (event) => indicatorStream.publish(event.subscriptionId, event),
     });
     polling = new PollingService([stub], candleRepo, watchlist, {
       onCandle: (event) => {
-        candleStream.publish(event);
+        candleStream.publish(event.id, event);
         void indicatorStreamService.handleCandle(event);
       },
       intervals: allIntervals(1000),

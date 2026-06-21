@@ -7,6 +7,7 @@ import {
   type WatchedSymbol,
 } from '@lametrader/core';
 import {
+  type CandleEvent,
   ConfigService,
   defaultIndicators,
   IndicatorComputeService,
@@ -18,9 +19,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
-import { CandleStreamHub } from '../candle-stream-hub.js';
-import { IndicatorStreamHub } from '../indicator-stream-hub.js';
-import { QuoteStreamHub } from '../quote-stream-hub.js';
+import { StreamHub } from '../stream-hub.js';
 import { buildAppDeps } from '../testing/app-deps.js';
 
 /** BTC as a watched symbol on the 1h period. */
@@ -84,23 +83,23 @@ async function buildApp(): Promise<TestApp> {
   ]);
   const registry = defaultIndicators();
   const compute = new IndicatorComputeService(registry, watchlist, candles);
-  const candleStream = new CandleStreamHub();
-  const indicatorStream = new IndicatorStreamHub();
+  const candleStream = new StreamHub<CandleEvent>();
+  const indicatorStream = new StreamHub<IndicatorStateEvent>();
   const captured: IndicatorStateEvent[] = [];
   const service = new IndicatorStreamService(registry, watchlist, compute, {
     onState: (event) => {
       captured.push(event);
-      indicatorStream.publish(event);
+      indicatorStream.publish(event.subscriptionId, event);
     },
   });
   const stored: Config = { periods: [Period.OneHour], defaultPeriod: Period.OneHour };
   const config = new ConfigService({ load: async () => stored, save: async () => {} });
-  const quoteStream = new QuoteStreamHub();
+  const quoteStream = new StreamHub<SymbolQuoteEvent>();
   const capturedQuotes: SymbolQuoteEvent[] = [];
   const quoteService = new QuoteStreamService(watchlist, config, candles, {
     onQuote: (event) => {
       capturedQuotes.push(event);
-      quoteStream.publish(event);
+      quoteStream.publish(event.subscriptionId, event);
     },
   });
   const app = createApp(
