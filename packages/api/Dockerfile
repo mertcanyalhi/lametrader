@@ -9,7 +9,7 @@
 #
 # Build context is the repo root (see infra/docker-compose.yml).
 
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 
 # Lockfile-first copy so `npm ci` layers cache as long as deps don't change.
@@ -20,7 +20,7 @@ RUN npm ci
 RUN npm run build
 RUN npm prune --omit=dev --workspaces --include-workspace-root
 
-FROM node:22-alpine AS run
+FROM node:26-alpine AS run
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000
