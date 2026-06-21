@@ -113,4 +113,32 @@ export function runRuleRepositoryContract(
     await repo.save(rule({ id: 'all-1', order: 1, scope: { kind: RuleScopeKind.AllSymbols } }));
     expect((await repo.listForSymbol(null)).map((r) => r.id)).toEqual(['all-1']);
   });
+
+  it('listForSymbol filters by profileId when provided', async () => {
+    const repo = await make();
+    await repo.save(rule({ id: 'p1-aapl', order: 1, profileId: 'profile-1' }));
+    await repo.save(rule({ id: 'p2-aapl', order: 1, profileId: 'profile-2' }));
+    await repo.save(
+      rule({
+        id: 'p2-all',
+        order: 1,
+        profileId: 'profile-2',
+        scope: { kind: RuleScopeKind.AllSymbols },
+      }),
+    );
+    expect((await repo.listForSymbol('AAPL', 'profile-2')).map((r) => r.id).sort()).toEqual([
+      'p2-aapl',
+      'p2-all',
+    ]);
+  });
+
+  it('listForSymbol with no profileId returns rules across all profiles', async () => {
+    const repo = await make();
+    await repo.save(rule({ id: 'p1-aapl', order: 1, profileId: 'profile-1' }));
+    await repo.save(rule({ id: 'p2-aapl', order: 1, profileId: 'profile-2' }));
+    expect((await repo.listForSymbol('AAPL')).map((r) => r.id).sort()).toEqual([
+      'p1-aapl',
+      'p2-aapl',
+    ]);
+  });
 }

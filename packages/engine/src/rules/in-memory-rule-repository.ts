@@ -22,9 +22,10 @@ export class InMemoryRuleRepository implements RuleRepository {
     return [...this.store.values()];
   }
 
-  async listForSymbol(symbolId: string | null): Promise<Rule[]> {
+  async listForSymbol(symbolId: string | null, profileId?: string): Promise<Rule[]> {
     const result: Rule[] = [];
     for (const rule of this.store.values()) {
+      if (profileId !== undefined && rule.profileId !== profileId) continue;
       if (rule.scope.kind === RuleScopeKind.AllSymbols) {
         result.push(rule);
         continue;

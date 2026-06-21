@@ -42,8 +42,8 @@ export class MongoRuleRepository implements RuleRepository {
     return docs.map(toRule);
   }
 
-  async listForSymbol(symbolId: string | null): Promise<Rule[]> {
-    const filter: Filter<RuleDocument> =
+  async listForSymbol(symbolId: string | null, profileId?: string): Promise<Rule[]> {
+    const scopeFilter: Filter<RuleDocument> =
       symbolId === null
         ? { 'scope.kind': RuleScopeKind.AllSymbols }
         : {
@@ -52,6 +52,8 @@ export class MongoRuleRepository implements RuleRepository {
               { 'scope.kind': RuleScopeKind.Symbol, 'scope.symbolId': symbolId },
             ],
           };
+    const filter: Filter<RuleDocument> =
+      profileId === undefined ? scopeFilter : { $and: [{ profileId }, scopeFilter] };
     const docs = await this.collection.find(filter).toArray();
     return docs.map(toRule);
   }
