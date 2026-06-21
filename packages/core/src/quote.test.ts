@@ -29,4 +29,13 @@ describe('computeQuote', () => {
       time: 2000,
     });
   });
+
+  it('yields changePct 0 (not Infinity/NaN) when the previous close is 0', () => {
+    expect(computeQuote(bar(2000, 5), bar(1000, 0))).toEqual({
+      price: 5,
+      change: expect.closeTo(5, 5),
+      changePct: 0,
+      time: 2000,
+    });
+  });
 });

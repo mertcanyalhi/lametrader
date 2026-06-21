@@ -1,6 +1,5 @@
 import {
   type Candle,
-  type CandleRepository,
   IndicatorError,
   IndicatorNotFoundError,
   Period,
