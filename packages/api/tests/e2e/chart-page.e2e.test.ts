@@ -83,9 +83,13 @@ describe('chart page candle contract (e2e)', () => {
   /** GET a candle window and return its decoded page. */
   async function readCandles(
     query: string,
-  ): Promise<{ candles: CryptoCandle[]; nextCursor: number | null }> {
+  ): Promise<{ candles: CryptoCandle[]; nextCursor: number | null; latestTime: number | null }> {
     const read = await app.inject({ method: 'GET', url: `/symbols/${BTC.id}/candles?${query}` });
-    return read.json() as { candles: CryptoCandle[]; nextCursor: number | null };
+    return read.json() as {
+      candles: CryptoCandle[];
+      nextCursor: number | null;
+      latestTime: number | null;
+    };
   }
 
   afterAll(async () => {
@@ -123,19 +127,21 @@ describe('chart page candle contract (e2e)', () => {
 
     expect({ status: read.statusCode, body: read.json() }).toEqual({
       status: 200,
-      body: { candles: SERIES, nextCursor: null },
+      body: { candles: SERIES, nextCursor: null, latestTime: 3000 },
     });
   });
 
-  it('returns an empty page for a window with nothing stored (the empty-state / stop signal)', async () => {
+  it('returns an empty page carrying latestTime when history exists outside the window (re-anchor signal, issue #70)', async () => {
     const read = await app.inject({
       method: 'GET',
       url: `/symbols/${BTC.id}/candles?period=1h&from=100000&to=200000`,
     });
 
+    // candles empty for this window, but latestTime points at the stored history
+    // elsewhere — the UI re-anchors to it instead of showing "No candles yet".
     expect({ status: read.statusCode, body: read.json() }).toEqual({
       status: 200,
-      body: { candles: [], nextCursor: null },
+      body: { candles: [], nextCursor: null, latestTime: 3000 },
     });
   });
 });

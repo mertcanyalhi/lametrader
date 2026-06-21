@@ -72,7 +72,11 @@ describe('runCandles', () => {
 
     const out = await runCandles(['list', BTC.id, '--period', '1h'], service, () => {});
 
-    expect(JSON.parse(out)).toEqual({ candles: [candle(1000), candle(2000)], nextCursor: null });
+    expect(JSON.parse(out)).toEqual({
+      candles: [candle(1000), candle(2000)],
+      nextCursor: null,
+      latestTime: 2000,
+    });
   });
 
   it('list paginates with --limit, surfacing the next cursor', async () => {
@@ -85,6 +89,10 @@ describe('runCandles', () => {
       () => {},
     );
 
-    expect(JSON.parse(out)).toEqual({ candles: [candle(1000), candle(2000)], nextCursor: 3000 });
+    expect(JSON.parse(out)).toEqual({
+      candles: [candle(1000), candle(2000)],
+      nextCursor: 3000,
+      latestTime: 3000,
+    });
   });
 });

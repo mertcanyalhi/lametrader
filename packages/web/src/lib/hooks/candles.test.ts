@@ -37,15 +37,22 @@ const candle = (time: number): Candle => ({
 describe('usePagedCandles', () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
   let queryClient: QueryClient;
-  /** Pages keyed by the window's exclusive upper bound (`to`). */
-  let windows: Map<number, CandlePage>;
+  /** Window contents keyed by the window's exclusive upper bound (`to`). */
+  let windows: Map<number, { candles: Candle[]; nextCursor: number | null }>;
 
   beforeEach(() => {
     vi.spyOn(Date, 'now').mockReturnValue(NOW);
     windows = new Map();
     fetchSpy = vi.fn(async (url: string) => {
       const to = Number(new URL(String(url), 'http://x').searchParams.get('to'));
-      const page = windows.get(to) ?? { candles: [], nextCursor: null };
+      const window = windows.get(to) ?? { candles: [], nextCursor: null };
+      // latestTime is the latest stored bar across ALL windows, independent of the
+      // requested window — exactly what the server reports (issue #70).
+      const times = [...windows.values()].flatMap((w) => w.candles.map((c) => c.time));
+      const page: CandlePage = {
+        ...window,
+        latestTime: times.length > 0 ? Math.max(...times) : null,
+      };
       return new Response(JSON.stringify(page), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -187,6 +194,43 @@ describe('usePagedCandles', () => {
       candle(NOW + HOUR),
       candle(NOW + 2 * HOUR),
     ]);
+  });
+
+  it('re-anchors to the latest stored bar and refetches when the now window is empty but older history exists', async () => {
+    // History sits far before the now-anchored window, so the first fetch is empty.
+    const STALE = NOW - 10 * SPAN;
+    windows.set(STALE + 1, {
+      candles: [candle(STALE - HOUR), candle(STALE)],
+      nextCursor: null,
+    });
+
+    const { result } = renderHook(() => usePagedCandles({ id: ID, period: Period.OneHour }), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.candles).toHaveLength(2));
+
+    expect({
+      candles: result.current.candles,
+      reanchorUrl: fetchSpy.mock.calls
+        .map((call) => String(call[0]))
+        .find((url) => url.includes(`to=${STALE + 1}`)),
+    }).toEqual({
+      candles: [candle(STALE - HOUR), candle(STALE)],
+      reanchorUrl: `/api/symbols/${ID}/candles?period=1h&from=${STALE + 1 - SPAN}&to=${STALE + 1}&limit=${CHART_CANDLE_LIMIT}`,
+    });
+  });
+
+  it('does not re-anchor and keeps an empty result when nothing is stored for the symbol+period', async () => {
+    // No windows set → every window empty and latestTime null (the empty-state signal).
+    const { result } = renderHook(() => usePagedCandles({ id: ID, period: Period.OneHour }), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+
+    expect({
+      candles: result.current.candles,
+      reanchored: fetchSpy.mock.calls.some((call) => !String(call[0]).includes(`to=${NOW}`)),
+    }).toEqual({ candles: [], reanchored: false });
   });
 });
 
