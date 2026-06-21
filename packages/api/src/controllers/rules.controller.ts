@@ -117,5 +117,31 @@ export function rulesController(service: RuleService) {
         return reply.code(204).send(null);
       },
     );
+
+    app.post(
+      '/rules/:id/enable',
+      {
+        schema: {
+          tags: ['rules'],
+          summary: 'Enable a rule',
+          params: RuleIdParamSchema,
+          response: { 200: RuleSchema, 404: ErrorSchema },
+        },
+      },
+      async (request) => service.setEnabled(request.params.id, true),
+    );
+
+    app.post(
+      '/rules/:id/disable',
+      {
+        schema: {
+          tags: ['rules'],
+          summary: 'Disable a rule',
+          params: RuleIdParamSchema,
+          response: { 200: RuleSchema, 404: ErrorSchema },
+        },
+      },
+      async (request) => service.setEnabled(request.params.id, false),
+    );
   };
 }

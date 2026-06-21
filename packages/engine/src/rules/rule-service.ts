@@ -114,6 +114,30 @@ export class RuleService {
   }
 
   /**
+   * Toggle a rule's `enabled` flag. Bumps `updatedAt` and appends an
+   * `Enabled` or `Disabled` history entry. No-op when the current value
+   * already matches `enabled` (still bumps `updatedAt` to surface the
+   * write).
+   *
+   * @throws {@link RuleNotFoundError} when the id is unknown.
+   */
+  async setEnabled(id: string, enabled: boolean): Promise<Rule> {
+    const existing = await this.get(id);
+    const ts = this.now();
+    const rule: Rule = {
+      ...existing,
+      enabled,
+      history: [
+        ...existing.history,
+        { type: enabled ? RuleHistoryType.Enabled : RuleHistoryType.Disabled, ts },
+      ],
+      updatedAt: ts,
+    };
+    await this.rules.save(rule);
+    return rule;
+  }
+
+  /**
    * Delete a rule by id. When the optional `firingState` port is wired in,
    * purges every persisted firing-state entry for the rule too — same pattern
    * as the profile cascade in #131.
