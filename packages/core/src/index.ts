@@ -83,6 +83,8 @@ export type {
   SymbolQuoteEvent,
   SymbolQuoteListener,
 } from './quote.types.js';
+export { isBool, isEnum, isNumber, isString } from './state.js';
+export { type StateValue, StateValueType } from './state.types.js';
 export {
   assertInstrumentTypeMatchesId,
   MarketDataError,
