@@ -135,8 +135,13 @@ export interface CandleRepository {
    * The most recent `n` stored candles for the symbol+period, ordered
    * highest-`time` first (newest at index 0), capped at however many exist.
    * Empty when none are stored.
+   *
+   * When `before` is given, only candles with `time < before` are considered —
+   * the warm-up window strictly preceding a request's `from`. This counts back
+   * by candle, not calendar span, so series with gaps (weekends, holidays) warm
+   * up the same as gapless ones.
    */
-  latestN(symbolId: string, period: Period, n: number): Promise<Candle[]>;
+  latestN(symbolId: string, period: Period, n: number, before?: number): Promise<Candle[]>;
   /**
    * Delete every stored candle for the symbol, across all periods. Idempotent
    * (no-op when none exist). Used when a symbol is removed from the watchlist.
