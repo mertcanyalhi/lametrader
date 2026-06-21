@@ -114,6 +114,27 @@ export class RuleService {
   }
 
   /**
+   * Bulk-renumber rules' `order` to the contiguous 1-based positions of
+   * `ids`. Every id in `ids` must resolve to an existing rule; ids missing
+   * from the input keep their previous order. Bumps `updatedAt` on each
+   * touched rule. Returns the updated rules in the new order.
+   *
+   * @throws {@link RuleNotFoundError} when any id is unknown.
+   */
+  async reorder(ids: readonly string[]): Promise<Rule[]> {
+    const ts = this.now();
+    const updated: Rule[] = [];
+    for (let i = 0; i < ids.length; i += 1) {
+      const id = ids[i] as string;
+      const existing = await this.get(id);
+      const rule: Rule = { ...existing, order: i + 1, updatedAt: ts };
+      await this.rules.save(rule);
+      updated.push(rule);
+    }
+    return updated;
+  }
+
+  /**
    * Toggle a rule's `enabled` flag. Bumps `updatedAt` and appends an
    * `Enabled` or `Disabled` history entry. No-op when the current value
    * already matches `enabled` (still bumps `updatedAt` to surface the

@@ -119,6 +119,19 @@ export function rulesController(service: RuleService) {
     );
 
     app.post(
+      '/rules/reorder',
+      {
+        schema: {
+          tags: ['rules'],
+          summary: 'Bulk-renumber rule order',
+          body: Type.Object({ ids: Type.Array(Type.String()) }, { additionalProperties: false }),
+          response: { 200: Type.Array(RuleSchema), 400: ErrorSchema, 404: ErrorSchema },
+        },
+      },
+      async (request) => service.reorder(request.body.ids),
+    );
+
+    app.post(
       '/rules/:id/enable',
       {
         schema: {
