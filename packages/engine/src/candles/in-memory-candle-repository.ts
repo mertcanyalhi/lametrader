@@ -39,9 +39,17 @@ export class InMemoryCandleRepository implements CandleRepository {
     return sorted.at(-1) ?? null;
   }
 
-  async latestN(symbolId: string, period: Period, n: number): Promise<Candle[]> {
+  async latestN(
+    symbolId: string,
+    period: Period,
+    n: number,
+    before = Number.POSITIVE_INFINITY,
+  ): Promise<Candle[]> {
     if (n <= 0) return [];
-    return this.sorted(symbolId, period).slice(-n).reverse();
+    return this.sorted(symbolId, period)
+      .filter((candle) => candle.time < before)
+      .slice(-n)
+      .reverse();
   }
 
   async deleteSymbol(symbolId: string): Promise<void> {

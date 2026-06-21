@@ -229,6 +229,7 @@ describe('IndicatorStreamService.handleCandle', () => {
   it('scopes the candle load to a warm-up + single-bar window around the event time — no full-history scan', async () => {
     const { stream, candles } = await build();
     const rangeSpy = vi.spyOn(candles, 'range');
+    const latestNSpy = vi.spyOn(candles, 'latestN');
     await stream.subscribe({
       id: BTC.id,
       period: Period.OneHour,
@@ -243,12 +244,12 @@ describe('IndicatorStreamService.handleCandle', () => {
       final: true,
     });
 
-    // `from` is clamped at 0 by Math.max when the warm-up margin would push
-    // it negative (this fixture's `time` is artificially small).
-    // `to` must be bounded just past the event candle — `MAX_SAFE_INTEGER`
-    // means we're scanning the full stored history per event, which is the
-    // CPU bug this guards against.
-    expect(rangeSpy.mock.calls).toEqual([[BTC.id, Period.OneHour, 0, 5]]);
+    // `range` is bounded to the single event bar `[4, 5)` — a `to` of
+    // `MAX_SAFE_INTEGER` would mean a full-history scan per event, the CPU bug
+    // this guards against. The warm-up bars load by *count* via `latestN`
+    // bounded just before the event time, not a calendar-span `range`.
+    expect(rangeSpy.mock.calls).toEqual([[BTC.id, Period.OneHour, 4, 5]]);
+    expect(latestNSpy.mock.calls).toEqual([[BTC.id, Period.OneHour, 3, 4]]);
   });
 
   it('confirmed live state at a candles time equals IndicatorComputeService.compute (consistency)', async () => {

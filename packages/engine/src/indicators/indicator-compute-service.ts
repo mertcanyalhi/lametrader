@@ -6,7 +6,6 @@ import {
   IndicatorNotFoundError,
   type IndicatorStatePoint,
   type Period,
-  periodMillis,
   SymbolNotFoundError,
   validateIndicatorInputs,
   type WatchlistRepository,
@@ -35,7 +34,7 @@ export class IndicatorComputeService {
   /**
    * Run an indicator over a symbol+period's stored candles and return the aligned state series.
    *
-   * Loads candles from the **earliest stored candle** up to `range.to` so a requested sub-range's first row is already past warm-up; the result is then sliced to `[range.from, range.to)`.
+   * Loads the `[range.from, range.to)` candles plus the warm-up bars (the N candles ending just before `range.from`, by count) so the sub-range's first row is already past warm-up; the result is then sliced to `[range.from, range.to)`.
    *
    * @throws {@link SymbolNotFoundError} when the symbol is not on the watchlist.
    * @throws {@link IndicatorNotFoundError} when the indicator key is not registered.
@@ -64,16 +63,19 @@ export class IndicatorComputeService {
     const validated = validateIndicatorInputs(module.definition, inputs);
     const to = range?.to ?? Number.MAX_SAFE_INTEGER;
     const from = range?.from ?? 0;
-    // Scope the load to `[from - warmup*periodMillis, to)` so a sub-range
-    // request doesn't pull every stored candle through compute. Warm-up bars
-    // are the count the module needs before its first non-null row; clamped at
-    // 0 so a near-epoch `from` can't underflow.
+    // Load the warm-up bars by *count* (the N candles ending just before `from`),
+    // not by calendar arithmetic. Counting back N spans under-loads any gapped
+    // series (weekends, holidays, overnight) — fewer trading candles fit the
+    // span than the module needs — leaving live sub-range rows stuck at null.
     const warmupBars = module.warmup
       ? module.warmup(validated as Parameters<NonNullable<typeof module.warmup>>[0])
       : 0;
-    const loadFrom = Math.max(0, from - warmupBars * periodMillis(period));
-    const candles = await this.candles.range(symbolId, period, loadFrom, to);
-    const series = module.compute(validated, candles);
+    const warmup =
+      warmupBars > 0
+        ? (await this.candles.latestN(symbolId, period, warmupBars, from)).reverse()
+        : [];
+    const inRange = await this.candles.range(symbolId, period, from, to);
+    const series = module.compute(validated, [...warmup, ...inRange]);
     const state: IndicatorStatePoint[] = series.filter(
       (row) => row.time >= from && row.time < to,
     ) as IndicatorStatePoint[];
