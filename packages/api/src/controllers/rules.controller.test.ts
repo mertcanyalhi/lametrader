@@ -8,7 +8,11 @@ import {
   StateValueType,
   TriggerKind,
 } from '@lametrader/core';
-import { InMemoryRuleRepository, RuleService } from '@lametrader/engine';
+import {
+  InMemoryFiringStateRepository,
+  InMemoryRuleRepository,
+  RuleService,
+} from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../app';
 import { buildAppDeps } from '../testing/app-deps';
@@ -47,14 +51,17 @@ function sequentialIds(): () => string {
 /**
  * Build an app wired with the given seeded rules. The service uses a
  * deterministic id generator + clock so create-response shapes are assertable
- * in full.
+ * in full. Returns the underlying repos so tests can introspect them.
  */
 function buildApp(seed: Rule[] = []) {
-  const rules = new RuleService(new InMemoryRuleRepository(seed), {
+  const ruleRepo = new InMemoryRuleRepository(seed);
+  const firingState = new InMemoryFiringStateRepository();
+  const rules = new RuleService(ruleRepo, {
     newId: sequentialIds(),
     now: () => 1000,
+    firingState,
   });
-  return createApp(buildAppDeps({ rules }));
+  return { app: createApp(buildAppDeps({ rules })), ruleRepo, firingState };
 }
 
 describe('GET /rules', () => {
@@ -66,7 +73,7 @@ describe('GET /rules', () => {
       order: 2,
       scope: { kind: RuleScopeKind.AllSymbols },
     });
-    const app = buildApp([r1, r2]);
+    const { app } = buildApp([r1, r2]);
 
     const res = await app.inject({ method: 'GET', url: '/rules' });
 
@@ -77,7 +84,7 @@ describe('GET /rules', () => {
   it('filters by profileId', async () => {
     const r1 = rule({ id: 'a', profileId: 'p1', order: 1 });
     const r2 = rule({ id: 'b', profileId: 'p2', order: 1 });
-    const app = buildApp([r1, r2]);
+    const { app } = buildApp([r1, r2]);
 
     const res = await app.inject({ method: 'GET', url: '/rules?profileId=p2' });
 
@@ -99,7 +106,7 @@ describe('GET /rules', () => {
       order: 3,
       scope: { kind: RuleScopeKind.AllSymbols },
     });
-    const app = buildApp([aaplRule, msftRule, allRule]);
+    const { app } = buildApp([aaplRule, msftRule, allRule]);
 
     const res = await app.inject({ method: 'GET', url: '/rules?symbolId=AAPL' });
 
@@ -121,7 +128,7 @@ describe('GET /rules', () => {
       order: 2,
       scope: { kind: RuleScopeKind.AllSymbols },
     });
-    const app = buildApp([r1, r2, allP2]);
+    const { app } = buildApp([r1, r2, allP2]);
 
     const res = await app.inject({ method: 'GET', url: '/rules?profileId=p2&symbolId=AAPL' });
 
@@ -137,7 +144,7 @@ describe('GET /rules', () => {
 
 describe('POST /rules', () => {
   it('creates a rule with a generated id, timestamps, and a Created history entry (201)', async () => {
-    const app = buildApp();
+    const { app } = buildApp();
     const body = {
       profileId: 'p1',
       name: 'AAPL > 100',
@@ -169,7 +176,7 @@ describe('POST /rules', () => {
   });
 
   it('returns 400 when validateRule rejects the input (empty name)', async () => {
-    const app = buildApp();
+    const { app } = buildApp();
     const body = {
       profileId: 'p1',
       name: '   ',
@@ -193,7 +200,7 @@ describe('POST /rules', () => {
   });
 
   it('returns 400 when the body fails schema validation (missing required field)', async () => {
-    const app = buildApp();
+    const { app } = buildApp();
     const res = await app.inject({ method: 'POST', url: '/rules', payload: { name: 'x' } });
     expect(res.statusCode).toBe(400);
   });
@@ -202,7 +209,7 @@ describe('POST /rules', () => {
 describe('GET /rules/:id', () => {
   it('returns the rule (200)', async () => {
     const r = rule({ id: 'r1', profileId: 'p1', order: 1 });
-    const app = buildApp([r]);
+    const { app } = buildApp([r]);
 
     const res = await app.inject({ method: 'GET', url: '/rules/r1' });
 
@@ -211,7 +218,7 @@ describe('GET /rules/:id', () => {
   });
 
   it('returns 404 for an unknown id', async () => {
-    const app = buildApp();
+    const { app } = buildApp();
     const res = await app.inject({ method: 'GET', url: '/rules/missing' });
     expect(res.statusCode).toBe(404);
     expect(res.json()).toEqual({ error: 'rule not found: missing' });
@@ -230,7 +237,7 @@ describe('PUT /rules/:id', () => {
       createdAt: 500,
       updatedAt: 500,
     });
-    const app = buildApp([seed]);
+    const { app } = buildApp([seed]);
     const body = {
       profileId: 'p1',
       name: 'renamed',
@@ -265,7 +272,7 @@ describe('PUT /rules/:id', () => {
   });
 
   it('returns 404 for an unknown id', async () => {
-    const app = buildApp();
+    const { app } = buildApp();
     const body = {
       profileId: 'p1',
       name: 'x',
@@ -283,7 +290,7 @@ describe('PUT /rules/:id', () => {
 
   it('returns 400 when the body fails domain validation', async () => {
     const seed = rule({ id: 'r1', profileId: 'p1', order: 1 });
-    const app = buildApp([seed]);
+    const { app } = buildApp([seed]);
     const body = {
       profileId: 'p1',
       name: '   ',
@@ -302,5 +309,25 @@ describe('PUT /rules/:id', () => {
     };
     const res = await app.inject({ method: 'PUT', url: '/rules/r1', payload: body });
     expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('DELETE /rules/:id', () => {
+  it('removes the rule and its firing state, returns 204', async () => {
+    const seed = rule({ id: 'r1', profileId: 'p1', order: 1 });
+    const { app, ruleRepo, firingState } = buildApp([seed]);
+    await firingState.setActive('r1', 'AAPL', true);
+
+    const res = await app.inject({ method: 'DELETE', url: '/rules/r1' });
+
+    expect(res.statusCode).toBe(204);
+    expect(await ruleRepo.list()).toEqual([]);
+    expect(await firingState.getActive('r1', 'AAPL')).toBe(false);
+  });
+
+  it('returns 404 for an unknown id', async () => {
+    const { app } = buildApp();
+    const res = await app.inject({ method: 'DELETE', url: '/rules/missing' });
+    expect(res.statusCode).toBe(404);
   });
 });
