@@ -118,6 +118,15 @@ export { NumericOperator, type RuleOperator, StateOperator } from './rule-operat
 export { isBool, isEnum, isNumber, isString } from './state.js';
 export { type StateValue, StateValueType } from './state.types.js';
 export {
+  type GlobalStateScope,
+  type StateChangedEvent,
+  type StateChangedListener,
+  type StateRepository,
+  StateScope,
+  type StateScopeSpec,
+  type SymbolStateScope,
+} from './state-repository.types.js';
+export {
   assertInstrumentTypeMatchesId,
   MarketDataError,
   parseSymbolPeriods,
