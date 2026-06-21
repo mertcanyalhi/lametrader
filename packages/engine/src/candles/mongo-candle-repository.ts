@@ -56,6 +56,9 @@ export class MongoCandleRepository implements CandleRepository {
     to: number,
     limit?: number,
   ): Promise<Candle[]> {
+    // Mongo's .limit(0) means "no limit" (and negatives are special-cased), so a
+    // zero/negative page size must short-circuit to [] rather than scan the lot.
+    if (limit !== undefined && limit <= 0) return [];
     const cursor = this.collection
       .find({ '_id.s': symbolId, '_id.p': period, '_id.t': { $gte: from, $lt: to } })
       .sort({ '_id.t': 1 });
@@ -74,6 +77,7 @@ export class MongoCandleRepository implements CandleRepository {
   }
 
   async latestN(symbolId: string, period: Period, n: number): Promise<Candle[]> {
+    if (n <= 0) return [];
     const docs = await this.collection
       .find({ '_id.s': symbolId, '_id.p': period })
       .sort({ '_id.t': -1 })
