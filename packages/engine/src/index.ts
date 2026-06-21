@@ -45,6 +45,7 @@ export { type IndicatorInstanceInput, ProfileService } from './profiles/profile-
 export type { ProfileServiceOptions } from './profiles/profile-service.types.js';
 export { CycleGuard, CycleOverflowError } from './rules/cycle-guard.js';
 export { type PrevCurrent, PrevCurrentCache } from './rules/prev-current-cache.js';
+export { QuoteRuleEventBridge } from './rules/quote-rule-event-bridge.js';
 export { loadSettings } from './settings.js';
 export type { Settings } from './settings.types.js';
 export { InMemoryStateRepository } from './state/in-memory-state-repository.js';
