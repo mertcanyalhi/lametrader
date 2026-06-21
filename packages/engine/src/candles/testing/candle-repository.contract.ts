@@ -54,6 +54,20 @@ export function runCandleRepositoryContract(
     expect(await repo.range(ID, PERIOD, 0, 4000, 2)).toEqual([candle(1000), candle(2000)]);
   });
 
+  it('range with a zero limit returns [] rather than the whole series', async () => {
+    const repo = await make();
+    await repo.save(ID, PERIOD, [candle(3000), candle(1000), candle(2000)]);
+
+    expect(await repo.range(ID, PERIOD, 0, 4000, 0)).toEqual([]);
+  });
+
+  it('latestN with a zero count returns [] rather than the whole series', async () => {
+    const repo = await make();
+    await repo.save(ID, PERIOD, [candle(3000), candle(1000), candle(2000)]);
+
+    expect(await repo.latestN(ID, PERIOD, 0)).toEqual([]);
+  });
+
   it('latest returns the highest-time candle, and null when empty', async () => {
     const repo = await make();
     expect(await repo.latest(ID, PERIOD)).toBeNull();

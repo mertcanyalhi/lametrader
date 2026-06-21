@@ -69,12 +69,55 @@ interface TestApp {
 }
 
 /**
+ * A controllable hold over an async `subscribe`: the wrapped call resolves `entered` when invoked, then blocks until `release()` is called.
+ *
+ * Lets a test wedge the socket-close handler in between a subscribe being entered and its engine registration completing — the exact window the close/subscribe race lives in.
+ */
+interface SubscribeGate {
+  /** Resolves once the gated `subscribe` has been entered. */
+  entered: Promise<void>;
+  /** Release the held `subscribe` so it proceeds to the real engine call. */
+  release: () => void;
+  /** Internal: invoked by the wrapper when entered. */
+  markEntered: () => void;
+  /** Internal: the promise the wrapper awaits before delegating. */
+  held: Promise<void>;
+}
+
+/** Build a {@link SubscribeGate}. */
+function makeGate(): SubscribeGate {
+  let markEntered!: () => void;
+  let release!: () => void;
+  const entered = new Promise<void>((resolve) => (markEntered = resolve));
+  const held = new Promise<void>((resolve) => (release = resolve));
+  return { entered, release, markEntered, held };
+}
+
+/** Wrap a service so its `subscribe` is gated, keeping every other method (unsubscribe, handleCandle) intact via the prototype chain. */
+function gateSubscribe<T extends { subscribe: (arg: never) => Promise<unknown> }>(
+  service: T,
+  gate: SubscribeGate,
+): T {
+  return Object.assign(Object.create(service) as T, {
+    subscribe: async (arg: never) => {
+      gate.markEntered();
+      await gate.held;
+      return service.subscribe(arg);
+    },
+  });
+}
+
+/**
  * Build a listening app whose `/stream` route runs over composed in-memory candle + indicator stream hubs.
  *
  * The watchlist holds BTC and three candles are pre-stored so `sma(length: 3)` has data immediately.
  * `captured` records every `onState` emission so a test can assert that close-cleanup actually shrinks the engine's subscription map (no emissions for prior subs after the socket goes away).
+ *
+ * Pass `indicatorGate` / `quoteGate` to hold the matching async `subscribe` open mid-flight (for the close-during-subscribe race).
  */
-async function buildApp(): Promise<TestApp> {
+async function buildApp(
+  gates: { indicatorGate?: SubscribeGate; quoteGate?: SubscribeGate } = {},
+): Promise<TestApp> {
   const watchlist = new InMemoryWatchlistRepository([BTC]);
   const candles = new InMemoryCandleRepository();
   await candles.save(BTC.id, Period.OneHour, [
@@ -113,9 +156,13 @@ async function buildApp(): Promise<TestApp> {
       liveStream: {
         candleStream,
         indicatorStream,
-        indicatorStreamService: service,
+        indicatorStreamService: gates.indicatorGate
+          ? gateSubscribe(service, gates.indicatorGate)
+          : service,
         quoteStream,
-        quoteStreamService: quoteService,
+        quoteStreamService: gates.quoteGate
+          ? gateSubscribe(quoteService, gates.quoteGate)
+          : quoteService,
       },
     }),
   );
@@ -354,6 +401,41 @@ describe('/stream indicator state delivery', () => {
       await app.close();
     }
   });
+
+  it('releases an indicator subscription that completes after the socket has already closed', async () => {
+    const gate = makeGate();
+    const { app, baseUrl, service, captured } = await buildApp({ indicatorGate: gate });
+    try {
+      const socket = await openSocket(baseUrl);
+      socket.send(
+        JSON.stringify({
+          action: 'subscribe-indicator',
+          id: BTC.id,
+          period: Period.OneHour,
+          indicator: { key: 'sma', inputs: { length: 3 } },
+        }),
+      );
+      // Close while the subscribe is still wedged inside the gate, then let it finish.
+      await gate.entered;
+      socket.close();
+      await settle();
+      gate.release();
+      await settle();
+
+      // The late-resolving subscribe must tear itself down: a matching candle reaches no subscribers.
+      captured.length = 0;
+      await service.handleCandle({
+        id: BTC.id,
+        period: Period.OneHour,
+        candle: candle(2 * HOUR, 30),
+        final: true,
+      });
+
+      expect(captured).toEqual([]);
+    } finally {
+      await app.close();
+    }
+  });
 });
 
 describe('/stream subscribe-quote', () => {
@@ -492,6 +574,34 @@ describe('/stream quote delivery', () => {
       await settle();
 
       // The engine's quote subscription map is now empty: a matching candle reaches no subscribers.
+      capturedQuotes.length = 0;
+      quoteService.handleCandle({
+        id: BTC.id,
+        period: Period.OneHour,
+        candle: candle(2 * HOUR, 30),
+        final: true,
+      });
+
+      expect(capturedQuotes).toEqual([]);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('releases a quote subscription that completes after the socket has already closed', async () => {
+    const gate = makeGate();
+    const { app, baseUrl, quoteService, capturedQuotes } = await buildApp({ quoteGate: gate });
+    try {
+      const socket = await openSocket(baseUrl);
+      socket.send(JSON.stringify({ action: 'subscribe-quote', id: BTC.id }));
+      // Close while the subscribe is still wedged inside the gate, then let it finish.
+      await gate.entered;
+      socket.close();
+      await settle();
+      gate.release();
+      await settle();
+
+      // The late-resolving subscribe must tear itself down: a matching candle reaches no subscribers.
       capturedQuotes.length = 0;
       quoteService.handleCandle({
         id: BTC.id,

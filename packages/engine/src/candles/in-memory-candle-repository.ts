@@ -27,6 +27,7 @@ export class InMemoryCandleRepository implements CandleRepository {
     to: number,
     limit?: number,
   ): Promise<Candle[]> {
+    if (limit !== undefined && limit <= 0) return [];
     const matched = this.sorted(symbolId, period).filter(
       (candle) => candle.time >= from && candle.time < to,
     );
@@ -44,6 +45,7 @@ export class InMemoryCandleRepository implements CandleRepository {
     n: number,
     before = Number.POSITIVE_INFINITY,
   ): Promise<Candle[]> {
+    if (n <= 0) return [];
     return this.sorted(symbolId, period)
       .filter((candle) => candle.time < before)
       .slice(-n)
