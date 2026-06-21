@@ -113,6 +113,20 @@ export {
   RuleScopeKind,
   type SymbolRuleScope,
 } from './rule.types.js';
+export {
+  type CloseValueChangedEvent,
+  type CurrentValueChangedEvent,
+  type GlobalStateChangedEvent,
+  type HighValueChangedEvent,
+  type IndicatorValueChangedEvent,
+  type LowValueChangedEvent,
+  type OpenValueChangedEvent,
+  type RuleEvent,
+  RuleEventKind,
+  type SymbolStateChangedEvent,
+  type TimerEvent,
+  type VolumeValueChangedEvent,
+} from './rule-event.types.js';
 export { RuleOperatorError, validateOperatorOperands } from './rule-operator.js';
 export { NumericOperator, type RuleOperator, StateOperator } from './rule-operator.types.js';
 export { isBool, isEnum, isNumber, isString } from './state.js';
