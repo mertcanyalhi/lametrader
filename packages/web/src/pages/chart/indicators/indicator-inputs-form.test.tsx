@@ -133,6 +133,139 @@ describe('IndicatorInputsForm', () => {
     expect(await screen.findByText('Number of candles in the window.')).not.toBeNull();
   });
 
+  it('renders an inline required error and skips onSubmit when a Number field is empty on submit', async () => {
+    const onSubmit = vi.fn();
+    render(
+      <Theme>
+        <IndicatorInputsForm
+          inputs={[
+            {
+              type: FieldType.Number,
+              key: 'length',
+              label: 'Length',
+              integer: true,
+              min: 1,
+              max: 1_000,
+            },
+          ]}
+          state={STATE_EMPTY}
+          initialValues={{}}
+          onSubmit={onSubmit}
+        />
+      </Theme>,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /save|create|submit|attach/i }));
+
+    expect({
+      message: (await screen.findByRole('alert')).textContent,
+      submitCalls: onSubmit.mock.calls,
+    }).toEqual({ message: 'Length is required.', submitCalls: [] });
+  });
+
+  it("renders an inline min error and skips onSubmit when a Number value is below the descriptor's min", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <Theme>
+        <IndicatorInputsForm
+          inputs={[
+            {
+              type: FieldType.Number,
+              key: 'length',
+              label: 'Length',
+              integer: true,
+              min: 2,
+              max: 1_000,
+              default: 14,
+            },
+          ]}
+          state={STATE_EMPTY}
+          initialValues={{}}
+          onSubmit={onSubmit}
+        />
+      </Theme>,
+    );
+    const user = userEvent.setup();
+    const input = screen.getByRole('spinbutton', { name: 'Length' });
+    await user.clear(input);
+    await user.type(input, '1');
+    await user.click(screen.getByRole('button', { name: /save|create|submit|attach/i }));
+
+    expect({
+      message: (await screen.findByRole('alert')).textContent,
+      submitCalls: onSubmit.mock.calls,
+    }).toEqual({ message: 'Length must be ≥ 2.', submitCalls: [] });
+  });
+
+  it("renders an inline max error and skips onSubmit when a Number value is above the descriptor's max", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <Theme>
+        <IndicatorInputsForm
+          inputs={[
+            {
+              type: FieldType.Number,
+              key: 'length',
+              label: 'Length',
+              integer: true,
+              min: 1,
+              max: 10,
+              default: 5,
+            },
+          ]}
+          state={STATE_EMPTY}
+          initialValues={{}}
+          onSubmit={onSubmit}
+        />
+      </Theme>,
+    );
+    const user = userEvent.setup();
+    const input = screen.getByRole('spinbutton', { name: 'Length' });
+    await user.clear(input);
+    await user.type(input, '11');
+    await user.click(screen.getByRole('button', { name: /save|create|submit|attach/i }));
+
+    expect({
+      message: (await screen.findByRole('alert')).textContent,
+      submitCalls: onSubmit.mock.calls,
+    }).toEqual({ message: 'Length must be ≤ 10.', submitCalls: [] });
+  });
+
+  it('renders an inline integer error and skips onSubmit when a fractional value is given to an integer Number', async () => {
+    const onSubmit = vi.fn();
+    render(
+      <Theme>
+        <IndicatorInputsForm
+          inputs={[
+            {
+              type: FieldType.Number,
+              key: 'length',
+              label: 'Length',
+              integer: true,
+              min: 1,
+              max: 100,
+              step: 0.1,
+              default: 14,
+            },
+          ]}
+          state={STATE_EMPTY}
+          initialValues={{}}
+          onSubmit={onSubmit}
+        />
+      </Theme>,
+    );
+    const user = userEvent.setup();
+    const input = screen.getByRole('spinbutton', { name: 'Length' });
+    await user.clear(input);
+    await user.type(input, '2.5');
+    await user.click(screen.getByRole('button', { name: /save|create|submit|attach/i }));
+
+    expect({
+      message: (await screen.findByRole('alert')).textContent,
+      submitCalls: onSubmit.mock.calls,
+    }).toEqual({ message: 'Length must be an integer.', submitCalls: [] });
+  });
+
   it('calls onSubmit with the current field values (defaults included) when the form is submitted', async () => {
     const onSubmit = vi.fn();
     render(

@@ -101,6 +101,19 @@ describe('web boilerplate build (e2e)', () => {
     expect(bundlesContainingMarker.length > 0).toEqual(true);
   });
 
+  it("emits a JS bundle whose contents include the indicator-inputs schema's min-rule message marker", () => {
+    // "must be ≥ " is a distinctive substring of the indicator-inputs Yup
+    // schema's min-rule message (built dynamically from each Number descriptor's
+    // `min`). Its presence in the bundle confirms `lib/indicator-inputs-schema.ts`
+    // is wired into the indicator panel and ships with the deployable artifact.
+    const assets = readdirSync(join(distDir, 'assets'));
+    const jsFiles = assets.filter((file) => file.endsWith('.js'));
+    const bundlesContainingMarker = jsFiles.filter((file) =>
+      readFileSync(join(distDir, 'assets', file), 'utf8').includes('must be ≥ '),
+    );
+    expect(bundlesContainingMarker.length > 0).toEqual(true);
+  });
+
   it("emits a JS bundle whose contents include the indicator legend's hide-overlay label", () => {
     // "Hide overlay" is the legend's eye-toggle accessible name (rendered when
     // the overlay is visible). Its presence in the bundle confirms the chart's
