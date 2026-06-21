@@ -82,7 +82,7 @@ export {
 export { evaluateState } from './rules/state-evaluator.js';
 export { executeTelegramAction } from './rules/telegram-action-executor.js';
 export { loadSettings } from './settings.js';
-export type { Settings } from './settings.types.js';
+export type { Settings, TelegramDestination } from './settings.types.js';
 export { InMemoryStateRepository } from './state/in-memory-state-repository.js';
 export { MongoStateRepository } from './state/mongo-state-repository.js';
 export { BinanceMarketDataSource } from './symbols/binance-market-data-source.js';
