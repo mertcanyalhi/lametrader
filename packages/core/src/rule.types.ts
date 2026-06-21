@@ -58,6 +58,8 @@ export enum RuleEventType {
   NotificationSent = 'notificationSent',
   /** An action failed (unknown destination, bad template token, transport error). */
   Error = 'error',
+  /** The rule's expiration was reached; further fires are suppressed. */
+  Expired = 'expired',
 }
 
 /**
@@ -140,6 +142,14 @@ export interface ErrorRuleEvent extends BaseRuleEventEntry {
 }
 
 /**
+ * An `Expired` event — the rule's expiration was reached and further fires
+ * are suppressed. Emitted at most once per (rule, symbol).
+ */
+export interface ExpiredRuleEvent extends BaseRuleEventEntry {
+  type: RuleEventType.Expired;
+}
+
+/**
  * One entry in a {@link Rule}'s embedded events log.
  *
  * Tagged union over {@link RuleEventType}; mirrored onto `Symbol.events[]` per
@@ -151,7 +161,8 @@ export type RuleEventEntry =
   | StateSetRuleEvent
   | StateRemovedRuleEvent
   | NotificationSentRuleEvent
-  | ErrorRuleEvent;
+  | ErrorRuleEvent
+  | ExpiredRuleEvent;
 
 /**
  * The kind of a {@link RuleHistoryEntry} — a lifecycle change to the rule

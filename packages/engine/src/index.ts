@@ -56,9 +56,13 @@ export { buildEvaluationContext } from './rules/evaluation-context.js';
 export type { EvaluationContext, EvaluationLookups } from './rules/evaluation-context.types.js';
 export { appendStateActionEvent } from './rules/event-appender.js';
 export { InMemoryEventLog } from './rules/in-memory-event-log.js';
+export { InMemoryFiringStateRepository } from './rules/in-memory-firing-state-repository.js';
 export { InMemoryNotifier, type SentMessage } from './rules/in-memory-notifier.js';
+export { InMemoryRuleRepository } from './rules/in-memory-rule-repository.js';
 export { IndicatorRuleEventBridge } from './rules/indicator-rule-event-bridge.js';
 export { MinuteTimerSource } from './rules/minute-timer-source.js';
+export { MongoFiringStateRepository } from './rules/mongo-firing-state-repository.js';
+export { MongoRuleRepository } from './rules/mongo-rule-repository.js';
 export {
   mayFireOncePerBar,
   mayFireOncePerBarClose,
@@ -67,6 +71,10 @@ export { mayFireOncePerMinute } from './rules/once-per-minute-trigger-gate.js';
 export { mayFireOnce } from './rules/once-trigger-gate.js';
 export { type PrevCurrent, PrevCurrentCache } from './rules/prev-current-cache.js';
 export { QuoteRuleEventBridge } from './rules/quote-rule-event-bridge.js';
+export {
+  RuleOrchestrator,
+  type RuleOrchestratorOptions,
+} from './rules/rule-orchestrator.js';
 export {
   executeStateAction,
   type StateMutationAction,

@@ -43,6 +43,7 @@ export { type Config, ConfigKey, type ConfigRepository, Period } from './config.
 export type { EventLog } from './event-log.types.js';
 export { ExpirationError, validateExpiration } from './expiration.js';
 export type { Expiration } from './expiration.types.js';
+export type { FiringStateRepository } from './firing-state-repository.types.js';
 export {
   IndicatorError,
   IndicatorInstanceNotFoundError,
@@ -106,6 +107,7 @@ export {
   type AllSymbolsRuleScope,
   type CycleOverflowRuleEvent,
   type ErrorRuleEvent,
+  type ExpiredRuleEvent,
   type FiredRuleEvent,
   type NotificationSentRuleEvent,
   type Rule,
@@ -135,6 +137,7 @@ export {
 } from './rule-event.types.js';
 export { RuleOperatorError, validateOperatorOperands } from './rule-operator.js';
 export { NumericOperator, type RuleOperator, StateOperator } from './rule-operator.types.js';
+export type { RuleRepository } from './rule-repository.types.js';
 export { isBool, isEnum, isNumber, isString } from './state.js';
 export { type StateValue, StateValueType } from './state.types.js';
 export {
