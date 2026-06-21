@@ -18,6 +18,7 @@ import type { EvaluationContext, EvaluationLookups } from './evaluation-context.
 export function buildEvaluationContext(
   event: RuleEvent,
   lookups: EvaluationLookups,
+  targetSymbolId: string | null = event.symbolId,
 ): EvaluationContext {
   const { prev, current } = derivePrevCurrent(event);
   return {
@@ -25,50 +26,53 @@ export function buildEvaluationContext(
     prev,
     current,
     resolve(operand) {
-      return resolveOperand(operand, event, lookups);
+      return resolveOperand(operand, targetSymbolId, lookups);
     },
   };
 }
 
 /**
- * Resolve one {@link ConditionOperand} against the event + lookups.
+ * Resolve one {@link ConditionOperand} against `targetSymbolId` + lookups.
  */
 function resolveOperand(
   operand: ConditionOperand,
-  event: RuleEvent,
+  symbolId: string | null,
   lookups: EvaluationLookups,
 ): StateValue | null {
   switch (operand.kind) {
     case OperandKind.Literal:
       return operand.value;
     case OperandKind.CurrentValue:
-      return wrapNumber(lookupOnSymbol(event, (id) => lookups.getCurrentValue(id)));
+      return wrapNumber(lookupOnSymbol(symbolId, (id) => lookups.getCurrentValue(id)));
     case OperandKind.OpenValue:
-      return wrapNumber(lookupOnSymbol(event, (id) => lookups.getOpenValue(id)));
+      return wrapNumber(lookupOnSymbol(symbolId, (id) => lookups.getOpenValue(id)));
     case OperandKind.HighValue:
-      return wrapNumber(lookupOnSymbol(event, (id) => lookups.getHighValue(id)));
+      return wrapNumber(lookupOnSymbol(symbolId, (id) => lookups.getHighValue(id)));
     case OperandKind.LowValue:
-      return wrapNumber(lookupOnSymbol(event, (id) => lookups.getLowValue(id)));
+      return wrapNumber(lookupOnSymbol(symbolId, (id) => lookups.getLowValue(id)));
     case OperandKind.CloseValue:
-      return wrapNumber(lookupOnSymbol(event, (id) => lookups.getCloseValue(id)));
+      return wrapNumber(lookupOnSymbol(symbolId, (id) => lookups.getCloseValue(id)));
     case OperandKind.VolumeValue:
-      return wrapNumber(lookupOnSymbol(event, (id) => lookups.getVolumeValue(id)));
+      return wrapNumber(lookupOnSymbol(symbolId, (id) => lookups.getVolumeValue(id)));
     case OperandKind.IndicatorRef:
       return lookups.getIndicatorValue(operand.instanceId, operand.stateKey);
     case OperandKind.SymbolStateRef:
-      return lookupOnSymbol(event, (id) => lookups.getSymbolState(id, operand.key));
+      return lookupOnSymbol(symbolId, (id) => lookups.getSymbolState(id, operand.key));
     case OperandKind.GlobalStateRef:
       return lookups.getGlobalState(operand.key);
   }
 }
 
 /**
- * Invoke `lookup` against the event's `symbolId` if it has one; events with
- * `symbolId: null` (Timer / global-state-change) resolve symbol-scoped
+ * Invoke `lookup` against `symbolId` when present; `null` symbolId (Timer
+ * with no fan-out target / global-state-change) resolves symbol-scoped
  * operands to `null`.
  */
-function lookupOnSymbol<T>(event: RuleEvent, lookup: (symbolId: string) => T | null): T | null {
-  return event.symbolId === null ? null : lookup(event.symbolId);
+function lookupOnSymbol<T>(
+  symbolId: string | null,
+  lookup: (symbolId: string) => T | null,
+): T | null {
+  return symbolId === null ? null : lookup(symbolId);
 }
 
 /**

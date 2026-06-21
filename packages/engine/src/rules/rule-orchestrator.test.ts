@@ -9,11 +9,13 @@ import {
   RuleScopeKind,
   StateOperator,
   StateValueType,
+  SymbolType,
   TriggerKind,
 } from '@lametrader/core';
 import { describe, expect, it } from 'vitest';
 
 import { InMemoryStateRepository } from '../state/in-memory-state-repository.js';
+import { InMemoryWatchlistRepository } from '../symbols/in-memory-watchlist-repository.js';
 import type { EvaluationLookups } from './evaluation-context.types.js';
 import { InMemoryEventLog } from './in-memory-event-log.js';
 import { InMemoryFiringStateRepository } from './in-memory-firing-state-repository.js';
@@ -95,6 +97,7 @@ describe('RuleOrchestrator', () => {
     const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       rules,
+      new InMemoryWatchlistRepository(),
       priceLookups(),
       new InMemoryStateRepository(),
       notifier,
@@ -153,6 +156,7 @@ describe('RuleOrchestrator', () => {
     const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       rules,
+      new InMemoryWatchlistRepository(),
       syncLookups,
       state,
       notifier,
@@ -196,6 +200,7 @@ describe('RuleOrchestrator', () => {
     const log = new InMemoryEventLog();
     const orchestrator = new RuleOrchestrator(
       rules,
+      new InMemoryWatchlistRepository(),
       priceLookups(),
       new InMemoryStateRepository(),
       new InMemoryNotifier(),
@@ -224,6 +229,7 @@ describe('RuleOrchestrator', () => {
     const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([r]),
+      new InMemoryWatchlistRepository(),
       priceLookups(),
       new InMemoryStateRepository(),
       notifier,
@@ -248,6 +254,7 @@ describe('RuleOrchestrator', () => {
     const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([aapl, msft]),
+      new InMemoryWatchlistRepository(),
       priceLookups(),
       new InMemoryStateRepository(),
       notifier,
@@ -267,6 +274,7 @@ describe('RuleOrchestrator', () => {
     const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([all]),
+      new InMemoryWatchlistRepository(),
       priceLookups(),
       new InMemoryStateRepository(),
       notifier,
@@ -290,6 +298,7 @@ describe('RuleOrchestrator', () => {
     const log = new InMemoryEventLog();
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([r]),
+      new InMemoryWatchlistRepository(),
       priceLookups(),
       new InMemoryStateRepository(),
       notifier,
@@ -309,6 +318,7 @@ describe('RuleOrchestrator', () => {
     const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([r]),
+      new InMemoryWatchlistRepository(),
       priceLookups(),
       new InMemoryStateRepository(),
       notifier,
@@ -340,6 +350,7 @@ describe('RuleOrchestrator', () => {
     const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([r]),
+      new InMemoryWatchlistRepository(),
       lookups,
       new InMemoryStateRepository(),
       notifier,
@@ -363,6 +374,7 @@ describe('RuleOrchestrator', () => {
     const log = new InMemoryEventLog();
     const orchestrator = new RuleOrchestrator(
       rules,
+      new InMemoryWatchlistRepository(),
       priceLookups(),
       new InMemoryStateRepository(),
       notifier,
@@ -384,6 +396,48 @@ describe('RuleOrchestrator', () => {
         ruleId: 'expired',
         symbolId: 'AAPL',
       },
+    ]);
+  });
+
+  it('fans an AllSymbols-scoped rule out across every watched symbol on a Timer event', async () => {
+    const r = rule({
+      id: 'timer-all',
+      order: 1,
+      scope: { kind: RuleScopeKind.AllSymbols },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        left: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 1 } },
+        operator: NumericOperator.Gt,
+        right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 0 } },
+      },
+      actions: [{ kind: ActionKind.NotifyTelegram, destinationName: 'main', template: 'tick' }],
+    });
+    const notifier = new InMemoryNotifier(['main']);
+    const watchlist = new InMemoryWatchlistRepository([
+      { id: 'AAPL', type: SymbolType.Stock, description: 'Apple', exchange: 'NMS', periods: [] },
+      {
+        id: 'MSFT',
+        type: SymbolType.Stock,
+        description: 'Microsoft',
+        exchange: 'NMS',
+        periods: [],
+      },
+    ]);
+    const orchestrator = new RuleOrchestrator(
+      new InMemoryRuleRepository([r]),
+      watchlist,
+      emptyLookups(),
+      new InMemoryStateRepository(),
+      notifier,
+      new InMemoryEventLog(),
+      new InMemoryFiringStateRepository(),
+    );
+
+    await orchestrator.process({ kind: RuleEventKind.Timer, ts: 1000, symbolId: null });
+
+    expect(notifier.sent).toEqual([
+      { destinationName: 'main', body: 'tick' },
+      { destinationName: 'main', body: 'tick' },
     ]);
   });
 });
