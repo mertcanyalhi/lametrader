@@ -4,6 +4,16 @@
  * Holds entities and contracts (ports) only: no I/O, no outward imports.
  */
 
+export { ActionError, validateAction } from './action.js';
+export {
+  type Action,
+  ActionKind,
+  type NotifyTelegramAction,
+  type RemoveGlobalStateAction,
+  type RemoveSymbolStateAction,
+  type SetGlobalStateAction,
+  type SetSymbolStateAction,
+} from './action.types.js';
 export {
   BackfillConflictError,
   CandleError,
