@@ -20,6 +20,7 @@ describe('loadSettings', () => {
       mongoUri: 'mongodb://lametrader:lametrader@localhost:27017/lametrader?authSource=admin',
       apiPort: 3000,
       pollIntervals: DEFAULT_POLL_INTERVALS,
+      telegramDestinations: [],
     });
   });
 
@@ -28,6 +29,7 @@ describe('loadSettings', () => {
       mongoUri: 'mongodb://db:1/x',
       apiPort: 8080,
       pollIntervals: DEFAULT_POLL_INTERVALS,
+      telegramDestinations: [],
     });
   });
 
@@ -36,6 +38,7 @@ describe('loadSettings', () => {
       mongoUri: 'mongodb://lametrader:lametrader@localhost:27017/lametrader?authSource=admin',
       apiPort: 3000,
       pollIntervals: { ...DEFAULT_POLL_INTERVALS, [Period.OneMinute]: 5000 },
+      telegramDestinations: [],
     });
   });
 
@@ -46,5 +49,41 @@ describe('loadSettings', () => {
   it('throws on a non-positive or non-integer PORT', () => {
     expect(() => loadSettings({ PORT: '0' })).toThrowError(/PORT/);
     expect(() => loadSettings({ PORT: '3000.5' })).toThrowError(/PORT/);
+  });
+
+  it('parses TELEGRAM_DESTINATIONS into the typed array', () => {
+    const env = {
+      TELEGRAM_DESTINATIONS: JSON.stringify([
+        { name: 'main', botToken: 't1', chatId: 'c1' },
+        { name: 'alerts', botToken: 't2', chatId: 'c2' },
+      ]),
+    };
+    expect(loadSettings(env).telegramDestinations).toEqual([
+      { name: 'main', botToken: 't1', chatId: 'c1' },
+      { name: 'alerts', botToken: 't2', chatId: 'c2' },
+    ]);
+  });
+
+  it('rejects TELEGRAM_DESTINATIONS with duplicate names', () => {
+    const env = {
+      TELEGRAM_DESTINATIONS: JSON.stringify([
+        { name: 'main', botToken: 't1', chatId: 'c1' },
+        { name: 'main', botToken: 't2', chatId: 'c2' },
+      ]),
+    };
+    expect(() => loadSettings(env)).toThrowError(/duplicate name: main/);
+  });
+
+  it('rejects TELEGRAM_DESTINATIONS entries missing required string fields', () => {
+    const env = {
+      TELEGRAM_DESTINATIONS: JSON.stringify([{ name: 'main', botToken: 't1' }]),
+    };
+    expect(() => loadSettings(env)).toThrowError(/{ name, botToken, chatId } strings/);
+  });
+
+  it('rejects a TELEGRAM_DESTINATIONS value that is not a JSON array', () => {
+    expect(() => loadSettings({ TELEGRAM_DESTINATIONS: '{"name":"x"}' })).toThrowError(
+      /must be a JSON array/,
+    );
   });
 });
