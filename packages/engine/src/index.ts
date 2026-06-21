@@ -43,6 +43,7 @@ export { InMemoryProfileRepository } from './profiles/in-memory-profile-reposito
 export { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 export { type IndicatorInstanceInput, ProfileService } from './profiles/profile-service.js';
 export type { ProfileServiceOptions } from './profiles/profile-service.types.js';
+export { CycleGuard, CycleOverflowError } from './rules/cycle-guard.js';
 export { loadSettings } from './settings.js';
 export type { Settings } from './settings.types.js';
 export { InMemoryStateRepository } from './state/in-memory-state-repository.js';
