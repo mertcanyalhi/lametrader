@@ -56,6 +56,7 @@ export { buildEvaluationContext } from './rules/evaluation-context.js';
 export type { EvaluationContext, EvaluationLookups } from './rules/evaluation-context.types.js';
 export { appendStateActionEvent } from './rules/event-appender.js';
 export { InMemoryEventLog } from './rules/in-memory-event-log.js';
+export { InMemoryNotifier, type SentMessage } from './rules/in-memory-notifier.js';
 export { IndicatorRuleEventBridge } from './rules/indicator-rule-event-bridge.js';
 export { MinuteTimerSource } from './rules/minute-timer-source.js';
 export {
@@ -71,6 +72,7 @@ export {
   type StateMutationAction,
 } from './rules/state-action-executor.js';
 export { evaluateState } from './rules/state-evaluator.js';
+export { executeTelegramAction } from './rules/telegram-action-executor.js';
 export { loadSettings } from './settings.js';
 export type { Settings } from './settings.types.js';
 export { InMemoryStateRepository } from './state/in-memory-state-repository.js';
