@@ -56,6 +56,7 @@ export { buildEvaluationContext } from './rules/evaluation-context.js';
 export type { EvaluationContext, EvaluationLookups } from './rules/evaluation-context.types.js';
 export { IndicatorRuleEventBridge } from './rules/indicator-rule-event-bridge.js';
 export { MinuteTimerSource } from './rules/minute-timer-source.js';
+export { mayFireOnce } from './rules/once-trigger-gate.js';
 export { type PrevCurrent, PrevCurrentCache } from './rules/prev-current-cache.js';
 export { QuoteRuleEventBridge } from './rules/quote-rule-event-bridge.js';
 export { evaluateState } from './rules/state-evaluator.js';
