@@ -183,3 +183,21 @@ npm run cli -- indicators compute crypto:BTCUSDT sma --period 1h --inputs '{"len
 # VWMA with deviation threshold and both buy/sell signals
 npm run cli -- indicators compute crypto:BTCUSDT vwma --period 1h --inputs '{"length":14,"multiplier":1,"direction":"both"}'
 ```
+
+### `rules`
+
+Read rules persisted by the engine (CRUD lands in a follow-up sub-issue).
+
+#### Subcommands
+
+- **`list [--profile <id>] [--symbol <id>] [--enabled]`** — print rules as JSON, sorted ascending by `order`. `--profile` narrows to one profile; `--symbol` returns rules whose scope is that symbol (plus any `AllSymbols` rule); `--enabled` drops disabled rules.
+- **`show <id>`** — print one rule by id; an unknown id errors with `RuleNotFoundError`.
+
+#### Examples
+
+```sh
+npm run cli -- rules list
+npm run cli -- rules list --profile p1
+npm run cli -- rules list --profile p1 --symbol crypto:BTCUSDT --enabled
+npm run cli -- rules show <id>
+```
