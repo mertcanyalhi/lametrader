@@ -98,6 +98,112 @@ describe('runState list (flag validation)', () => {
   });
 });
 
+describe('runState set --symbol', () => {
+  it('writes the value and prints the new state map', async () => {
+    const { symbols, state } = buildDeps();
+    const output = await runState(
+      ['set', '--symbol', BTC.id, '--key', 'armed', '--value', 'true', '--type', 'bool'],
+      symbols,
+      state,
+    );
+    expect(JSON.parse(output)).toEqual({ armed: { type: 'bool', value: true } });
+    expect(await state.getSymbolState(BTC.id, 'armed')).toEqual({
+      type: 'bool',
+      value: true,
+    });
+  });
+
+  it('parses --type number into a StateValue.Number', async () => {
+    const { symbols, state } = buildDeps();
+    await runState(
+      ['set', '--symbol', BTC.id, '--key', 'cooldown', '--value', '42', '--type', 'number'],
+      symbols,
+      state,
+    );
+    expect(await state.getSymbolState(BTC.id, 'cooldown')).toEqual({
+      type: 'number',
+      value: 42,
+    });
+  });
+
+  it('rejects a non-numeric --value when --type number', async () => {
+    const { symbols, state } = buildDeps();
+    await expect(
+      runState(
+        ['set', '--symbol', BTC.id, '--key', 'x', '--value', 'abc', '--type', 'number'],
+        symbols,
+        state,
+      ),
+    ).rejects.toThrow('--type number requires a finite numeric --value');
+  });
+
+  it('rejects a non-boolean --value when --type bool', async () => {
+    const { symbols, state } = buildDeps();
+    await expect(
+      runState(
+        ['set', '--symbol', BTC.id, '--key', 'x', '--value', 'maybe', '--type', 'bool'],
+        symbols,
+        state,
+      ),
+    ).rejects.toThrow('--type bool requires --value true|false');
+  });
+
+  it('rejects an unknown --type', async () => {
+    const { symbols, state } = buildDeps();
+    await expect(
+      runState(
+        ['set', '--symbol', BTC.id, '--key', 'x', '--value', '1', '--type', 'bogus'],
+        symbols,
+        state,
+      ),
+    ).rejects.toThrow('unknown --type bogus');
+  });
+
+  it('requires --key', async () => {
+    const { symbols, state } = buildDeps();
+    await expect(
+      runState(['set', '--symbol', BTC.id, '--value', '1', '--type', 'number'], symbols, state),
+    ).rejects.toThrow('state set requires --key');
+  });
+});
+
+describe('runState set --global', () => {
+  it('writes the value and prints the new global state map', async () => {
+    const { symbols, state } = buildDeps();
+    const output = await runState(
+      ['set', '--global', '--key', 'regime', '--value', 'risk-on', '--type', 'enum'],
+      symbols,
+      state,
+    );
+    expect(JSON.parse(output)).toEqual({ regime: { type: 'enum', value: 'risk-on' } });
+  });
+});
+
+describe('runState remove', () => {
+  it('removes a symbol key and prints the new state map', async () => {
+    const { symbols, state } = buildDeps();
+    await state.setSymbolState(BTC.id, 'armed', { type: StateValueType.Bool, value: true }, 100);
+    const output = await runState(['remove', '--symbol', BTC.id, '--key', 'armed'], symbols, state);
+    expect(JSON.parse(output)).toEqual({});
+    expect(await state.getSymbolState(BTC.id, 'armed')).toBeNull();
+  });
+
+  it('removes a global key and prints the new global state map', async () => {
+    const { symbols, state } = buildDeps();
+    await state.setGlobalState('regime', { type: StateValueType.Enum, value: 'risk-on' }, 100);
+    const output = await runState(['remove', '--global', '--key', 'regime'], symbols, state);
+    expect(JSON.parse(output)).toEqual({});
+    expect(await state.getGlobalState('regime')).toBeNull();
+  });
+
+  it('requires --key', async () => {
+    const { symbols, state } = buildDeps();
+    await expect(runState(['remove', '--symbol', BTC.id], symbols, state)).rejects.toThrow(
+      'state remove requires --key',
+    );
+  });
+});
+
 describe('runState unknown subcommand', () => {
   it('throws so the entry point prints `error: ...` and exits non-zero', async () => {
     const { symbols, state } = buildDeps();

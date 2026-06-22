@@ -218,18 +218,24 @@ npm run cli -- rules events --symbol crypto:BTCUSDT --limit 50
 
 ### `state`
 
-Read the rule-engine state (per-symbol and global).
+Read and (for debugging) write the rule-engine state. Writes go straight at the `StateRepository` port — production state should be set by the orchestrator's action executors, not by hand.
 
 #### Subcommands
 
 - **`list --symbol <id>`** — print the symbol's current state map (`{ [key]: StateValue }`) as JSON. Unknown symbol errors with `SymbolNotFoundError`.
 - **`list --global`** — print the global state map as JSON.
+- **`set --symbol <id>|--global --key <k> --value <v> --type <string|number|bool|enum>`** — write the value (the `--type` flag validates `--value`: numbers must be finite, `bool` must be `true`/`false`). On success, prints the new state map.
+- **`remove --symbol <id>|--global --key <k>`** — drop the key; prints the new state map (a no-op when the key was already absent).
 
-Exactly one of `--symbol` / `--global` must be provided.
+Exactly one of `--symbol` / `--global` must be provided for every subcommand.
 
 #### Examples
 
 ```sh
 npm run cli -- state list --symbol crypto:BTCUSDT
 npm run cli -- state list --global
+npm run cli -- state set --symbol crypto:BTCUSDT --key armed --value true --type bool
+npm run cli -- state set --global --key regime --value risk-on --type enum
+npm run cli -- state remove --symbol crypto:BTCUSDT --key armed
+npm run cli -- state remove --global --key regime
 ```
