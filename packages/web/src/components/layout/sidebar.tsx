@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { CandlestickChart, List, Settings as SettingsIcon } from 'lucide-react';
+import { CandlestickChart, List, Scale, Settings as SettingsIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router';
 import { cn } from '../../lib/cn.js';
@@ -18,11 +18,12 @@ interface NavItem {
 }
 
 /**
- * The three primary destinations of the app. Order is the rendered order.
+ * The primary destinations of the app, in rendered order.
  */
 const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Watchlist', icon: List },
   { path: '/chart', label: 'Chart', icon: CandlestickChart },
+  { path: '/rules', label: 'Rules', icon: Scale },
   { path: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
