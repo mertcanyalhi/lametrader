@@ -24,6 +24,7 @@ import {
   useRule,
   useRuleEvents,
   useRules,
+  useSymbolRuleEvents,
 } from './rules';
 
 /**
@@ -247,5 +248,44 @@ describe('rules hooks', () => {
       expect(fetchSpy).toHaveBeenCalled();
     });
     expect(fetchSpy.mock.calls[0]?.[0]).toBe('/api/rules/r1/events?limit=10&before=5000');
+  });
+
+  it('useSymbolRuleEvents GETs /api/symbols/:id/rule-events', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+    const { wrapper } = makeWrapper();
+    renderHook(() => useSymbolRuleEvents('crypto:BTCUSDT'), { wrapper });
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalled();
+    });
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe('/api/symbols/crypto%3ABTCUSDT/rule-events');
+  });
+
+  it('useSymbolRuleEvents threads `limit` and `before` into the query string', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+    const { wrapper } = makeWrapper();
+    renderHook(() => useSymbolRuleEvents('crypto:BTCUSDT', { limit: 10, before: 5000 }), {
+      wrapper,
+    });
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalled();
+    });
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe(
+      '/api/symbols/crypto%3ABTCUSDT/rule-events?limit=10&before=5000',
+    );
+  });
+
+  it('useSymbolRuleEvents resolves with the empty page when the API returns []', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => useSymbolRuleEvents('crypto:BTCUSDT'), { wrapper });
+    await waitFor(() => {
+      expect(result.current.data).toEqual([]);
+    });
   });
 });

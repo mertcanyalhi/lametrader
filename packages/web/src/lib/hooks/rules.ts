@@ -26,6 +26,14 @@ export function ruleEventsKey(id: string, options: { limit?: number; before?: nu
   return [...RULES_QUERY_KEY, 'events', id, options] as const;
 }
 
+/** Stable key for a symbol's embedded rule-events query. */
+export function symbolRuleEventsKey(
+  symbolId: string,
+  options: { limit?: number; before?: number } = {},
+) {
+  return [...RULES_QUERY_KEY, 'symbolEvents', symbolId, options] as const;
+}
+
 /** Body the API's `POST /rules` and `PUT /rules/:id` both accept. */
 export type RuleInput = Omit<Rule, 'id' | 'events' | 'history' | 'createdAt' | 'updatedAt'>;
 
@@ -159,6 +167,28 @@ export function useRuleEvents(
   const path = `/rules/${encodeURIComponent(id)}/events${qs ? `?${qs}` : ''}`;
   return useQuery({
     queryKey: ruleEventsKey(id, options),
+    queryFn: () => apiFetch<RuleEventEntry[]>(path),
+  });
+}
+
+/**
+ * Paginated read of a symbol's embedded rule events
+ * (`GET /symbols/:id/rule-events`), newest-first — surfaces every rule
+ * firing against the symbol regardless of which rule produced it. Same
+ * pagination contract as {@link useRuleEvents} (`limit` default 50;
+ * `before` is a strict `<` cursor on `ts`).
+ */
+export function useSymbolRuleEvents(
+  symbolId: string,
+  options: { limit?: number; before?: number } = {},
+): UseQueryResult<RuleEventEntry[], Error> {
+  const search = new URLSearchParams();
+  if (options.limit !== undefined) search.set('limit', String(options.limit));
+  if (options.before !== undefined) search.set('before', String(options.before));
+  const qs = search.toString();
+  const path = `/symbols/${encodeURIComponent(symbolId)}/rule-events${qs ? `?${qs}` : ''}`;
+  return useQuery({
+    queryKey: symbolRuleEventsKey(symbolId, options),
     queryFn: () => apiFetch<RuleEventEntry[]>(path),
   });
 }
