@@ -14,9 +14,10 @@ npm run cli -- <command>       # e.g. npm run cli -- config get
 
 Resolved from the environment (with defaults) via the engine settings layer:
 
-| Variable      | Default                                                                       |
-| ------------- | ----------------------------------------------------------------------------- |
-| `MONGODB_URI` | `mongodb://lametrader:lametrader@localhost:27017/lametrader?authSource=admin` |
+| Variable                | Default                                                                       | Notes                                                                 |
+| ----------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `MONGODB_URI`           | `mongodb://lametrader:lametrader@localhost:27017/lametrader?authSource=admin` |                                                                       |
+| `TELEGRAM_DESTINATIONS` | `[]`                                                                          | JSON array of `{ name, botToken, chatId }` — surfaces in `telegram list`. |
 
 ## Commands
 
@@ -186,7 +187,7 @@ npm run cli -- indicators compute crypto:BTCUSDT vwma --period 1h --inputs '{"le
 
 ### `rules`
 
-Read rules persisted by the engine (CRUD lands in a follow-up sub-issue).
+Manage rules persisted by the engine — full CRUD plus enable / disable, bulk reorder, and a paginated read of fired-rule events (by rule or by symbol).
 
 #### Subcommands
 
