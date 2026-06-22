@@ -192,6 +192,8 @@ Read rules persisted by the engine (CRUD lands in a follow-up sub-issue).
 
 - **`list [--profile <id>] [--symbol <id>] [--enabled]`** — print rules as JSON, sorted ascending by `order`. `--profile` narrows to one profile; `--symbol` returns rules whose scope is that symbol (plus any `AllSymbols` rule); `--enabled` drops disabled rules.
 - **`show <id>`** — print one rule by id; an unknown id errors with `RuleNotFoundError`.
+- **`create --profile <id> --file <path>`** — read a JSON `RuleCreateInput` from the file, set the profileId from `--profile` (overrides the file's value), validate via `validateRule`, persist, and print the created rule.
+- **`update <id> --file <path>`** — read a JSON `RuleCreateInput` from the file and replace the rule's mutable fields (preserves `id`, `events`, `history`, `createdAt`; bumps `updatedAt`; appends an `Updated` history entry).
 
 #### Examples
 
@@ -200,4 +202,6 @@ npm run cli -- rules list
 npm run cli -- rules list --profile p1
 npm run cli -- rules list --profile p1 --symbol crypto:BTCUSDT --enabled
 npm run cli -- rules show <id>
+npm run cli -- rules create --profile p1 --file rule.json
+npm run cli -- rules update <id> --file rule.json
 ```
