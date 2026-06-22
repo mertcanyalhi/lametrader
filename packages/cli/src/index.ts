@@ -11,3 +11,4 @@ export { runProfiles } from './profile.js';
 export { runRules } from './rules.js';
 export { runState } from './state.js';
 export { runSymbols } from './symbols.js';
+export { runTelegram } from './telegram.js';

@@ -239,3 +239,17 @@ npm run cli -- state set --global --key regime --value risk-on --type enum
 npm run cli -- state remove --symbol crypto:BTCUSDT --key armed
 npm run cli -- state remove --global --key regime
 ```
+
+### `telegram`
+
+Inspect (and test, via the `test` subcommand in a follow-up) configured Telegram destinations from the settings layer.
+
+#### Subcommands
+
+- **`list`** — print each destination as `<name>\t<chatId>\t<redacted token>` (last 4 chars of the token only, prefixed with `****`). `(none)` when no destinations are configured. The full token is never echoed.
+
+#### Examples
+
+```sh
+npm run cli -- telegram list
+```
