@@ -5,6 +5,31 @@ import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Sidebar } from './sidebar';
 
+describe('Sidebar primary navigation', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('renders the Rules nav entry pointing to /rules', () => {
+    render(
+      <MemoryRouter>
+        <Sidebar collapsed={false} />
+      </MemoryRouter>,
+    );
+    const link = screen.getByRole('link', { name: 'Rules' });
+    expect(link).toHaveAttribute('href', '/rules');
+  });
+
+  it('marks the Rules link as the active page when the current route is /rules', () => {
+    render(
+      <MemoryRouter initialEntries={['/rules']}>
+        <Sidebar collapsed={false} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: 'Rules' })).toHaveAttribute('aria-current', 'page');
+  });
+});
+
 describe('Sidebar brand mark', () => {
   afterEach(() => {
     cleanup();
