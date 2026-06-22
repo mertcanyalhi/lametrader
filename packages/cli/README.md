@@ -197,6 +197,7 @@ Read rules persisted by the engine (CRUD lands in a follow-up sub-issue).
 - **`delete <id>`** — remove the rule (cascades its persisted firing-state). Prints `deleted <id>` on success.
 - **`enable <id>`** / **`disable <id>`** — flip the rule's `enabled` flag and append an `Enabled` / `Disabled` history entry; echoes the updated rule.
 - **`reorder --order <csv>`** — bulk-renumber rule `order` to the 1-based positions of the comma-separated ids (e.g. `--order r2,r3,r1`); echoes the renumbered rules.
+- **`events <id> [--limit N]`** / **`events --symbol <id> [--limit N]`** — paginated rule-firing events newest-first (default 20, max 500), by rule id (positional) or by symbol (`--symbol`).
 
 #### Examples
 
@@ -211,4 +212,6 @@ npm run cli -- rules delete <id>
 npm run cli -- rules enable <id>
 npm run cli -- rules disable <id>
 npm run cli -- rules reorder --order r2,r3,r1
+npm run cli -- rules events <id>
+npm run cli -- rules events --symbol crypto:BTCUSDT --limit 50
 ```

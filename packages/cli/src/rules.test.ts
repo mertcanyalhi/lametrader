@@ -6,13 +6,28 @@ import {
   ConditionNodeKind,
   NumericOperator,
   OperandKind,
+  Period,
   type Rule,
+  type RuleEventEntry,
+  RuleEventType,
   RuleNotFoundError,
   RuleScopeKind,
   StateValueType,
+  SymbolType,
   TriggerKind,
+  type WatchedSymbol,
 } from '@lametrader/core';
-import { InMemoryRuleRepository, type RuleCreateInput, RuleService } from '@lametrader/engine';
+import {
+  ConfigService,
+  InMemoryCandleRepository,
+  InMemoryConfigRepository,
+  InMemoryMarketDataSource,
+  InMemoryRuleRepository,
+  InMemoryWatchlistRepository,
+  type RuleCreateInput,
+  RuleService,
+  SymbolService,
+} from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 import { runRules } from './rules';
 
@@ -271,6 +286,87 @@ describe('runRules reorder', () => {
     await expect(runRules(['reorder', '--order', 'a,missing'], service)).rejects.toBeInstanceOf(
       RuleNotFoundError,
     );
+  });
+});
+
+/**
+ * Build a real `SymbolService` seeded with one BTC symbol that carries the
+ * given embedded `events`, so the `events --symbol` path is exercised
+ * through the full controller → service → repo chain.
+ */
+function buildSymbolService(events: RuleEventEntry[]): SymbolService {
+  const watched: WatchedSymbol = {
+    id: 'crypto:BTCUSDT',
+    type: SymbolType.Crypto,
+    description: 'BTC',
+    exchange: 'Binance',
+    periods: [Period.OneHour],
+    events,
+  };
+  const watchlist = new InMemoryWatchlistRepository([watched]);
+  const config = new ConfigService(new InMemoryConfigRepository());
+  return new SymbolService(
+    [new InMemoryMarketDataSource([])],
+    watchlist,
+    config,
+    new InMemoryCandleRepository(),
+  );
+}
+
+describe('runRules events (by rule)', () => {
+  it('prints the rule embedded events newest-first via RuleService.listEvents', async () => {
+    const events: RuleEventEntry[] = [
+      { type: RuleEventType.Fired, ts: 100, ruleId: 'r1', symbolId: 'crypto:BTCUSDT' },
+      { type: RuleEventType.Fired, ts: 300, ruleId: 'r1', symbolId: 'crypto:BTCUSDT' },
+      { type: RuleEventType.Fired, ts: 200, ruleId: 'r1', symbolId: 'crypto:BTCUSDT' },
+    ];
+    const service = buildService([rule({ id: 'r1', profileId: 'p1', order: 1, events })]);
+    const parsed = JSON.parse(await runRules(['events', 'r1'], service)) as RuleEventEntry[];
+    expect(parsed.map((e) => e.ts)).toEqual([300, 200, 100]);
+  });
+
+  it('caps to --limit', async () => {
+    const events: RuleEventEntry[] = [100, 200, 300, 400, 500].map((ts) => ({
+      type: RuleEventType.Fired,
+      ts,
+      ruleId: 'r1',
+      symbolId: 'crypto:BTCUSDT',
+    }));
+    const service = buildService([rule({ id: 'r1', profileId: 'p1', order: 1, events })]);
+    const parsed = JSON.parse(
+      await runRules(['events', 'r1', '--limit', '2'], service),
+    ) as RuleEventEntry[];
+    expect(parsed.map((e) => e.ts)).toEqual([500, 400]);
+  });
+
+  it('throws when neither a rule id nor --symbol is given', async () => {
+    await expect(runRules(['events'], buildService())).rejects.toThrow('events requires a rule id');
+  });
+
+  it('rejects an out-of-range --limit with a readable error', async () => {
+    await expect(runRules(['events', 'r1', '--limit', '501'], buildService())).rejects.toThrow(
+      '--limit must be an integer in [1, 500]',
+    );
+  });
+});
+
+describe('runRules events --symbol', () => {
+  it('prints the symbol embedded events newest-first via SymbolService.listEventsForSymbol', async () => {
+    const events: RuleEventEntry[] = [
+      { type: RuleEventType.Fired, ts: 100, ruleId: 'r1', symbolId: 'crypto:BTCUSDT' },
+      { type: RuleEventType.Fired, ts: 200, ruleId: 'r2', symbolId: 'crypto:BTCUSDT' },
+    ];
+    const symbols = buildSymbolService(events);
+    const parsed = JSON.parse(
+      await runRules(['events', '--symbol', 'crypto:BTCUSDT'], buildService(), symbols),
+    ) as RuleEventEntry[];
+    expect(parsed.map((e) => e.ts)).toEqual([200, 100]);
+  });
+
+  it('throws when the symbols use-case is not wired but --symbol is given', async () => {
+    await expect(
+      runRules(['events', '--symbol', 'crypto:BTCUSDT'], buildService()),
+    ).rejects.toThrow('events --symbol requires the symbols use-case');
   });
 });
 
