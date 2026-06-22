@@ -76,6 +76,11 @@ export class MongoStateRepository implements StateRepository {
     await this.removeValue({ kind: StateScope.Symbol, symbolId }, key, ts);
   }
 
+  async listGlobalState(): Promise<Record<string, StateValue>> {
+    const docs = await this.collection.find({ scope: StateScope.Global }).toArray();
+    return Object.fromEntries(docs.map((doc) => [doc.key, doc.value]));
+  }
+
   async getGlobalState(key: string): Promise<StateValue | null> {
     return this.getValue({ kind: StateScope.Global }, key);
   }

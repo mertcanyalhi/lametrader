@@ -1,4 +1,4 @@
-import type { IndicatorStateEvent, SymbolQuoteEvent } from '@lametrader/core';
+import type { IndicatorStateEvent, StateRepository, SymbolQuoteEvent } from '@lametrader/core';
 import type {
   BackfillService,
   CandleEvent,
@@ -59,6 +59,12 @@ export interface AppDependencies {
    * When present, the `/rules` routes are registered.
    */
   rules?: RuleService;
+  /**
+   * The rule-engine state store. When present, `GET /state/global` is
+   * registered; the per-symbol state route lives under `/symbols` and is
+   * wired through {@link SymbolService}.
+   */
+  state?: StateRepository;
   /**
    * The backfill use-case (historical candles).
    */

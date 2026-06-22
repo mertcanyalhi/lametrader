@@ -1,4 +1,9 @@
-import type { IndicatorStateListener, Period, SymbolQuoteListener } from '@lametrader/core';
+import type {
+  IndicatorStateListener,
+  Period,
+  StateRepository,
+  SymbolQuoteListener,
+} from '@lametrader/core';
 import { MongoClient } from 'mongodb';
 import { BackfillService } from './candles/backfill-service.js';
 import { MongoCandleRepository } from './candles/mongo-candle-repository.js';
@@ -55,6 +60,8 @@ export interface ConnectedServices {
   indicatorStream: IndicatorStreamService;
   /** Live quote streaming (subscription registry + onCandle reaction). */
   quoteStream: QuoteStreamService;
+  /** The rule-engine state store (read-side; the engine's writes flow through the orchestrator). */
+  state: StateRepository;
   /** The backfill use-case (historical candles). */
   backfill: BackfillService;
   /** The continuous polling + live-streaming loop. */
@@ -127,6 +134,7 @@ export async function connectServices(
     indicatorCompute,
     indicatorStream,
     quoteStream,
+    state: stateRepo,
     backfill,
     polling,
     close: async () => {

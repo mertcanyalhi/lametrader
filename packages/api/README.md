@@ -309,6 +309,26 @@ curl 'http://localhost:3000/symbols/crypto:BTCUSDT/indicators/sma?period=1h&leng
 curl 'http://localhost:3000/symbols/crypto:BTCUSDT/indicators/vwma?period=1h&length=14&multiplier=1&direction=both'
 ```
 
+## State resource
+
+Read-side views of the rule-engine state — the cross-symbol global key/value store and (via the symbols resource) per-symbol state maps. Used by chart markers and debugging; the engine itself writes state through the orchestrator.
+
+A `StateValue` is a tagged scalar: `{ "type": "string" | "number" | "bool" | "enum", "value": ... }`.
+
+### Endpoints
+
+| Method | Path             | Body | Description                                                       |
+| ------ | ---------------- | ---- | ----------------------------------------------------------------- |
+| `GET`  | `/state/global`  | —    | Current global state map (`{ [key]: StateValue }`; `{}` when empty). 200. |
+
+The per-symbol state map lives at `GET /symbols/{id}/state` (see the symbols resource).
+
+### Examples
+
+```sh
+curl http://localhost:3000/state/global
+```
+
 ## Live stream
 
 Once the service is running it continuously polls each watched symbol+period and

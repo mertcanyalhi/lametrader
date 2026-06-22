@@ -92,6 +92,11 @@ export interface StateRepository {
   removeSymbolState(symbolId: string, key: string, ts: number): Promise<void>;
 
   /**
+   * Read every (key, value) pair in the global store. Returns `{}` when no
+   * global keys have been set.
+   */
+  listGlobalState(): Promise<Record<string, StateValue>>;
+  /**
    * Read the value at `key` in the global store, or `null` if absent.
    */
   getGlobalState(key: string): Promise<StateValue | null>;

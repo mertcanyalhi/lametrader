@@ -28,6 +28,7 @@ import { configController } from './controllers/config.controller.js';
 import { indicatorsController } from './controllers/indicators.controller.js';
 import { profilesController } from './controllers/profiles.controller.js';
 import { rulesController } from './controllers/rules.controller.js';
+import { stateController } from './controllers/state.controller.js';
 import { streamController } from './controllers/stream.controller.js';
 import { symbolsController } from './controllers/symbols.controller.js';
 import { StreamHub } from './stream-hub.js';
@@ -125,6 +126,9 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
   }
   if (deps.rules) {
     app.register(rulesController(deps.rules));
+  }
+  if (deps.state) {
+    app.register(stateController(deps.state));
   }
   app.register(indicatorsController(deps.indicators.registry, deps.indicators.compute));
   if (deps.backfill) {

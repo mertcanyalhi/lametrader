@@ -66,6 +66,10 @@ export class InMemoryStateRepository implements StateRepository {
     });
   }
 
+  async listGlobalState(): Promise<Record<string, StateValue>> {
+    return Object.fromEntries(this.globalStore);
+  }
+
   async getGlobalState(key: string): Promise<StateValue | null> {
     return this.globalStore.get(key) ?? null;
   }
