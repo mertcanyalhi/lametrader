@@ -4,7 +4,7 @@
  *
  * Thin: connect to Mongo, dispatch the command, print the result, disconnect.
  */
-import { connectServices, loadSettings } from '@lametrader/engine';
+import { connectServices, loadSettings, TelegramNotifier } from '@lametrader/engine';
 import { runCandles } from './candles.js';
 import { runConfig } from './config.js';
 import { runIndicators } from './indicators.js';
@@ -71,7 +71,9 @@ if (
         console.log(await runState(args, symbols, state));
         break;
       case 'telegram':
-        console.log(await runTelegram(args, telegramDestinations));
+        console.log(
+          await runTelegram(args, telegramDestinations, new TelegramNotifier(telegramDestinations)),
+        );
         break;
     }
   } catch (error) {
