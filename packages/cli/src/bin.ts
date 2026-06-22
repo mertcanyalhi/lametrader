@@ -12,9 +12,10 @@ import { runProfiles } from './profile.js';
 import { runRules } from './rules.js';
 import { runState } from './state.js';
 import { runSymbols } from './symbols.js';
+import { runTelegram } from './telegram.js';
 
 const [, , command, ...args] = process.argv;
-const { mongoUri, pollIntervals } = loadSettings();
+const { mongoUri, pollIntervals, telegramDestinations } = loadSettings();
 
 if (
   command !== 'config' &&
@@ -23,7 +24,8 @@ if (
   command !== 'candles' &&
   command !== 'indicators' &&
   command !== 'rules' &&
-  command !== 'state'
+  command !== 'state' &&
+  command !== 'telegram'
 ) {
   console.error(`unknown command: ${command ?? '(none)'}`);
   process.exitCode = 1;
@@ -67,6 +69,9 @@ if (
         break;
       case 'state':
         console.log(await runState(args, symbols, state));
+        break;
+      case 'telegram':
+        console.log(await runTelegram(args, telegramDestinations));
         break;
     }
   } catch (error) {
