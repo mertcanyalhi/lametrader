@@ -10,6 +10,7 @@ import { runConfig } from './config.js';
 import { runIndicators } from './indicators.js';
 import { runProfiles } from './profile.js';
 import { runRules } from './rules.js';
+import { runState } from './state.js';
 import { runSymbols } from './symbols.js';
 
 const [, , command, ...args] = process.argv;
@@ -21,7 +22,8 @@ if (
   command !== 'profile' &&
   command !== 'candles' &&
   command !== 'indicators' &&
-  command !== 'rules'
+  command !== 'rules' &&
+  command !== 'state'
 ) {
   console.error(`unknown command: ${command ?? '(none)'}`);
   process.exitCode = 1;
@@ -37,6 +39,7 @@ if (
       symbols,
       profiles,
       rules,
+      state,
       backfill,
       indicators,
       indicatorCompute,
@@ -61,6 +64,9 @@ if (
         break;
       case 'rules':
         console.log(await runRules(args, rules, symbols));
+        break;
+      case 'state':
+        console.log(await runState(args, symbols, state));
         break;
     }
   } catch (error) {
