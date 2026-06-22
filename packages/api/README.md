@@ -309,6 +309,75 @@ curl 'http://localhost:3000/symbols/crypto:BTCUSDT/indicators/sma?period=1h&leng
 curl 'http://localhost:3000/symbols/crypto:BTCUSDT/indicators/vwma?period=1h&length=14&multiplier=1&direction=both'
 ```
 
+## Rules resource
+
+Profile-scoped trading-rule definitions: a `Rule` couples a `scope` (one symbol or all watched symbols), a `condition` tree (recursive AND/OR over comparison, crossing, or state operators), a `trigger` gate (`once` / `oncePerBar` / `oncePerBarClose` / `oncePerMinute`), an optional `expiration.at`, and an ordered list of `actions` (`setSymbolState`, `removeSymbolState`, `setGlobalState`, `removeGlobalState`, `notifyTelegram`).
+
+Each rule belongs to one profile (`profileId`) and carries an `order` integer used to break ties when several rules match the same event. The server preserves embedded `events[]` (rule firings) and `history[]` (`Created` / `Updated` / `Enabled` / `Disabled` entries) across mutations.
+
+### Endpoints
+
+| Method   | Path                                  | Body                | Description                                                              |
+| -------- | ------------------------------------- | ------------------- | ------------------------------------------------------------------------ |
+| `GET`    | `/rules?profileId=&symbolId=`         | —                   | List rules; optional filters narrow by profile and/or symbol scope.       |
+| `POST`   | `/rules`                              | `RuleInput`         | Create a rule (validated, seeded with one `Created` history entry). **201** / 400. |
+| `GET`    | `/rules/{id}`                         | —                   | Fetch one rule. 200 / 404.                                                |
+| `PUT`    | `/rules/{id}`                         | `RuleInput`         | Replace mutable fields (preserves `events`, `history` + appends `Updated`, `createdAt`). 200 / 400 / 404. |
+| `DELETE` | `/rules/{id}`                         | —                   | Delete a rule (cascades the rule's persisted firing-state). **204** / 404. |
+| `POST`   | `/rules/reorder`                      | `{ ids: string[] }` | Bulk-renumber rule `order` to the 1-based positions of `ids`. 200 / 400 / 404. |
+| `GET`    | `/rules/{id}/events?limit=&before=`   | —                   | Paginated rule-firing events newest-first (default limit 50, max 500; `before` cursors on `ts`). 200 / 404. |
+| `POST`   | `/rules/{id}/enable`                  | —                   | Enable a rule (appends an `Enabled` history entry). 200 / 404.            |
+| `POST`   | `/rules/{id}/disable`                 | —                   | Disable a rule (appends a `Disabled` history entry). 200 / 404.           |
+
+`RuleInput` is the client-controllable subset of a `Rule` — every field on `Rule` except `id`, `events`, `history`, `createdAt`, `updatedAt`. Domain validation (`validateRule`) runs on every write; cross-field violations (e.g. an empty AND/OR group, an unknown action kind, an `expiration.at` already in the past) surface as **400**.
+
+`POST /rules/{id}/enable` and `/disable`, plus `POST /rules/reorder`, are action-style endpoints rather than partial-update verbs — see #238 for the RESTful-refactor follow-up.
+
+### Examples
+
+```sh
+# List rules (optionally filtered)
+curl http://localhost:3000/rules
+curl 'http://localhost:3000/rules?profileId=p1&symbolId=crypto:BTCUSDT'
+
+# Create a "BTC above 50k" notifyTelegram rule
+curl -X POST http://localhost:3000/rules \
+  -H 'content-type: application/json' \
+  -d '{
+    "profileId": "p1",
+    "name": "BTC > 50k",
+    "scope": { "kind": "symbol", "symbolId": "crypto:BTCUSDT" },
+    "condition": {
+      "kind": "leaf",
+      "left":  { "kind": "current", "valueType": "number" },
+      "operator": "gt",
+      "right": { "kind": "literal", "value": { "type": "number", "value": 50000 } }
+    },
+    "trigger":   { "kind": "once" },
+    "expiration": null,
+    "actions":   [{ "kind": "notifyTelegram", "destinationName": "main", "template": "{symbol} crossed 50k at {close}" }],
+    "enabled":   true,
+    "order":     1
+  }'
+
+# Fetch / replace / delete one rule
+curl http://localhost:3000/rules/<id>
+curl -X PUT http://localhost:3000/rules/<id> \
+  -H 'content-type: application/json' -d '<RuleInput>'
+curl -X DELETE http://localhost:3000/rules/<id>
+
+# Bulk renumber (rule ids must already exist)
+curl -X POST http://localhost:3000/rules/reorder \
+  -H 'content-type: application/json' -d '{ "ids": ["r3", "r1", "r2"] }'
+
+# Toggle enablement
+curl -X POST http://localhost:3000/rules/<id>/enable
+curl -X POST http://localhost:3000/rules/<id>/disable
+
+# Paginated firing events (newest-first)
+curl 'http://localhost:3000/rules/<id>/events?limit=50'
+```
+
 ## State resource
 
 Read-side views of the rule-engine state — the cross-symbol global key/value store and (via the symbols resource) per-symbol state maps. Used by chart markers and debugging; the engine itself writes state through the orchestrator.
