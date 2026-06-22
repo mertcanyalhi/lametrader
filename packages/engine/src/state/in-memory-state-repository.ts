@@ -20,6 +20,11 @@ export class InMemoryStateRepository implements StateRepository {
   /** Active change listeners. */
   private readonly listeners = new Set<StateChangedListener>();
 
+  async listSymbolState(symbolId: string): Promise<Record<string, StateValue>> {
+    const bucket = this.symbolStore.get(symbolId);
+    return bucket ? Object.fromEntries(bucket) : {};
+  }
+
   async getSymbolState(symbolId: string, key: string): Promise<StateValue | null> {
     return this.symbolStore.get(symbolId)?.get(key) ?? null;
   }

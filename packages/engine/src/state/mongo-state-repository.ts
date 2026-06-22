@@ -54,6 +54,11 @@ export class MongoStateRepository implements StateRepository {
     );
   }
 
+  async listSymbolState(symbolId: string): Promise<Record<string, StateValue>> {
+    const docs = await this.collection.find({ scope: StateScope.Symbol, symbolId }).toArray();
+    return Object.fromEntries(docs.map((doc) => [doc.key, doc.value]));
+  }
+
   async getSymbolState(symbolId: string, key: string): Promise<StateValue | null> {
     return this.getValue({ kind: StateScope.Symbol, symbolId }, key);
   }

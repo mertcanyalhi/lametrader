@@ -14,6 +14,7 @@ import { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 import { ProfileService } from './profiles/profile-service.js';
 import { MongoRuleRepository } from './rules/mongo-rule-repository.js';
 import { RuleService } from './rules/rule-service.js';
+import { MongoStateRepository } from './state/mongo-state-repository.js';
 import { defaultMarketDataSources } from './symbols/default-sources.js';
 import { MongoWatchlistRepository } from './symbols/mongo-watchlist-repository.js';
 import { QuoteStreamService } from './symbols/quote-stream-service.js';
@@ -97,9 +98,11 @@ export async function connectServices(
   });
   const ruleRepo = new MongoRuleRepository(db);
   await ruleRepo.ensureIndexes();
+  const stateRepo = new MongoStateRepository(db);
+  await stateRepo.ensureIndexes();
   const profiles = new ProfileService(new MongoProfileRepository(db), watchlist, indicators);
   const rules = new RuleService(ruleRepo);
-  const symbols = new SymbolService(sources, watchlist, config, candleRepo, profiles);
+  const symbols = new SymbolService(sources, watchlist, config, candleRepo, profiles, stateRepo);
   const backfill = new BackfillService(sources, candleRepo, watchlist);
 
   // Fan the polling loop's per-candle event to every sink: the user-supplied

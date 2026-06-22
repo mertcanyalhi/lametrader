@@ -1,5 +1,11 @@
 import { createApp } from '@lametrader/api';
-import { Period, type RuleEventEntry, RuleEventType, SymbolType } from '@lametrader/core';
+import {
+  Period,
+  type RuleEventEntry,
+  RuleEventType,
+  StateValueType,
+  SymbolType,
+} from '@lametrader/core';
 import {
   BackfillService,
   ConfigService,
@@ -8,6 +14,7 @@ import {
   InMemoryMarketDataSource,
   MongoCandleRepository,
   MongoConfigRepository,
+  MongoStateRepository,
   MongoWatchlistRepository,
   SymbolService,
 } from '@lametrader/engine';
@@ -47,7 +54,9 @@ describe('symbols API (e2e)', () => {
     const sources = [new InMemoryMarketDataSource([BTC])];
     const watchlist = new MongoWatchlistRepository(db);
     const candles = new MongoCandleRepository(db);
-    const symbols = new SymbolService(sources, watchlist, config, candles);
+    const state = new MongoStateRepository(db);
+    await state.ensureIndexes();
+    const symbols = new SymbolService(sources, watchlist, config, candles, undefined, state);
     const backfill = new BackfillService(sources, candles, watchlist);
     const registry = defaultIndicators();
     const compute = new IndicatorComputeService(registry, watchlist, candles);
@@ -262,6 +271,66 @@ describe('symbols API (e2e)', () => {
     } finally {
       await eventsApp.close();
       await eventsDb.dropDatabase();
+    }
+  });
+
+  it('returns the symbol current rule-engine state over HTTP, {} when empty, 404 when unwatched', async () => {
+    // Use an isolated db so the seeded state doesn't bleed into other tests.
+    const stateDb = client.db('lametrader-symbol-state');
+    const config = new ConfigService(new MongoConfigRepository(stateDb));
+    const sources = [new InMemoryMarketDataSource([BTC])];
+    const watchlist = new MongoWatchlistRepository(stateDb);
+    const candles = new MongoCandleRepository(stateDb);
+    const stateRepo = new MongoStateRepository(stateDb);
+    await stateRepo.ensureIndexes();
+    const symbols = new SymbolService(sources, watchlist, config, candles, undefined, stateRepo);
+    const backfill = new BackfillService(sources, candles, watchlist);
+    const registry = defaultIndicators();
+    const compute = new IndicatorComputeService(registry, watchlist, candles);
+    const stateApp = createApp({ config, symbols, backfill, indicators: { registry, compute } });
+    await stateApp.ready();
+
+    try {
+      await stateApp.inject({ method: 'POST', url: '/symbols', payload: { id: BTC.id } });
+
+      const empty = await stateApp.inject({
+        method: 'GET',
+        url: `/symbols/${BTC.id}/state`,
+      });
+      expect(empty.statusCode).toBe(200);
+      expect(empty.json()).toEqual({});
+
+      await stateRepo.setSymbolState(
+        BTC.id,
+        'armed',
+        { type: StateValueType.Bool, value: true },
+        100,
+      );
+      await stateRepo.setSymbolState(
+        BTC.id,
+        'cooldown',
+        { type: StateValueType.Number, value: 42 },
+        101,
+      );
+
+      const populated = await stateApp.inject({
+        method: 'GET',
+        url: `/symbols/${BTC.id}/state`,
+      });
+      expect(populated.statusCode).toBe(200);
+      expect(populated.json()).toEqual({
+        armed: { type: 'bool', value: true },
+        cooldown: { type: 'number', value: 42 },
+      });
+
+      const missing = await stateApp.inject({
+        method: 'GET',
+        url: '/symbols/crypto:NOPEUSDT/state',
+      });
+      expect(missing.statusCode).toBe(404);
+    } finally {
+      await stateApp.close();
+      await stateDb.dropDatabase();
     }
   });
 

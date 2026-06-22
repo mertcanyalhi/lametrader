@@ -72,6 +72,11 @@ export type StateChangedListener = (event: StateChangedEvent) => void;
  */
 export interface StateRepository {
   /**
+   * Read every (key, value) pair on `symbolId`'s state. Returns `{}` when the
+   * symbol has no state. Used by the read-side API (chart markers, debugging).
+   */
+  listSymbolState(symbolId: string): Promise<Record<string, StateValue>>;
+  /**
    * Read the value at `key` on `symbolId`'s state, or `null` if absent.
    */
   getSymbolState(symbolId: string, key: string): Promise<StateValue | null>;
