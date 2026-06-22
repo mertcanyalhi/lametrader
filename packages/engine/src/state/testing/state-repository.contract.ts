@@ -103,6 +103,28 @@ export function runStateRepositoryContract(
     expect(await repo.getSymbolState('MSFT', 'armed')).toBeNull();
   });
 
+  it('listSymbolState returns {} for a symbol that has no state', async () => {
+    const repo = await make();
+    expect(await repo.listSymbolState('AAPL')).toEqual({});
+  });
+
+  it('listSymbolState returns every set key/value for the symbol', async () => {
+    const repo = await make();
+    await repo.setSymbolState('AAPL', 'armed', numberValue(1), 100);
+    await repo.setSymbolState('AAPL', 'cooldown', numberValue(2), 101);
+    expect(await repo.listSymbolState('AAPL')).toEqual({
+      armed: numberValue(1),
+      cooldown: numberValue(2),
+    });
+  });
+
+  it('listSymbolState scopes its result to the requested symbol', async () => {
+    const repo = await make();
+    await repo.setSymbolState('AAPL', 'armed', numberValue(1), 100);
+    await repo.setSymbolState('MSFT', 'cooldown', numberValue(2), 101);
+    expect(await repo.listSymbolState('AAPL')).toEqual({ armed: numberValue(1) });
+  });
+
   it('getGlobalState returns null for a key that was never set', async () => {
     const repo = await make();
     expect(await repo.getGlobalState('regime')).toBeNull();

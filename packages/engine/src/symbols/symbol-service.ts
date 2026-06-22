@@ -7,6 +7,8 @@ import {
   type Period,
   parseSymbolPeriods,
   type RuleEventEntry,
+  type StateRepository,
+  type StateValue,
   SymbolConflictError,
   type SymbolDiscovery,
   SymbolNotFoundError,
@@ -36,6 +38,8 @@ export class SymbolService {
    * @param candles - the candle persistence port (cascaded on removal).
    * @param profiles - optional profiles use-case.
    *   When present, removing a symbol prunes it from every profile's scope (cascaded on removal).
+   * @param state - optional rule-engine state store, consulted by `listSymbolState`.
+   *   Omit it when the engine isn't wired (the route stays absent).
    */
   constructor(
     private readonly sources: SymbolDiscovery[],
@@ -43,6 +47,7 @@ export class SymbolService {
     private readonly config: ConfigService,
     private readonly candles: CandleRepository,
     private readonly profiles?: ProfileService,
+    private readonly state?: StateRepository,
   ) {}
 
   /**
@@ -165,6 +170,27 @@ export class SymbolService {
     const events = existing.events ?? [];
     const filtered = before === undefined ? events : events.filter((event) => event.ts < before);
     return [...filtered].sort((a, b) => b.ts - a.ts).slice(0, limit);
+  }
+
+  /**
+   * Return the symbol's current rule-engine state as a key → value map.
+   * Empty state yields `{}`.
+   *
+   * Lazy: requires the optional `state` port to be wired; an unwired
+   * deployment can't expose the route, so this throws explicitly rather
+   * than silently returning empty.
+   *
+   * @throws {@link SymbolNotFoundError} when the symbol is not on the watchlist.
+   */
+  async listSymbolState(id: string): Promise<Record<string, StateValue>> {
+    const existing = await this.watchlist.get(id);
+    if (!existing) {
+      throw new SymbolNotFoundError(`symbol not watched: ${id}`);
+    }
+    if (!this.state) {
+      throw new Error('SymbolService.listSymbolState requires the state port to be wired');
+    }
+    return await this.state.listSymbolState(id);
   }
 
   /**

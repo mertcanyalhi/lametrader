@@ -2,7 +2,7 @@ import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { SymbolService } from '@lametrader/engine';
 import type { FastifyInstance } from 'fastify';
 import { ErrorSchema } from '../schemas/common.schema.js';
-import { RuleEventEntrySchema } from '../schemas/rule.schema.js';
+import { RuleEventEntrySchema, StateValueSchema } from '../schemas/rule.schema.js';
 import {
   AddSymbolSchema,
   DiscoverQuerySchema,
@@ -130,6 +130,19 @@ export function symbolsController(service: SymbolService) {
         },
       },
       async (request) => service.listEventsForSymbol(request.params.id, request.query),
+    );
+
+    app.get(
+      '/symbols/:id/state',
+      {
+        schema: {
+          tags: ['symbols'],
+          summary: "Get the symbol's current rule-engine state map",
+          params: SymbolIdParamSchema,
+          response: { 200: Type.Record(Type.String(), StateValueSchema), 404: ErrorSchema },
+        },
+      },
+      async (request) => service.listSymbolState(request.params.id),
     );
   };
 }

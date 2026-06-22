@@ -2,6 +2,8 @@ import {
   Period,
   type RuleEventEntry,
   RuleEventType,
+  type StateValue,
+  StateValueType,
   SymbolType,
   type WatchedSymbol,
   type WatchlistRepository,
@@ -11,6 +13,7 @@ import {
   InMemoryCandleRepository,
   InMemoryConfigRepository,
   InMemoryMarketDataSource,
+  InMemoryStateRepository,
   SymbolService,
 } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
@@ -299,6 +302,67 @@ describe('GET /symbols/:id/rule-events', () => {
     const res = await buildApp().inject({
       method: 'GET',
       url: '/symbols/crypto:BTCUSDT/rule-events',
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+/**
+ * Build an app whose SymbolService is wired with an InMemoryStateRepository
+ * so the `/state` route is driven over the full controller → service →
+ * state-repo path.
+ */
+function buildAppWithState(seed?: Array<[string, StateValue]>) {
+  const items = new Map<string, WatchedSymbol>([
+    ['crypto:BTCUSDT', { ...BTC, periods: [Period.OneHour, Period.OneDay] }],
+  ]);
+  const watchlist: WatchlistRepository = {
+    list: async () => [...items.values()],
+    get: async (id) => items.get(id) ?? null,
+    add: async (symbol) => void items.set(symbol.id, symbol),
+    remove: async (id) => void items.delete(id),
+  };
+  const state = new InMemoryStateRepository();
+  for (const [key, value] of seed ?? []) {
+    void state.setSymbolState('crypto:BTCUSDT', key, value, 100);
+  }
+  const config = new ConfigService(new InMemoryConfigRepository());
+  const symbols = new SymbolService(
+    [new InMemoryMarketDataSource([BTC])],
+    watchlist,
+    config,
+    new InMemoryCandleRepository(),
+    undefined,
+    state,
+  );
+  return createApp(buildAppDeps({ config, symbols }));
+}
+
+describe('GET /symbols/:id/state', () => {
+  it('returns the symbol current state map (200)', async () => {
+    const app = buildAppWithState([
+      ['armed', { type: StateValueType.Bool, value: true }],
+      ['cooldown', { type: StateValueType.Number, value: 42 }],
+    ]);
+    const res = await app.inject({ method: 'GET', url: '/symbols/crypto:BTCUSDT/state' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      armed: { type: 'bool', value: true },
+      cooldown: { type: 'number', value: 42 },
+    });
+  });
+
+  it('returns {} for a symbol with no state', async () => {
+    const app = buildAppWithState();
+    const res = await app.inject({ method: 'GET', url: '/symbols/crypto:BTCUSDT/state' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({});
+  });
+
+  it('returns 404 when the symbol is not watched', async () => {
+    const res = await buildAppWithState().inject({
+      method: 'GET',
+      url: '/symbols/crypto:NOPEUSDT/state',
     });
     expect(res.statusCode).toBe(404);
   });

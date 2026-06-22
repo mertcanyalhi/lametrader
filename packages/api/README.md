@@ -100,6 +100,7 @@ results (so a discovery hit may omit it; a watched symbol always has it).
 | `PATCH`  | `/symbols/{id}`       | `{ periods }`           | Change a symbol's periods. 200 / 400 / 404.         |
 | `DELETE` | `/symbols/{id}`       | —                       | Remove a symbol **and its stored candles**. **204**. |
 | `GET`    | `/symbols/{id}/rule-events?limit=&before=` | —     | Paginated rule-engine events fired against this symbol, newest first. 200 / 404. |
+| `GET`    | `/symbols/{id}/state` | —                       | Current rule-engine state map for this symbol (`{ [key]: StateValue }`; `{}` when empty). 200 / 404. |
 
 Errors use the uniform `{ "error": "<reason>" }` body — **400** for invalid input,
 **404** when the symbol doesn't exist at its source or isn't watched, **409** when
@@ -125,6 +126,7 @@ curl -X PATCH http://localhost:3000/symbols/crypto:BTCUSDT \
   -H 'content-type: application/json' -d '{ "periods": ["1h"] }'
 curl -X DELETE http://localhost:3000/symbols/crypto:BTCUSDT
 curl 'http://localhost:3000/symbols/crypto:BTCUSDT/rule-events?limit=50'
+curl http://localhost:3000/symbols/crypto:BTCUSDT/state
 ```
 
 ## Profiles resource
