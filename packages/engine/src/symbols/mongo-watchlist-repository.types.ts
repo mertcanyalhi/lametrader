@@ -1,3 +1,5 @@
+import type { RuleEventEntry } from '@lametrader/core';
+
 /**
  * Shape of a persisted watchlist document in the `watchlist` collection. The
  * canonical symbol id is the `_id`.
@@ -15,4 +17,9 @@ export interface WatchlistDocument {
   currency?: string;
   /** Stored period strings (each a {@link Period} value). */
   periods: string[];
+  /**
+   * Rule-engine events fired against this symbol, in append order. Optional —
+   * older documents pre-date the field; reads default to `[]` (per ADR 0012).
+   */
+  events?: RuleEventEntry[];
 }
