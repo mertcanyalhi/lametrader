@@ -4,10 +4,23 @@ import type { FastifyInstance } from 'fastify';
 import { ErrorSchema } from '../schemas/common.schema.js';
 import {
   ConditionNodeSchema,
+  RuleEventEntrySchema,
   RuleIdParamSchema,
   RuleInputSchema,
   RuleSchema,
 } from '../schemas/rule.schema.js';
+
+/**
+ * Optional `?limit=&before=` query for `GET /rules/:id/events`. `limit` is
+ * clamped to `[1, 500]`; `before` is an epoch-ms cursor.
+ */
+const RuleEventsQuerySchema = Type.Object(
+  {
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 500 })),
+    before: Type.Optional(Type.Integer({ minimum: 0 })),
+  },
+  { additionalProperties: false },
+);
 
 /**
  * Optional `?profileId=&symbolId=` query filter for `GET /rules`. Both are
@@ -129,6 +142,20 @@ export function rulesController(service: RuleService) {
         },
       },
       async (request) => service.reorder(request.body.ids),
+    );
+
+    app.get(
+      '/rules/:id/events',
+      {
+        schema: {
+          tags: ['rules'],
+          summary: "List a rule's embedded events newest-first (paginated)",
+          params: RuleIdParamSchema,
+          querystring: RuleEventsQuerySchema,
+          response: { 200: Type.Array(RuleEventEntrySchema), 404: ErrorSchema },
+        },
+      },
+      async (request) => service.listEvents(request.params.id, request.query),
     );
 
     app.post(

@@ -352,6 +352,80 @@ describe('POST /rules/reorder', () => {
   });
 });
 
+describe('GET /rules/:id/events', () => {
+  it('returns the embedded events newest-first (200)', async () => {
+    const seed = rule({
+      id: 'r1',
+      profileId: 'p1',
+      order: 1,
+      events: [
+        { type: 'fired' as const, ts: 100, ruleId: 'r1', symbolId: 'AAPL' },
+        { type: 'fired' as const, ts: 300, ruleId: 'r1', symbolId: 'AAPL' },
+        { type: 'fired' as const, ts: 200, ruleId: 'r1', symbolId: 'AAPL' },
+      ],
+    });
+    const { app } = buildApp([seed]);
+
+    const res = await app.inject({ method: 'GET', url: '/rules/r1/events' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([
+      { type: 'fired', ts: 300, ruleId: 'r1', symbolId: 'AAPL' },
+      { type: 'fired', ts: 200, ruleId: 'r1', symbolId: 'AAPL' },
+      { type: 'fired', ts: 100, ruleId: 'r1', symbolId: 'AAPL' },
+    ]);
+  });
+
+  it('caps the page at `limit`', async () => {
+    const events = Array.from({ length: 5 }, (_, i) => ({
+      type: 'fired' as const,
+      ts: (i + 1) * 100,
+      ruleId: 'r1',
+      symbolId: 'AAPL',
+    }));
+    const seed = rule({ id: 'r1', profileId: 'p1', order: 1, events });
+    const { app } = buildApp([seed]);
+
+    const res = await app.inject({ method: 'GET', url: '/rules/r1/events?limit=2' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([
+      { type: 'fired', ts: 500, ruleId: 'r1', symbolId: 'AAPL' },
+      { type: 'fired', ts: 400, ruleId: 'r1', symbolId: 'AAPL' },
+    ]);
+  });
+
+  it('filters to events strictly before `before`', async () => {
+    const events = [
+      { type: 'fired' as const, ts: 100, ruleId: 'r1', symbolId: 'AAPL' },
+      { type: 'fired' as const, ts: 200, ruleId: 'r1', symbolId: 'AAPL' },
+      { type: 'fired' as const, ts: 300, ruleId: 'r1', symbolId: 'AAPL' },
+    ];
+    const seed = rule({ id: 'r1', profileId: 'p1', order: 1, events });
+    const { app } = buildApp([seed]);
+
+    const res = await app.inject({ method: 'GET', url: '/rules/r1/events?before=300' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([
+      { type: 'fired', ts: 200, ruleId: 'r1', symbolId: 'AAPL' },
+      { type: 'fired', ts: 100, ruleId: 'r1', symbolId: 'AAPL' },
+    ]);
+  });
+
+  it('returns 400 when `limit` exceeds the 500 cap', async () => {
+    const { app } = buildApp([rule({ id: 'r1', profileId: 'p1', order: 1 })]);
+    const res = await app.inject({ method: 'GET', url: '/rules/r1/events?limit=501' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 404 for an unknown id', async () => {
+    const { app } = buildApp();
+    const res = await app.inject({ method: 'GET', url: '/rules/missing/events' });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
 describe('POST /rules/:id/enable', () => {
   it('flips enabled to true and appends an Enabled history entry (200)', async () => {
     const seed = rule({

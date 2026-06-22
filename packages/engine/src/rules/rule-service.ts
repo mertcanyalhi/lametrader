@@ -1,6 +1,7 @@
 import {
   type FiringStateRepository,
   type Rule,
+  type RuleEventEntry,
   RuleHistoryType,
   RuleNotFoundError,
   type RuleRepository,
@@ -171,6 +172,27 @@ export class RuleService {
     if (this.firingState !== undefined) {
       await this.firingState.removeByRule(id);
     }
+  }
+
+  /**
+   * List a rule's embedded events newest-first, paginated.
+   *
+   * Pagination:
+   * - `limit` caps the page size; defaults to 50.
+   * - `before` returns only entries with `ts < before` — cursor for "next page".
+   *
+   * @throws {@link RuleNotFoundError} when the id is unknown.
+   */
+  async listEvents(
+    id: string,
+    options: { limit?: number; before?: number } = {},
+  ): Promise<RuleEventEntry[]> {
+    const rule = await this.get(id);
+    const limit = options.limit ?? 50;
+    const before = options.before;
+    const filtered =
+      before === undefined ? rule.events : rule.events.filter((event) => event.ts < before);
+    return [...filtered].sort((a, b) => b.ts - a.ts).slice(0, limit);
   }
 
   /**
