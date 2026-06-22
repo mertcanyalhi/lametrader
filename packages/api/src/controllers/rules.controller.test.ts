@@ -312,7 +312,7 @@ describe('PUT /rules/:id', () => {
   });
 });
 
-describe('POST /rules/reorder', () => {
+describe('PUT /rules/order', () => {
   it("renumbers `order` to the input ids' 1-based positions (200)", async () => {
     const a = rule({ id: 'a', profileId: 'p1', order: 5 });
     const b = rule({ id: 'b', profileId: 'p1', order: 3 });
@@ -320,8 +320,8 @@ describe('POST /rules/reorder', () => {
     const { app, ruleRepo } = buildApp([a, b, c]);
 
     const res = await app.inject({
-      method: 'POST',
-      url: '/rules/reorder',
+      method: 'PUT',
+      url: '/rules/order',
       payload: { ids: ['b', 'c', 'a'] },
     });
 
@@ -344,8 +344,8 @@ describe('POST /rules/reorder', () => {
   it('returns 404 when any id is unknown', async () => {
     const { app } = buildApp([rule({ id: 'a', profileId: 'p1', order: 1 })]);
     const res = await app.inject({
-      method: 'POST',
-      url: '/rules/reorder',
+      method: 'PUT',
+      url: '/rules/order',
       payload: { ids: ['a', 'missing'] },
     });
     expect(res.statusCode).toBe(404);
@@ -426,7 +426,7 @@ describe('GET /rules/:id/events', () => {
   });
 });
 
-describe('POST /rules/:id/enable', () => {
+describe('PATCH /rules/:id', () => {
   it('flips enabled to true and appends an Enabled history entry (200)', async () => {
     const seed = rule({
       id: 'r1',
@@ -439,7 +439,11 @@ describe('POST /rules/:id/enable', () => {
     });
     const { app } = buildApp([seed]);
 
-    const res = await app.inject({ method: 'POST', url: '/rules/r1/enable' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/rules/r1',
+      payload: { enabled: true },
+    });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
@@ -453,14 +457,6 @@ describe('POST /rules/:id/enable', () => {
     });
   });
 
-  it('returns 404 for an unknown id', async () => {
-    const { app } = buildApp();
-    const res = await app.inject({ method: 'POST', url: '/rules/missing/enable' });
-    expect(res.statusCode).toBe(404);
-  });
-});
-
-describe('POST /rules/:id/disable', () => {
   it('flips enabled to false and appends a Disabled history entry (200)', async () => {
     const seed = rule({
       id: 'r1',
@@ -473,7 +469,11 @@ describe('POST /rules/:id/disable', () => {
     });
     const { app } = buildApp([seed]);
 
-    const res = await app.inject({ method: 'POST', url: '/rules/r1/disable' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/rules/r1',
+      payload: { enabled: false },
+    });
 
     expect(res.statusCode).toBe(200);
     expect(res.json<Rule>().enabled).toBe(false);
@@ -481,6 +481,27 @@ describe('POST /rules/:id/disable', () => {
       { type: 'created', ts: 500 },
       { type: 'disabled', ts: 1000 },
     ]);
+  });
+
+  it('returns the unchanged rule when the body is empty (no-op patch)', async () => {
+    const seed = rule({ id: 'r1', profileId: 'p1', order: 1, enabled: true });
+    const { app } = buildApp([seed]);
+
+    const res = await app.inject({ method: 'PATCH', url: '/rules/r1', payload: {} });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<Rule>().enabled).toBe(true);
+    expect(res.json<Rule>().updatedAt).toBe(seed.updatedAt);
+  });
+
+  it('returns 404 for an unknown id', async () => {
+    const { app } = buildApp();
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/rules/missing',
+      payload: { enabled: true },
+    });
+    expect(res.statusCode).toBe(404);
   });
 });
 
