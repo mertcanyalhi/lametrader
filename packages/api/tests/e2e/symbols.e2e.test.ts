@@ -1,5 +1,5 @@
 import { createApp } from '@lametrader/api';
-import { Period, SymbolType } from '@lametrader/core';
+import { Period, type RuleEventEntry, RuleEventType, SymbolType } from '@lametrader/core';
 import {
   BackfillService,
   ConfigService,
@@ -193,6 +193,75 @@ describe('symbols API (e2e)', () => {
     } finally {
       await enrichApp.close();
       await enrichDb.dropDatabase();
+    }
+  });
+
+  it('lists a symbol embedded rule-events over HTTP, newest-first with `before`/`limit`, and 404s an unwatched symbol', async () => {
+    // Use an isolated db so the test seeds the symbol document with events
+    // round-tripped through MongoWatchlistRepository.
+    const eventsDb = client.db('lametrader-symbol-events');
+    const config = new ConfigService(new MongoConfigRepository(eventsDb));
+    const sources = [new InMemoryMarketDataSource([BTC])];
+    const watchlist = new MongoWatchlistRepository(eventsDb);
+    const candles = new MongoCandleRepository(eventsDb);
+    const symbols = new SymbolService(sources, watchlist, config, candles);
+    const backfill = new BackfillService(sources, candles, watchlist);
+    const registry = defaultIndicators();
+    const compute = new IndicatorComputeService(registry, watchlist, candles);
+    const eventsApp = createApp({ config, symbols, backfill, indicators: { registry, compute } });
+    await eventsApp.ready();
+
+    try {
+      await eventsApp.inject({ method: 'POST', url: '/symbols', payload: { id: BTC.id } });
+      const eventA: RuleEventEntry = {
+        type: RuleEventType.Fired,
+        ts: 100,
+        ruleId: 'r1',
+        symbolId: BTC.id,
+      };
+      const eventB: RuleEventEntry = {
+        type: RuleEventType.Fired,
+        ts: 200,
+        ruleId: 'r2',
+        symbolId: BTC.id,
+      };
+      const eventC: RuleEventEntry = {
+        type: RuleEventType.Fired,
+        ts: 300,
+        ruleId: 'r3',
+        symbolId: BTC.id,
+      };
+      // The orchestrator's EventLog wiring lands later; seed the embedded
+      // events directly through the watchlist port so the read path is
+      // exercised end-to-end against real Mongo.
+      await watchlist.add({
+        ...BTC,
+        periods: [Period.OneHour, Period.OneDay],
+        events: [eventA, eventB, eventC],
+      });
+
+      const list = await eventsApp.inject({
+        method: 'GET',
+        url: `/symbols/${BTC.id}/rule-events`,
+      });
+      expect(list.statusCode).toBe(200);
+      expect(list.json()).toEqual([eventC, eventB, eventA]);
+
+      const filtered = await eventsApp.inject({
+        method: 'GET',
+        url: `/symbols/${BTC.id}/rule-events?before=300`,
+      });
+      expect(filtered.statusCode).toBe(200);
+      expect(filtered.json()).toEqual([eventB, eventA]);
+
+      const missing = await eventsApp.inject({
+        method: 'GET',
+        url: '/symbols/crypto:NOPEUSDT/rule-events',
+      });
+      expect(missing.statusCode).toBe(404);
+    } finally {
+      await eventsApp.close();
+      await eventsDb.dropDatabase();
     }
   });
 

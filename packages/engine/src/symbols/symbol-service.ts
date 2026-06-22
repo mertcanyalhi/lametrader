@@ -6,6 +6,7 @@ import {
   type Instrument,
   type Period,
   parseSymbolPeriods,
+  type RuleEventEntry,
   SymbolConflictError,
   type SymbolDiscovery,
   SymbolNotFoundError,
@@ -141,6 +142,29 @@ export class SymbolService {
     if (this.profiles) {
       await this.profiles.pruneSymbol(id);
     }
+  }
+
+  /**
+   * List a symbol's embedded rule-engine events newest-first, paginated.
+   *
+   * - `limit` caps the page size; defaults to 50.
+   * - `before` returns only entries with `ts < before` — cursor for "next page".
+   *
+   * @throws {@link SymbolNotFoundError} when the symbol is not on the watchlist.
+   */
+  async listEventsForSymbol(
+    id: string,
+    options: { limit?: number; before?: number } = {},
+  ): Promise<RuleEventEntry[]> {
+    const existing = await this.watchlist.get(id);
+    if (!existing) {
+      throw new SymbolNotFoundError(`symbol not watched: ${id}`);
+    }
+    const limit = options.limit ?? 50;
+    const before = options.before;
+    const events = existing.events ?? [];
+    const filtered = before === undefined ? events : events.filter((event) => event.ts < before);
+    return [...filtered].sort((a, b) => b.ts - a.ts).slice(0, limit);
   }
 
   /**

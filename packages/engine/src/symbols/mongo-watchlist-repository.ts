@@ -46,7 +46,8 @@ export class MongoWatchlistRepository implements WatchlistRepository {
 }
 
 /**
- * Map a stored document to a domain {@link WatchedSymbol}.
+ * Map a stored document to a domain {@link WatchedSymbol}. The optional
+ * `events` field round-trips when present; absent on older documents.
  */
 function toWatchedSymbol(doc: WatchlistDocument): WatchedSymbol {
   return {
@@ -56,6 +57,7 @@ function toWatchedSymbol(doc: WatchlistDocument): WatchedSymbol {
     exchange: doc.exchange,
     ...(doc.currency ? { currency: doc.currency } : {}),
     periods: doc.periods as Period[],
+    ...(doc.events ? { events: doc.events } : {}),
   };
 }
 
@@ -70,5 +72,6 @@ function toDocument(symbol: WatchedSymbol): WatchlistDocument {
     exchange: symbol.exchange,
     ...(symbol.currency ? { currency: symbol.currency } : {}),
     periods: symbol.periods,
+    ...(symbol.events ? { events: symbol.events } : {}),
   };
 }
