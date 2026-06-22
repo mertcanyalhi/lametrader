@@ -241,6 +241,39 @@ describe('runRules disable', () => {
   });
 });
 
+describe('runRules reorder', () => {
+  it("renumbers rules to the input ids' 1-based positions and echoes them", async () => {
+    const service = buildService([
+      rule({ id: 'a', profileId: 'p1', order: 3 }),
+      rule({ id: 'b', profileId: 'p1', order: 1 }),
+      rule({ id: 'c', profileId: 'p1', order: 2 }),
+    ]);
+    const parsed = JSON.parse(await runRules(['reorder', '--order', 'b,c,a'], service)) as Rule[];
+    expect(parsed.map((r) => ({ id: r.id, order: r.order }))).toEqual([
+      { id: 'b', order: 1 },
+      { id: 'c', order: 2 },
+      { id: 'a', order: 3 },
+    ]);
+  });
+
+  it('throws when --order is absent', async () => {
+    await expect(runRules(['reorder'], buildService())).rejects.toThrow('reorder requires --order');
+  });
+
+  it('throws when --order is empty (after trimming)', async () => {
+    await expect(runRules(['reorder', '--order', ' , , '], buildService())).rejects.toThrow(
+      'reorder requires at least one id',
+    );
+  });
+
+  it('propagates `RuleNotFoundError` for an unknown id in --order', async () => {
+    const service = buildService([rule({ id: 'a', profileId: 'p1', order: 1 })]);
+    await expect(runRules(['reorder', '--order', 'a,missing'], service)).rejects.toBeInstanceOf(
+      RuleNotFoundError,
+    );
+  });
+});
+
 describe('runRules unknown subcommand', () => {
   it('throws so the entry point prints `error: ...` and exits non-zero', async () => {
     await expect(runRules(['bogus'], buildService())).rejects.toThrow(

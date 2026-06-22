@@ -20,6 +20,8 @@ enum RulesSubcommand {
   Enable = 'enable',
   /** Flip a rule's `enabled` flag to false. */
   Disable = 'disable',
+  /** Bulk-renumber rule `order` to the given ids' 1-based positions. */
+  Reorder = 'reorder',
 }
 
 /**
@@ -41,6 +43,8 @@ enum RulesSubcommand {
  *   Echoes `deleted <id>` on success.
  * - `enable <id>` / `disable <id>` — flip the rule's `enabled` flag and
  *   append an `Enabled` / `Disabled` history entry. Echoes the updated rule.
+ * - `reorder --order <csv>` — bulk-renumber `order` to the 1-based
+ *   positions of the comma-separated ids. Echoes the renumbered rules.
  *
  * Output is JSON for both subcommands so the result can be piped or
  * round-tripped through `jq`. Errors (unknown profile / rule) propagate to
@@ -116,6 +120,19 @@ export async function runRules(argv: string[], service: RuleService): Promise<st
       const id = positionals[0];
       if (!id) throw new Error('disable requires an id');
       return json(await service.setEnabled(id, false));
+    }
+    case RulesSubcommand.Reorder: {
+      const { values } = parseArgs({
+        args: rest,
+        options: { order: { type: 'string' } },
+      });
+      if (!values.order) throw new Error('reorder requires --order (comma-separated ids)');
+      const ids = values.order
+        .split(',')
+        .map((id) => id.trim())
+        .filter((id) => id.length > 0);
+      if (ids.length === 0) throw new Error('reorder requires at least one id in --order');
+      return json(await service.reorder(ids));
     }
     default:
       throw new Error(`unknown rules subcommand: ${subcommand ?? '(none)'}`);

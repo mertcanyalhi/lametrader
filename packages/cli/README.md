@@ -196,6 +196,7 @@ Read rules persisted by the engine (CRUD lands in a follow-up sub-issue).
 - **`update <id> --file <path>`** — read a JSON `RuleCreateInput` from the file and replace the rule's mutable fields (preserves `id`, `events`, `history`, `createdAt`; bumps `updatedAt`; appends an `Updated` history entry).
 - **`delete <id>`** — remove the rule (cascades its persisted firing-state). Prints `deleted <id>` on success.
 - **`enable <id>`** / **`disable <id>`** — flip the rule's `enabled` flag and append an `Enabled` / `Disabled` history entry; echoes the updated rule.
+- **`reorder --order <csv>`** — bulk-renumber rule `order` to the 1-based positions of the comma-separated ids (e.g. `--order r2,r3,r1`); echoes the renumbered rules.
 
 #### Examples
 
@@ -209,4 +210,5 @@ npm run cli -- rules update <id> --file rule.json
 npm run cli -- rules delete <id>
 npm run cli -- rules enable <id>
 npm run cli -- rules disable <id>
+npm run cli -- rules reorder --order r2,r3,r1
 ```
