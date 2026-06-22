@@ -1,4 +1,5 @@
-import type { TelegramDestination } from '@lametrader/engine';
+import { UnknownDestinationError } from '@lametrader/core';
+import { InMemoryNotifier, type TelegramDestination } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 import { runTelegram } from './telegram';
 
@@ -29,6 +30,46 @@ describe('runTelegram list', () => {
     const destinations: TelegramDestination[] = [{ name: 'tiny', botToken: 'ab', chatId: '1' }];
     const output = await runTelegram(['list'], destinations);
     expect(output).toBe('tiny\t1\t****');
+  });
+});
+
+describe('runTelegram test', () => {
+  it('sends a message through the notifier and prints `sent`', async () => {
+    const notifier = new InMemoryNotifier(['main']);
+    const output = await runTelegram(
+      ['test', '--destination', 'main', '--message', 'hello'],
+      [],
+      notifier,
+    );
+    expect(output).toBe('sent');
+    expect(notifier.sent).toEqual([{ destinationName: 'main', body: 'hello' }]);
+  });
+
+  it('propagates `UnknownDestinationError` from the notifier (caller exits non-zero)', async () => {
+    const notifier = new InMemoryNotifier(['main']);
+    await expect(
+      runTelegram(['test', '--destination', 'missing', '--message', 'hi'], [], notifier),
+    ).rejects.toBeInstanceOf(UnknownDestinationError);
+  });
+
+  it("throws when the notifier isn't wired", async () => {
+    await expect(
+      runTelegram(['test', '--destination', 'main', '--message', 'hi'], []),
+    ).rejects.toThrow('telegram test requires the notifier port to be wired');
+  });
+
+  it('requires --destination', async () => {
+    const notifier = new InMemoryNotifier(['main']);
+    await expect(runTelegram(['test', '--message', 'hi'], [], notifier)).rejects.toThrow(
+      'telegram test requires --destination',
+    );
+  });
+
+  it('requires --message', async () => {
+    const notifier = new InMemoryNotifier(['main']);
+    await expect(runTelegram(['test', '--destination', 'main'], [], notifier)).rejects.toThrow(
+      'telegram test requires --message',
+    );
   });
 });
 
