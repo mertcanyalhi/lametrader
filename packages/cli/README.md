@@ -215,3 +215,21 @@ npm run cli -- rules reorder --order r2,r3,r1
 npm run cli -- rules events <id>
 npm run cli -- rules events --symbol crypto:BTCUSDT --limit 50
 ```
+
+### `state`
+
+Read the rule-engine state (per-symbol and global).
+
+#### Subcommands
+
+- **`list --symbol <id>`** — print the symbol's current state map (`{ [key]: StateValue }`) as JSON. Unknown symbol errors with `SymbolNotFoundError`.
+- **`list --global`** — print the global state map as JSON.
+
+Exactly one of `--symbol` / `--global` must be provided.
+
+#### Examples
+
+```sh
+npm run cli -- state list --symbol crypto:BTCUSDT
+npm run cli -- state list --global
+```
