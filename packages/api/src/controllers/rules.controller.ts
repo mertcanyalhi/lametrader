@@ -131,12 +131,12 @@ export function rulesController(service: RuleService) {
       },
     );
 
-    app.post(
-      '/rules/reorder',
+    app.put(
+      '/rules/order',
       {
         schema: {
           tags: ['rules'],
-          summary: 'Bulk-renumber rule order',
+          summary: 'Replace the rule ordering (bulk renumber to the input ids 1-based positions)',
           body: Type.Object({ ids: Type.Array(Type.String()) }, { additionalProperties: false }),
           response: { 200: Type.Array(RuleSchema), 400: ErrorSchema, 404: ErrorSchema },
         },
@@ -158,30 +158,26 @@ export function rulesController(service: RuleService) {
       async (request) => service.listEvents(request.params.id, request.query),
     );
 
-    app.post(
-      '/rules/:id/enable',
+    app.patch(
+      '/rules/:id',
       {
         schema: {
           tags: ['rules'],
-          summary: 'Enable a rule',
+          summary: 'Partial-update a rule (currently only `enabled` is patchable)',
           params: RuleIdParamSchema,
-          response: { 200: RuleSchema, 404: ErrorSchema },
+          body: Type.Object(
+            { enabled: Type.Optional(Type.Boolean()) },
+            { additionalProperties: false },
+          ),
+          response: { 200: RuleSchema, 400: ErrorSchema, 404: ErrorSchema },
         },
       },
-      async (request) => service.setEnabled(request.params.id, true),
-    );
-
-    app.post(
-      '/rules/:id/disable',
-      {
-        schema: {
-          tags: ['rules'],
-          summary: 'Disable a rule',
-          params: RuleIdParamSchema,
-          response: { 200: RuleSchema, 404: ErrorSchema },
-        },
+      async (request) => {
+        if (request.body.enabled !== undefined) {
+          return await service.setEnabled(request.params.id, request.body.enabled);
+        }
+        return await service.get(request.params.id);
       },
-      async (request) => service.setEnabled(request.params.id, false),
     );
   };
 }

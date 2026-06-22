@@ -319,19 +319,16 @@ Each rule belongs to one profile (`profileId`) and carries an `order` integer us
 
 | Method   | Path                                  | Body                | Description                                                              |
 | -------- | ------------------------------------- | ------------------- | ------------------------------------------------------------------------ |
-| `GET`    | `/rules?profileId=&symbolId=`         | —                   | List rules; optional filters narrow by profile and/or symbol scope.       |
-| `POST`   | `/rules`                              | `RuleInput`         | Create a rule (validated, seeded with one `Created` history entry). **201** / 400. |
-| `GET`    | `/rules/{id}`                         | —                   | Fetch one rule. 200 / 404.                                                |
-| `PUT`    | `/rules/{id}`                         | `RuleInput`         | Replace mutable fields (preserves `events`, `history` + appends `Updated`, `createdAt`). 200 / 400 / 404. |
-| `DELETE` | `/rules/{id}`                         | —                   | Delete a rule (cascades the rule's persisted firing-state). **204** / 404. |
-| `POST`   | `/rules/reorder`                      | `{ ids: string[] }` | Bulk-renumber rule `order` to the 1-based positions of `ids`. 200 / 400 / 404. |
-| `GET`    | `/rules/{id}/events?limit=&before=`   | —                   | Paginated rule-firing events newest-first (default limit 50, max 500; `before` cursors on `ts`). 200 / 404. |
-| `POST`   | `/rules/{id}/enable`                  | —                   | Enable a rule (appends an `Enabled` history entry). 200 / 404.            |
-| `POST`   | `/rules/{id}/disable`                 | —                   | Disable a rule (appends a `Disabled` history entry). 200 / 404.           |
+| `GET`    | `/rules?profileId=&symbolId=`         | —                       | List rules; optional filters narrow by profile and/or symbol scope.       |
+| `POST`   | `/rules`                              | `RuleInput`             | Create a rule (validated, seeded with one `Created` history entry). **201** / 400. |
+| `GET`    | `/rules/{id}`                         | —                       | Fetch one rule. 200 / 404.                                                |
+| `PUT`    | `/rules/{id}`                         | `RuleInput`             | Replace mutable fields (preserves `events`, `history` + appends `Updated`, `createdAt`). 200 / 400 / 404. |
+| `PATCH`  | `/rules/{id}`                         | `{ enabled?: boolean }` | Partial update; toggling `enabled` appends an `Enabled` / `Disabled` history entry. An empty body is a no-op. 200 / 400 / 404. |
+| `DELETE` | `/rules/{id}`                         | —                       | Delete a rule (cascades the rule's persisted firing-state). **204** / 404. |
+| `PUT`    | `/rules/order`                        | `{ ids: string[] }`     | Replace the rule ordering by bulk-renumbering `order` to the 1-based positions of `ids`. 200 / 400 / 404. |
+| `GET`    | `/rules/{id}/events?limit=&before=`   | —                       | Paginated rule-firing events newest-first (default limit 50, max 500; `before` cursors on `ts`). 200 / 404. |
 
 `RuleInput` is the client-controllable subset of a `Rule` — every field on `Rule` except `id`, `events`, `history`, `createdAt`, `updatedAt`. Domain validation (`validateRule`) runs on every write; cross-field violations (e.g. an empty AND/OR group, an unknown action kind, an `expiration.at` already in the past) surface as **400**.
-
-`POST /rules/{id}/enable` and `/disable`, plus `POST /rules/reorder`, are action-style endpoints rather than partial-update verbs — see #238 for the RESTful-refactor follow-up.
 
 ### Examples
 
@@ -366,13 +363,15 @@ curl -X PUT http://localhost:3000/rules/<id> \
   -H 'content-type: application/json' -d '<RuleInput>'
 curl -X DELETE http://localhost:3000/rules/<id>
 
-# Bulk renumber (rule ids must already exist)
-curl -X POST http://localhost:3000/rules/reorder \
+# Bulk renumber (rule ids must already exist) — replaces the ordering
+curl -X PUT http://localhost:3000/rules/order \
   -H 'content-type: application/json' -d '{ "ids": ["r3", "r1", "r2"] }'
 
 # Toggle enablement
-curl -X POST http://localhost:3000/rules/<id>/enable
-curl -X POST http://localhost:3000/rules/<id>/disable
+curl -X PATCH http://localhost:3000/rules/<id> \
+  -H 'content-type: application/json' -d '{ "enabled": true }'
+curl -X PATCH http://localhost:3000/rules/<id> \
+  -H 'content-type: application/json' -d '{ "enabled": false }'
 
 # Paginated firing events (newest-first)
 curl 'http://localhost:3000/rules/<id>/events?limit=50'
