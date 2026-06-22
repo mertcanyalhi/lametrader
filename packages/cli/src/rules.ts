@@ -14,6 +14,12 @@ enum RulesSubcommand {
   Create = 'create',
   /** Replace a rule by id from a JSON file. */
   Update = 'update',
+  /** Delete a rule by id. */
+  Delete = 'delete',
+  /** Flip a rule's `enabled` flag to true. */
+  Enable = 'enable',
+  /** Flip a rule's `enabled` flag to false. */
+  Disable = 'disable',
 }
 
 /**
@@ -31,6 +37,10 @@ enum RulesSubcommand {
  *   create it via the service (validated). Echoes the created rule.
  * - `update <id> --file <path>` — read a JSON `RuleCreateInput` and replace
  *   the rule's mutable fields. Echoes the updated rule.
+ * - `delete <id>` — remove the rule (cascades its persisted firing-state).
+ *   Echoes `deleted <id>` on success.
+ * - `enable <id>` / `disable <id>` — flip the rule's `enabled` flag and
+ *   append an `Enabled` / `Disabled` history entry. Echoes the updated rule.
  *
  * Output is JSON for both subcommands so the result can be piped or
  * round-tripped through `jq`. Errors (unknown profile / rule) propagate to
@@ -87,6 +97,25 @@ export async function runRules(argv: string[], service: RuleService): Promise<st
       if (!values.file) throw new Error('update requires --file');
       const body = await readRuleInput(values.file);
       return json(await service.replace(id, body));
+    }
+    case RulesSubcommand.Delete: {
+      const { positionals } = parseArgs({ args: rest, allowPositionals: true });
+      const id = positionals[0];
+      if (!id) throw new Error('delete requires an id');
+      await service.remove(id);
+      return `deleted ${id}`;
+    }
+    case RulesSubcommand.Enable: {
+      const { positionals } = parseArgs({ args: rest, allowPositionals: true });
+      const id = positionals[0];
+      if (!id) throw new Error('enable requires an id');
+      return json(await service.setEnabled(id, true));
+    }
+    case RulesSubcommand.Disable: {
+      const { positionals } = parseArgs({ args: rest, allowPositionals: true });
+      const id = positionals[0];
+      if (!id) throw new Error('disable requires an id');
+      return json(await service.setEnabled(id, false));
     }
     default:
       throw new Error(`unknown rules subcommand: ${subcommand ?? '(none)'}`);

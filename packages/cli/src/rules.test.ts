@@ -202,6 +202,45 @@ describe('runRules update', () => {
   });
 });
 
+describe('runRules delete', () => {
+  it('removes the rule and prints `deleted <id>`', async () => {
+    const service = buildService([rule({ id: 'r1', profileId: 'p1', order: 1 })]);
+    const output = await runRules(['delete', 'r1'], service);
+    expect(output).toBe('deleted r1');
+    expect(await service.list()).toEqual([]);
+  });
+
+  it('throws `delete requires an id` when the positional is missing', async () => {
+    await expect(runRules(['delete'], buildService())).rejects.toThrow('delete requires an id');
+  });
+
+  it('propagates `RuleNotFoundError` for an unknown id', async () => {
+    await expect(runRules(['delete', 'missing'], buildService())).rejects.toBeInstanceOf(
+      RuleNotFoundError,
+    );
+  });
+});
+
+describe('runRules enable', () => {
+  it('flips `enabled` to true and echoes the updated rule', async () => {
+    const service = buildService([rule({ id: 'r1', profileId: 'p1', order: 1, enabled: false })]);
+    const parsed = JSON.parse(await runRules(['enable', 'r1'], service)) as Rule;
+    expect(parsed.enabled).toBe(true);
+  });
+
+  it('throws `enable requires an id` when the positional is missing', async () => {
+    await expect(runRules(['enable'], buildService())).rejects.toThrow('enable requires an id');
+  });
+});
+
+describe('runRules disable', () => {
+  it('flips `enabled` to false and echoes the updated rule', async () => {
+    const service = buildService([rule({ id: 'r1', profileId: 'p1', order: 1, enabled: true })]);
+    const parsed = JSON.parse(await runRules(['disable', 'r1'], service)) as Rule;
+    expect(parsed.enabled).toBe(false);
+  });
+});
+
 describe('runRules unknown subcommand', () => {
   it('throws so the entry point prints `error: ...` and exits non-zero', async () => {
     await expect(runRules(['bogus'], buildService())).rejects.toThrow(
