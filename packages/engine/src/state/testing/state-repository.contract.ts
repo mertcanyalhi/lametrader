@@ -130,6 +130,28 @@ export function runStateRepositoryContract(
     expect(await repo.getGlobalState('regime')).toBeNull();
   });
 
+  it('listGlobalState returns {} when no global keys have been set', async () => {
+    const repo = await make();
+    expect(await repo.listGlobalState()).toEqual({});
+  });
+
+  it('listGlobalState returns every set global (key, value) pair', async () => {
+    const repo = await make();
+    await repo.setGlobalState('regime', numberValue(1), 100);
+    await repo.setGlobalState('lastSweep', numberValue(2), 101);
+    expect(await repo.listGlobalState()).toEqual({
+      regime: numberValue(1),
+      lastSweep: numberValue(2),
+    });
+  });
+
+  it('listGlobalState does not surface symbol-scoped keys', async () => {
+    const repo = await make();
+    await repo.setSymbolState('AAPL', 'armed', numberValue(1), 100);
+    await repo.setGlobalState('regime', numberValue(2), 101);
+    expect(await repo.listGlobalState()).toEqual({ regime: numberValue(2) });
+  });
+
   it('setGlobalState emits a stateChanged event with the Global scope', async () => {
     const repo = await make();
     const events: StateChangedEvent[] = [];

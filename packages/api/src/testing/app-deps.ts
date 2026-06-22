@@ -75,6 +75,7 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
     symbols: overrides.symbols ?? new SymbolService(sources, watchlist, config, candles, profiles),
     profiles,
     rules,
+    ...(overrides.state ? { state: overrides.state } : {}),
     backfill: overrides.backfill ?? new BackfillService(sources, candles, watchlist),
     indicators: { registry, compute },
     liveStream: {

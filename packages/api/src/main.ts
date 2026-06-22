@@ -30,6 +30,7 @@ const {
   indicatorCompute,
   indicatorStream: indicatorStreamService,
   quoteStream: quoteStreamService,
+  state,
   close,
 } = await connectServices(mongoUri, {
   onCandle: (event) => candleStream.publish(event.id, event),
@@ -44,6 +45,7 @@ const app = createApp(
     symbols,
     profiles,
     rules,
+    state,
     backfill,
     indicators: { registry: indicators, compute: indicatorCompute },
     liveStream: {
