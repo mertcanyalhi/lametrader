@@ -60,7 +60,7 @@ if (
         console.log(await runIndicators(args, indicators, indicatorCompute));
         break;
       case 'rules':
-        console.log(await runRules(args, rules));
+        console.log(await runRules(args, rules, symbols));
         break;
     }
   } catch (error) {

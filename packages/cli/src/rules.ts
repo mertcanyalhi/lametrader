@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
-import type { RuleCreateInput, RuleService } from '@lametrader/engine';
+import type { RuleCreateInput, RuleService, SymbolService } from '@lametrader/engine';
 
 /**
  * The recognized subcommands of the `rules` CLI command.
@@ -22,7 +22,12 @@ enum RulesSubcommand {
   Disable = 'disable',
   /** Bulk-renumber rule `order` to the given ids' 1-based positions. */
   Reorder = 'reorder',
+  /** Paginated read of rule-firing events by rule id or by symbol. */
+  Events = 'events',
 }
+
+/** Default page size when `--limit` is omitted on `rules events`. */
+const DEFAULT_EVENTS_LIMIT = 20;
 
 /**
  * Run the `rules` CLI command against a {@link RuleService} and return the
@@ -45,6 +50,9 @@ enum RulesSubcommand {
  *   append an `Enabled` / `Disabled` history entry. Echoes the updated rule.
  * - `reorder --order <csv>` — bulk-renumber `order` to the 1-based
  *   positions of the comma-separated ids. Echoes the renumbered rules.
+ * - `events <id> [--limit N]` / `events --symbol <id> [--limit N]` —
+ *   paginated read of rule-firing events (default 20, max 500),
+ *   newest-first, by rule id (positional) or by symbol (`--symbol`).
  *
  * Output is JSON for both subcommands so the result can be piped or
  * round-tripped through `jq`. Errors (unknown profile / rule) propagate to
@@ -52,8 +60,14 @@ enum RulesSubcommand {
  *
  * @param argv - arguments after `rules`.
  * @param service - the rules use-case to drive.
+ * @param symbols - the symbols use-case, used by `events --symbol` to read
+ *   the embedded events on the symbol document.
  */
-export async function runRules(argv: string[], service: RuleService): Promise<string> {
+export async function runRules(
+  argv: string[],
+  service: RuleService,
+  symbols?: SymbolService,
+): Promise<string> {
   const [subcommand, ...rest] = argv;
   switch (subcommand) {
     case RulesSubcommand.List: {
@@ -134,6 +148,26 @@ export async function runRules(argv: string[], service: RuleService): Promise<st
       if (ids.length === 0) throw new Error('reorder requires at least one id in --order');
       return json(await service.reorder(ids));
     }
+    case RulesSubcommand.Events: {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        allowPositionals: true,
+        options: {
+          symbol: { type: 'string' },
+          limit: { type: 'string' },
+        },
+      });
+      const limit = parseLimit(values.limit);
+      if (values.symbol !== undefined) {
+        if (!symbols) {
+          throw new Error('events --symbol requires the symbols use-case to be wired');
+        }
+        return json(await symbols.listEventsForSymbol(values.symbol, { limit }));
+      }
+      const id = positionals[0];
+      if (!id) throw new Error('events requires a rule id (or --symbol <id>)');
+      return json(await service.listEvents(id, { limit }));
+    }
     default:
       throw new Error(`unknown rules subcommand: ${subcommand ?? '(none)'}`);
   }
@@ -148,6 +182,20 @@ export async function runRules(argv: string[], service: RuleService): Promise<st
 async function readRuleInput(path: string): Promise<RuleCreateInput> {
   const raw = await readFile(path, 'utf8');
   return JSON.parse(raw) as RuleCreateInput;
+}
+
+/**
+ * Parse a `--limit` flag value into an integer in `[1, 500]`. Defaults to
+ * {@link DEFAULT_EVENTS_LIMIT} when absent; throws on a non-integer or an
+ * out-of-range value so the caller surfaces a non-zero exit.
+ */
+function parseLimit(raw: string | undefined): number {
+  if (raw === undefined) return DEFAULT_EVENTS_LIMIT;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 500) {
+    throw new Error(`--limit must be an integer in [1, 500] (got ${raw})`);
+  }
+  return parsed;
 }
 
 /** Pretty-print a value as JSON. */
