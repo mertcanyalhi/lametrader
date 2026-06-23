@@ -18,7 +18,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SELECTED_PROFILE_STORAGE_KEY, setStoredProfileId } from '../../lib/selected-profile.js';
+import { setStoredProfileId } from '../../lib/selected-profile.js';
 import { SelectedProfileProvider } from '../../lib/selected-profile-context.js';
 import { RulesPage } from './rules-page';
 
@@ -161,18 +161,25 @@ describe('RulesPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders the empty-state count when the selected profile has no rules', async () => {
+  it('renders the empty-state message when the selected profile has no rules', async () => {
     rules = [];
     setStoredProfileId(SCALPER.id);
     renderPage();
     expect(await screen.findByText('No rules in this profile yet.')).toBeInTheDocument();
   });
 
-  it('switches the rule count when the user picks a different profile', async () => {
-    rules = [makeRule({ id: 'r-1' })];
+  it('renders the rules table when the selected profile has rules', async () => {
+    rules = [makeRule({ id: 'r-1', name: 'BTC alert' })];
     setStoredProfileId(SCALPER.id);
     renderPage();
-    await screen.findByText('1 rule in this profile.');
+    expect(await screen.findByRole('button', { name: 'Open BTC alert' })).toBeInTheDocument();
+  });
+
+  it('switches the rendered rules when the user picks a different profile', async () => {
+    rules = [makeRule({ id: 'r-1', name: 'BTC alert' })];
+    setStoredProfileId(SCALPER.id);
+    renderPage();
+    await screen.findByRole('button', { name: 'Open BTC alert' });
     const user = userEvent.setup();
 
     rules = [];
