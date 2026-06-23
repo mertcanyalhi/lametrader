@@ -112,8 +112,17 @@ export interface PatchRuleInput {
  * Patch a rule's mutable subset (`PATCH /rules/:id`). The only currently
  * patchable field is `enabled` (toggled by the list page's enable/disable
  * action; appends an `Enabled` / `Disabled` history entry server-side).
+ *
+ * Performs an optimistic write across every cached rule list / detail so the
+ * UI flips before the server round-trip; rolls back to the snapshot on error
+ * and finally refetches to reconcile with the server.
  */
-export function usePatchRule(): UseMutationResult<Rule, Error, PatchRuleInput> {
+export function usePatchRule(): UseMutationResult<
+  Rule,
+  Error,
+  PatchRuleInput,
+  { snapshots: Array<[readonly unknown[], unknown]> }
+> {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, patch }: PatchRuleInput) =>
@@ -121,7 +130,23 @@ export function usePatchRule(): UseMutationResult<Rule, Error, PatchRuleInput> {
         method: 'PATCH',
         body: JSON.stringify(patch),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: RULES_QUERY_KEY }),
+    onMutate: async ({ id, patch }) => {
+      await queryClient.cancelQueries({ queryKey: RULES_QUERY_KEY });
+      const snapshots = queryClient.getQueriesData({ queryKey: RULES_QUERY_KEY });
+      queryClient.setQueriesData<Rule[] | Rule>({ queryKey: RULES_QUERY_KEY }, (current) => {
+        if (Array.isArray(current))
+          return current.map((rule) => (rule.id === id ? { ...rule, ...patch } : rule));
+        if (current && typeof current === 'object' && 'id' in current && current.id === id)
+          return { ...current, ...patch };
+        return current;
+      });
+      return { snapshots };
+    },
+    onError: (_error, _variables, context) => {
+      if (!context) return;
+      for (const [key, value] of context.snapshots) queryClient.setQueryData(key, value);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: RULES_QUERY_KEY }),
   });
 }
 

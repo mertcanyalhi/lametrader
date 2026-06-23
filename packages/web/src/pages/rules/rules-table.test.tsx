@@ -13,10 +13,16 @@ import {
   TriggerKind,
 } from '@lametrader/core';
 import { Theme } from '@radix-ui/themes';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RulesTable } from './rules-table';
+
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+  Toaster: () => null,
+}));
 
 const NOW = 1_700_000_000_000;
 
@@ -44,11 +50,15 @@ function makeRule(overrides: Partial<Rule> & Pick<Rule, 'id'>): Rule {
   };
 }
 
+let queryClient: QueryClient;
+
 function renderTable(rules: Rule[], onEdit: (rule: Rule) => void = vi.fn()): void {
   render(
-    <Theme>
-      <RulesTable rules={rules} onEdit={onEdit} />
-    </Theme>,
+    <QueryClientProvider client={queryClient}>
+      <Theme>
+        <RulesTable rules={rules} onEdit={onEdit} />
+      </Theme>
+    </QueryClientProvider>,
   );
 }
 
@@ -63,8 +73,13 @@ function rowFor(name: string): HTMLTableRowElement {
 }
 
 describe('RulesTable', () => {
+  beforeEach(() => {
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  });
+
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
   });
 
   it('renders the empty-state message when there are no rules', () => {
@@ -181,5 +196,28 @@ describe('RulesTable', () => {
       .getAllByRole('button', { name: /^Open / })
       .map((button) => button.textContent);
     expect(names).toEqual(['Second', 'First']);
+  });
+
+  it('sends PATCH /rules/:id { enabled: false } when the enable switch is toggled off', async () => {
+    const rule = makeRule({ id: 'r-1', name: 'Live alert', enabled: true });
+    const fetchSpy = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ ...rule, enabled: false }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    renderTable([rule]);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('switch', { name: 'Enable Live alert' }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const init = (fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined) ?? {};
+    expect({ url: fetchSpy.mock.calls[0]?.[0], method: init.method, body: init.body }).toEqual({
+      url: '/api/rules/r-1',
+      method: 'PATCH',
+      body: JSON.stringify({ enabled: false }),
+    });
   });
 });
