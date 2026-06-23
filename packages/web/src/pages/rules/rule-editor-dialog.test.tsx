@@ -221,6 +221,32 @@ describe('RuleEditorDialog', () => {
     });
   });
 
+  it('blocks save with an inline error when the condition has an empty group', async () => {
+    const rule = makeRule({
+      id: 'r-1',
+      name: 'Sample',
+      condition: { kind: ConditionNodeKind.And, children: [] },
+    });
+    const onOpenChange = vi.fn();
+    renderEditor(rule, onOpenChange);
+    const user = userEvent.setup();
+
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+
+    const message = await screen.findByText('Every AND / OR group must have at least one child.');
+    expect({
+      shown: message.textContent,
+      saveCalls: fetchSpy.mock.calls.filter(
+        (call) => (call[1] as RequestInit | undefined)?.method === 'PUT',
+      ).length,
+      stayedOpen: onOpenChange.mock.calls.find((call) => call[0] === false) === undefined,
+    }).toEqual({
+      shown: 'Every AND / OR group must have at least one child.',
+      saveCalls: 0,
+      stayedOpen: true,
+    });
+  });
+
   it('surfaces a 400 response as an inline alert and keeps the dialog open', async () => {
     const rule = makeRule({ id: 'r-1', name: 'Sample' });
     fetchSpy.mockImplementation(async (url: string, init?: RequestInit) => {

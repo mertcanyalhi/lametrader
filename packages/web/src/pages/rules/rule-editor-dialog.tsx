@@ -1,5 +1,5 @@
 import { yupResolver } from '@hookform/resolvers/yup';
-import { type Rule, RuleScopeKind } from '@lametrader/core';
+import { type ConditionNode, ConditionNodeKind, type Rule, RuleScopeKind } from '@lametrader/core';
 import {
   Box,
   Button,
@@ -18,7 +18,13 @@ import { type SubmitHandler, useForm } from 'react-hook-form';
 import { ApiError } from '../../lib/api-fetch.js';
 import { type RuleInput, useCreateRule, useReplaceRule } from '../../lib/hooks/rules.js';
 import { useWatchlist } from '../../lib/hooks/symbols.js';
-import { FIELD_LABELS, type RuleFormValues, ruleFormSchema } from '../../lib/rule-form-schema.js';
+import {
+  FIELD_LABELS,
+  isConditionTreeNonEmpty,
+  type RuleFormValues,
+  ruleFormSchema,
+} from '../../lib/rule-form-schema.js';
+import { ConditionTreeEditor } from './condition-tree-editor.js';
 
 /**
  * The reusable rule-editor `Dialog`. Owns the modal frame, the create/edit
@@ -58,11 +64,16 @@ export function RuleEditorDialog({
   const scopeKind = watch('scopeKind');
   const symbolId = watch('symbolId');
   const enabled = watch('enabled');
+  const condition = watch('condition');
   const nameError = formState.errors.name?.message;
   const symbolError = formState.errors.symbolId?.message;
 
   const onSubmit: SubmitHandler<RuleFormValues> = async (values) => {
     setInlineError(null);
+    if (!isConditionTreeNonEmpty(values.condition)) {
+      setInlineError('Every AND / OR group must have at least one child.');
+      return;
+    }
     try {
       if (mode === 'edit') {
         if (!initial) return;
@@ -160,6 +171,17 @@ export function RuleEditorDialog({
                 ) : null}
               </Box>
             ) : null}
+            <Box>
+              <Text as="div" size="2" weight="medium" mb="1">
+                {FIELD_LABELS.condition}
+              </Text>
+              <ConditionTreeEditor
+                value={condition}
+                onChange={(next) =>
+                  setValue('condition', next, { shouldDirty: true, shouldValidate: false })
+                }
+              />
+            </Box>
             <Flex align="center" gap="2">
               <Switch
                 id="rule-enabled"
@@ -253,6 +275,7 @@ function defaultValuesFor(initial: Rule | undefined): RuleFormValues {
       scopeKind: RuleScopeKind.Symbol,
       symbolId: '',
       enabled: true,
+      condition: defaultCondition(),
     };
   }
   return {
@@ -261,7 +284,13 @@ function defaultValuesFor(initial: Rule | undefined): RuleFormValues {
     scopeKind: initial.scope.kind,
     symbolId: initial.scope.kind === RuleScopeKind.Symbol ? initial.scope.symbolId : '',
     enabled: initial.enabled,
+    condition: initial.condition,
   };
+}
+
+/** A neutral starter — an empty `And` group ready for the first child. */
+function defaultCondition(): ConditionNode {
+  return { kind: ConditionNodeKind.And, children: [] };
 }
 
 /**
@@ -280,5 +309,6 @@ function mergeInput(initial: Rule, values: RuleFormValues): RuleInput {
         ? { kind: RuleScopeKind.Symbol, symbolId: values.symbolId }
         : { kind: RuleScopeKind.AllSymbols },
     enabled: values.enabled,
+    condition: values.condition,
   };
 }
