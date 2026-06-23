@@ -16,6 +16,7 @@ import {
 import { type ReactNode, useState } from 'react';
 import { type SubmitHandler, useForm } from 'react-hook-form';
 import { ApiError } from '../../lib/api-fetch.js';
+import { useProfiles } from '../../lib/hooks/profiles.js';
 import { type RuleInput, useCreateRule, useReplaceRule } from '../../lib/hooks/rules.js';
 import { useWatchlist } from '../../lib/hooks/symbols.js';
 import {
@@ -54,6 +55,9 @@ export function RuleEditorDialog({
 }): ReactNode {
   const create = useCreateRule();
   const replace = useReplaceRule();
+  const profilesQuery = useProfiles();
+  const profile = profilesQuery.data?.find((candidate) => candidate.id === initial?.profileId);
+  const indicators = profile?.indicators ?? [];
   const [inlineError, setInlineError] = useState<string | null>(null);
   const submitting = create.isPending || replace.isPending;
   const { register, handleSubmit, setValue, watch, formState } = useForm<RuleFormValues>({
@@ -180,6 +184,7 @@ export function RuleEditorDialog({
                 onChange={(next) =>
                   setValue('condition', next, { shouldDirty: true, shouldValidate: false })
                 }
+                indicators={indicators}
               />
             </Box>
             <Flex align="center" gap="2">

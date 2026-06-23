@@ -1,6 +1,7 @@
 import {
   type ConditionNode,
   ConditionNodeKind,
+  type IndicatorInstance,
   NumericOperator,
   OperandKind,
   StateValueType,
@@ -17,6 +18,7 @@ import {
 } from '@radix-ui/themes';
 import { Plus, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { OperandPicker } from './operand-picker.js';
 
 /**
  * The recursive condition-tree editor — walks a {@link ConditionNode} and
@@ -37,11 +39,15 @@ import type { ReactNode } from 'react';
 export function ConditionTreeEditor({
   value,
   onChange,
+  indicators,
 }: {
   value: ConditionNode;
   onChange: (next: ConditionNode) => void;
+  indicators: IndicatorInstance[];
 }): ReactNode {
-  return <NodeView path={[]} node={value} root={value} onChange={onChange} />;
+  return (
+    <NodeView path={[]} node={value} root={value} onChange={onChange} indicators={indicators} />
+  );
 }
 
 /** A neutral starter leaf — overwritten by the operand/operator picker (#170–#171). */
@@ -60,20 +66,40 @@ function NodeView({
   node,
   root,
   onChange,
+  indicators,
 }: {
   path: number[];
   node: ConditionNode;
   root: ConditionNode;
   onChange: (next: ConditionNode) => void;
+  indicators: IndicatorInstance[];
 }): ReactNode {
   if (node.kind === ConditionNodeKind.Leaf) {
     return (
       <Card variant="surface">
-        <Text size="2" color="gray">
-          {/* Lazy: operand / operator picker lands with #170–#171; the
-              persisted leaf shape is intact so saves still round-trip. */}
-          Leaf — operand &amp; operator picker lands in #170–#171.
-        </Text>
+        <Flex gap="3" align="start">
+          <Box flexGrow="1">
+            <OperandPicker
+              value={node.left}
+              onChange={(left) => onChange(replaceAt(root, path, { ...node, left }))}
+              indicators={indicators}
+              ariaLabel="Left operand kind"
+            />
+          </Box>
+          {/* Lazy: operator picker lands with #171 — for now a placeholder so
+              the leaf reads naturally. The current operator persists unchanged. */}
+          <Text size="2" color="gray" mt="2">
+            operator…
+          </Text>
+          <Box flexGrow="1">
+            <OperandPicker
+              value={node.right}
+              onChange={(right) => onChange(replaceAt(root, path, { ...node, right }))}
+              indicators={indicators}
+              ariaLabel="Right operand kind"
+            />
+          </Box>
+        </Flex>
       </Card>
     );
   }
@@ -142,7 +168,13 @@ function NodeView({
           // biome-ignore lint/suspicious/noArrayIndexKey: condition children are positional; no stable id available.
           <Flex key={index} gap="2" align="start">
             <Box flexGrow="1">
-              <NodeView path={[...path, index]} node={child} root={root} onChange={onChange} />
+              <NodeView
+                path={[...path, index]}
+                node={child}
+                root={root}
+                onChange={onChange}
+                indicators={indicators}
+              />
             </Box>
             <Tooltip content="Remove">
               <IconButton

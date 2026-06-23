@@ -29,7 +29,7 @@ function Harness({ initial }: { initial: ConditionNode }): ReactNode {
   return (
     <Theme>
       <div data-testid="snapshot">{JSON.stringify(tree)}</div>
-      <ConditionTreeEditor value={tree} onChange={setTree} />
+      <ConditionTreeEditor value={tree} onChange={setTree} indicators={[]} />
     </Theme>
   );
 }

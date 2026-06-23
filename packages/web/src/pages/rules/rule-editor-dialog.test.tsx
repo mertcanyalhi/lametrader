@@ -65,17 +65,29 @@ let fetchSpy: ReturnType<typeof vi.fn>;
 let watched: EnrichedSymbol[];
 
 function installFetch(): void {
-  fetchSpy = vi.fn(async (url: string, init?: RequestInit) => {
-    const method = init?.method ?? 'GET';
-    if (method === 'GET' && String(url).startsWith('/api/symbols')) {
-      return new Response(JSON.stringify(watched), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-    throw new Error(`unexpected fetch: ${method} ${url}`);
-  });
+  fetchSpy = vi.fn(async (url: string, init?: RequestInit) => baseHandler(url, init));
   globalThis.fetch = fetchSpy as unknown as typeof fetch;
+}
+
+/** Shared base — returns the seed watchlist for `/api/symbols`, an empty list
+ * for `/api/profiles` (the operand picker reads attached indicators from
+ * profiles), and 404s anything else. Per-test `mockImplementation` overrides
+ * fall through to this for the calls they don't care about. */
+async function baseHandler(url: string, init?: RequestInit): Promise<Response> {
+  const method = init?.method ?? 'GET';
+  if (method === 'GET' && String(url).startsWith('/api/symbols')) {
+    return new Response(JSON.stringify(watched), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  if (method === 'GET' && String(url).startsWith('/api/profiles')) {
+    return new Response('[]', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  throw new Error(`unexpected fetch: ${method} ${url}`);
 }
 
 function renderEditor(rule: Rule | undefined, onOpenChange = vi.fn()): void {
@@ -120,19 +132,13 @@ describe('RuleEditorDialog', () => {
     const rule = makeRule({ id: 'r-1', name: 'Sample', description: 'old' });
     fetchSpy.mockImplementation(async (url: string, init?: RequestInit) => {
       const method = init?.method ?? 'GET';
-      if (method === 'GET' && String(url).startsWith('/api/symbols')) {
-        return new Response(JSON.stringify(watched), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
       if (method === 'PUT') {
         return new Response(JSON.stringify(rule), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });
       }
-      throw new Error(`unexpected fetch: ${method} ${url}`);
+      return baseHandler(url, init);
     });
     const onOpenChange = vi.fn();
     renderEditor(rule, onOpenChange);
@@ -184,19 +190,13 @@ describe('RuleEditorDialog', () => {
     });
     fetchSpy.mockImplementation(async (url: string, init?: RequestInit) => {
       const method = init?.method ?? 'GET';
-      if (method === 'GET' && String(url).startsWith('/api/symbols')) {
-        return new Response(JSON.stringify(watched), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
       if (method === 'PUT') {
         return new Response(JSON.stringify(rule), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });
       }
-      throw new Error(`unexpected fetch: ${method} ${url}`);
+      return baseHandler(url, init);
     });
     renderEditor(rule);
     const user = userEvent.setup();
@@ -251,19 +251,13 @@ describe('RuleEditorDialog', () => {
     const rule = makeRule({ id: 'r-1', name: 'Sample' });
     fetchSpy.mockImplementation(async (url: string, init?: RequestInit) => {
       const method = init?.method ?? 'GET';
-      if (method === 'GET' && String(url).startsWith('/api/symbols')) {
-        return new Response(JSON.stringify(watched), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
       if (method === 'PUT') {
         return new Response(JSON.stringify({ error: 'rule name "Sample" already exists' }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' },
         });
       }
-      throw new Error(`unexpected fetch: ${method} ${url}`);
+      return baseHandler(url, init);
     });
     const onOpenChange = vi.fn();
     renderEditor(rule, onOpenChange);
