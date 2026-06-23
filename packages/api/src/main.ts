@@ -7,7 +7,7 @@ import { type CandleEvent, connectServices, loadSettings } from '@lametrader/eng
 import { createApp } from './app.js';
 import { StreamHub } from './stream-hub.js';
 
-const { mongoUri, apiPort, pollIntervals } = loadSettings();
+const { mongoUri, apiPort, pollIntervals, telegramDestinations } = loadSettings();
 
 // Hubs bridge the engine's transport-agnostic `onCandle` / `onIndicatorState` /
 // `onSymbolQuote` callbacks to the `/stream` WebSocket route (see ADR-0005).
@@ -46,6 +46,7 @@ const app = createApp(
     profiles,
     rules,
     state,
+    telegramDestinationNames: telegramDestinations.map((destination) => destination.name),
     backfill,
     indicators: { registry: indicators, compute: indicatorCompute },
     liveStream: {
