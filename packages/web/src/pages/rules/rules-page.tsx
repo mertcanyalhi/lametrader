@@ -4,6 +4,7 @@ import { type ReactNode, useState } from 'react';
 import { useRules } from '../../lib/hooks/rules.js';
 import { useSelectedProfile } from '../../lib/selected-profile-context.js';
 import { ProfilePickerDialog } from '../chart/profile-picker-dialog.js';
+import { RuleEditorDialog } from './rule-editor-dialog.js';
 import { RulesTable } from './rules-table.js';
 
 /**
@@ -19,9 +20,7 @@ import { RulesTable } from './rules-table.js';
  */
 export function RulesPage(): ReactNode {
   const { profileId } = useSelectedProfile();
-  // Editor modal lands in #167; we already capture the selection so the
-  // table's row-click wire-up doesn't need to change when the modal arrives.
-  const [, setEditing] = useState<Rule | null>(null);
+  const [editing, setEditing] = useState<Rule | null>(null);
 
   return (
     <div className="flex h-full flex-col gap-3">
@@ -47,6 +46,16 @@ export function RulesPage(): ReactNode {
       >
         <ProfilePickerDialog />
       </Flex>
+      {editing ? (
+        <RuleEditorDialog
+          open={true}
+          onOpenChange={(next) => {
+            if (!next) setEditing(null);
+          }}
+          mode="edit"
+          initial={editing}
+        />
+      ) : null}
     </div>
   );
 }
