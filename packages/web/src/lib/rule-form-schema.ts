@@ -1,5 +1,14 @@
-import { type ConditionNode, ConditionNodeKind, RuleScopeKind } from '@lametrader/core';
+import {
+  type ConditionNode,
+  ConditionNodeKind,
+  Period,
+  RuleScopeKind,
+  TriggerKind,
+} from '@lametrader/core';
 import * as yup from 'yup';
+
+/** Default re-fire interval for `OncePerMinute` triggers — matches the engine. */
+export const DEFAULT_TRIGGER_INTERVAL_MS = 60_000;
 
 /**
  * Walk a condition tree and return `true` when every `And` / `Or` group has
@@ -25,6 +34,9 @@ export const FIELD_LABELS = {
   symbolId: 'Symbol',
   enabled: 'Enabled',
   condition: 'Condition',
+  trigger: 'Trigger',
+  triggerPeriod: 'Trigger period',
+  triggerIntervalMs: 'Trigger interval (ms)',
 } as const;
 
 /**
@@ -51,6 +63,18 @@ export interface RuleFormValues {
    * to reject empty `And` / `Or` groups before the server round-trip.
    */
   condition: ConditionNode;
+  /** Which trigger gate the rule uses — drives which sub-fields are required. */
+  triggerKind: TriggerKind;
+  /**
+   * Bar size for the `OncePerBar` / `OncePerBarClose` triggers. Required by
+   * the schema in those modes; ignored for `Once` / `OncePerMinute`.
+   */
+  triggerPeriod: Period | '';
+  /**
+   * Minimum re-fire interval in milliseconds for the `OncePerMinute` trigger.
+   * Ignored for the other trigger kinds.
+   */
+  triggerIntervalMs: number;
 }
 
 /**
@@ -85,4 +109,32 @@ export const ruleFormSchema: yup.ObjectSchema<RuleFormValues> = yup.object({
   // #170–#171; we accept any persisted node and check non-empty groups in the
   // submit handler via `isConditionTreeNonEmpty`.
   condition: yup.mixed<ConditionNode>().required().label(FIELD_LABELS.condition),
+  triggerKind: yup
+    .mixed<TriggerKind>()
+    .oneOf(Object.values(TriggerKind))
+    .required()
+    .label(FIELD_LABELS.trigger),
+  triggerPeriod: yup
+    .mixed<Period | ''>()
+    .oneOf(['' as const, ...Object.values(Period)])
+    .defined()
+    .test(
+      'period-required-for-bar-triggers',
+      ({ label }) => `${label} is required.`,
+      function check(value) {
+        const triggerKind = this.parent.triggerKind as TriggerKind;
+        const barBased =
+          triggerKind === TriggerKind.OncePerBar || triggerKind === TriggerKind.OncePerBarClose;
+        if (!barBased) return true;
+        return Object.values(Period).includes(value as Period);
+      },
+    )
+    .label(FIELD_LABELS.triggerPeriod),
+  triggerIntervalMs: yup
+    .number()
+    .typeError(({ label }) => `${label} must be a number.`)
+    .integer()
+    .min(1, ({ label }) => `${label} must be at least 1 ms.`)
+    .required()
+    .label(FIELD_LABELS.triggerIntervalMs),
 });
