@@ -37,7 +37,17 @@ export const FIELD_LABELS = {
   trigger: 'Trigger',
   triggerPeriod: 'Trigger period',
   triggerIntervalMs: 'Trigger interval (ms)',
+  expiration: 'Expiration',
+  expirationAt: 'Expiration date',
 } as const;
+
+/** The two expiration modes the form exposes. */
+export enum ExpirationKind {
+  /** Rule never expires; persists as `null`. */
+  Never = 'never',
+  /** Rule expires at a specific date; persists as `{ at: <epoch ms> }`. */
+  OnDate = 'date',
+}
 
 /**
  * The subset of a {@link Rule}'s mutable fields the editor's **basic** form
@@ -75,6 +85,14 @@ export interface RuleFormValues {
    * Ignored for the other trigger kinds.
    */
   triggerIntervalMs: number;
+  /** Which expiration mode the rule uses — `Never` or `OnDate`. */
+  expirationKind: ExpirationKind;
+  /**
+   * `datetime-local`-formatted expiration timestamp (`YYYY-MM-DDTHH:mm`) when
+   * `expirationKind === OnDate`. The schema enforces "in the future"; empty
+   * string when the mode is `Never`.
+   */
+  expirationAt: string;
 }
 
 /**
@@ -137,4 +155,24 @@ export const ruleFormSchema: yup.ObjectSchema<RuleFormValues> = yup.object({
     .min(1, ({ label }) => `${label} must be at least 1 ms.`)
     .required()
     .label(FIELD_LABELS.triggerIntervalMs),
+  expirationKind: yup
+    .mixed<ExpirationKind>()
+    .oneOf(Object.values(ExpirationKind))
+    .required()
+    .label(FIELD_LABELS.expiration),
+  expirationAt: yup
+    .string()
+    .defined()
+    .default('')
+    .test(
+      'expiration-date-required-and-future',
+      ({ label }) => `${label} must be in the future.`,
+      function check(value) {
+        const kind = this.parent.expirationKind as ExpirationKind;
+        if (kind !== ExpirationKind.OnDate) return true;
+        const parsed = Date.parse(String(value ?? ''));
+        return Number.isFinite(parsed) && parsed > Date.now();
+      },
+    )
+    .label(FIELD_LABELS.expirationAt),
 });

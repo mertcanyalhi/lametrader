@@ -221,6 +221,29 @@ describe('RuleEditorDialog', () => {
     });
   });
 
+  it('blocks save when "On date" expiration is in the past', async () => {
+    const rule = makeRule({ id: 'r-1', name: 'Sample' });
+    renderEditor(rule);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('radio', { name: 'On date' }));
+    const dateField = screen.getByLabelText('Expiration date');
+    await user.clear(dateField);
+    await user.type(dateField, '2000-01-01T12:00');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+
+    const alerts = await screen.findAllByRole('alert');
+    expect({
+      messages: alerts.map((alert) => alert.textContent),
+      putCount: fetchSpy.mock.calls.filter(
+        (call) => (call[1] as RequestInit | undefined)?.method === 'PUT',
+      ).length,
+    }).toEqual({
+      messages: ['Expiration date must be in the future.'],
+      putCount: 0,
+    });
+  });
+
   it('blocks save with a "Trigger period is required." inline error when bar-based trigger has no period', async () => {
     const rule = makeRule({
       id: 'r-1',
