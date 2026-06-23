@@ -1,10 +1,19 @@
 import { type Rule, RuleEventType, RuleScopeKind, TriggerKind } from '@lametrader/core';
-import { Flex, IconButton, Switch, Table, Text, Tooltip } from '@radix-ui/themes';
-import { ListChecks, MoreHorizontal, Pencil } from 'lucide-react';
-import type { ReactNode } from 'react';
+import {
+  AlertDialog,
+  Button,
+  Flex,
+  IconButton,
+  Switch,
+  Table,
+  Text,
+  Tooltip,
+} from '@radix-ui/themes';
+import { ListChecks, Pencil, Trash2 } from 'lucide-react';
+import { type ReactNode, useState } from 'react';
 import { toast } from 'sonner';
 import { ApiError } from '../../lib/api-fetch.js';
-import { usePatchRule } from '../../lib/hooks/rules.js';
+import { useDeleteRule, usePatchRule } from '../../lib/hooks/rules.js';
 
 /**
  * The dense rules table — one row per rule, ordered by the server-supplied
@@ -56,6 +65,8 @@ export function RulesTable({
 function RuleRow({ rule, onEdit }: { rule: Rule; onEdit: (rule: Rule) => void }): ReactNode {
   const rowName = `Open ${rule.name}`;
   const patch = usePatchRule();
+  const remove = useDeleteRule();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   function toggleEnabled(next: boolean): void {
     patch.mutate(
       { id: rule.id, patch: { enabled: next } },
@@ -67,6 +78,16 @@ function RuleRow({ rule, onEdit }: { rule: Rule; onEdit: (rule: Rule) => void })
         },
       },
     );
+  }
+  function confirmDelete(): void {
+    remove.mutate(rule.id, {
+      onSuccess: () => toast.success(`Deleted ${rule.name}`),
+      onError: (cause) => {
+        const message = cause instanceof ApiError ? cause.message : `Failed to delete ${rule.name}`;
+        toast.error(message);
+      },
+    });
+    setConfirmingDelete(false);
   }
   return (
     <Table.Row className="align-middle">
@@ -127,19 +148,41 @@ function RuleRow({ rule, onEdit }: { rule: Rule; onEdit: (rule: Rule) => void })
               <ListChecks size={14} aria-hidden="true" />
             </IconButton>
           </Tooltip>
-          <Tooltip content="More">
+          <Tooltip content="Delete">
             <IconButton
               type="button"
               variant="ghost"
               color="gray"
-              aria-label={`More actions for ${rule.name}`}
-              disabled
+              aria-label={`Delete ${rule.name}`}
+              onClick={() => setConfirmingDelete(true)}
             >
-              <MoreHorizontal size={14} aria-hidden="true" />
+              <Trash2 size={14} aria-hidden="true" />
             </IconButton>
           </Tooltip>
         </Flex>
       </Table.Cell>
+      {confirmingDelete ? (
+        <AlertDialog.Root open={true} onOpenChange={setConfirmingDelete}>
+          <AlertDialog.Content maxWidth="420px">
+            <AlertDialog.Title>Delete rule</AlertDialog.Title>
+            <AlertDialog.Description size="2">
+              <Text>Delete rule “{rule.name}”? This can’t be undone.</Text>
+            </AlertDialog.Description>
+            <Flex gap="3" mt="4" justify="end">
+              <AlertDialog.Cancel>
+                <Button variant="soft" color="gray">
+                  Cancel
+                </Button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action>
+                <Button color="red" onClick={confirmDelete}>
+                  Delete
+                </Button>
+              </AlertDialog.Action>
+            </Flex>
+          </AlertDialog.Content>
+        </AlertDialog.Root>
+      ) : null}
     </Table.Row>
   );
 }

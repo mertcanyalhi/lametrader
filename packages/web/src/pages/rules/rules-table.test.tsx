@@ -198,6 +198,39 @@ describe('RulesTable', () => {
     expect(names).toEqual(['Second', 'First']);
   });
 
+  it('opens an AlertDialog when the Delete icon is clicked and sends DELETE on confirm', async () => {
+    const rule = makeRule({ id: 'r-1', name: 'Doomed' });
+    const fetchSpy = vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 }));
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    renderTable([rule]);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Delete Doomed' }));
+    const dialog = await screen.findByRole('alertdialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const init = (fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined) ?? {};
+    expect({ url: fetchSpy.mock.calls[0]?.[0], method: init.method }).toEqual({
+      url: '/api/rules/r-1',
+      method: 'DELETE',
+    });
+  });
+
+  it('does not call DELETE when the user cancels the confirmation dialog', async () => {
+    const rule = makeRule({ id: 'r-1', name: 'Safe' });
+    const fetchSpy = vi.fn();
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    renderTable([rule]);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Delete Safe' }));
+    const dialog = await screen.findByRole('alertdialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it('sends PATCH /rules/:id { enabled: false } when the enable switch is toggled off', async () => {
     const rule = makeRule({ id: 'r-1', name: 'Live alert', enabled: true });
     const fetchSpy = vi.fn().mockResolvedValueOnce(

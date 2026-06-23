@@ -151,15 +151,35 @@ export function usePatchRule(): UseMutationResult<
 }
 
 /**
- * Delete a rule (`DELETE /rules/:id`). On success invalidates every rules
- * query so the list refetches.
+ * Delete a rule (`DELETE /rules/:id`). Performs an optimistic removal from
+ * every cached rule list so the row disappears before the server round-trip;
+ * rolls back to the snapshot on error and invalidates in `onSettled` to
+ * reconcile with the server.
  */
-export function useDeleteRule(): UseMutationResult<void, Error, string> {
+export function useDeleteRule(): UseMutationResult<
+  void,
+  Error,
+  string,
+  { snapshots: Array<[readonly unknown[], unknown]> }
+> {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<void>(`/rules/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: RULES_QUERY_KEY }),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: RULES_QUERY_KEY });
+      const snapshots = queryClient.getQueriesData({ queryKey: RULES_QUERY_KEY });
+      queryClient.setQueriesData<Rule[] | Rule>({ queryKey: RULES_QUERY_KEY }, (current) => {
+        if (Array.isArray(current)) return current.filter((rule) => rule.id !== id);
+        return current;
+      });
+      return { snapshots };
+    },
+    onError: (_error, _id, context) => {
+      if (!context) return;
+      for (const [key, value] of context.snapshots) queryClient.setQueryData(key, value);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: RULES_QUERY_KEY }),
   });
 }
 
