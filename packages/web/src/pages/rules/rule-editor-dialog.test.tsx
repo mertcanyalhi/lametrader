@@ -221,6 +221,30 @@ describe('RuleEditorDialog', () => {
     });
   });
 
+  it('blocks save with a "Trigger period is required." inline error when bar-based trigger has no period', async () => {
+    const rule = makeRule({
+      id: 'r-1',
+      name: 'Sample',
+      trigger: { kind: TriggerKind.Once },
+    });
+    renderEditor(rule);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('radio', { name: 'Once per bar' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+
+    const alerts = await screen.findAllByRole('alert');
+    expect({
+      messages: alerts.map((alert) => alert.textContent),
+      putCount: fetchSpy.mock.calls.filter(
+        (call) => (call[1] as RequestInit | undefined)?.method === 'PUT',
+      ).length,
+    }).toEqual({
+      messages: ['Trigger period is required.'],
+      putCount: 0,
+    });
+  });
+
   it('blocks save with an inline error when the condition has an empty group', async () => {
     const rule = makeRule({
       id: 'r-1',

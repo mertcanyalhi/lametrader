@@ -1,5 +1,13 @@
 import { yupResolver } from '@hookform/resolvers/yup';
-import { type ConditionNode, ConditionNodeKind, type Rule, RuleScopeKind } from '@lametrader/core';
+import {
+  type ConditionNode,
+  ConditionNodeKind,
+  type Period,
+  type Rule,
+  RuleScopeKind,
+  type Trigger,
+  TriggerKind,
+} from '@lametrader/core';
 import {
   Box,
   Button,
@@ -20,12 +28,14 @@ import { useProfiles } from '../../lib/hooks/profiles.js';
 import { type RuleInput, useCreateRule, useReplaceRule } from '../../lib/hooks/rules.js';
 import { useWatchlist } from '../../lib/hooks/symbols.js';
 import {
+  DEFAULT_TRIGGER_INTERVAL_MS,
   FIELD_LABELS,
   isConditionTreeNonEmpty,
   type RuleFormValues,
   ruleFormSchema,
 } from '../../lib/rule-form-schema.js';
 import { ConditionTreeEditor } from './condition-tree-editor.js';
+import { TriggerPicker } from './trigger-picker.js';
 
 /**
  * The reusable rule-editor `Dialog`. Owns the modal frame, the create/edit
@@ -69,8 +79,12 @@ export function RuleEditorDialog({
   const symbolId = watch('symbolId');
   const enabled = watch('enabled');
   const condition = watch('condition');
+  const triggerKind = watch('triggerKind');
+  const triggerPeriod = watch('triggerPeriod');
+  const triggerIntervalMs = watch('triggerIntervalMs');
   const nameError = formState.errors.name?.message;
   const symbolError = formState.errors.symbolId?.message;
+  const triggerPeriodError = formState.errors.triggerPeriod?.message;
 
   const onSubmit: SubmitHandler<RuleFormValues> = async (values) => {
     setInlineError(null);
@@ -187,6 +201,29 @@ export function RuleEditorDialog({
                 indicators={indicators}
               />
             </Box>
+            <Box>
+              <Text as="div" size="2" weight="medium" mb="1">
+                {FIELD_LABELS.trigger}
+              </Text>
+              <TriggerPicker
+                kind={triggerKind}
+                onKindChange={(next) =>
+                  setValue('triggerKind', next, { shouldDirty: true, shouldValidate: false })
+                }
+                period={triggerPeriod}
+                onPeriodChange={(next) =>
+                  setValue('triggerPeriod', next, { shouldDirty: true, shouldValidate: false })
+                }
+                intervalMs={triggerIntervalMs}
+                onIntervalMsChange={(next) =>
+                  setValue('triggerIntervalMs', next, {
+                    shouldDirty: true,
+                    shouldValidate: false,
+                  })
+                }
+                periodError={triggerPeriodError}
+              />
+            </Box>
             <Flex align="center" gap="2">
               <Switch
                 id="rule-enabled"
@@ -281,6 +318,9 @@ function defaultValuesFor(initial: Rule | undefined): RuleFormValues {
       symbolId: '',
       enabled: true,
       condition: defaultCondition(),
+      triggerKind: TriggerKind.Once,
+      triggerPeriod: '',
+      triggerIntervalMs: DEFAULT_TRIGGER_INTERVAL_MS,
     };
   }
   return {
@@ -290,7 +330,24 @@ function defaultValuesFor(initial: Rule | undefined): RuleFormValues {
     symbolId: initial.scope.kind === RuleScopeKind.Symbol ? initial.scope.symbolId : '',
     enabled: initial.enabled,
     condition: initial.condition,
+    triggerKind: initial.trigger.kind,
+    triggerPeriod: triggerPeriodOf(initial.trigger),
+    triggerIntervalMs: triggerIntervalOf(initial.trigger),
   };
+}
+
+/** Extract a `period` from a bar-based trigger, or `''` when N/A. */
+function triggerPeriodOf(trigger: Trigger): Period | '' {
+  if (trigger.kind === TriggerKind.OncePerBar || trigger.kind === TriggerKind.OncePerBarClose) {
+    return trigger.period;
+  }
+  return '';
+}
+
+/** Extract an `intervalMs` from an `OncePerMinute` trigger, or the default. */
+function triggerIntervalOf(trigger: Trigger): number {
+  if (trigger.kind === TriggerKind.OncePerMinute) return trigger.intervalMs;
+  return DEFAULT_TRIGGER_INTERVAL_MS;
 }
 
 /** A neutral starter — an empty `And` group ready for the first child. */
@@ -315,5 +372,25 @@ function mergeInput(initial: Rule, values: RuleFormValues): RuleInput {
         : { kind: RuleScopeKind.AllSymbols },
     enabled: values.enabled,
     condition: values.condition,
+    trigger: triggerFrom(values),
   };
+}
+
+/** Build a {@link Trigger} from the flat trigger form fields. */
+function triggerFrom(values: RuleFormValues): Trigger {
+  switch (values.triggerKind) {
+    case TriggerKind.Once:
+      return { kind: TriggerKind.Once };
+    case TriggerKind.OncePerBar:
+      return {
+        kind: TriggerKind.OncePerBar,
+        // Schema-required; `as Period` is safe — the empty string is rejected
+        // by Yup so we never reach here without a real period.
+        period: values.triggerPeriod as Period,
+      };
+    case TriggerKind.OncePerBarClose:
+      return { kind: TriggerKind.OncePerBarClose, period: values.triggerPeriod as Period };
+    case TriggerKind.OncePerMinute:
+      return { kind: TriggerKind.OncePerMinute, intervalMs: values.triggerIntervalMs };
+  }
 }
