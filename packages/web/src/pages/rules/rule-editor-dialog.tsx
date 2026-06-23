@@ -2,6 +2,7 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import {
   type ConditionNode,
   ConditionNodeKind,
+  type Expiration,
   type Period,
   type Rule,
   RuleScopeKind,
@@ -29,12 +30,14 @@ import { type RuleInput, useCreateRule, useReplaceRule } from '../../lib/hooks/r
 import { useWatchlist } from '../../lib/hooks/symbols.js';
 import {
   DEFAULT_TRIGGER_INTERVAL_MS,
+  ExpirationKind,
   FIELD_LABELS,
   isConditionTreeNonEmpty,
   type RuleFormValues,
   ruleFormSchema,
 } from '../../lib/rule-form-schema.js';
 import { ConditionTreeEditor } from './condition-tree-editor.js';
+import { ExpirationPicker } from './expiration-picker.js';
 import { TriggerPicker } from './trigger-picker.js';
 
 /**
@@ -82,9 +85,12 @@ export function RuleEditorDialog({
   const triggerKind = watch('triggerKind');
   const triggerPeriod = watch('triggerPeriod');
   const triggerIntervalMs = watch('triggerIntervalMs');
+  const expirationKind = watch('expirationKind');
+  const expirationAt = watch('expirationAt');
   const nameError = formState.errors.name?.message;
   const symbolError = formState.errors.symbolId?.message;
   const triggerPeriodError = formState.errors.triggerPeriod?.message;
+  const expirationError = formState.errors.expirationAt?.message;
 
   const onSubmit: SubmitHandler<RuleFormValues> = async (values) => {
     setInlineError(null);
@@ -224,6 +230,22 @@ export function RuleEditorDialog({
                 periodError={triggerPeriodError}
               />
             </Box>
+            <Box>
+              <Text as="div" size="2" weight="medium" mb="1">
+                {FIELD_LABELS.expiration}
+              </Text>
+              <ExpirationPicker
+                kind={expirationKind}
+                onKindChange={(next) =>
+                  setValue('expirationKind', next, { shouldDirty: true, shouldValidate: false })
+                }
+                value={expirationAt}
+                onValueChange={(next) =>
+                  setValue('expirationAt', next, { shouldDirty: true, shouldValidate: false })
+                }
+                error={expirationError}
+              />
+            </Box>
             <Flex align="center" gap="2">
               <Switch
                 id="rule-enabled"
@@ -321,6 +343,8 @@ function defaultValuesFor(initial: Rule | undefined): RuleFormValues {
       triggerKind: TriggerKind.Once,
       triggerPeriod: '',
       triggerIntervalMs: DEFAULT_TRIGGER_INTERVAL_MS,
+      expirationKind: ExpirationKind.Never,
+      expirationAt: '',
     };
   }
   return {
@@ -333,7 +357,16 @@ function defaultValuesFor(initial: Rule | undefined): RuleFormValues {
     triggerKind: initial.trigger.kind,
     triggerPeriod: triggerPeriodOf(initial.trigger),
     triggerIntervalMs: triggerIntervalOf(initial.trigger),
+    expirationKind: initial.expiration === null ? ExpirationKind.Never : ExpirationKind.OnDate,
+    expirationAt: initial.expiration === null ? '' : epochMsToDateTimeLocal(initial.expiration.at),
   };
+}
+
+/** `<input type="datetime-local">` reads/writes `YYYY-MM-DDTHH:mm` (local). */
+function epochMsToDateTimeLocal(at: number): string {
+  const d = new Date(at);
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 /** Extract a `period` from a bar-based trigger, or `''` when N/A. */
@@ -373,7 +406,14 @@ function mergeInput(initial: Rule, values: RuleFormValues): RuleInput {
     enabled: values.enabled,
     condition: values.condition,
     trigger: triggerFrom(values),
+    expiration: expirationFrom(values),
   };
+}
+
+/** Build an {@link Expiration} from the flat expiration form fields. */
+function expirationFrom(values: RuleFormValues): Expiration {
+  if (values.expirationKind === ExpirationKind.Never) return null;
+  return { at: Date.parse(values.expirationAt) };
 }
 
 /** Build a {@link Trigger} from the flat trigger form fields. */
