@@ -40,6 +40,29 @@ Each applicable instance gets a deterministic palette colour, fetched once per `
 A legend below the canvas lists every overlay with its display name + summary, the value at the crosshair (or the latest non-null when no crosshair), a show/hide eye (chart-local view state), and a remove `x` that opens the same `AlertDialog` detach confirm the panel uses.
 Live updates land in a follow-up issue.
 
+The bottom action bar also carries a **`Rules N`** button (label includes the live count of rules in the current profile scoped to the current symbol; refetched on either change).
+Clicking opens a dialog containing the same rules table the `/rules` page uses, filtered to the current symbol — Edit a row to open the editor in `edit` mode, or **`+ New rule`** to open it in `create` mode with the profile + symbol pre-filled.
+
+Symbol activity also lands on the chart itself: every `state_set` rule event renders a circle marker below the matching bar (via a single marker plugin attached to the candle series), and a collapsible **Events** panel under the canvas lists the symbol's events newest-first with **Load more** pagination (`GET /symbols/:id/rule-events`). The panel's open / closed state persists to `localStorage` so reloads remember it.
+
+### `/rules` — Rules
+
+A profile-scoped list of rules with full CRUD.
+The bottom-bar profile picker is the same `ProfilePickerDialog` as the chart, so the active profile and its persistence are shared.
+The list body only mounts once a profile is selected, keeping `useRules({ profileId })` cleanly conditional.
+
+The table columns are `Order`, `Name`, `Scope`, `Trigger`, `Last fired`, `Actions`.
+Per row affordances:
+
+- **Enable / disable** — an inline `Switch` on the name cell that calls `PATCH /rules/:id { enabled }` with an optimistic write across every cached rules query (rolls back on error; invalidates on settled).
+- **Move up / down** — Chevron `IconButton`s that emit a single `PUT /rules/order { ids }` per click via `useReorderRules`. Up on the top row and Down on the bottom row are `disabled`.
+- **Edit** — opens `<RuleEditorDialog>` in `edit` mode with the row's rule.
+- **Events** — opens `<EventsDialog>` in `rule` mode (`GET /rules/:id/events`, "Load more" via `useInfiniteQuery`).
+- **Delete** — opens a confirmation `AlertDialog`; on confirm fires `DELETE /rules/:id` with the same snapshot-rollback pattern (`useDeleteRule`).
+
+`<RuleEditorDialog>` is the shared editor for both `create` (used from the chart's Rules dialog) and `edit` (used here): a Radix `Dialog` with a `react-hook-form` / Yup-validated form covering name, description, scope (symbol picker scoped to the current profile or all-symbols), enabled, the recursive condition tree (AND/OR groups + leaves with operand + operator pickers wired to core's `validateOperatorOperands`), trigger (`Once` / `OncePerBar` / `OncePerBarClose` / `OncePerMinute` with per-variant inputs), expiration (`Never` or `On date` — future-dated only), and the actions list (`SetSymbolState` / `RemoveSymbolState` / `SetGlobalState` / `RemoveGlobalState` / `NotifyTelegram` with a destination dropdown sourced from `/notification/telegram/destinations`).
+Cancel closes without persisting; Save calls `useCreateRule` / `useReplaceRule`; a server-rejected save (400, including `TemplateError` on NotifyTelegram) surfaces inline as a red `Callout`.
+
 ### `/settings` — Settings (this README's focus)
 
 Read/write the platform configuration (`GET` / `PUT /api/config`).
@@ -66,6 +89,15 @@ A thrown `ConfigError` becomes a form-level error rendered inline as a Radix The
 - Initial-load failure → an inline `Callout` with the server message; the form is not rendered.
 - Initial-load pending → a Radix Themes `Skeleton` placeholder.
 
+**Telegram destinations**
+
+A second Card on the same page manages the API's named Telegram destinations (`GET / POST / DELETE /api/notification/telegram/destinations` — see the API README's `/notification` section).
+The table shows `Name` and `Chat id` only — bot tokens stay server-side; the API never reads them back.
+**Add destination** opens a Radix `Dialog` with a Yup-validated form (every field required, non-blank; bot token rendered as `type="password"`).
+A per-row Delete affordance opens a Radix `AlertDialog` confirm before firing `DELETE /api/notification/telegram/destinations/:name`.
+
+The same `/settings` page is the home for every future notification adapter — add a sibling component alongside `TelegramDestinationsSection` when one lands.
+
 ## Hooks
 
 `src/lib/hooks/use-config.ts` exposes:
@@ -83,6 +115,13 @@ The chart page sets `from` / `to` from the loaded candle feed's earliest and lat
 The mutations invalidate `['profiles']` so the profile's embedded `indicators[]` array refetches.
 
 `src/lib/hooks/candles.ts` exposes `usePagedCandles` — the chart's historical candle feed, which loads a symbol/period's bars a time window at a time and walks the window backward through history as you scroll.
+
+`src/lib/hooks/rules.ts` exposes the rules data layer — `useRules({ profileId?, symbolId? })` (`GET /rules`), `useRule(id)` (`GET /rules/:id`), `useCreateRule` (`POST /rules`), `useReplaceRule` (`PUT /rules/:id`), `usePatchRule` (`PATCH /rules/:id` — currently just `enabled`; performs an optimistic write across every cached rules query, rolls back on error), `useDeleteRule` (`DELETE /rules/:id`; same snapshot rollback pattern), `useReorderRules` (`PUT /rules/order`), `useRuleEvents(id, { limit?, before? })` (`GET /rules/:id/events`), and `useSymbolRuleEvents(symbolId, { limit?, before? })` (`GET /symbols/:id/rule-events`).
+The chart's Events panel and the per-rule / per-symbol `EventsDialog` build on top of these via `useInfiniteQuery` for "Load more" pagination keyed by the oldest event's `ts`.
+
+`src/lib/hooks/telegram.ts` exposes the notification-destinations data layer behind the rule editor's destination dropdown and the settings page's destinations CRUD — `useTelegramDestinations` (`GET /notification/telegram/destinations` → `{ name, chatId }[]`), `useUpsertTelegramDestination` (`POST` upsert; tokens are write-only), and `useDeleteTelegramDestination` (`DELETE /notification/telegram/destinations/:name`).
+Token reads aren't possible: the API never returns `botToken` on a list, so there's no client-side bot-token handling beyond the Add form.
+The matching CRUD CLI surface lives under `lametrader telegram` (see the CLI README's Telegram section).
 
 Both modules go through the package's `apiFetch` wrapper, so logging + `ApiError` mapping happen at the boundary, not at each call site.
 
