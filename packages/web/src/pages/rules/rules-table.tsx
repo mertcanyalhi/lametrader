@@ -14,6 +14,7 @@ import { type ReactNode, useState } from 'react';
 import { toast } from 'sonner';
 import { ApiError } from '../../lib/api-fetch.js';
 import { useDeleteRule, usePatchRule, useReorderRules } from '../../lib/hooks/rules.js';
+import { EventsDialog } from './events-dialog.js';
 
 /**
  * The dense rules table — one row per rule, ordered by the server-supplied
@@ -104,6 +105,7 @@ function RuleRow({
   const patch = usePatchRule();
   const remove = useDeleteRule();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [viewingEvents, setViewingEvents] = useState(false);
   function toggleEnabled(next: boolean): void {
     patch.mutate(
       { id: rule.id, patch: { enabled: next } },
@@ -204,7 +206,7 @@ function RuleRow({
               variant="ghost"
               color="gray"
               aria-label={`Events for ${rule.name}`}
-              disabled
+              onClick={() => setViewingEvents(true)}
             >
               <ListChecks size={14} aria-hidden="true" />
             </IconButton>
@@ -222,6 +224,13 @@ function RuleRow({
           </Tooltip>
         </Flex>
       </Table.Cell>
+      {viewingEvents ? (
+        <EventsDialog
+          open={true}
+          onOpenChange={setViewingEvents}
+          mode={{ kind: 'rule', ruleId: rule.id, ruleName: rule.name }}
+        />
+      ) : null}
       {confirmingDelete ? (
         <AlertDialog.Root open={true} onOpenChange={setConfirmingDelete}>
           <AlertDialog.Content maxWidth="420px">
