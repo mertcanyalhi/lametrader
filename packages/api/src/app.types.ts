@@ -66,6 +66,12 @@ export interface AppDependencies {
    */
   state?: StateRepository;
   /**
+   * The configured Telegram destination names (no bot tokens / chat ids —
+   * those are sensitive). When present, `GET /telegram/destinations` is
+   * registered so the web rule editor can populate its destination dropdown.
+   */
+  telegramDestinationNames?: string[];
+  /**
    * The backfill use-case (historical candles).
    */
   backfill?: BackfillService;

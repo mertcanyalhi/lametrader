@@ -9,12 +9,13 @@ import {
   Select,
   Switch,
   Text,
+  TextArea,
   TextField,
   Tooltip,
 } from '@radix-ui/themes';
 import { Plus, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { isStateAction } from '../../lib/rule-form-schema.js';
+import { useTelegramDestinations } from '../../lib/hooks/telegram.js';
 
 /**
  * The actions list editor — renders one card per state-write action and
@@ -53,38 +54,97 @@ export function ActionsEditor({
         </Text>
       ) : null}
       {value.map((action, index) =>
-        isStateAction(action) ? (
+        action.kind === ActionKind.NotifyTelegram ? (
           // biome-ignore lint/suspicious/noArrayIndexKey: actions are positional; no stable id.
-          <ActionCard key={index} index={index} action={action} update={update} remove={remove} />
+          <TelegramCard key={index} index={index} action={action} update={update} remove={remove} />
         ) : (
           // biome-ignore lint/suspicious/noArrayIndexKey: actions are positional; no stable id.
-          <Card key={index} variant="surface">
-            <Flex align="center" justify="between" gap="2">
-              <Text size="2" color="gray">
-                Telegram notification — editor lands in #175.
-              </Text>
-              <Tooltip content="Remove">
-                <IconButton
-                  type="button"
-                  variant="ghost"
-                  color="gray"
-                  aria-label={`Remove action ${index + 1}`}
-                  onClick={() => remove(index)}
-                >
-                  <Trash2 size={14} aria-hidden="true" />
-                </IconButton>
-              </Tooltip>
-            </Flex>
-          </Card>
+          <ActionCard key={index} index={index} action={action} update={update} remove={remove} />
         ),
       )}
-      <Box>
+      <Flex gap="2">
         <Button type="button" size="1" variant="soft" onClick={append}>
           <Plus size={12} aria-hidden="true" />
           Add state action
         </Button>
-      </Box>
+        <Button
+          type="button"
+          size="1"
+          variant="soft"
+          onClick={() =>
+            onChange([
+              ...value,
+              { kind: ActionKind.NotifyTelegram, destinationName: '', template: '' },
+            ])
+          }
+        >
+          <Plus size={12} aria-hidden="true" />
+          Add telegram notification
+        </Button>
+      </Flex>
     </Flex>
+  );
+}
+
+function TelegramCard({
+  index,
+  action,
+  update,
+  remove,
+}: {
+  index: number;
+  action: Action & { kind: ActionKind.NotifyTelegram };
+  update: (index: number, next: Action) => void;
+  remove: (index: number) => void;
+}): ReactNode {
+  const destinations = useTelegramDestinations();
+  const names = destinations.data ?? [];
+  return (
+    <Card variant="surface">
+      <Flex direction="column" gap="2">
+        <Flex align="center" justify="between" gap="2">
+          <Text size="2" weight="medium">
+            Telegram notification
+          </Text>
+          <Tooltip content="Remove">
+            <IconButton
+              type="button"
+              variant="ghost"
+              color="gray"
+              aria-label={`Remove action ${index + 1}`}
+              onClick={() => remove(index)}
+            >
+              <Trash2 size={14} aria-hidden="true" />
+            </IconButton>
+          </Tooltip>
+        </Flex>
+        <Select.Root
+          value={action.destinationName === '' ? undefined : action.destinationName}
+          onValueChange={(next) => update(index, { ...action, destinationName: next })}
+        >
+          <Select.Trigger
+            placeholder="Pick a destination"
+            aria-label={`Action ${index + 1} destination`}
+          />
+          <Select.Content>
+            {names.map((destination) => (
+              <Select.Item key={destination.name} value={destination.name}>
+                {destination.name}
+              </Select.Item>
+            ))}
+          </Select.Content>
+        </Select.Root>
+        <TextArea
+          aria-label={`Action ${index + 1} template`}
+          placeholder="Message template (multi-line)"
+          value={action.template}
+          onChange={(event) => update(index, { ...action, template: event.target.value })}
+        />
+        <Text size="1" color="gray">
+          Available variables: {'{symbol}'}, {'{left}'}, {'{right}'}, {'{operator}'}, {'{ts}'}.
+        </Text>
+      </Flex>
+    </Card>
   );
 }
 
