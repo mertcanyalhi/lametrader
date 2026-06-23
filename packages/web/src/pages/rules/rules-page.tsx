@@ -24,7 +24,7 @@ export function RulesPage(): ReactNode {
   const [, setEditing] = useState<Rule | null>(null);
 
   return (
-    <div className="grid h-full grid-rows-[minmax(0,1fr)_auto] gap-3">
+    <div className="flex h-full flex-col gap-3">
       <Card>
         <div className="flex flex-col gap-3 p-2">
           <Heading size="5">Rules</Heading>
@@ -37,6 +37,7 @@ export function RulesPage(): ReactNode {
           )}
         </div>
       </Card>
+      <div className="flex-1" aria-hidden="true" />
       <Flex
         gap="2"
         align="center"
