@@ -318,6 +318,57 @@ describe('rules hooks', () => {
     );
   });
 
+  it('useDeleteRule removes the cached list entry optimistically before the request resolves', async () => {
+    let resolveFetch: (response: Response) => void = () => {};
+    fetchSpy.mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      }),
+    );
+    const { wrapper, client } = makeWrapper();
+    client.setQueryData(rulesListKey({ profileId: 'p1' }), [
+      ruleResponse({ id: 'r1' }),
+      ruleResponse({ id: 'r2' }),
+    ]);
+    const { result } = renderHook(() => useDeleteRule(), { wrapper });
+
+    act(() => {
+      result.current.mutate('r1');
+    });
+
+    await waitFor(() => {
+      const list = client.getQueryData<Rule[]>(rulesListKey({ profileId: 'p1' }));
+      expect(list?.map((r) => r.id)).toEqual(['r2']);
+    });
+
+    resolveFetch(new Response(null, { status: 204 }));
+  });
+
+  it('useDeleteRule rolls the cached list back to the pre-mutation snapshot when the request fails', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'boom' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const { wrapper, client } = makeWrapper();
+    const before = [ruleResponse({ id: 'r1' }), ruleResponse({ id: 'r2' })];
+    client.setQueryData(rulesListKey({ profileId: 'p1' }), before);
+    const { result } = renderHook(() => useDeleteRule(), { wrapper });
+
+    await act(async () => {
+      try {
+        await result.current.mutateAsync('r1');
+      } catch {
+        // expected
+      }
+    });
+
+    expect(
+      client.getQueryData<Rule[]>(rulesListKey({ profileId: 'p1' }))?.map((r) => r.id),
+    ).toEqual(['r1', 'r2']);
+  });
+
   it('usePatchRule rolls the cached list back to the pre-mutation snapshot when the request fails', async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response(JSON.stringify({ error: 'boom' }), {
