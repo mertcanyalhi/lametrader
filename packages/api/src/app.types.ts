@@ -10,6 +10,7 @@ import type {
   QuoteStreamService,
   RuleService,
   SymbolService,
+  TelegramDestinationsService,
 } from '@lametrader/engine';
 import type { StreamHub } from './stream-hub.js';
 
@@ -66,11 +67,11 @@ export interface AppDependencies {
    */
   state?: StateRepository;
   /**
-   * The configured Telegram destination names (no bot tokens / chat ids —
-   * those are sensitive). When present, `GET /telegram/destinations` is
-   * registered so the web rule editor can populate its destination dropdown.
+   * The Telegram destinations CRUD use-case. When present, the
+   * `/notification/telegram/destinations` routes are registered (list,
+   * upsert, remove). Bot tokens stay server-side — never read back.
    */
-  telegramDestinationNames?: string[];
+  telegramDestinations?: TelegramDestinationsService;
   /**
    * The backfill use-case (historical candles).
    */

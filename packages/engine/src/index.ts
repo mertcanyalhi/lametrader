@@ -39,6 +39,9 @@ export {
 } from './indicators/indicator-stream-service.js';
 export { movingAverage } from './indicators/sma.js';
 export { volumeWeightedMovingAverage } from './indicators/vwma.js';
+export { InMemoryTelegramDestinationsRepository } from './notification/in-memory-telegram-destinations-repository.js';
+export { MongoTelegramDestinationsRepository } from './notification/mongo-telegram-destinations-repository.js';
+export { TelegramDestinationsService } from './notification/telegram-destinations-service.js';
 export { InMemoryProfileRepository } from './profiles/in-memory-profile-repository.js';
 export { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 export { type IndicatorInstanceInput, ProfileService } from './profiles/profile-service.js';

@@ -167,6 +167,13 @@ export {
   type WatchedSymbol,
   type WatchlistRepository,
 } from './symbol.types.js';
+export {
+  type TelegramDestination,
+  TelegramDestinationError,
+  TelegramDestinationNotFoundError,
+  type TelegramDestinationSummary,
+  type TelegramDestinationsRepository,
+} from './telegram-destination.types.js';
 export { DEFAULT_TRIGGER_INTERVAL_MS, TriggerError, validateTrigger } from './trigger.js';
 export {
   type OncePerBarCloseTrigger,

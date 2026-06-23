@@ -1,22 +1,11 @@
-import type { Period } from '@lametrader/core';
+import type { Period, TelegramDestination } from '@lametrader/core';
 
 /**
- * One named Telegram destination — the bot token + chat id a rule's
- * `NotifyTelegram` action looks up by `name` from the settings layer.
- *
- * `botToken` is sensitive: never log it.
+ * Re-exported for back-compat — the canonical declaration lives in
+ * `@lametrader/core` so the destinations repository port can reference it
+ * without engine importing core's siblings.
  */
-export interface TelegramDestination {
-  /**
-   * Human-readable identifier rules pick from a dropdown (e.g. `"main"`,
-   * `"alerts"`).
-   */
-  name: string;
-  /** Bot API token (sensitive; never log). */
-  botToken: string;
-  /** Target chat id the bot sends messages to. */
-  chatId: string;
-}
+export type { TelegramDestination };
 
 /**
  * Runtime settings resolved from the environment, with sane defaults. The

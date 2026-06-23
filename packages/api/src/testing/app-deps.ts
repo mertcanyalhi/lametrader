@@ -76,8 +76,8 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
     profiles,
     rules,
     ...(overrides.state ? { state: overrides.state } : {}),
-    ...(overrides.telegramDestinationNames
-      ? { telegramDestinationNames: overrides.telegramDestinationNames }
+    ...(overrides.telegramDestinations
+      ? { telegramDestinations: overrides.telegramDestinations }
       : {}),
     backfill: overrides.backfill ?? new BackfillService(sources, candles, watchlist),
     indicators: { registry, compute },

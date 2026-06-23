@@ -3,6 +3,7 @@ import type {
   Period,
   StateRepository,
   SymbolQuoteListener,
+  TelegramDestinationsRepository,
 } from '@lametrader/core';
 import { MongoClient } from 'mongodb';
 import { BackfillService } from './candles/backfill-service.js';
@@ -15,6 +16,8 @@ import { defaultIndicators } from './indicators/default-indicators.js';
 import { IndicatorComputeService } from './indicators/indicator-compute-service.js';
 import type { IndicatorRegistry } from './indicators/indicator-registry.js';
 import { IndicatorStreamService } from './indicators/indicator-stream-service.js';
+import { MongoTelegramDestinationsRepository } from './notification/mongo-telegram-destinations-repository.js';
+import { TelegramDestinationsService } from './notification/telegram-destinations-service.js';
 import { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 import { ProfileService } from './profiles/profile-service.js';
 import { MongoRuleRepository } from './rules/mongo-rule-repository.js';
@@ -38,6 +41,13 @@ export interface ConnectOptions {
   onSymbolQuote?: SymbolQuoteListener;
   /** Per-period poll cadence in ms (required to enable a useful polling loop). */
   pollIntervals: Record<Period, number>;
+  /**
+   * Optional one-time seed for the Telegram destinations repository — at
+   * startup, every entry here is upserted into the repo before any service
+   * is returned. Used to migrate the legacy `TELEGRAM_DESTINATIONS` env
+   * path: subsequent CRUD via the API takes over from there.
+   */
+  seedTelegramDestinations?: Array<{ name: string; botToken: string; chatId: string }>;
 }
 
 /**
@@ -62,6 +72,15 @@ export interface ConnectedServices {
   quoteStream: QuoteStreamService;
   /** The rule-engine state store (read-side; the engine's writes flow through the orchestrator). */
   state: StateRepository;
+  /** The Telegram destinations CRUD use-case (drives `/notification/telegram/destinations`). */
+  telegramDestinations: TelegramDestinationsService;
+  /**
+   * The Telegram destinations repository (read source for the
+   * `TelegramNotifier`). Exposed alongside the service so the notifier can
+   * resolve `findByName` directly without going through the service's
+   * validation shell.
+   */
+  telegramDestinationsRepo: TelegramDestinationsRepository;
   /** The backfill use-case (historical candles). */
   backfill: BackfillService;
   /** The continuous polling + live-streaming loop. */
@@ -107,6 +126,12 @@ export async function connectServices(
   await ruleRepo.ensureIndexes();
   const stateRepo = new MongoStateRepository(db);
   await stateRepo.ensureIndexes();
+  const telegramDestinationsRepo = new MongoTelegramDestinationsRepository(db);
+  await telegramDestinationsRepo.ensureIndexes();
+  for (const seed of options.seedTelegramDestinations ?? []) {
+    await telegramDestinationsRepo.upsert(seed);
+  }
+  const telegramDestinations = new TelegramDestinationsService(telegramDestinationsRepo);
   const profiles = new ProfileService(new MongoProfileRepository(db), watchlist, indicators);
   const rules = new RuleService(ruleRepo);
   const symbols = new SymbolService(sources, watchlist, config, candleRepo, profiles, stateRepo);
@@ -135,6 +160,8 @@ export async function connectServices(
     indicatorStream,
     quoteStream,
     state: stateRepo,
+    telegramDestinations,
+    telegramDestinationsRepo,
     backfill,
     polling,
     close: async () => {

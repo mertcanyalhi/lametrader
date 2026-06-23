@@ -19,6 +19,8 @@ import {
   SymbolConflictError,
   SymbolError,
   SymbolNotFoundError,
+  TelegramDestinationError,
+  TelegramDestinationNotFoundError,
 } from '@lametrader/core';
 import { type BackfillJob, BackfillJobService } from '@lametrader/engine';
 import Fastify, { type FastifyError } from 'fastify';
@@ -79,7 +81,8 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
       error instanceof ProfileNotFoundError ||
       error instanceof RuleNotFoundError ||
       error instanceof IndicatorNotFoundError ||
-      error instanceof IndicatorInstanceNotFoundError
+      error instanceof IndicatorInstanceNotFoundError ||
+      error instanceof TelegramDestinationNotFoundError
     ) {
       reply.code(404).send({ error: error.message });
       return;
@@ -99,7 +102,8 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
       error instanceof CandleError ||
       error instanceof ProfileError ||
       error instanceof RuleError ||
-      error instanceof IndicatorError
+      error instanceof IndicatorError ||
+      error instanceof TelegramDestinationError
     ) {
       reply.code(400).send({ error: error.message });
       return;
@@ -132,8 +136,8 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
   if (deps.state) {
     app.register(stateController(deps.state));
   }
-  if (deps.telegramDestinationNames) {
-    app.register(telegramController(deps.telegramDestinationNames));
+  if (deps.telegramDestinations) {
+    app.register(telegramController(deps.telegramDestinations));
   }
   app.register(indicatorsController(deps.indicators.registry, deps.indicators.compute));
   if (deps.backfill) {
