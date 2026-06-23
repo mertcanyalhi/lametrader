@@ -1,5 +1,6 @@
 import { yupResolver } from '@hookform/resolvers/yup';
 import {
+  type Action,
   type ConditionNode,
   ConditionNodeKind,
   type Expiration,
@@ -36,6 +37,7 @@ import {
   type RuleFormValues,
   ruleFormSchema,
 } from '../../lib/rule-form-schema.js';
+import { ActionsEditor } from './actions-editor.js';
 import { ConditionTreeEditor } from './condition-tree-editor.js';
 import { ExpirationPicker } from './expiration-picker.js';
 import { TriggerPicker } from './trigger-picker.js';
@@ -87,10 +89,12 @@ export function RuleEditorDialog({
   const triggerIntervalMs = watch('triggerIntervalMs');
   const expirationKind = watch('expirationKind');
   const expirationAt = watch('expirationAt');
+  const actions = watch('actions');
   const nameError = formState.errors.name?.message;
   const symbolError = formState.errors.symbolId?.message;
   const triggerPeriodError = formState.errors.triggerPeriod?.message;
   const expirationError = formState.errors.expirationAt?.message;
+  const actionsError = formState.errors.actions?.message;
 
   const onSubmit: SubmitHandler<RuleFormValues> = async (values) => {
     setInlineError(null);
@@ -246,6 +250,22 @@ export function RuleEditorDialog({
                 error={expirationError}
               />
             </Box>
+            <Box>
+              <Text as="div" size="2" weight="medium" mb="1">
+                {FIELD_LABELS.actions}
+              </Text>
+              <ActionsEditor
+                value={actions}
+                onChange={(next) =>
+                  setValue('actions', next, { shouldDirty: true, shouldValidate: false })
+                }
+              />
+              {actionsError ? (
+                <Text role="alert" color="red" size="1">
+                  {actionsError}
+                </Text>
+              ) : null}
+            </Box>
             <Flex align="center" gap="2">
               <Switch
                 id="rule-enabled"
@@ -345,6 +365,7 @@ function defaultValuesFor(initial: Rule | undefined): RuleFormValues {
       triggerIntervalMs: DEFAULT_TRIGGER_INTERVAL_MS,
       expirationKind: ExpirationKind.Never,
       expirationAt: '',
+      actions: [],
     };
   }
   return {
@@ -359,6 +380,7 @@ function defaultValuesFor(initial: Rule | undefined): RuleFormValues {
     triggerIntervalMs: triggerIntervalOf(initial.trigger),
     expirationKind: initial.expiration === null ? ExpirationKind.Never : ExpirationKind.OnDate,
     expirationAt: initial.expiration === null ? '' : epochMsToDateTimeLocal(initial.expiration.at),
+    actions: initial.actions as Action[],
   };
 }
 
@@ -407,6 +429,7 @@ function mergeInput(initial: Rule, values: RuleFormValues): RuleInput {
     condition: values.condition,
     trigger: triggerFrom(values),
     expiration: expirationFrom(values),
+    actions: values.actions,
   };
 }
 
