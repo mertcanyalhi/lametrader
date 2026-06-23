@@ -21,6 +21,7 @@ import { useTheme } from '../../lib/theme-context.js';
 import { CandleChart, type IndicatorOverlay } from './candle-chart.js';
 import { ChartLoading } from './chart-loading.js';
 import { CHART_RANGE_ORDER, type ChartRange } from './chart-range.js';
+import { ChartRulesButton } from './chart-rules-button.js';
 import { ChartEmptyState } from './empty-state.js';
 import type { LegendOverlay } from './indicators/indicator-legend.js';
 import { IndicatorPanelDialog } from './indicators/indicator-panel-dialog.js';
@@ -170,6 +171,7 @@ function ChartLayout({
           hidden={hidden}
           onToggleVisible={toggleVisible}
         />
+        <ChartRulesButton symbolId={id} />
       </Flex>
     </div>
   );
