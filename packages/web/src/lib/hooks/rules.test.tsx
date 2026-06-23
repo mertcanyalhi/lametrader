@@ -16,6 +16,7 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type RuleInput,
+  rulesListKey,
   useCreateRule,
   useDeleteRule,
   usePatchRule,
@@ -287,5 +288,56 @@ describe('rules hooks', () => {
     await waitFor(() => {
       expect(result.current.data).toEqual([]);
     });
+  });
+
+  it('usePatchRule flips the cached list entry optimistically before the request resolves', async () => {
+    let resolveFetch: (response: Response) => void = () => {};
+    fetchSpy.mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      }),
+    );
+    const { wrapper, client } = makeWrapper();
+    client.setQueryData(rulesListKey({ profileId: 'p1' }), [ruleResponse({ id: 'r1' })]);
+    const { result } = renderHook(() => usePatchRule(), { wrapper });
+
+    act(() => {
+      result.current.mutate({ id: 'r1', patch: { enabled: false } });
+    });
+
+    await waitFor(() => {
+      const list = client.getQueryData<Rule[]>(rulesListKey({ profileId: 'p1' }));
+      expect(list?.[0]?.enabled).toBe(false);
+    });
+
+    resolveFetch(
+      new Response(JSON.stringify(ruleResponse({ id: 'r1', enabled: false })), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+  });
+
+  it('usePatchRule rolls the cached list back to the pre-mutation snapshot when the request fails', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'boom' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const { wrapper, client } = makeWrapper();
+    const before = [ruleResponse({ id: 'r1' })];
+    client.setQueryData(rulesListKey({ profileId: 'p1' }), before);
+    const { result } = renderHook(() => usePatchRule(), { wrapper });
+
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ id: 'r1', patch: { enabled: false } });
+      } catch {
+        // expected
+      }
+    });
+
+    expect(client.getQueryData<Rule[]>(rulesListKey({ profileId: 'p1' }))?.[0]?.enabled).toBe(true);
   });
 });

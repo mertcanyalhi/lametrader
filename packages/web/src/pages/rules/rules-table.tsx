@@ -1,7 +1,10 @@
 import { type Rule, RuleEventType, RuleScopeKind, TriggerKind } from '@lametrader/core';
-import { Flex, IconButton, Table, Text, Tooltip } from '@radix-ui/themes';
+import { Flex, IconButton, Switch, Table, Text, Tooltip } from '@radix-ui/themes';
 import { ListChecks, MoreHorizontal, Pencil } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { toast } from 'sonner';
+import { ApiError } from '../../lib/api-fetch.js';
+import { usePatchRule } from '../../lib/hooks/rules.js';
 
 /**
  * The dense rules table — one row per rule, ordered by the server-supplied
@@ -52,18 +55,38 @@ export function RulesTable({
 
 function RuleRow({ rule, onEdit }: { rule: Rule; onEdit: (rule: Rule) => void }): ReactNode {
   const rowName = `Open ${rule.name}`;
+  const patch = usePatchRule();
+  function toggleEnabled(next: boolean): void {
+    patch.mutate(
+      { id: rule.id, patch: { enabled: next } },
+      {
+        onError: (cause) => {
+          const message =
+            cause instanceof ApiError ? cause.message : `Failed to update ${rule.name}`;
+          toast.error(message);
+        },
+      },
+    );
+  }
   return (
     <Table.Row className="align-middle">
       <Table.Cell>{rule.order}</Table.Cell>
       <Table.Cell>
-        <button
-          type="button"
-          onClick={() => onEdit(rule)}
-          aria-label={rowName}
-          className="text-left font-medium text-[var(--gray-12)] hover:underline"
-        >
-          {rule.name}
-        </button>
+        <Flex align="center" gap="2">
+          <Switch
+            checked={rule.enabled}
+            onCheckedChange={(checked) => toggleEnabled(checked === true)}
+            aria-label={`Enable ${rule.name}`}
+          />
+          <button
+            type="button"
+            onClick={() => onEdit(rule)}
+            aria-label={rowName}
+            className="text-left font-medium text-[var(--gray-12)] hover:underline"
+          >
+            {rule.name}
+          </button>
+        </Flex>
       </Table.Cell>
       <Table.Cell>
         <Text size="2" color="gray">
