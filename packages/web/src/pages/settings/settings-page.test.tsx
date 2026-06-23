@@ -25,9 +25,28 @@ import { toast } from 'sonner';
 describe('SettingsPage', () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
   let queryClient: QueryClient;
+  /**
+   * Queue of `/api/config` responses (FIFO). `mockJsonResponse` pushes here;
+   * `/api/notification/telegram/destinations` always returns `[]` so the
+   * Telegram destinations section's query never consumes a queued config
+   * response.
+   */
+  let configResponses: Response[];
 
   beforeEach(() => {
-    fetchSpy = vi.fn();
+    configResponses = [];
+    fetchSpy = vi.fn(async (url: string) => {
+      const path = String(url);
+      if (path.endsWith('/notification/telegram/destinations')) {
+        return new Response('[]', {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      const next = configResponses.shift();
+      if (!next) throw new Error(`unexpected fetch: ${url}`);
+      return next;
+    });
     globalThis.fetch = fetchSpy as unknown as typeof fetch;
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   });
@@ -48,10 +67,12 @@ describe('SettingsPage', () => {
   }
 
   /**
-   * Resolve the next `fetch` call with the given JSON body and status.
+   * Queue the next `/api/config` response (GET or PUT consumed in order).
+   * Calls to `/notification/telegram/destinations` are not gated by this
+   * queue — they always return `[]`.
    */
   function mockJsonResponse(body: unknown, status = 200): void {
-    fetchSpy.mockResolvedValueOnce(
+    configResponses.push(
       new Response(JSON.stringify(body), {
         status,
         headers: { 'Content-Type': 'application/json' },
@@ -292,12 +313,15 @@ describe('SettingsPage', () => {
       periods: [Period.OneHour, Period.OneDay],
       defaultPeriod: Period.OneDay,
     });
-    // Hold the PUT pending so the in-flight state is observable.
+    // Hold the PUT pending so the in-flight state is observable. Queue the
+    // pending promise as the next `/api/config` response — the destinations
+    // GET takes a separate code path (always returns `[]`) so it can't
+    // accidentally consume this slot.
     let resolvePut!: (response: Response) => void;
-    fetchSpy.mockReturnValueOnce(
+    configResponses.push(
       new Promise<Response>((resolve) => {
         resolvePut = resolve;
-      }),
+      }) as unknown as Response,
     );
 
     renderPage();

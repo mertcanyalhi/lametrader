@@ -11,6 +11,7 @@ import { configSchema, FIELD_LABELS } from '../../lib/config-schema.js';
 import { useConfig, useUpdateConfig } from '../../lib/hooks/use-config.js';
 import { getLogger } from '../../lib/log.js';
 import { PERIOD_ORDER } from '../../lib/periods.js';
+import { TelegramDestinationsSection } from './telegram-destinations-section.js';
 
 /**
  * Scoped logger for the settings page — form/save lifecycle events.
@@ -40,7 +41,12 @@ export function SettingsPage(): ReactNode {
       </Callout.Root>
     );
   }
-  return <SettingsForm initial={query.data} />;
+  return (
+    <div className="flex flex-col gap-4">
+      <SettingsForm initial={query.data} />
+      <TelegramDestinationsSection />
+    </div>
+  );
 }
 
 /**
