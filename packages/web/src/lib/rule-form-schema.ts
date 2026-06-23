@@ -1,5 +1,17 @@
-import { RuleScopeKind } from '@lametrader/core';
+import { type ConditionNode, ConditionNodeKind, RuleScopeKind } from '@lametrader/core';
 import * as yup from 'yup';
+
+/**
+ * Walk a condition tree and return `true` when every `And` / `Or` group has
+ * at least one child (the editor lets users build an empty group, which the
+ * domain rejects). Leaves are always valid here — their per-field validation
+ * lands with the operand / operator pickers in #170–#171.
+ */
+export function isConditionTreeNonEmpty(node: ConditionNode): boolean {
+  if (node.kind === ConditionNodeKind.Leaf) return true;
+  if (node.children.length === 0) return false;
+  return node.children.every(isConditionTreeNonEmpty);
+}
 
 /**
  * Human labels for the rule editor's basic fields — used as the form control
@@ -12,6 +24,7 @@ export const FIELD_LABELS = {
   scope: 'Scope',
   symbolId: 'Symbol',
   enabled: 'Enabled',
+  condition: 'Condition',
 } as const;
 
 /**
@@ -33,6 +46,11 @@ export interface RuleFormValues {
   symbolId: string;
   /** Whether the rule is currently active. */
   enabled: boolean;
+  /**
+   * The rule's condition tree. Validated by {@link isConditionTreeNonEmpty}
+   * to reject empty `And` / `Or` groups before the server round-trip.
+   */
+  condition: ConditionNode;
 }
 
 /**
@@ -63,4 +81,8 @@ export const ruleFormSchema: yup.ObjectSchema<RuleFormValues> = yup.object({
     })
     .label(FIELD_LABELS.symbolId),
   enabled: yup.boolean().required(),
+  // The condition tree's shape is recursive and the leaf-level inputs land in
+  // #170–#171; we accept any persisted node and check non-empty groups in the
+  // submit handler via `isConditionTreeNonEmpty`.
+  condition: yup.mixed<ConditionNode>().required().label(FIELD_LABELS.condition),
 });
