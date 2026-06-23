@@ -9,11 +9,11 @@ import {
   Text,
   Tooltip,
 } from '@radix-ui/themes';
-import { ListChecks, Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, ListChecks, Pencil, Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { toast } from 'sonner';
 import { ApiError } from '../../lib/api-fetch.js';
-import { useDeleteRule, usePatchRule } from '../../lib/hooks/rules.js';
+import { useDeleteRule, usePatchRule, useReorderRules } from '../../lib/hooks/rules.js';
 
 /**
  * The dense rules table — one row per rule, ordered by the server-supplied
@@ -34,6 +34,21 @@ export function RulesTable({
   rules: Rule[];
   onEdit: (rule: Rule) => void;
 }): ReactNode {
+  const reorder = useReorderRules();
+  function move(index: number, direction: -1 | 1): void {
+    const target = index + direction;
+    if (target < 0 || target >= rules.length) return;
+    const ids = rules.map((rule) => rule.id);
+    const [moved] = ids.splice(index, 1);
+    if (moved === undefined) return;
+    ids.splice(target, 0, moved);
+    reorder.mutate(ids, {
+      onError: (cause) => {
+        const message = cause instanceof ApiError ? cause.message : 'Failed to reorder rules';
+        toast.error(message);
+      },
+    });
+  }
   if (rules.length === 0) {
     return (
       <Text size="2" color="gray" role="status">
@@ -54,15 +69,37 @@ export function RulesTable({
         </Table.Row>
       </Table.Header>
       <Table.Body>
-        {rules.map((rule) => (
-          <RuleRow key={rule.id} rule={rule} onEdit={onEdit} />
+        {rules.map((rule, index) => (
+          <RuleRow
+            key={rule.id}
+            rule={rule}
+            onEdit={onEdit}
+            canMoveUp={index > 0}
+            canMoveDown={index < rules.length - 1}
+            onMoveUp={() => move(index, -1)}
+            onMoveDown={() => move(index, 1)}
+          />
         ))}
       </Table.Body>
     </Table.Root>
   );
 }
 
-function RuleRow({ rule, onEdit }: { rule: Rule; onEdit: (rule: Rule) => void }): ReactNode {
+function RuleRow({
+  rule,
+  onEdit,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
+}: {
+  rule: Rule;
+  onEdit: (rule: Rule) => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+}): ReactNode {
   const rowName = `Open ${rule.name}`;
   const patch = usePatchRule();
   const remove = useDeleteRule();
@@ -126,6 +163,30 @@ function RuleRow({ rule, onEdit }: { rule: Rule; onEdit: (rule: Rule) => void })
       </Table.Cell>
       <Table.Cell>
         <Flex gap="2" justify="end">
+          <Tooltip content="Move up">
+            <IconButton
+              type="button"
+              variant="ghost"
+              color="gray"
+              aria-label={`Move ${rule.name} up`}
+              onClick={onMoveUp}
+              disabled={!canMoveUp}
+            >
+              <ChevronUp size={14} aria-hidden="true" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip content="Move down">
+            <IconButton
+              type="button"
+              variant="ghost"
+              color="gray"
+              aria-label={`Move ${rule.name} down`}
+              onClick={onMoveDown}
+              disabled={!canMoveDown}
+            >
+              <ChevronDown size={14} aria-hidden="true" />
+            </IconButton>
+          </Tooltip>
           <Tooltip content="Edit">
             <IconButton
               type="button"
