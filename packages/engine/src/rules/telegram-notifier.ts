@@ -1,5 +1,8 @@
-import { type Notifier, UnknownDestinationError } from '@lametrader/core';
-import type { TelegramDestination } from '../settings.types.js';
+import {
+  type Notifier,
+  type TelegramDestinationsRepository,
+  UnknownDestinationError,
+} from '@lametrader/core';
 
 /**
  * Thrown when the Telegram Bot API rejects a send or the transport itself
@@ -37,28 +40,32 @@ export interface TelegramNotifierOptions {
 
 /**
  * {@link Notifier} adapter that resolves a destination by `name` against the
- * settings-provided list and POSTs to the Telegram Bot API's `sendMessage`
+ * destinations repository and POSTs to the Telegram Bot API's `sendMessage`
  * endpoint.
+ *
+ * Reads the destination on every send so an upsert / remove via the
+ * `/notification/telegram/destinations` API takes effect immediately —
+ * no notifier restart required.
  */
 export class TelegramNotifier implements Notifier {
-  /** name → destination. */
-  private readonly byName: Map<string, TelegramDestination>;
   /** Injected fetch (defaults to global). */
   private readonly fetch: FetchLike;
 
   /**
-   * @param destinations - the registered destinations (usually from
-   *   `Settings.telegramDestinations`).
+   * @param destinations - the destinations repository the notifier resolves
+   *   names against.
    * @param options - injectable transport.
    */
-  constructor(destinations: TelegramDestination[], options: TelegramNotifierOptions = {}) {
-    this.byName = new Map(destinations.map((d) => [d.name, d]));
+  constructor(
+    private readonly destinations: TelegramDestinationsRepository,
+    options: TelegramNotifierOptions = {},
+  ) {
     this.fetch = options.fetch ?? (globalThis.fetch as unknown as FetchLike);
   }
 
   async send(destinationName: string, body: string): Promise<void> {
-    const destination = this.byName.get(destinationName);
-    if (destination === undefined) {
+    const destination = await this.destinations.findByName(destinationName);
+    if (destination === null) {
       throw new UnknownDestinationError(destinationName);
     }
     const url = `https://api.telegram.org/bot${destination.botToken}/sendMessage`;

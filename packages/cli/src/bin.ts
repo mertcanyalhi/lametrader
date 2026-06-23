@@ -15,7 +15,7 @@ import { runSymbols } from './symbols.js';
 import { runTelegram } from './telegram.js';
 
 const [, , command, ...args] = process.argv;
-const { mongoUri, pollIntervals, telegramDestinations } = loadSettings();
+const { mongoUri, pollIntervals, telegramDestinations: telegramDestinationsSeed } = loadSettings();
 
 if (
   command !== 'config' &&
@@ -45,8 +45,13 @@ if (
       backfill,
       indicators,
       indicatorCompute,
+      telegramDestinations,
+      telegramDestinationsRepo,
       close: disconnect,
-    } = await connectServices(mongoUri, { pollIntervals });
+    } = await connectServices(mongoUri, {
+      pollIntervals,
+      seedTelegramDestinations: telegramDestinationsSeed,
+    });
     close = disconnect;
     switch (command) {
       case 'config':
@@ -72,7 +77,11 @@ if (
         break;
       case 'telegram':
         console.log(
-          await runTelegram(args, telegramDestinations, new TelegramNotifier(telegramDestinations)),
+          await runTelegram(
+            args,
+            telegramDestinations,
+            new TelegramNotifier(telegramDestinationsRepo),
+          ),
         );
         break;
     }
