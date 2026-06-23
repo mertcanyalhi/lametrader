@@ -217,6 +217,57 @@ describe('RulesTable', () => {
     });
   });
 
+  it('disables Move up on the top row and Move down on the bottom row', () => {
+    renderTable([
+      makeRule({ id: 'r-1', name: 'Top' }),
+      makeRule({ id: 'r-2', name: 'Middle' }),
+      makeRule({ id: 'r-3', name: 'Bottom' }),
+    ]);
+    expect({
+      topUp: (screen.getByRole('button', { name: 'Move Top up' }) as HTMLButtonElement).disabled,
+      topDown: (screen.getByRole('button', { name: 'Move Top down' }) as HTMLButtonElement)
+        .disabled,
+      middleUp: (screen.getByRole('button', { name: 'Move Middle up' }) as HTMLButtonElement)
+        .disabled,
+      middleDown: (screen.getByRole('button', { name: 'Move Middle down' }) as HTMLButtonElement)
+        .disabled,
+      bottomUp: (screen.getByRole('button', { name: 'Move Bottom up' }) as HTMLButtonElement)
+        .disabled,
+      bottomDown: (screen.getByRole('button', { name: 'Move Bottom down' }) as HTMLButtonElement)
+        .disabled,
+    }).toEqual({
+      topUp: true,
+      topDown: false,
+      middleUp: false,
+      middleDown: false,
+      bottomUp: false,
+      bottomDown: true,
+    });
+  });
+
+  it('sends PUT /rules/order with the swapped ids when Move down is clicked', async () => {
+    const rules = [makeRule({ id: 'r-1', name: 'First' }), makeRule({ id: 'r-2', name: 'Second' })];
+    const fetchSpy = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify(rules), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    renderTable(rules);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Move First down' }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const init = (fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined) ?? {};
+    expect({ url: fetchSpy.mock.calls[0]?.[0], method: init.method, body: init.body }).toEqual({
+      url: '/api/rules/order',
+      method: 'PUT',
+      body: JSON.stringify({ ids: ['r-2', 'r-1'] }),
+    });
+  });
+
   it('does not call DELETE when the user cancels the confirmation dialog', async () => {
     const rule = makeRule({ id: 'r-1', name: 'Safe' });
     const fetchSpy = vi.fn();
