@@ -66,6 +66,7 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
         { name: 'rules', description: 'Rule definitions, events and state' },
         { name: 'candles', description: 'Historical candle backfill and reads' },
         { name: 'indicators', description: 'Indicator catalog (descriptors only)' },
+        { name: 'notification', description: 'Notification adapters (Telegram, …)' },
       ],
     },
   });

@@ -2,13 +2,17 @@ import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
 
 /**
- * Register the read endpoints of the `/telegram` resource.
+ * Register the read endpoints for the Telegram notification adapter under
+ * the shared `/notification` prefix.
  *
- * Currently exposes only `GET /telegram/destinations` returning the list of
- * configured destination names (no bot tokens / chat ids — those are
- * sensitive and never leave the server). The rule editor's
- * `NotifyTelegram` action picker reads this to populate its destination
- * dropdown.
+ * Currently exposes only `GET /notification/telegram/destinations` returning
+ * the configured destination names (no bot tokens / chat ids — those are
+ * sensitive and never leave the server). The rule editor's `NotifyTelegram`
+ * action picker reads this to populate its destination dropdown.
+ *
+ * The `/notification` prefix is shared by every notifier adapter — a future
+ * Discord adapter would expose its own routes under
+ * `/notification/discord/...` etc.
  *
  * Lazy: read-only; the CRUD surface lands with #179 / #257.
  *
@@ -19,10 +23,10 @@ export function telegramController(destinationNames: string[]) {
     const app = instance.withTypeProvider<TypeBoxTypeProvider>();
 
     app.get(
-      '/telegram/destinations',
+      '/notification/telegram/destinations',
       {
         schema: {
-          tags: ['rules'],
+          tags: ['notification'],
           summary: 'List configured Telegram destination names',
           response: {
             200: Type.Array(Type.Object({ name: Type.String() }, { additionalProperties: false })),

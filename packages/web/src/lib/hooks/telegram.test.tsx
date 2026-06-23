@@ -30,7 +30,7 @@ describe('useTelegramDestinations', () => {
     return { wrapper, client };
   }
 
-  it('GETs /api/telegram/destinations and returns the parsed name list', async () => {
+  it('GETs /api/notification/telegram/destinations and returns the parsed name list', async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response(JSON.stringify([{ name: 'main' }, { name: 'alerts' }]), {
         status: 200,
@@ -42,6 +42,6 @@ describe('useTelegramDestinations', () => {
     await waitFor(() => {
       expect(result.current.data).toEqual([{ name: 'main' }, { name: 'alerts' }]);
     });
-    expect(fetchSpy.mock.calls[0]?.[0]).toBe('/api/telegram/destinations');
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe('/api/notification/telegram/destinations');
   });
 });
