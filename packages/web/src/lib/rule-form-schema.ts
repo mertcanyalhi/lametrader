@@ -1,4 +1,6 @@
 import {
+  type Action,
+  ActionKind,
   type ConditionNode,
   ConditionNodeKind,
   Period,
@@ -6,6 +8,11 @@ import {
   TriggerKind,
 } from '@lametrader/core';
 import * as yup from 'yup';
+
+/** Whether `action` writes (or removes) state — what the actions editor edits. */
+export function isStateAction(action: Action): boolean {
+  return action.kind !== ActionKind.NotifyTelegram;
+}
 
 /** Default re-fire interval for `OncePerMinute` triggers — matches the engine. */
 export const DEFAULT_TRIGGER_INTERVAL_MS = 60_000;
@@ -39,6 +46,7 @@ export const FIELD_LABELS = {
   triggerIntervalMs: 'Trigger interval (ms)',
   expiration: 'Expiration',
   expirationAt: 'Expiration date',
+  actions: 'Actions',
 } as const;
 
 /** The two expiration modes the form exposes. */
@@ -93,6 +101,11 @@ export interface RuleFormValues {
    * string when the mode is `Never`.
    */
   expirationAt: string;
+  /**
+   * The full action list the rule will execute on fire. The editor surface
+   * (#174 / #175) renders one input row per action.
+   */
+  actions: Action[];
 }
 
 /**
@@ -175,4 +188,22 @@ export const ruleFormSchema: yup.ObjectSchema<RuleFormValues> = yup.object({
       },
     )
     .label(FIELD_LABELS.expirationAt),
+  actions: yup
+    .mixed<Action[]>()
+    .required()
+    .test(
+      'actions-min-one',
+      ({ label }) => `${label} require at least one entry.`,
+      (value) => Array.isArray(value) && value.length >= 1,
+    )
+    .test('state-action-keys-required', 'Every state action needs a non-empty key.', (value) => {
+      if (!Array.isArray(value)) return true;
+      return value.every(
+        (action: Action) =>
+          !isStateAction(action) ||
+          (typeof (action as { key: string }).key === 'string' &&
+            (action as { key: string }).key.trim() !== ''),
+      );
+    })
+    .label(FIELD_LABELS.actions),
 });

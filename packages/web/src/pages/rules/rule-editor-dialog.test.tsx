@@ -221,6 +221,27 @@ describe('RuleEditorDialog', () => {
     });
   });
 
+  it('blocks save when the rule has no actions', async () => {
+    const rule = makeRule({ id: 'r-1', name: 'Sample', actions: [] as never[] });
+    renderEditor(rule);
+    const user = userEvent.setup();
+
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+
+    const alerts = await screen.findAllByRole('alert');
+    expect({
+      hasMessage: alerts.some(
+        (alert) => alert.textContent === 'Actions require at least one entry.',
+      ),
+      putCount: fetchSpy.mock.calls.filter(
+        (call) => (call[1] as RequestInit | undefined)?.method === 'PUT',
+      ).length,
+    }).toEqual({
+      hasMessage: true,
+      putCount: 0,
+    });
+  });
+
   it('blocks save when "On date" expiration is in the past', async () => {
     const rule = makeRule({ id: 'r-1', name: 'Sample' });
     renderEditor(rule);
