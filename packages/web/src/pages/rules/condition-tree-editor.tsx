@@ -1,9 +1,11 @@
 import {
   type ConditionNode,
   ConditionNodeKind,
+  type ConditionOperand,
   type IndicatorInstance,
   NumericOperator,
   OperandKind,
+  type RuleOperator,
   StateValueType,
 } from '@lametrader/core';
 import {
@@ -19,6 +21,7 @@ import {
 import { Plus, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { OperandPicker } from './operand-picker.js';
+import { OperatorPicker, validOperatorsFor } from './operator-picker.js';
 
 /**
  * The recursive condition-tree editor — walks a {@link ConditionNode} and
@@ -75,26 +78,31 @@ function NodeView({
   indicators: IndicatorInstance[];
 }): ReactNode {
   if (node.kind === ConditionNodeKind.Leaf) {
+    const leaf = node;
     return (
       <Card variant="surface">
         <Flex gap="3" align="start">
           <Box flexGrow="1">
             <OperandPicker
-              value={node.left}
-              onChange={(left) => onChange(replaceAt(root, path, { ...node, left }))}
+              value={leaf.left}
+              onChange={(left) => onChange(replaceAt(root, path, swapOperand(leaf, { left })))}
               indicators={indicators}
               ariaLabel="Left operand kind"
             />
           </Box>
-          {/* Lazy: operator picker lands with #171 — for now a placeholder so
-              the leaf reads naturally. The current operator persists unchanged. */}
-          <Text size="2" color="gray" mt="2">
-            operator…
-          </Text>
+          <Box mt="2">
+            <OperatorPicker
+              value={leaf.operator}
+              onChange={(operator) => onChange(replaceAt(root, path, { ...leaf, operator }))}
+              left={leaf.left}
+              right={leaf.right}
+              ariaLabel="Operator"
+            />
+          </Box>
           <Box flexGrow="1">
             <OperandPicker
-              value={node.right}
-              onChange={(right) => onChange(replaceAt(root, path, { ...node, right }))}
+              value={leaf.right}
+              onChange={(right) => onChange(replaceAt(root, path, swapOperand(leaf, { right })))}
               indicators={indicators}
               ariaLabel="Right operand kind"
             />
@@ -193,6 +201,25 @@ function NodeView({
       </Flex>
     </Card>
   );
+}
+
+/**
+ * Build a new leaf with one operand swapped. If the leaf's current operator
+ * is no longer legal for the new operand pair, swap to the first valid one
+ * (or fall back to a numeric `Gt`, which the placeholder also uses). The
+ * core's `validateOperatorOperands` is the authority — see `validOperatorsFor`.
+ */
+function swapOperand(
+  leaf: Extract<ConditionNode, { kind: ConditionNodeKind.Leaf }>,
+  patch: { left?: ConditionOperand; right?: ConditionOperand },
+): ConditionNode {
+  const left = patch.left ?? leaf.left;
+  const right = patch.right ?? leaf.right;
+  const validOperators = validOperatorsFor(left, right);
+  const operator: RuleOperator = validOperators.includes(leaf.operator)
+    ? leaf.operator
+    : (validOperators[0] ?? NumericOperator.Gt);
+  return { kind: ConditionNodeKind.Leaf, left, operator, right };
 }
 
 /**
