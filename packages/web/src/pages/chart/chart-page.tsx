@@ -19,6 +19,7 @@ import { useConfig } from '../../lib/hooks/use-config.js';
 import { useSelectedProfile } from '../../lib/selected-profile-context.js';
 import { useTheme } from '../../lib/theme-context.js';
 import { CandleChart, type IndicatorOverlay } from './candle-chart.js';
+import { ChartEventsPanel } from './chart-events-panel.js';
 import { ChartLoading } from './chart-loading.js';
 import { CHART_RANGE_ORDER, type ChartRange } from './chart-range.js';
 import { ChartRulesButton } from './chart-rules-button.js';
@@ -28,6 +29,7 @@ import { IndicatorPanelDialog } from './indicators/indicator-panel-dialog.js';
 import { paletteColor } from './indicators/overlay-palette.js';
 import { PeriodRangeDialog } from './period-range-dialog.js';
 import { ProfilePickerDialog } from './profile-picker-dialog.js';
+import { useStateChangeMarkers } from './state-change-markers.js';
 import { SymbolPickerDialog } from './symbol-picker-dialog.js';
 
 /**
@@ -273,6 +275,7 @@ function ChartView({
     from: computeFrom,
     to: computeTo,
   });
+  const ruleEventMarkers = useStateChangeMarkers(id);
   const body = feed.isPending ? (
     <ChartLoading />
   ) : feed.isError ? (
@@ -291,12 +294,14 @@ function ChartView({
       legendOverlays={legendOverlays}
       onToggleLegendVisible={toggleVisible}
       legendProfile={profile}
+      ruleEventMarkers={ruleEventMarkers}
     />
   );
   return (
     <>
       <DocumentTitle id={id} latest={latest} previous={previous} />
       {body}
+      <ChartEventsPanel symbolId={id} />
     </>
   );
 }
