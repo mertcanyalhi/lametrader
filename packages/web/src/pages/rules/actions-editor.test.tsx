@@ -64,7 +64,7 @@ describe('ActionsEditor', () => {
     ]);
   });
 
-  it('flips the kind to RemoveSymbolState when the operation radio switches to Remove', async () => {
+  it('flips the kind to RemoveSymbolState when the operation dropdown switches to Remove', async () => {
     render(
       <Harness
         initial={[
@@ -78,12 +78,13 @@ describe('ActionsEditor', () => {
     );
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('radio', { name: 'Remove' }));
+    await user.click(screen.getByRole('combobox', { name: 'Action 1 operation' }));
+    await user.click(screen.getByRole('option', { name: 'Remove' }));
 
     expect(snapshot()).toEqual([{ kind: ActionKind.RemoveSymbolState, key: 'streak' }]);
   });
 
-  it('flips the kind to SetGlobalState when the scope radio switches to Global', async () => {
+  it('flips the kind to SetGlobalState when the scope dropdown switches to Global', async () => {
     render(
       <Harness
         initial={[
@@ -97,7 +98,8 @@ describe('ActionsEditor', () => {
     );
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('radio', { name: 'Global state' }));
+    await user.click(screen.getByRole('combobox', { name: 'Action 1 scope' }));
+    await user.click(screen.getByRole('option', { name: 'Global state' }));
 
     expect(snapshot()).toEqual([
       {

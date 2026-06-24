@@ -1,5 +1,5 @@
 import type { Rule } from '@lametrader/core';
-import { Button, Callout, Dialog, Flex, Skeleton, Text } from '@radix-ui/themes';
+import { Badge, Button, Callout, Dialog, Flex, Skeleton, Text } from '@radix-ui/themes';
 import { Plus, Scale } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { makeDraftRule } from '../../lib/draft-rule.js';
@@ -29,7 +29,7 @@ export function ChartRulesButton({ symbolId }: { symbolId: string }): ReactNode 
   const [editing, setEditing] = useState<Rule | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const triggerLabel = profileId === null ? 'Rules' : `Rules ${rules.length}`;
+  const triggerAriaLabel = profileId === null ? 'Rules' : `Rules (${rules.length})`;
 
   return (
     <>
@@ -40,9 +40,15 @@ export function ChartRulesButton({ symbolId }: { symbolId: string }): ReactNode 
             color="gray"
             className="min-w-32 justify-center"
             disabled={profileId === null}
+            aria-label={triggerAriaLabel}
           >
             <Scale size={14} aria-hidden="true" />
-            {triggerLabel}
+            Rules
+            {profileId !== null ? (
+              <Badge variant="soft" color="gray" radius="full">
+                {rules.length}
+              </Badge>
+            ) : null}
           </Button>
         </Dialog.Trigger>
         <Dialog.Content maxWidth="720px">
@@ -95,6 +101,7 @@ export function ChartRulesButton({ symbolId }: { symbolId: string }): ReactNode 
           }}
           mode="create"
           initial={makeDraftRule({ profileId, symbolId })}
+          lockSymbol={true}
         />
       ) : null}
     </>

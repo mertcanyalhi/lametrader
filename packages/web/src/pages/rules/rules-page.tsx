@@ -1,6 +1,8 @@
 import type { Rule } from '@lametrader/core';
-import { Callout, Card, Flex, Heading, Skeleton, Text } from '@radix-ui/themes';
+import { Button, Callout, Card, Flex, Heading, Skeleton, Text } from '@radix-ui/themes';
+import { Plus } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import { makeDraftRule } from '../../lib/draft-rule.js';
 import { useRules } from '../../lib/hooks/rules.js';
 import { useSelectedProfile } from '../../lib/selected-profile-context.js';
 import { ProfilePickerDialog } from '../chart/profile-picker-dialog.js';
@@ -21,12 +23,19 @@ import { RulesTable } from './rules-table.js';
 export function RulesPage(): ReactNode {
   const { profileId } = useSelectedProfile();
   const [editing, setEditing] = useState<Rule | null>(null);
+  const [creating, setCreating] = useState(false);
 
   return (
     <div className="flex h-full flex-col gap-3">
       <Card>
         <div className="flex flex-col gap-3 p-2">
-          <Heading size="5">Rules</Heading>
+          <Flex align="center" justify="between" gap="2">
+            <Heading size="5">Rules</Heading>
+            <Button onClick={() => setCreating(true)} disabled={profileId === null}>
+              <Plus size={16} aria-hidden="true" />
+              New rule
+            </Button>
+          </Flex>
           {profileId === null ? (
             <Text size="2" color="gray">
               Pick a profile from the bottom bar to see its rules.
@@ -46,6 +55,16 @@ export function RulesPage(): ReactNode {
       >
         <ProfilePickerDialog />
       </Flex>
+      {creating && profileId !== null ? (
+        <RuleEditorDialog
+          open={true}
+          onOpenChange={(next) => {
+            if (!next) setCreating(false);
+          }}
+          mode="create"
+          initial={makeDraftRule({ profileId })}
+        />
+      ) : null}
       {editing ? (
         <RuleEditorDialog
           open={true}

@@ -128,6 +128,40 @@ describe('RuleEditorDialog', () => {
     });
   });
 
+  it('DELETEs /rules/:id and closes when the trash button is confirmed', async () => {
+    const rule = makeRule({ id: 'r-1', name: 'Sample' });
+    fetchSpy.mockImplementation(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      if (method === 'DELETE') {
+        return new Response(null, { status: 204 });
+      }
+      return baseHandler(url, init);
+    });
+    const onOpenChange = vi.fn();
+    renderEditor(rule, onOpenChange);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Delete rule' }));
+    await user.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete' }),
+    );
+
+    const del = await waitFor(() => {
+      const call = fetchSpy.mock.calls.find(
+        (c) => (c[1] as RequestInit | undefined)?.method === 'DELETE',
+      );
+      if (!call) throw new Error('no DELETE yet');
+      return call;
+    });
+    expect({
+      url: String(del[0]),
+      onOpenChange: onOpenChange.mock.calls,
+    }).toEqual({
+      url: '/api/rules/r-1',
+      onOpenChange: [[false]],
+    });
+  });
+
   it('PUTs to /rules/:id with the merged form values and closes on save success', async () => {
     const rule = makeRule({ id: 'r-1', name: 'Sample', description: 'old' });
     fetchSpy.mockImplementation(async (url: string, init?: RequestInit) => {
@@ -201,7 +235,8 @@ describe('RuleEditorDialog', () => {
     renderEditor(rule);
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('radio', { name: 'All symbols' }));
+    await user.click(screen.getByRole('combobox', { name: 'Scope' }));
+    await user.click(screen.getByRole('option', { name: 'All symbols' }));
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }));
 
     const put = await waitFor(() => {
@@ -247,7 +282,8 @@ describe('RuleEditorDialog', () => {
     renderEditor(rule);
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('radio', { name: 'On date' }));
+    await user.click(screen.getByRole('combobox', { name: 'Expiration' }));
+    await user.click(screen.getByRole('option', { name: 'On date' }));
     const dateField = screen.getByLabelText('Expiration date');
     await user.clear(dateField);
     await user.type(dateField, '2000-01-01T12:00');
@@ -274,7 +310,8 @@ describe('RuleEditorDialog', () => {
     renderEditor(rule);
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('radio', { name: 'Once per bar' }));
+    await user.click(screen.getByRole('combobox', { name: 'Trigger' }));
+    await user.click(screen.getByRole('option', { name: 'Once per bar' }));
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }));
 
     const alerts = await screen.findAllByRole('alert');

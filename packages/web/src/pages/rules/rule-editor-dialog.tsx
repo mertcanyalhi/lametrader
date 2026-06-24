@@ -11,23 +11,32 @@ import {
   TriggerKind,
 } from '@lametrader/core';
 import {
+  AlertDialog,
   Box,
   Button,
   Callout,
   Dialog,
   Flex,
-  RadioGroup,
+  IconButton,
   Select,
+  Separator,
   Switch,
   Text,
   TextArea,
   TextField,
+  Tooltip,
 } from '@radix-ui/themes';
+import { Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { type SubmitHandler, useForm } from 'react-hook-form';
 import { ApiError } from '../../lib/api-fetch.js';
 import { useProfiles } from '../../lib/hooks/profiles.js';
-import { type RuleInput, useCreateRule, useReplaceRule } from '../../lib/hooks/rules.js';
+import {
+  type RuleInput,
+  useCreateRule,
+  useDeleteRule,
+  useReplaceRule,
+} from '../../lib/hooks/rules.js';
 import { useWatchlist } from '../../lib/hooks/symbols.js';
 import {
   DEFAULT_TRIGGER_INTERVAL_MS,
@@ -62,11 +71,14 @@ export function RuleEditorDialog({
   onOpenChange,
   mode,
   initial,
+  lockSymbol = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: 'create' | 'edit';
   initial?: Rule;
+  /** Hide the scope + symbol rows; the rule stays bound to `initial`'s symbol (chart create). */
+  lockSymbol?: boolean;
 }): ReactNode {
   const create = useCreateRule();
   const replace = useReplaceRule();
@@ -128,14 +140,11 @@ export function RuleEditorDialog({
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content maxWidth="560px">
+      <Dialog.Content maxWidth="560px" onInteractOutside={(event) => event.preventDefault()}>
         <Dialog.Title>{title}</Dialog.Title>
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
           <Flex direction="column" gap="3" mt="3">
-            <Box>
-              <Text as="label" htmlFor="rule-name" size="2" weight="medium">
-                {FIELD_LABELS.name}
-              </Text>
+            <FieldRow label={FIELD_LABELS.name} htmlFor="rule-name">
               <TextField.Root
                 id="rule-name"
                 aria-label={FIELD_LABELS.name}
@@ -149,40 +158,35 @@ export function RuleEditorDialog({
                   {nameError}
                 </Text>
               ) : null}
-            </Box>
-            <Box>
-              <Text as="label" htmlFor="rule-description" size="2" weight="medium">
-                {FIELD_LABELS.description}
-              </Text>
+            </FieldRow>
+            <FieldRow label={FIELD_LABELS.description} htmlFor="rule-description" align="start">
               <TextArea
                 id="rule-description"
                 aria-label={FIELD_LABELS.description}
                 {...register('description')}
               />
-            </Box>
-            <Box>
-              <Text as="div" size="2" weight="medium" mb="1">
-                {FIELD_LABELS.scope}
-              </Text>
-              <RadioGroup.Root
-                value={scopeKind}
-                onValueChange={(value) =>
-                  setValue('scopeKind', value as RuleScopeKind, {
-                    shouldDirty: true,
-                    shouldValidate: false,
-                  })
-                }
-                aria-label={FIELD_LABELS.scope}
-              >
-                <RadioGroup.Item value={RuleScopeKind.Symbol}>One symbol</RadioGroup.Item>
-                <RadioGroup.Item value={RuleScopeKind.AllSymbols}>All symbols</RadioGroup.Item>
-              </RadioGroup.Root>
-            </Box>
-            {scopeKind === RuleScopeKind.Symbol ? (
-              <Box>
-                <Text as="div" size="2" weight="medium" mb="1">
-                  {FIELD_LABELS.symbolId}
-                </Text>
+            </FieldRow>
+            {lockSymbol ? null : (
+              <FieldRow label={FIELD_LABELS.scope}>
+                <Select.Root
+                  value={scopeKind}
+                  onValueChange={(value) =>
+                    setValue('scopeKind', value as RuleScopeKind, {
+                      shouldDirty: true,
+                      shouldValidate: false,
+                    })
+                  }
+                >
+                  <Select.Trigger aria-label={FIELD_LABELS.scope} className="w-full" />
+                  <Select.Content>
+                    <Select.Item value={RuleScopeKind.Symbol}>One symbol</Select.Item>
+                    <Select.Item value={RuleScopeKind.AllSymbols}>All symbols</Select.Item>
+                  </Select.Content>
+                </Select.Root>
+              </FieldRow>
+            )}
+            {!lockSymbol && scopeKind === RuleScopeKind.Symbol ? (
+              <FieldRow label={FIELD_LABELS.symbolId}>
                 <SymbolPicker
                   profileId={profileId}
                   value={symbolId}
@@ -197,12 +201,11 @@ export function RuleEditorDialog({
                     {symbolError}
                   </Text>
                 ) : null}
-              </Box>
+              </FieldRow>
             ) : null}
-            <Box>
-              <Text as="div" size="2" weight="medium" mb="1">
-                {FIELD_LABELS.condition}
-              </Text>
+            <Separator size="4" my="1" />
+
+            <FieldRow label={FIELD_LABELS.condition} align="start">
               <ConditionTreeEditor
                 value={condition}
                 onChange={(next) =>
@@ -210,11 +213,11 @@ export function RuleEditorDialog({
                 }
                 indicators={indicators}
               />
-            </Box>
-            <Box>
-              <Text as="div" size="2" weight="medium" mb="1">
-                {FIELD_LABELS.trigger}
-              </Text>
+            </FieldRow>
+
+            <Separator size="4" my="1" />
+
+            <FieldRow label={FIELD_LABELS.trigger} align="start">
               <TriggerPicker
                 kind={triggerKind}
                 onKindChange={(next) =>
@@ -233,11 +236,8 @@ export function RuleEditorDialog({
                 }
                 periodError={triggerPeriodError}
               />
-            </Box>
-            <Box>
-              <Text as="div" size="2" weight="medium" mb="1">
-                {FIELD_LABELS.expiration}
-              </Text>
+            </FieldRow>
+            <FieldRow label={FIELD_LABELS.expiration} align="start">
               <ExpirationPicker
                 kind={expirationKind}
                 onKindChange={(next) =>
@@ -249,11 +249,10 @@ export function RuleEditorDialog({
                 }
                 error={expirationError}
               />
-            </Box>
-            <Box>
-              <Text as="div" size="2" weight="medium" mb="1">
-                {FIELD_LABELS.actions}
-              </Text>
+            </FieldRow>
+            <Separator size="4" my="1" />
+
+            <FieldRow label={FIELD_LABELS.actions} align="start">
               <ActionsEditor
                 value={actions}
                 onChange={(next) =>
@@ -265,8 +264,11 @@ export function RuleEditorDialog({
                   {actionsError}
                 </Text>
               ) : null}
-            </Box>
-            <Flex align="center" gap="2">
+            </FieldRow>
+
+            <Separator size="4" my="1" />
+
+            <FieldRow label={FIELD_LABELS.enabled} htmlFor="rule-enabled">
               <Switch
                 id="rule-enabled"
                 checked={enabled}
@@ -274,33 +276,130 @@ export function RuleEditorDialog({
                   setValue('enabled', next === true, { shouldDirty: true, shouldValidate: false })
                 }
               />
-              <Text as="label" htmlFor="rule-enabled" size="2">
-                {FIELD_LABELS.enabled}
-              </Text>
-            </Flex>
+            </FieldRow>
             {inlineError ? (
               <Callout.Root color="red" role="alert">
                 <Callout.Text>{inlineError}</Callout.Text>
               </Callout.Root>
             ) : null}
           </Flex>
-          <Flex gap="3" mt="5" justify="end">
-            <Button
-              type="button"
-              variant="soft"
-              color="gray"
-              onClick={() => onOpenChange(false)}
-              disabled={submitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" loading={submitting} disabled={submitting || !initial}>
-              {submitLabel}
-            </Button>
+          <Separator size="4" my="4" />
+          <Flex gap="3" align="center">
+            {mode === 'edit' && initial ? (
+              <DeleteRuleButton
+                id={initial.id}
+                name={initial.name}
+                disabled={submitting}
+                onDeleted={() => onOpenChange(false)}
+              />
+            ) : null}
+            <Flex gap="3" justify="end" flexGrow="1">
+              <Button
+                type="button"
+                variant="soft"
+                color="gray"
+                onClick={() => onOpenChange(false)}
+                disabled={submitting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" loading={submitting} disabled={submitting || !initial}>
+                {submitLabel}
+              </Button>
+            </Flex>
           </Flex>
         </form>
       </Dialog.Content>
     </Dialog.Root>
+  );
+}
+
+/**
+ * A label-left / control-right form row — the muted label sits in a fixed
+ * column on the left, the control fills the rest (TradingView-style alert
+ * editor). Pass `align="start"` for tall controls (textarea, condition tree,
+ * actions list) so the label tracks the first line.
+ */
+function FieldRow({
+  label,
+  htmlFor,
+  align = 'center',
+  children,
+}: {
+  label: string;
+  htmlFor?: string;
+  align?: 'center' | 'start';
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <Flex gap="4" align={align}>
+      <Text
+        as="label"
+        htmlFor={htmlFor}
+        size="2"
+        color="gray"
+        className={align === 'start' ? 'w-28 shrink-0 pt-[6px]' : 'w-28 shrink-0'}
+      >
+        {label}
+      </Text>
+      <Box flexGrow="1" minWidth="0">
+        {children}
+      </Box>
+    </Flex>
+  );
+}
+
+/**
+ * The destructive footer action — a trash `IconButton` that opens an
+ * `AlertDialog` confirmation before deleting the rule. On confirm it fires the
+ * optimistic delete and closes the editor via `onDeleted`.
+ */
+function DeleteRuleButton({
+  id,
+  name,
+  disabled,
+  onDeleted,
+}: {
+  id: string;
+  name: string;
+  disabled: boolean;
+  onDeleted: () => void;
+}): ReactNode {
+  const del = useDeleteRule();
+  return (
+    <AlertDialog.Root>
+      <Tooltip content="Delete rule">
+        <AlertDialog.Trigger>
+          <IconButton
+            type="button"
+            variant="soft"
+            color="red"
+            aria-label="Delete rule"
+            disabled={disabled}
+          >
+            <Trash2 size={16} aria-hidden="true" />
+          </IconButton>
+        </AlertDialog.Trigger>
+      </Tooltip>
+      <AlertDialog.Content maxWidth="420px">
+        <AlertDialog.Title>Delete rule</AlertDialog.Title>
+        <AlertDialog.Description size="2">
+          Delete “{name}”? This can't be undone.
+        </AlertDialog.Description>
+        <Flex gap="3" mt="4" justify="end">
+          <AlertDialog.Cancel>
+            <Button variant="soft" color="gray">
+              Cancel
+            </Button>
+          </AlertDialog.Cancel>
+          <AlertDialog.Action>
+            <Button color="red" onClick={() => del.mutate(id, { onSuccess: onDeleted })}>
+              Delete
+            </Button>
+          </AlertDialog.Action>
+        </Flex>
+      </AlertDialog.Content>
+    </AlertDialog.Root>
   );
 }
 
@@ -334,6 +433,7 @@ function SymbolPicker({
         aria-label={FIELD_LABELS.symbolId}
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
+        className="w-full"
       />
       <Select.Content>
         {symbols.map((symbol) => (

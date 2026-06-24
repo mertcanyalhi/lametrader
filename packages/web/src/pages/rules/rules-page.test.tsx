@@ -175,6 +175,18 @@ describe('RulesPage', () => {
     expect(await screen.findByRole('button', { name: 'Open BTC alert' })).toBeInTheDocument();
   });
 
+  it('opens the create-mode rule editor when "New rule" is clicked', async () => {
+    rules = [];
+    setStoredProfileId(SCALPER.id);
+    renderPage();
+    await screen.findByText('No rules in this profile yet.');
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'New rule' }));
+
+    expect(await screen.findByRole('heading', { name: 'New rule' })).toBeInTheDocument();
+  });
+
   it('switches the rendered rules when the user picks a different profile', async () => {
     rules = [makeRule({ id: 'r-1', name: 'BTC alert' })];
     setStoredProfileId(SCALPER.id);
