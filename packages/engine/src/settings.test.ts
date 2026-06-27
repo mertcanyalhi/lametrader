@@ -21,6 +21,7 @@ describe('loadSettings', () => {
       apiPort: 3000,
       pollIntervals: DEFAULT_POLL_INTERVALS,
       telegramDestinations: [],
+      logLevel: 'info',
     });
   });
 
@@ -30,6 +31,7 @@ describe('loadSettings', () => {
       apiPort: 8080,
       pollIntervals: DEFAULT_POLL_INTERVALS,
       telegramDestinations: [],
+      logLevel: 'info',
     });
   });
 
@@ -39,6 +41,7 @@ describe('loadSettings', () => {
       apiPort: 3000,
       pollIntervals: { ...DEFAULT_POLL_INTERVALS, [Period.OneMinute]: 5000 },
       telegramDestinations: [],
+      logLevel: 'info',
     });
   });
 
@@ -85,5 +88,13 @@ describe('loadSettings', () => {
     expect(() => loadSettings({ TELEGRAM_DESTINATIONS: '{"name":"x"}' })).toThrowError(
       /must be a JSON array/,
     );
+  });
+
+  it('accepts a recognized LOG_LEVEL', () => {
+    expect(loadSettings({ LOG_LEVEL: 'debug' }).logLevel).toEqual('debug');
+  });
+
+  it('rejects an unrecognized LOG_LEVEL', () => {
+    expect(() => loadSettings({ LOG_LEVEL: 'verbose' })).toThrowError(/LOG_LEVEL/);
   });
 });

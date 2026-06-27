@@ -1,6 +1,7 @@
 import { type EventLog, type RuleEventEntry, RuleEventKind, RuleEventType } from '@lametrader/core';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
+import { _resetLogRoot } from '../log.js';
 import { handleCascadeError } from './cascade-error-handler.js';
 import { InMemoryEventLog } from './in-memory-event-log.js';
 
@@ -8,33 +9,41 @@ import { InMemoryEventLog } from './in-memory-event-log.js';
  * Unit tests for {@link handleCascadeError} — the single helper called by
  * the serialized rule chain when `orchestrator.process` rejects (#290).
  *
- * Each test builds a stub Pino-shaped logger and observes its calls plus
- * the side-effect on the {@link EventLog}.
+ * Per #306 the handler now logs through the engine's shared Pino logger;
+ * each test installs a destination stream via {@link _resetLogRoot} to
+ * capture emitted records.
  */
 
 /**
- * The subset of Pino's API the helper uses, plus a recorder for tests.
+ * Decode the raw line Pino writes onto the destination stream into the
+ * structured record we want to assert against.
  */
-interface RecordingLogger {
-  error: (context: { err: unknown; event?: unknown }, message: string) => void;
-  calls: Array<{ context: { err: unknown; event?: unknown }; message: string }>;
+function parseRecord(line: string): Record<string, unknown> {
+  return JSON.parse(line);
 }
 
-/** Build a fresh recording logger. */
-function recordingLogger(): RecordingLogger {
-  const calls: RecordingLogger['calls'] = [];
-  return {
-    error: (context, message) => {
-      calls.push({ context, message });
+/**
+ * Install a fresh recording destination, return the array the test will
+ * assert against, plus a getter for the records emitted so far.
+ */
+function recordingDestination(): { records: Record<string, unknown>[] } {
+  const records: Record<string, unknown>[] = [];
+  _resetLogRoot({
+    write: (line: string) => {
+      records.push(parseRecord(line));
     },
-    calls,
-  };
+  });
+  return { records };
 }
 
 describe('handleCascadeError', () => {
+  afterEach(() => {
+    _resetLogRoot();
+  });
+
   it('logs the primary error at level error with { err, event } and the canonical message', async () => {
-    const log = new InMemoryEventLog();
-    const logger = recordingLogger();
+    const eventLog = new InMemoryEventLog();
+    const { records } = recordingDestination();
     const err = new Error('boom');
     const event = {
       kind: RuleEventKind.CurrentValueChanged as const,
@@ -45,17 +54,22 @@ describe('handleCascadeError', () => {
       final: false,
     };
 
-    await handleCascadeError(err, event, log, logger);
+    await handleCascadeError(err, event, eventLog);
 
-    expect(logger.calls[0]).toEqual({
-      context: { err, event },
-      message: 'rule orchestration failed',
+    expect(records[0]).toEqual({
+      level: 50,
+      time: expect.any(Number),
+      app: 'engine',
+      scope: 'cascade-error-handler',
+      err: { type: 'Error', message: 'boom', stack: expect.any(String) },
+      event,
+      msg: 'rule orchestration failed',
     });
   });
 
   it('appends a synthetic Error rule event to the affected symbol when the event carries a symbolId', async () => {
-    const log = new InMemoryEventLog();
-    const logger = recordingLogger();
+    const eventLog = new InMemoryEventLog();
+    recordingDestination();
     const err = new Error('boom');
     const event = {
       kind: RuleEventKind.CurrentValueChanged as const,
@@ -66,9 +80,9 @@ describe('handleCascadeError', () => {
       final: false,
     };
 
-    await handleCascadeError(err, event, log, logger);
+    await handleCascadeError(err, event, eventLog);
 
-    expect(await log.symbolEvents('AAPL')).toEqual<RuleEventEntry[]>([
+    expect(await eventLog.symbolEvents('AAPL')).toEqual<RuleEventEntry[]>([
       {
         type: RuleEventType.Error,
         ts: 1000,
@@ -80,7 +94,7 @@ describe('handleCascadeError', () => {
   });
 
   it('logs the secondary failure and resolves when the synthetic-event write itself throws', async () => {
-    const logger = recordingLogger();
+    const { records } = recordingDestination();
     const writeErr = new Error('mongo write failed');
     const failingLog: EventLog = {
       appendSymbolEvent: () => Promise.reject(writeErr),
@@ -98,24 +112,27 @@ describe('handleCascadeError', () => {
       final: false,
     };
 
-    await expect(handleCascadeError(err, event, failingLog, logger)).resolves.toBeUndefined();
+    await expect(handleCascadeError(err, event, failingLog)).resolves.toBeUndefined();
 
-    expect(logger.calls).toEqual([
-      { context: { err, event }, message: 'rule orchestration failed' },
-      { context: { err: writeErr }, message: 'failed to write cascade error event' },
+    expect(records.map((r) => r.msg)).toEqual([
+      'rule orchestration failed',
+      'failed to write cascade error event',
     ]);
   });
 
   it('only logs (no synthetic event) when the rejecting event has no symbolId', async () => {
-    const log = new InMemoryEventLog();
-    const logger = recordingLogger();
+    const eventLog = new InMemoryEventLog();
+    const { records } = recordingDestination();
     const err = new Error('boom');
     const event = { kind: RuleEventKind.Timer as const, ts: 1000, symbolId: null };
 
-    await handleCascadeError(err, event, log, logger);
+    await handleCascadeError(err, event, eventLog);
 
-    expect({ calls: logger.calls.length, symbolEvents: await log.symbolEvents('AAPL') }).toEqual({
-      calls: 1,
+    expect({
+      messages: records.map((r) => r.msg),
+      symbolEvents: await eventLog.symbolEvents('AAPL'),
+    }).toEqual({
+      messages: ['rule orchestration failed'],
       symbolEvents: [],
     });
   });

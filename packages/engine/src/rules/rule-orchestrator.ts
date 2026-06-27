@@ -20,6 +20,7 @@ import {
   TriggerKind,
   type WatchlistRepository,
 } from '@lametrader/core';
+import { getLogger } from '../log.js';
 import { type ComparisonOperator, evaluateComparison } from './comparison-evaluator.js';
 import { evaluateConditionTree } from './condition-tree-evaluator.js';
 import { type CrossingOperator, evaluateCrossing } from './crossing-evaluator.js';
@@ -33,6 +34,9 @@ import { mayFireOnce } from './once-trigger-gate.js';
 import { executeStateAction, type StateMutationAction } from './state-action-executor.js';
 import { evaluateState } from './state-evaluator.js';
 import { executeTelegramAction } from './telegram-action-executor.js';
+
+/** Scope-bound logger for the rule orchestrator (#306). */
+const log = getLogger('rule-orchestrator');
 
 /** Options for {@link RuleOrchestrator}. */
 export interface RuleOrchestratorOptions {
@@ -166,6 +170,10 @@ export class RuleOrchestrator {
       if (didFire && rule.trigger.kind === TriggerKind.Once) {
         const fresh = await this.rules.get(rule.id);
         if (fresh !== null) await this.rules.save({ ...fresh, enabled: false });
+        log.warn(
+          { ruleId: rule.id, symbolId: firingSymbolId, ts: event.ts },
+          'auto-disabled Once rule after fire',
+        );
         return;
       }
     }

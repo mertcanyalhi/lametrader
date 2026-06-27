@@ -26,7 +26,7 @@ import {
   PollingService,
   wireRuleEngine,
 } from '@lametrader/engine';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 /**
  * E2e for #290 — verifies the rule-engine wiring helper that
@@ -128,7 +128,6 @@ describe('rule orchestrator wiring (e2e)', () => {
     const eventLog = new InMemoryEventLog();
     const firingState = new InMemoryFiringStateRepository();
     const notifier = new InMemoryNotifier(['main']);
-    const logger = { error: vi.fn() };
 
     const wired = wireRuleEngine({
       rules: fixtures.rules,
@@ -137,7 +136,6 @@ describe('rule orchestrator wiring (e2e)', () => {
       notifier,
       eventLog,
       firingState,
-      logger,
     });
     const polling = new PollingService([fixtures.source], fixtures.candleRepo, fixtures.watchlist, {
       onCandle: (event) => wired.candleBridge.handleCandle(event),
@@ -169,7 +167,6 @@ describe('rule orchestrator wiring (e2e)', () => {
     const eventLog = new InMemoryEventLog();
     const firingState = new InMemoryFiringStateRepository();
     const notifier = new InMemoryNotifier(['main']);
-    const logger = { error: vi.fn() };
 
     // Wrap the rule repo so `listEnabledForSymbol` throws — every inbound
     // event from this point hits the cascade error handler.
@@ -191,7 +188,6 @@ describe('rule orchestrator wiring (e2e)', () => {
       notifier,
       eventLog,
       firingState,
-      logger,
     });
 
     // Push exactly one event through so we can assert exactly one Error
@@ -210,13 +206,11 @@ describe('rule orchestrator wiring (e2e)', () => {
     const symbolEvents = await eventLog.symbolEvents(SYMBOL_ID);
     const errors = symbolEvents.filter((event) => event.type === RuleEventType.Error);
     expect({
-      loggerErrorCount: logger.error.mock.calls.length,
       errorCount: errors.length,
       reason: errors[0]?.type === RuleEventType.Error ? errors[0].reason : null,
       ruleId: errors[0]?.ruleId,
       symbolId: errors[0]?.symbolId,
     }).toEqual({
-      loggerErrorCount: 5,
       errorCount: 5,
       reason: 'rule orchestration failed: boom',
       ruleId: '',
@@ -225,7 +219,8 @@ describe('rule orchestrator wiring (e2e)', () => {
     // The candle event has no `current` axis (that's QuoteStreamService's
     // job), so `CurrentValueChanged` isn't emitted — but each of the 5
     // OHLCV-field changes goes through the chain and hits the cascade
-    // handler, producing 5 logger calls and 5 synthetic Error events.
+    // handler, producing 5 synthetic Error events. The engine's logger
+    // emission is asserted at the unit tier (#306).
     expect(notifier.sent).toEqual([]);
   });
 });

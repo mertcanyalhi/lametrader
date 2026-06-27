@@ -1,5 +1,5 @@
 import { Period } from '@lametrader/core';
-import type { Settings, TelegramDestination } from './settings.types.js';
+import type { LogLevel, Settings, TelegramDestination } from './settings.types.js';
 
 /**
  * Default MongoDB connection string (local dev infra in `infra/docker-compose.yml`).
@@ -39,7 +39,25 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     apiPort: parsePort(env.PORT),
     pollIntervals: resolvePollIntervals(env.POLL_INTERVALS),
     telegramDestinations: parseTelegramDestinations(env.TELEGRAM_DESTINATIONS),
+    logLevel: parseLogLevel(env.LOG_LEVEL),
   };
+}
+
+/**
+ * The Pino log levels `LOG_LEVEL` accepts; in priority order so the error
+ * message lists them lowest → highest verbosity.
+ */
+const VALID_LOG_LEVELS: readonly LogLevel[] = ['fatal', 'error', 'warn', 'info', 'debug', 'trace'];
+
+/**
+ * Resolve {@link Settings.logLevel} from the `LOG_LEVEL` env value. Defaults
+ * to `'info'` when unset; throws on an unrecognized value so a typo fails
+ * fast at startup rather than silently quieting the logs.
+ */
+function parseLogLevel(value: string | undefined): LogLevel {
+  if (value === undefined || value === '') return 'info';
+  if ((VALID_LOG_LEVELS as readonly string[]).includes(value)) return value as LogLevel;
+  throw new Error(`LOG_LEVEL must be one of ${VALID_LOG_LEVELS.join(', ')}: ${value}`);
 }
 
 /**

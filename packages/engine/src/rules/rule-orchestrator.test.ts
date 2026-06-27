@@ -13,8 +13,9 @@ import {
   SymbolType,
   TriggerKind,
 } from '@lametrader/core';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
+import { _resetLogRoot } from '../log.js';
 import { InMemoryProfileRepository } from '../profiles/in-memory-profile-repository.js';
 import { InMemoryStateRepository } from '../state/in-memory-state-repository.js';
 import { InMemoryWatchlistRepository } from '../symbols/in-memory-watchlist-repository.js';
@@ -24,6 +25,10 @@ import { InMemoryFiringStateRepository } from './in-memory-firing-state-reposito
 import { InMemoryNotifier } from './in-memory-notifier.js';
 import { InMemoryRuleRepository } from './in-memory-rule-repository.js';
 import { RuleOrchestrator } from './rule-orchestrator.js';
+
+afterEach(() => {
+  _resetLogRoot();
+});
 
 /** Baseline lookups that return null for everything. */
 function emptyLookups(): EvaluationLookups {
@@ -312,6 +317,40 @@ describe('RuleOrchestrator', () => {
 
     const stored = await rules.get('once');
     expect({ enabled: stored?.enabled }).toEqual({ enabled: false });
+  });
+
+  it('logs a warn entry when auto-disabling a Once rule after fire (#306)', async () => {
+    const r = rule({ id: 'once', order: 1, trigger: { kind: TriggerKind.Once } });
+    const rules = new InMemoryRuleRepository([r]);
+    const records: Record<string, unknown>[] = [];
+    _resetLogRoot({
+      write: (line: string) => {
+        records.push(JSON.parse(line));
+      },
+    });
+    const orchestrator = new RuleOrchestrator(
+      rules,
+      new InMemoryWatchlistRepository(),
+      priceLookups(),
+      new InMemoryStateRepository(),
+      new InMemoryNotifier(['main']),
+      new InMemoryEventLog(),
+      new InMemoryFiringStateRepository(),
+    );
+
+    await orchestrator.process(priceEvent());
+
+    const warnEntries = records
+      .filter((r) => r.level === 40)
+      .map((r) => ({ scope: r.scope, msg: r.msg, ruleId: r.ruleId, symbolId: r.symbolId }));
+    expect(warnEntries).toEqual([
+      {
+        scope: 'rule-orchestrator',
+        msg: 'auto-disabled Once rule after fire',
+        ruleId: 'once',
+        symbolId: 'AAPL',
+      },
+    ]);
   });
 
   it('preserves the Fired event on the rule when auto-disabling a Once rule (issue #300)', async () => {
