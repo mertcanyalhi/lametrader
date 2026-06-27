@@ -82,6 +82,19 @@ export function formatChangePct(rate: number): string {
 }
 
 /**
+ * Format an epoch-ms timestamp as `YYYY-MM-DD HH:MM:SS.SSS` (UTC) — ms
+ * precision so the rule-engine's per-event timing is legible at a glance
+ * (e.g. cascading events on the same tick are distinguishable).
+ *
+ * Used by the rules table's "Last fired" column and the events dialog;
+ * keep callers on this shared formatter so timestamp shapes stay
+ * consistent across the UI.
+ */
+export function formatTimestamp(ms: number): string {
+  return new Date(ms).toISOString().replace('T', ' ').replace('Z', '');
+}
+
+/**
  * Format a volume with K / M / B suffixes (two decimals), so chart legends stay
  * readable across the magnitude range typical of crypto, equities, and ETFs.
  * Values below 1,000 keep up to two decimals (crypto base-asset volume can be

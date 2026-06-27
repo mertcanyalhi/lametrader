@@ -100,9 +100,14 @@ export class SymbolService {
 
   /**
    * List the watched symbols.
+   *
+   * Strips the embedded `events[]` field — the list endpoint is for
+   * lightweight enumeration; events are exposed separately via
+   * `listEventsForSymbol` / `GET /symbols/:id/rule-events` (#290).
    */
-  list(): Promise<WatchedSymbol[]> {
-    return this.watchlist.list();
+  async list(): Promise<WatchedSymbol[]> {
+    const watched = await this.watchlist.list();
+    return watched.map(stripEvents);
   }
 
   /**
@@ -110,13 +115,15 @@ export class SymbolService {
    * from its latest two candles on the config's `defaultPeriod` (strictly — no
    * fallback). `quote` is `null` when the symbol does not watch `defaultPeriod`
    * or has fewer than two candles stored there.
+   *
+   * Strips the embedded `events[]` field (#290) — see {@link list}.
    */
   async listWithQuotes(): Promise<EnrichedSymbol[]> {
     const { defaultPeriod } = await this.config.get();
     const watched = await this.watchlist.list();
     return Promise.all(
       watched.map(async (symbol) => ({
-        ...symbol,
+        ...stripEvents(symbol),
         quote: symbol.periods.includes(defaultPeriod)
           ? await this.quoteFor(symbol.id, defaultPeriod)
           : null,
@@ -211,6 +218,16 @@ export class SymbolService {
     assertSourceSupportsPeriods(sourceForType(this.sources, symbolType(id)), resolved);
     const updated: WatchedSymbol = { ...existing, periods: resolved };
     await this.watchlist.add(updated);
-    return updated;
+    return stripEvents(updated);
   }
+}
+
+/**
+ * Drop the embedded `events[]` field from a watched symbol for endpoints
+ * that don't expose it (#290) — the events log is reachable via
+ * `listEventsForSymbol` only.
+ */
+function stripEvents(symbol: WatchedSymbol): WatchedSymbol {
+  const { events: _events, ...rest } = symbol;
+  return rest;
 }

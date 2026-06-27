@@ -1,4 +1,9 @@
-import { type Rule, type RuleRepository, RuleScopeKind } from '@lametrader/core';
+import {
+  type ProfileRepository,
+  type Rule,
+  type RuleRepository,
+  RuleScopeKind,
+} from '@lametrader/core';
 import type { Collection, Db, Filter } from 'mongodb';
 import type { RuleDocument } from './mongo-rule-repository.types.js';
 
@@ -8,16 +13,25 @@ import type { RuleDocument } from './mongo-rule-repository.types.js';
  * Stores each rule as a document in the `rules` collection keyed by id
  * (`_id`). Embedded `events` and `history` arrays live on the same document
  * per ADR 0012.
+ *
+ * `listEnabledForSymbol` consults the optional injected
+ * {@link ProfileRepository} to enforce the parent `profile.enabled` runtime
+ * kill-switch (#290); when no profile repo is provided, every profile reads
+ * as enabled.
  */
 export class MongoRuleRepository implements RuleRepository {
   /** The database handle. */
   private readonly db: Db;
+  /** Optional profile repo consulted for the `profile.enabled` filter. */
+  private readonly profiles: ProfileRepository | undefined;
 
   /**
    * @param db - a connected MongoDB database handle.
+   * @param profiles - optional profile repo for the `profile.enabled` filter.
    */
-  constructor(db: Db) {
+  constructor(db: Db, profiles?: ProfileRepository) {
     this.db = db;
+    this.profiles = profiles;
   }
 
   /** The typed `rules` collection. */
@@ -56,6 +70,19 @@ export class MongoRuleRepository implements RuleRepository {
       profileId === undefined ? scopeFilter : { $and: [{ profileId }, scopeFilter] };
     const docs = await this.collection.find(filter).toArray();
     return docs.map(toRule);
+  }
+
+  async listEnabledForSymbol(symbolId: string | null, profileId?: string): Promise<Rule[]> {
+    const candidates = await this.listForSymbol(symbolId, profileId);
+    const enabled = candidates.filter((rule) => rule.enabled);
+    if (this.profiles === undefined) return enabled;
+    const profileIds = [...new Set(enabled.map((rule) => rule.profileId))];
+    const enabledProfileIds = new Set<string>();
+    for (const id of profileIds) {
+      const profile = await this.profiles.get(id);
+      if (profile?.enabled === true) enabledProfileIds.add(id);
+    }
+    return enabled.filter((rule) => enabledProfileIds.has(rule.profileId));
   }
 
   async get(id: string): Promise<Rule | null> {

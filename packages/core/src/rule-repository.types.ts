@@ -23,6 +23,19 @@ export interface RuleRepository {
    */
   listForSymbol(symbolId: string | null, profileId?: string): Promise<Rule[]>;
   /**
+   * Like {@link listForSymbol} but additionally enforces the engine's runtime
+   * kill-switches: only rules whose own `enabled` is `true` AND whose parent
+   * profile's `enabled` is `true` are returned. This is the read the
+   * {@link RuleOrchestrator} performs on every inbound event (so a disabled
+   * profile never wakes its child rules).
+   *
+   * When `profileId` is provided, the result is further restricted to that
+   * profile — used for cascaded state-change events that carry their
+   * originating `profileId` so a profile-A write doesn't fire profile-B
+   * rules.
+   */
+  listEnabledForSymbol(symbolId: string | null, profileId?: string): Promise<Rule[]>;
+  /**
    * One rule by id, or `null` if none exists.
    */
   get(id: string): Promise<Rule | null>;

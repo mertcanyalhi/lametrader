@@ -18,13 +18,41 @@ import { IndicatorStreamService } from './indicators/indicator-stream-service.js
 import { TelegramDestinationsService } from './notification/telegram-destinations-service.js';
 import { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 import { ProfileService } from './profiles/profile-service.js';
+import type { CascadeErrorLogger } from './rules/cascade-error-handler.js';
+import { MongoEventLog } from './rules/mongo-event-log.js';
+import { MongoFiringStateRepository } from './rules/mongo-firing-state-repository.js';
 import { MongoRuleRepository } from './rules/mongo-rule-repository.js';
 import { RuleService } from './rules/rule-service.js';
+import { TelegramNotifier } from './rules/telegram-notifier.js';
+import { type WiredRuleEngine, wireRuleEngine } from './rules/wire-rule-engine.js';
 import { MongoStateRepository } from './state/mongo-state-repository.js';
 import { defaultMarketDataSources } from './symbols/default-sources.js';
 import { MongoWatchlistRepository } from './symbols/mongo-watchlist-repository.js';
 import { QuoteStreamService } from './symbols/quote-stream-service.js';
 import { SymbolService } from './symbols/symbol-service.js';
+
+/**
+ * The structural shape of the logger {@link connectServices} accepts.
+ *
+ * Pino-compatible: `error`, `warn` (used for stream-error catches and the
+ * cascade error handler). A no-op default is supplied so existing callers
+ * (CLI, tests) need no change.
+ */
+export interface ConnectLogger extends CascadeErrorLogger {
+  /**
+   * Log a `warn`-level entry; matches Pino's two-argument signature.
+   *
+   * @param context - structured fields.
+   * @param message - the human-readable log message.
+   */
+  warn(context: { err: unknown; event?: unknown }, message: string): void;
+}
+
+/** A no-op logger satisfying {@link ConnectLogger}; the default when none is passed. */
+const SILENT_LOGGER: ConnectLogger = {
+  error: () => {},
+  warn: () => {},
+};
 
 /**
  * Options for {@link connectServices}: the live-candle sink and per-period poll
@@ -39,6 +67,13 @@ export interface ConnectOptions {
   onSymbolQuote?: SymbolQuoteListener;
   /** Per-period poll cadence in ms (required to enable a useful polling loop). */
   pollIntervals: Record<Period, number>;
+  /**
+   * Optional structured logger (Pino-shaped) used by the rule chain's
+   * cascade error handler and the indicator/quote stream `catch` paths.
+   * Defaults to a silent no-op so existing callers (CLI, tests) need no
+   * change.
+   */
+  logger?: ConnectLogger;
   /**
    * Optional one-time seed for the Telegram destinations — at startup, every
    * entry here is upserted via {@link TelegramDestinationsService} into the
@@ -72,6 +107,13 @@ export interface ConnectedServices {
   /** The rule-engine state store (read-side; the engine's writes flow through the orchestrator). */
   state: StateRepository;
   /**
+   * The composed live rule engine — `RuleOrchestrator` + three bridges +
+   * cascade error handler. The polling loop and stream services dispatch
+   * into the bridges; `wiredRuleEngine.drain()` is exposed for tests that
+   * need to await the chain.
+   */
+  wiredRuleEngine: WiredRuleEngine;
+  /**
    * The Telegram destinations CRUD use-case
    * (drives `/config/notifications/telegram` and the `TelegramNotifier`).
    * Stored under {@link ConfigKey.TelegramDestinations} in the shared K/V
@@ -90,10 +132,11 @@ export interface ConnectedServices {
  * The single composition root: open one MongoDB connection, register the default
  * market-data sources once, and wire every use-case on top — the
  * {@link ConfigService}, {@link SymbolService} (which share that config),
- * {@link BackfillService}, and the {@link PollingService} (continuous polling +
- * live streaming). Driving adapters (api, cli) build the whole platform from here,
- * so neither depends on the Mongo driver or the concrete adapters, and a new
- * source or store is added in exactly one place.
+ * {@link BackfillService}, the {@link PollingService} (continuous polling +
+ * live streaming), and the live {@link RuleOrchestrator} chain (per #290).
+ * Driving adapters (api, cli) build the whole platform from here, so neither
+ * depends on the Mongo driver or the concrete adapters, and a new source or
+ * store is added in exactly one place.
  *
  * @param uri - the MongoDB connection string (database taken from the URI).
  * @param options - the live-candle sink and poll cadence for the polling loop.
@@ -114,13 +157,8 @@ export async function connectServices(
   const config = new ConfigService(configRepo);
   const indicators = defaultIndicators();
   const indicatorCompute = new IndicatorComputeService(indicators, watchlist, candleRepo);
-  const indicatorStream = new IndicatorStreamService(indicators, watchlist, indicatorCompute, {
-    onState: options.onIndicatorState ?? (() => {}),
-  });
-  const quoteStream = new QuoteStreamService(watchlist, config, candleRepo, {
-    onQuote: options.onSymbolQuote ?? (() => {}),
-  });
-  const ruleRepo = new MongoRuleRepository(db);
+  const profileRepo = new MongoProfileRepository(db);
+  const ruleRepo = new MongoRuleRepository(db, profileRepo);
   await ruleRepo.ensureIndexes();
   const stateRepo = new MongoStateRepository(db);
   await stateRepo.ensureIndexes();
@@ -128,21 +166,55 @@ export async function connectServices(
   for (const seed of options.seedTelegramDestinations ?? []) {
     await telegramDestinations.upsert(seed);
   }
-  const profiles = new ProfileService(new MongoProfileRepository(db), watchlist, indicators);
+  const profiles = new ProfileService(profileRepo, watchlist, indicators);
   const rules = new RuleService(ruleRepo);
   const symbols = new SymbolService(sources, watchlist, config, candleRepo, profiles, stateRepo);
   const backfill = new BackfillService(sources, candleRepo, watchlist);
+  const logger = options.logger ?? SILENT_LOGGER;
+  const eventLog = new MongoEventLog(db);
+  const firingState = new MongoFiringStateRepository(db);
+  const notifier = new TelegramNotifier(telegramDestinations);
+  const wiredRuleEngine = wireRuleEngine({
+    rules: ruleRepo,
+    watchlist,
+    state: stateRepo,
+    notifier,
+    eventLog,
+    firingState,
+    logger,
+  });
+  const indicatorStream = new IndicatorStreamService(indicators, watchlist, indicatorCompute, {
+    onState: (event) => {
+      (options.onIndicatorState ?? (() => {}))(event);
+      wiredRuleEngine.indicatorBridge.handleState(event);
+    },
+  });
+  const quoteStream = new QuoteStreamService(watchlist, config, candleRepo, {
+    onQuote: (event) => {
+      (options.onSymbolQuote ?? (() => {}))(event);
+      wiredRuleEngine.quoteBridge.handleQuote(event);
+    },
+  });
 
   // Fan the polling loop's per-candle event to every sink: the user-supplied
-  // `onCandle` (renders to the candle WS hub), the indicator stream service, and
-  // the quote stream service (each reacts for its matching subscriptions and emits
-  // via its own callback).
+  // `onCandle` (renders to the candle WS hub), the indicator stream service
+  // (computes indicator state), the quote stream service (derives quotes),
+  // and the rule chain (drives the orchestrator). Errors from the async
+  // indicator/quote streams are logged via the injected logger rather than
+  // swallowed.
   const candleListener = options.onCandle ?? (() => {});
   const polling = new PollingService(sources, candleRepo, watchlist, {
     onCandle: (event) => {
       candleListener(event);
-      void indicatorStream.handleCandle(event);
-      quoteStream.handleCandle(event);
+      indicatorStream
+        .handleCandle(event)
+        .catch((err) => logger.error({ err, event }, 'indicator stream failed'));
+      try {
+        quoteStream.handleCandle(event);
+      } catch (err) {
+        logger.error({ err, event }, 'quote stream failed');
+      }
+      wiredRuleEngine.candleBridge.handleCandle(event);
     },
     intervals: options.pollIntervals,
   });
@@ -156,6 +228,7 @@ export async function connectServices(
     indicatorStream,
     quoteStream,
     state: stateRepo,
+    wiredRuleEngine,
     telegramDestinations,
     backfill,
     polling,
