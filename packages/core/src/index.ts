@@ -170,9 +170,9 @@ export {
 export {
   type TelegramDestination,
   TelegramDestinationError,
+  type TelegramDestinationLookup,
   TelegramDestinationNotFoundError,
   type TelegramDestinationSummary,
-  type TelegramDestinationsRepository,
 } from './telegram-destination.types.js';
 export { DEFAULT_TRIGGER_INTERVAL_MS, TriggerError, validateTrigger } from './trigger.js';
 export {

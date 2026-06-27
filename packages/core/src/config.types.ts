@@ -46,6 +46,13 @@ export enum ConfigKey {
   Periods = 'periods',
   /** Holds the `defaultPeriod` string. */
   DefaultPeriod = 'defaultPeriod',
+  /**
+   * Holds the `TelegramDestination[]` array.
+   * Folded into the config K/V store instead of its own collection
+   * (admin-edited, 1–10 entries, handful of writes per day) — see
+   * `docs/decisions/0014-notification-destinations-in-config-store.md`.
+   */
+  TelegramDestinations = 'telegramDestinations',
 }
 
 /**

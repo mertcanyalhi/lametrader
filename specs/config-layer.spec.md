@@ -58,7 +58,35 @@ With an ephemeral MongoDB (Testcontainers): write a config through
 it round-trips. Critical failure mode: an invalid update is rejected and the
 previously persisted value is unchanged.
 
+## Notification destinations sub-resource
+
+Telegram destinations live alongside the scalar config in the same K/V store
+under a new key `ConfigKey.TelegramDestinations`, holding a
+`TelegramDestination[]` (last-write-wins on the whole array).
+Storage choice — array under a single K/V key rather than its own collection +
+port + adapter — is documented in
+`docs/decisions/0014-notification-destinations-in-config-store.md`.
+
+The `TelegramDestinationsService` is the only writer/reader; the scalar
+`/config` endpoints are untouched and do not expose destinations.
+
+API (`/config/notifications/telegram`):
+
+- `GET /config/notifications/telegram` — list `[{ name, chatId }]` (no bot tokens).
+- `POST /config/notifications/telegram` — upsert `{ name, botToken, chatId }`; returns the summary.
+- `DELETE /config/notifications/telegram/:name` — remove; **404** when absent.
+
+CLI (`lametrader config notifications telegram …`):
+
+- `list` — same projection as the API.
+- `set --name --bot-token --chat-id` — upsert.
+- `delete --name` — remove.
+- `test --destination --message` — send a one-off message through the wired `Notifier`.
+
 ## Out of scope
 
 - Per-symbol / per-user config, config history/versioning, API auth,
   hot-reload/subscriptions, and any period values beyond the enum.
+- Per-rule notification preferences (only the destinations book lives here).
+- Slack or other notification adapters (the `/config/notifications/` shape is
+  forward-compatible but no new channel is added in this spec).

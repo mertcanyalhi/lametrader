@@ -23,13 +23,13 @@ function installFetch(): void {
   globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
     const path = String(url);
-    if (method === 'GET' && path.endsWith('/notification/telegram/destinations')) {
+    if (method === 'GET' && path.endsWith('/config/notifications/telegram')) {
       return new Response(JSON.stringify(destinations), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    if (method === 'POST' && path.endsWith('/notification/telegram/destinations')) {
+    if (method === 'POST' && path.endsWith('/config/notifications/telegram')) {
       const body = init?.body ? JSON.parse(String(init.body)) : null;
       postBodies.push(body);
       destinations = [...destinations, { name: String(body.name), chatId: String(body.chatId) }];
@@ -38,7 +38,7 @@ function installFetch(): void {
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    if (method === 'DELETE' && path.includes('/notification/telegram/destinations/')) {
+    if (method === 'DELETE' && path.includes('/config/notifications/telegram/')) {
       const name = decodeURIComponent(path.split('/').pop() ?? '');
       deleteCalls.push(name);
       destinations = destinations.filter((d) => d.name !== name);

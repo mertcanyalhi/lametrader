@@ -27,7 +27,7 @@ describe('SettingsPage', () => {
   let queryClient: QueryClient;
   /**
    * Queue of `/api/config` responses (FIFO). `mockJsonResponse` pushes here;
-   * `/api/notification/telegram/destinations` always returns `[]` so the
+   * `/api/config/notifications/telegram` always returns `[]` so the
    * Telegram destinations section's query never consumes a queued config
    * response.
    */
@@ -37,7 +37,7 @@ describe('SettingsPage', () => {
     configResponses = [];
     fetchSpy = vi.fn(async (url: string) => {
       const path = String(url);
-      if (path.endsWith('/notification/telegram/destinations')) {
+      if (path.endsWith('/config/notifications/telegram')) {
         return new Response('[]', {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
@@ -68,7 +68,7 @@ describe('SettingsPage', () => {
 
   /**
    * Queue the next `/api/config` response (GET or PUT consumed in order).
-   * Calls to `/notification/telegram/destinations` are not gated by this
+   * Calls to `/config/notifications/telegram` are not gated by this
    * queue — they always return `[]`.
    */
   function mockJsonResponse(body: unknown, status = 200): void {

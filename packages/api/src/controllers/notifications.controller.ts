@@ -9,7 +9,7 @@ const TelegramDestinationSummarySchema = Type.Object(
   { additionalProperties: false, $id: 'TelegramDestinationSummary' },
 );
 
-/** Write shape for `POST /notification/telegram/destinations`. */
+/** Write shape for `POST /config/notifications/telegram`. */
 const TelegramDestinationInputSchema = Type.Object(
   {
     name: Type.String({ minLength: 1 }),
@@ -25,12 +25,14 @@ const TelegramDestinationNameParamSchema = Type.Object(
 );
 
 /**
- * Register the CRUD endpoints for the Telegram notification adapter under
- * the shared `/notification` prefix.
+ * Register the CRUD endpoints for notification destinations as a sub-resource
+ * of `/config`. Telegram is the only adapter today; the `/config/notifications`
+ * prefix keeps room for siblings (e.g. `/slack`) without growing top-level
+ * routes.
  *
- * - `GET /notification/telegram/destinations` — list (no bot tokens).
- * - `POST /notification/telegram/destinations` — upsert by `name`.
- * - `DELETE /notification/telegram/destinations/:name` — remove.
+ * - `GET /config/notifications/telegram` — list (no bot tokens).
+ * - `POST /config/notifications/telegram` — upsert by `name`.
+ * - `DELETE /config/notifications/telegram/:name` — remove.
  *
  * Bot tokens are never read back from the server; the upsert returns the
  * non-sensitive summary projection. Domain failures map to 400 / 404 in
@@ -38,15 +40,15 @@ const TelegramDestinationNameParamSchema = Type.Object(
  *
  * @param service - the destinations use-case to drive.
  */
-export function telegramController(service: TelegramDestinationsService) {
+export function notificationsController(service: TelegramDestinationsService) {
   return async (instance: FastifyInstance): Promise<void> => {
     const app = instance.withTypeProvider<TypeBoxTypeProvider>();
 
     app.get(
-      '/notification/telegram/destinations',
+      '/config/notifications/telegram',
       {
         schema: {
-          tags: ['notification'],
+          tags: ['config'],
           summary: 'List configured Telegram destinations',
           response: { 200: Type.Array(TelegramDestinationSummarySchema) },
         },
@@ -55,10 +57,10 @@ export function telegramController(service: TelegramDestinationsService) {
     );
 
     app.post(
-      '/notification/telegram/destinations',
+      '/config/notifications/telegram',
       {
         schema: {
-          tags: ['notification'],
+          tags: ['config'],
           summary: 'Upsert a Telegram destination',
           body: TelegramDestinationInputSchema,
           response: { 200: TelegramDestinationSummarySchema, 400: ErrorSchema },
@@ -68,10 +70,10 @@ export function telegramController(service: TelegramDestinationsService) {
     );
 
     app.delete(
-      '/notification/telegram/destinations/:name',
+      '/config/notifications/telegram/:name',
       {
         schema: {
-          tags: ['notification'],
+          tags: ['config'],
           summary: 'Delete a Telegram destination by name',
           params: TelegramDestinationNameParamSchema,
           response: { 204: Type.Null(), 404: ErrorSchema },

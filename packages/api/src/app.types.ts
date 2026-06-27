@@ -68,8 +68,8 @@ export interface AppDependencies {
   state?: StateRepository;
   /**
    * The Telegram destinations CRUD use-case. When present, the
-   * `/notification/telegram/destinations` routes are registered (list,
-   * upsert, remove). Bot tokens stay server-side — never read back.
+   * `/config/notifications/telegram` routes are registered (list, upsert,
+   * remove). Bot tokens stay server-side — never read back.
    */
   telegramDestinations?: TelegramDestinationsService;
   /**
