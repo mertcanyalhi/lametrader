@@ -10,8 +10,9 @@ const { pollIntervals } = loadSettings({});
 /**
  * E2E for the read-side rule-engine state routes from the API consumer's
  * perspective. Real Fastify over real Mongo (Testcontainers): writes go
- * through `MongoStateRepository`, reads come back through `/state/global`.
- * Mirrors the acceptance criteria in #145.
+ * through `MongoStateRepository`, reads come back through
+ * `/profiles/:profileId/state/global`. State is partitioned by profile
+ * (#281), so reads scope to the profile in the route.
  */
 describe('state API (e2e)', () => {
   let container: StartedMongoDBContainer;
@@ -41,20 +42,51 @@ describe('state API (e2e)', () => {
     await container?.stop();
   });
 
-  it('GET /state/global returns {} when no keys have been set', async () => {
-    const res = await app.inject({ method: 'GET', url: '/state/global' });
+  it('GET /profiles/:profileId/state/global returns {} when no keys have been set', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/profiles/profile-1/state/global',
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({});
   });
 
-  it('GET /state/global returns every set global key after writes', async () => {
-    await state.setGlobalState('regime', { type: StateValueType.Enum, value: 'risk-on' }, 100);
-    await state.setGlobalState('lastSweep', { type: StateValueType.Number, value: 42 }, 101);
-    const res = await app.inject({ method: 'GET', url: '/state/global' });
+  it('GET /profiles/:profileId/state/global returns every set global key after writes', async () => {
+    await state.setGlobalState(
+      'profile-1',
+      'regime',
+      { type: StateValueType.Enum, value: 'risk-on' },
+      100,
+    );
+    await state.setGlobalState(
+      'profile-1',
+      'lastSweep',
+      { type: StateValueType.Number, value: 42 },
+      101,
+    );
+    const res = await app.inject({
+      method: 'GET',
+      url: '/profiles/profile-1/state/global',
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       regime: { type: 'enum', value: 'risk-on' },
       lastSweep: { type: 'number', value: 42 },
     });
+  });
+
+  it('GET /profiles/:profileId/state/global returns {} for a different profileId', async () => {
+    await state.setGlobalState(
+      'profile-1',
+      'regime',
+      { type: StateValueType.Enum, value: 'risk-on' },
+      100,
+    );
+    const res = await app.inject({
+      method: 'GET',
+      url: '/profiles/profile-99/state/global',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({});
   });
 });

@@ -24,6 +24,7 @@ describe('buildEvaluationContext', () => {
     const context = buildEvaluationContext(
       { kind: RuleEventKind.Timer, ts: 1000, symbolId: null },
       emptyLookups(),
+      'profile-1',
     );
     expect({ prev: context.prev, current: context.current }).toEqual({
       prev: null,
@@ -42,6 +43,7 @@ describe('buildEvaluationContext', () => {
         final: false,
       },
       emptyLookups(),
+      'profile-1',
     );
     expect({ prev: context.prev, current: context.current }).toEqual({
       prev: { type: StateValueType.Number, value: 99 },
@@ -55,11 +57,13 @@ describe('buildEvaluationContext', () => {
         kind: RuleEventKind.SymbolStateChanged,
         ts: 1000,
         symbolId: 'AAPL',
+        profileId: 'profile-1',
         key: 'armed',
         prev: { type: StateValueType.Bool, value: false },
         current: { type: StateValueType.Bool, value: true },
       },
       emptyLookups(),
+      'profile-1',
     );
     expect({ prev: context.prev, current: context.current }).toEqual({
       prev: { type: StateValueType.Bool, value: false },
@@ -71,6 +75,7 @@ describe('buildEvaluationContext', () => {
     const context = buildEvaluationContext(
       { kind: RuleEventKind.Timer, ts: 1000, symbolId: null },
       emptyLookups(),
+      'profile-1',
     );
     expect(
       context.resolve({
@@ -95,6 +100,7 @@ describe('buildEvaluationContext', () => {
         final: false,
       },
       lookups,
+      'profile-1',
     );
     expect(
       context.resolve({
@@ -112,6 +118,7 @@ describe('buildEvaluationContext', () => {
     const context = buildEvaluationContext(
       { kind: RuleEventKind.Timer, ts: 1000, symbolId: null },
       lookups,
+      'profile-1',
     );
     expect(
       context.resolve({
@@ -132,6 +139,7 @@ describe('buildEvaluationContext', () => {
     const context = buildEvaluationContext(
       { kind: RuleEventKind.Timer, ts: 1000, symbolId: null },
       lookups,
+      'profile-1',
     );
     expect(
       context.resolve({
@@ -143,11 +151,13 @@ describe('buildEvaluationContext', () => {
     ).toEqual({ type: StateValueType.Number, value: 100 });
   });
 
-  it('resolves a SymbolStateRef operand via the symbol-state lookup', () => {
+  it('resolves a SymbolStateRef operand via the symbol-state lookup with the rule profileId', () => {
     const lookups: EvaluationLookups = {
       ...emptyLookups(),
-      getSymbolState: (symbolId, key) =>
-        symbolId === 'AAPL' && key === 'armed' ? { type: StateValueType.Bool, value: true } : null,
+      getSymbolState: (profileId, symbolId, key) =>
+        profileId === 'profile-1' && symbolId === 'AAPL' && key === 'armed'
+          ? { type: StateValueType.Bool, value: true }
+          : null,
     };
     const context = buildEvaluationContext(
       {
@@ -159,6 +169,7 @@ describe('buildEvaluationContext', () => {
         final: false,
       },
       lookups,
+      'profile-1',
     );
     expect(
       context.resolve({
@@ -169,15 +180,47 @@ describe('buildEvaluationContext', () => {
     ).toEqual({ type: StateValueType.Bool, value: true });
   });
 
-  it('resolves a GlobalStateRef operand via the global-state lookup', () => {
+  it("returns null from a SymbolStateRef operand when the rule profileId differs from the stored value's profile", () => {
     const lookups: EvaluationLookups = {
       ...emptyLookups(),
-      getGlobalState: (key) =>
-        key === 'regime' ? { type: StateValueType.Enum, value: 'risk-on' } : null,
+      getSymbolState: (profileId, symbolId, key) =>
+        profileId === 'profile-1' && symbolId === 'AAPL' && key === 'armed'
+          ? { type: StateValueType.Bool, value: true }
+          : null,
+    };
+    const context = buildEvaluationContext(
+      {
+        kind: RuleEventKind.CurrentValueChanged,
+        ts: 1000,
+        symbolId: 'AAPL',
+        prev: null,
+        current: 100,
+        final: false,
+      },
+      lookups,
+      'profile-2',
+    );
+    expect(
+      context.resolve({
+        kind: OperandKind.SymbolStateRef,
+        key: 'armed',
+        valueType: StateValueType.Bool,
+      }),
+    ).toBeNull();
+  });
+
+  it('resolves a GlobalStateRef operand via the global-state lookup with the rule profileId', () => {
+    const lookups: EvaluationLookups = {
+      ...emptyLookups(),
+      getGlobalState: (profileId, key) =>
+        profileId === 'profile-1' && key === 'regime'
+          ? { type: StateValueType.Enum, value: 'risk-on' }
+          : null,
     };
     const context = buildEvaluationContext(
       { kind: RuleEventKind.Timer, ts: 1000, symbolId: null },
       lookups,
+      'profile-1',
     );
     expect(
       context.resolve({

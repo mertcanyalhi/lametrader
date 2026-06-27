@@ -135,21 +135,17 @@ describe('RuleOrchestrator', () => {
     });
     const rules = new InMemoryRuleRepository([trigger, downstream]);
     const state = new InMemoryStateRepository();
-    const lookups: EvaluationLookups = {
-      ...priceLookups(),
-      getSymbolState: async (symbolId, key) => state.getSymbolState(symbolId, key),
-    } as EvaluationLookups;
     // The lookups interface expects sync; bridge via a small Map updated by the cascade subscription.
     const stateCache = new Map<string, boolean>();
     state.onStateChanged((event) => {
       if (event.scope.kind === 'symbol' && event.current !== null) {
-        stateCache.set(`${event.scope.symbolId}|${event.key}`, true);
+        stateCache.set(`${event.profileId}|${event.scope.symbolId}|${event.key}`, true);
       }
     });
     const syncLookups: EvaluationLookups = {
       ...priceLookups(),
-      getSymbolState: (symbolId, key) =>
-        stateCache.get(`${symbolId}|${key}`) === true
+      getSymbolState: (profileId, symbolId, key) =>
+        stateCache.get(`${profileId}|${symbolId}|${key}`) === true
           ? { type: StateValueType.Bool, value: true }
           : null,
     };
@@ -167,6 +163,79 @@ describe('RuleOrchestrator', () => {
     await orchestrator.process(priceEvent());
 
     expect(notifier.sent.map((sent) => sent.body)).toEqual(['cascaded']);
+  });
+
+  it('cascaded state changes only fire rules belonging to the originating profile (#281)', async () => {
+    const triggerInP1 = rule({
+      id: 'trigger',
+      order: 1,
+      profileId: 'profile-1',
+      actions: [
+        {
+          kind: ActionKind.SetSymbolState,
+          key: 'armed',
+          value: { type: StateValueType.Bool, value: true },
+        },
+      ],
+    });
+    const downstreamP1 = rule({
+      id: 'downstream-p1',
+      order: 2,
+      profileId: 'profile-1',
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        left: { kind: OperandKind.SymbolStateRef, key: 'armed', valueType: StateValueType.Bool },
+        operator: StateOperator.Equals,
+        right: { kind: OperandKind.Literal, value: { type: StateValueType.Bool, value: true } },
+      },
+      actions: [
+        { kind: ActionKind.NotifyTelegram, destinationName: 'main', template: 'p1-saw-it' },
+      ],
+    });
+    const downstreamP2 = rule({
+      id: 'downstream-p2',
+      order: 3,
+      profileId: 'profile-2',
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        left: { kind: OperandKind.SymbolStateRef, key: 'armed', valueType: StateValueType.Bool },
+        operator: StateOperator.Equals,
+        right: { kind: OperandKind.Literal, value: { type: StateValueType.Bool, value: true } },
+      },
+      actions: [
+        { kind: ActionKind.NotifyTelegram, destinationName: 'main', template: 'p2-saw-it' },
+      ],
+    });
+    const rules = new InMemoryRuleRepository([triggerInP1, downstreamP1, downstreamP2]);
+    const state = new InMemoryStateRepository();
+    const stateCache = new Map<string, boolean>();
+    state.onStateChanged((event) => {
+      if (event.scope.kind === 'symbol' && event.current !== null) {
+        stateCache.set(`${event.profileId}|${event.scope.symbolId}|${event.key}`, true);
+      }
+    });
+    const syncLookups: EvaluationLookups = {
+      ...priceLookups(),
+      getSymbolState: (profileId, symbolId, key) =>
+        stateCache.get(`${profileId}|${symbolId}|${key}`) === true
+          ? { type: StateValueType.Bool, value: true }
+          : null,
+    };
+    const notifier = new InMemoryNotifier(['main']);
+    const orchestrator = new RuleOrchestrator(
+      rules,
+      new InMemoryWatchlistRepository(),
+      syncLookups,
+      state,
+      notifier,
+      new InMemoryEventLog(),
+      new InMemoryFiringStateRepository(),
+      { getActiveProfileId: () => 'profile-1' },
+    );
+
+    await orchestrator.process(priceEvent());
+
+    expect(notifier.sent.map((sent) => sent.body)).toEqual(['p1-saw-it']);
   });
 
   it('stops cascading and records one CycleOverflow event when the cycle limit is breached', async () => {

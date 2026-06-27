@@ -14,10 +14,20 @@ import type { EvaluationContext, EvaluationLookups } from './evaluation-context.
  * Pure: takes the event plus a set of injected lookups; never touches I/O or
  * a clock. The returned context resolves any operand by dispatching on its
  * `kind`.
+ *
+ * @param event - the event being evaluated.
+ * @param lookups - the live caches the orchestrator wires in.
+ * @param profileId - the firing rule's profile id; state lookups
+ *   ({@link OperandKind.SymbolStateRef} / {@link OperandKind.GlobalStateRef})
+ *   resolve against this profile's namespace (#281).
+ * @param targetSymbolId - the symbol the rule is firing on (may differ from
+ *   the event's `symbolId` for AllSymbols Timer fan-out); defaults to
+ *   `event.symbolId`.
  */
 export function buildEvaluationContext(
   event: RuleEvent,
   lookups: EvaluationLookups,
+  profileId: string,
   targetSymbolId: string | null = event.symbolId,
 ): EvaluationContext {
   const { prev, current } = derivePrevCurrent(event);
@@ -26,16 +36,18 @@ export function buildEvaluationContext(
     prev,
     current,
     resolve(operand) {
-      return resolveOperand(operand, targetSymbolId, lookups);
+      return resolveOperand(operand, profileId, targetSymbolId, lookups);
     },
   };
 }
 
 /**
- * Resolve one {@link ConditionOperand} against `targetSymbolId` + lookups.
+ * Resolve one {@link ConditionOperand} against `targetSymbolId` + lookups,
+ * scoped to `profileId` for state operands.
  */
 function resolveOperand(
   operand: ConditionOperand,
+  profileId: string,
   symbolId: string | null,
   lookups: EvaluationLookups,
 ): StateValue | null {
@@ -57,9 +69,9 @@ function resolveOperand(
     case OperandKind.IndicatorRef:
       return lookups.getIndicatorValue(operand.instanceId, operand.stateKey);
     case OperandKind.SymbolStateRef:
-      return lookupOnSymbol(symbolId, (id) => lookups.getSymbolState(id, operand.key));
+      return lookupOnSymbol(symbolId, (id) => lookups.getSymbolState(profileId, id, operand.key));
     case OperandKind.GlobalStateRef:
-      return lookups.getGlobalState(operand.key);
+      return lookups.getGlobalState(profileId, operand.key);
   }
 }
 

@@ -42,6 +42,12 @@ export type StateScopeSpec = SymbolStateScope | GlobalStateScope;
  * when the key was just removed.
  */
 export interface StateChangedEvent {
+  /**
+   * The profile namespace the mutation happened in.
+   * State is partitioned per profile so two profiles operating on the same
+   * symbol have isolated `state.*` maps.
+   */
+  profileId: string;
   /** The scope (and symbol, when scoped to one) that mutated. */
   scope: StateScopeSpec;
   /** The state key that mutated. */
@@ -63,6 +69,10 @@ export type StateChangedListener = (event: StateChangedEvent) => void;
  * Driven port for the rule-engine's symbol-scoped + global key/value state
  * store.
  *
+ * **Partitioned by `profileId`** (#281): every read and write takes a
+ * `profileId` so two profiles operating on the same `(symbol, key)` see
+ * isolated namespaces.
+ *
  * Mutations carry their own `ts` (per ADR 0012 — the engine never reads
  * `Date.now()`). Observable mutations emit a {@link StateChangedEvent} so the
  * engine can cascade rules in the same tick.
@@ -72,44 +82,52 @@ export type StateChangedListener = (event: StateChangedEvent) => void;
  */
 export interface StateRepository {
   /**
-   * Read every (key, value) pair on `symbolId`'s state. Returns `{}` when the
-   * symbol has no state. Used by the read-side API (chart markers, debugging).
+   * Read every (key, value) pair on `symbolId`'s state within `profileId`.
+   * Returns `{}` when the symbol has no state under that profile.
    */
-  listSymbolState(symbolId: string): Promise<Record<string, StateValue>>;
+  listSymbolState(profileId: string, symbolId: string): Promise<Record<string, StateValue>>;
   /**
-   * Read the value at `key` on `symbolId`'s state, or `null` if absent.
+   * Read the value at `key` on `symbolId`'s state within `profileId`, or
+   * `null` if absent.
    */
-  getSymbolState(symbolId: string, key: string): Promise<StateValue | null>;
+  getSymbolState(profileId: string, symbolId: string, key: string): Promise<StateValue | null>;
   /**
-   * Write `value` at `key` on `symbolId`'s state. Emits a
+   * Write `value` at `key` on `symbolId`'s state within `profileId`. Emits a
    * {@link StateChangedEvent} only when the value actually changed.
    */
-  setSymbolState(symbolId: string, key: string, value: StateValue, ts: number): Promise<void>;
+  setSymbolState(
+    profileId: string,
+    symbolId: string,
+    key: string,
+    value: StateValue,
+    ts: number,
+  ): Promise<void>;
   /**
-   * Remove `key` from `symbolId`'s state. No-op (no event) if the key was
-   * already absent.
+   * Remove `key` from `symbolId`'s state within `profileId`. No-op (no event)
+   * if the key was already absent.
    */
-  removeSymbolState(symbolId: string, key: string, ts: number): Promise<void>;
+  removeSymbolState(profileId: string, symbolId: string, key: string, ts: number): Promise<void>;
 
   /**
-   * Read every (key, value) pair in the global store. Returns `{}` when no
-   * global keys have been set.
+   * Read every (key, value) pair in the global store for `profileId`.
+   * Returns `{}` when no global keys have been set under that profile.
    */
-  listGlobalState(): Promise<Record<string, StateValue>>;
+  listGlobalState(profileId: string): Promise<Record<string, StateValue>>;
   /**
-   * Read the value at `key` in the global store, or `null` if absent.
+   * Read the value at `key` in the global store for `profileId`, or `null`
+   * if absent.
    */
-  getGlobalState(key: string): Promise<StateValue | null>;
+  getGlobalState(profileId: string, key: string): Promise<StateValue | null>;
   /**
-   * Write `value` at `key` in the global store. Emits a
+   * Write `value` at `key` in the global store for `profileId`. Emits a
    * {@link StateChangedEvent} only when the value actually changed.
    */
-  setGlobalState(key: string, value: StateValue, ts: number): Promise<void>;
+  setGlobalState(profileId: string, key: string, value: StateValue, ts: number): Promise<void>;
   /**
-   * Remove `key` from the global store. No-op (no event) if the key was
-   * already absent.
+   * Remove `key` from the global store for `profileId`. No-op (no event) if
+   * the key was already absent.
    */
-  removeGlobalState(key: string, ts: number): Promise<void>;
+  removeGlobalState(profileId: string, key: string, ts: number): Promise<void>;
 
   /**
    * Subscribe to every {@link StateChangedEvent}; returns an `unsubscribe`

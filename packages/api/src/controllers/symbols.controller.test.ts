@@ -324,7 +324,7 @@ function buildAppWithState(seed?: Array<[string, StateValue]>) {
   };
   const state = new InMemoryStateRepository();
   for (const [key, value] of seed ?? []) {
-    void state.setSymbolState('crypto:BTCUSDT', key, value, 100);
+    void state.setSymbolState('profile-1', 'crypto:BTCUSDT', key, value, 100);
   }
   const config = new ConfigService(new InMemoryConfigRepository());
   const symbols = new SymbolService(
@@ -339,12 +339,15 @@ function buildAppWithState(seed?: Array<[string, StateValue]>) {
 }
 
 describe('GET /symbols/:id/state', () => {
-  it('returns the symbol current state map (200)', async () => {
+  it('returns the symbol current state map for the profile (200)', async () => {
     const app = buildAppWithState([
       ['armed', { type: StateValueType.Bool, value: true }],
       ['cooldown', { type: StateValueType.Number, value: 42 }],
     ]);
-    const res = await app.inject({ method: 'GET', url: '/symbols/crypto:BTCUSDT/state' });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/symbols/crypto:BTCUSDT/state?profileId=profile-1',
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       armed: { type: 'bool', value: true },
@@ -352,9 +355,22 @@ describe('GET /symbols/:id/state', () => {
     });
   });
 
-  it('returns {} for a symbol with no state', async () => {
+  it('returns {} for a symbol with no state under the profile', async () => {
     const app = buildAppWithState();
-    const res = await app.inject({ method: 'GET', url: '/symbols/crypto:BTCUSDT/state' });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/symbols/crypto:BTCUSDT/state?profileId=profile-1',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({});
+  });
+
+  it('returns {} for a different profileId that has no keys', async () => {
+    const app = buildAppWithState([['armed', { type: StateValueType.Bool, value: true }]]);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/symbols/crypto:BTCUSDT/state?profileId=profile-2',
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({});
   });
@@ -362,8 +378,16 @@ describe('GET /symbols/:id/state', () => {
   it('returns 404 when the symbol is not watched', async () => {
     const res = await buildAppWithState().inject({
       method: 'GET',
-      url: '/symbols/crypto:NOPEUSDT/state',
+      url: '/symbols/crypto:NOPEUSDT/state?profileId=profile-1',
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('rejects a missing profileId query param with 400', async () => {
+    const res = await buildAppWithState().inject({
+      method: 'GET',
+      url: '/symbols/crypto:BTCUSDT/state',
+    });
+    expect(res.statusCode).toBe(400);
   });
 });

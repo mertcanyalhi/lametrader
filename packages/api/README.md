@@ -103,7 +103,7 @@ results (so a discovery hit may omit it; a watched symbol always has it).
 | `PATCH`  | `/symbols/{id}`       | `{ periods }`           | Change a symbol's periods. 200 / 400 / 404.         |
 | `DELETE` | `/symbols/{id}`       | —                       | Remove a symbol **and its stored candles**. **204**. |
 | `GET`    | `/symbols/{id}/rule-events?limit=&before=` | —     | Paginated rule-engine events fired against this symbol, newest first. 200 / 404. |
-| `GET`    | `/symbols/{id}/state` | —                       | Current rule-engine state map for this symbol (`{ [key]: StateValue }`; `{}` when empty). 200 / 404. |
+| `GET`    | `/symbols/{id}/state?profileId=` | —                | Current rule-engine state map for this symbol under `profileId` (state is partitioned per profile; `{ [key]: StateValue }`; `{}` when empty). 200 / 400 / 404. |
 
 Errors use the uniform `{ "error": "<reason>" }` body — **400** for invalid input,
 **404** when the symbol doesn't exist at its source or isn't watched, **409** when
@@ -129,7 +129,7 @@ curl -X PATCH http://localhost:3000/symbols/crypto:BTCUSDT \
   -H 'content-type: application/json' -d '{ "periods": ["1h"] }'
 curl -X DELETE http://localhost:3000/symbols/crypto:BTCUSDT
 curl 'http://localhost:3000/symbols/crypto:BTCUSDT/rule-events?limit=50'
-curl http://localhost:3000/symbols/crypto:BTCUSDT/state
+curl 'http://localhost:3000/symbols/crypto:BTCUSDT/state?profileId=p1'
 ```
 
 ## Profiles resource
@@ -382,22 +382,24 @@ curl 'http://localhost:3000/rules/<id>/events?limit=50'
 
 ## State resource
 
-Read-side views of the rule-engine state — the cross-symbol global key/value store and (via the symbols resource) per-symbol state maps. Used by chart markers and debugging; the engine itself writes state through the orchestrator.
+Read-side views of the rule-engine state — the per-profile global key/value store and (via the symbols resource) per-profile per-symbol state maps. Used by chart markers and debugging; the engine itself writes state through the orchestrator.
+
+State is **partitioned by profile** (#281) — two profiles operating on the same symbol see isolated `state.*` namespaces, so every read takes a `profileId`.
 
 A `StateValue` is a tagged scalar: `{ "type": "string" | "number" | "bool" | "enum", "value": ... }`.
 
 ### Endpoints
 
-| Method | Path             | Body | Description                                                       |
-| ------ | ---------------- | ---- | ----------------------------------------------------------------- |
-| `GET`  | `/state/global`  | —    | Current global state map (`{ [key]: StateValue }`; `{}` when empty). 200. |
+| Method | Path                                  | Body | Description                                                                              |
+| ------ | ------------------------------------- | ---- | ---------------------------------------------------------------------------------------- |
+| `GET`  | `/profiles/{profileId}/state/global`  | —    | Current global state map for `profileId` (`{ [key]: StateValue }`; `{}` when empty). 200. |
 
-The per-symbol state map lives at `GET /symbols/{id}/state` (see the symbols resource).
+The per-symbol state map lives at `GET /symbols/{id}/state?profileId=...` (see the symbols resource).
 
 ### Examples
 
 ```sh
-curl http://localhost:3000/state/global
+curl http://localhost:3000/profiles/p1/state/global
 ```
 
 ## Live stream

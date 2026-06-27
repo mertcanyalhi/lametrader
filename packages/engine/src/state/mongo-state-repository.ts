@@ -12,8 +12,9 @@ import type { StateDocument } from './mongo-state-repository.types.js';
 /**
  * MongoDB-backed {@link StateRepository}.
  *
- * Stores one document per `(scope, symbolId?, key)` in the `state` collection.
- * The compound triple is the natural unique key (enforced by
+ * Partitioned by `profileId` (#281): one document per
+ * `(profileId, scope, symbolId?, key)` in the `state` collection. The
+ * compound quadruple is the natural unique key (enforced by
  * {@link ensureIndexes}). Re-saving an existing key upserts.
  *
  * Per ADR 0012, the caller supplies each mutation's `ts`; the adapter records
@@ -43,54 +44,79 @@ export class MongoStateRepository implements StateRepository {
   }
 
   /**
-   * Create the compound unique index on `(scope, symbolId, key)`. Idempotent —
-   * Mongo no-ops a `createIndex` for an index that already exists with the
-   * same spec.
+   * Create the compound unique index on `(profileId, scope, symbolId, key)`.
+   *
+   * Migration: drop any pre-existing legacy `(scope, symbolId, key)` index
+   * and wipe documents lacking a `profileId` field (we never persisted
+   * profile-aware state before #281 — wipe-and-rebuild was the agreed
+   * migration path; the engine repopulates on the next tick).
+   *
+   * Idempotent — Mongo no-ops a `createIndex` for an index that already
+   * exists with the same spec.
    */
   async ensureIndexes(): Promise<void> {
+    await this.dropLegacyIndex();
+    await this.dropLegacyDocuments();
     await this.collection.createIndex(
-      { scope: 1, symbolId: 1, key: 1 },
-      { unique: true, name: 'scope_symbolId_key_unique' },
+      { profileId: 1, scope: 1, symbolId: 1, key: 1 },
+      { unique: true, name: 'profileId_scope_symbolId_key_unique' },
     );
   }
 
-  async listSymbolState(symbolId: string): Promise<Record<string, StateValue>> {
-    const docs = await this.collection.find({ scope: StateScope.Symbol, symbolId }).toArray();
+  async listSymbolState(profileId: string, symbolId: string): Promise<Record<string, StateValue>> {
+    const docs = await this.collection
+      .find({ profileId, scope: StateScope.Symbol, symbolId })
+      .toArray();
     return Object.fromEntries(docs.map((doc) => [doc.key, doc.value]));
   }
 
-  async getSymbolState(symbolId: string, key: string): Promise<StateValue | null> {
-    return this.getValue({ kind: StateScope.Symbol, symbolId }, key);
+  async getSymbolState(
+    profileId: string,
+    symbolId: string,
+    key: string,
+  ): Promise<StateValue | null> {
+    return this.getValue(profileId, { kind: StateScope.Symbol, symbolId }, key);
   }
 
   async setSymbolState(
+    profileId: string,
     symbolId: string,
     key: string,
     value: StateValue,
     ts: number,
   ): Promise<void> {
-    await this.setValue({ kind: StateScope.Symbol, symbolId }, key, value, ts);
+    await this.setValue(profileId, { kind: StateScope.Symbol, symbolId }, key, value, ts);
   }
 
-  async removeSymbolState(symbolId: string, key: string, ts: number): Promise<void> {
-    await this.removeValue({ kind: StateScope.Symbol, symbolId }, key, ts);
+  async removeSymbolState(
+    profileId: string,
+    symbolId: string,
+    key: string,
+    ts: number,
+  ): Promise<void> {
+    await this.removeValue(profileId, { kind: StateScope.Symbol, symbolId }, key, ts);
   }
 
-  async listGlobalState(): Promise<Record<string, StateValue>> {
-    const docs = await this.collection.find({ scope: StateScope.Global }).toArray();
+  async listGlobalState(profileId: string): Promise<Record<string, StateValue>> {
+    const docs = await this.collection.find({ profileId, scope: StateScope.Global }).toArray();
     return Object.fromEntries(docs.map((doc) => [doc.key, doc.value]));
   }
 
-  async getGlobalState(key: string): Promise<StateValue | null> {
-    return this.getValue({ kind: StateScope.Global }, key);
+  async getGlobalState(profileId: string, key: string): Promise<StateValue | null> {
+    return this.getValue(profileId, { kind: StateScope.Global }, key);
   }
 
-  async setGlobalState(key: string, value: StateValue, ts: number): Promise<void> {
-    await this.setValue({ kind: StateScope.Global }, key, value, ts);
+  async setGlobalState(
+    profileId: string,
+    key: string,
+    value: StateValue,
+    ts: number,
+  ): Promise<void> {
+    await this.setValue(profileId, { kind: StateScope.Global }, key, value, ts);
   }
 
-  async removeGlobalState(key: string, ts: number): Promise<void> {
-    await this.removeValue({ kind: StateScope.Global }, key, ts);
+  async removeGlobalState(profileId: string, key: string, ts: number): Promise<void> {
+    await this.removeValue(profileId, { kind: StateScope.Global }, key, ts);
   }
 
   onStateChanged(listener: StateChangedListener): () => void {
@@ -100,33 +126,56 @@ export class MongoStateRepository implements StateRepository {
     };
   }
 
-  private async getValue(scope: StateScopeSpec, key: string): Promise<StateValue | null> {
-    const doc = await this.collection.findOne(toFilter(scope, key));
+  private async getValue(
+    profileId: string,
+    scope: StateScopeSpec,
+    key: string,
+  ): Promise<StateValue | null> {
+    const doc = await this.collection.findOne(toFilter(profileId, scope, key));
     return doc?.value ?? null;
   }
 
   private async setValue(
+    profileId: string,
     scope: StateScopeSpec,
     key: string,
     value: StateValue,
     ts: number,
   ): Promise<void> {
-    const filter = toFilter(scope, key);
+    const filter = toFilter(profileId, scope, key);
     const prev = await this.collection.findOne(filter);
     if (prev !== null && stateValueEquals(prev.value, value)) return;
     await this.collection.replaceOne(
       filter,
-      { ...toDocumentKey(scope, key), value, updatedAt: ts },
+      { ...toDocumentKey(profileId, scope, key), value, updatedAt: ts },
       { upsert: true },
     );
-    this.emit({ scope, key, prev: prev?.value ?? null, current: value, ts });
+    this.emit({ profileId, scope, key, prev: prev?.value ?? null, current: value, ts });
   }
 
-  private async removeValue(scope: StateScopeSpec, key: string, ts: number): Promise<void> {
-    const filter = toFilter(scope, key);
+  private async removeValue(
+    profileId: string,
+    scope: StateScopeSpec,
+    key: string,
+    ts: number,
+  ): Promise<void> {
+    const filter = toFilter(profileId, scope, key);
     const removed = await this.collection.findOneAndDelete(filter);
     if (removed === null) return;
-    this.emit({ scope, key, prev: removed.value, current: null, ts });
+    this.emit({ profileId, scope, key, prev: removed.value, current: null, ts });
+  }
+
+  private async dropLegacyIndex(): Promise<void> {
+    try {
+      await this.collection.dropIndex('scope_symbolId_key_unique');
+    } catch {
+      // Index didn't exist — nothing to drop. Mongo throws `IndexNotFound`
+      // and we treat that as the steady-state.
+    }
+  }
+
+  private async dropLegacyDocuments(): Promise<void> {
+    await this.collection.deleteMany({ profileId: { $exists: false } });
   }
 
   private emit(event: StateChangedEvent): void {
@@ -137,14 +186,14 @@ export class MongoStateRepository implements StateRepository {
 }
 
 /**
- * Build a Mongo filter pinning one `(scope, symbolId, key)` row. For global
- * scope `symbolId` is matched against `null` so the same compound index
- * resolves both kinds of read.
+ * Build a Mongo filter pinning one `(profileId, scope, symbolId, key)` row.
+ * For global scope `symbolId` is matched against `null` so the same compound
+ * index resolves both kinds of read.
  */
-function toFilter(scope: StateScopeSpec, key: string): Filter<StateDocument> {
+function toFilter(profileId: string, scope: StateScopeSpec, key: string): Filter<StateDocument> {
   return scope.kind === StateScope.Symbol
-    ? { scope: StateScope.Symbol, symbolId: scope.symbolId, key }
-    : { scope: StateScope.Global, symbolId: null, key };
+    ? { profileId, scope: StateScope.Symbol, symbolId: scope.symbolId, key }
+    : { profileId, scope: StateScope.Global, symbolId: null, key };
 }
 
 /**
@@ -152,12 +201,13 @@ function toFilter(scope: StateScopeSpec, key: string): Filter<StateDocument> {
  * `updatedAt`).
  */
 function toDocumentKey(
+  profileId: string,
   scope: StateScopeSpec,
   key: string,
 ): Omit<StateDocument, 'value' | 'updatedAt'> {
   return scope.kind === StateScope.Symbol
-    ? { scope: StateScope.Symbol, symbolId: scope.symbolId, key }
-    : { scope: StateScope.Global, symbolId: null, key };
+    ? { profileId, scope: StateScope.Symbol, symbolId: scope.symbolId, key }
+    : { profileId, scope: StateScope.Global, symbolId: null, key };
 }
 
 /**

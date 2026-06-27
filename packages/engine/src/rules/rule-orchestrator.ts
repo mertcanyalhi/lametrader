@@ -118,15 +118,35 @@ export class RuleOrchestrator {
 
   /**
    * Process one event against every matching enabled rule.
+   *
+   * For cascaded state-change events (which carry their originating
+   * `profileId` per #281), the profile is taken from the event itself so a
+   * profile-A write never wakes profile-B rules.
+   * For all other events, the configured `getActiveProfileId` filter applies.
    */
   private async processOneEvent(event: RuleEvent): Promise<void> {
-    const profileId = await this.resolveActiveProfileId();
+    const profileId = await this.resolveProfileIdForEvent(event);
     const candidates = await this.rules.listForSymbol(event.symbolId, profileId);
     const enabled = candidates.filter((rule) => rule.enabled);
     enabled.sort((a, b) => a.order - b.order);
     for (const rule of enabled) {
       await this.processRule(rule, event);
     }
+  }
+
+  /**
+   * Pick the `profileId` filter for `event`'s evaluation. Cascaded state
+   * changes carry their originating profile on the event itself (#281); other
+   * events fall through to the configured active-profile getter.
+   */
+  private async resolveProfileIdForEvent(event: RuleEvent): Promise<string | undefined> {
+    if (
+      event.kind === RuleEventKind.SymbolStateChanged ||
+      event.kind === RuleEventKind.GlobalStateChanged
+    ) {
+      return event.profileId;
+    }
+    return await this.resolveActiveProfileId();
   }
 
   /**
@@ -164,7 +184,7 @@ export class RuleOrchestrator {
       return;
     }
 
-    const context = buildEvaluationContext(event, this.lookups, firingSymbolId);
+    const context = buildEvaluationContext(event, this.lookups, rule.profileId, firingSymbolId);
     const conditionTrue = evaluateConditionTree(rule.condition, (leaf) =>
       evaluateLeaf(leaf, context),
     );
@@ -199,7 +219,7 @@ export class RuleOrchestrator {
   ): Promise<void> {
     for (const action of rule.actions) {
       if (isStateAction(action)) {
-        await executeStateAction(action, firingSymbolId, ts, this.state);
+        await executeStateAction(action, rule.profileId, firingSymbolId, ts, this.state);
         await appendStateActionEvent(action, rule.id, firingSymbolId, ts, this.log);
         continue;
       }
@@ -382,6 +402,9 @@ function isCrossingOp(op: string): op is CrossingOperator {
 /**
  * Translate one {@link StateChangedEvent} from the repository into the
  * matching {@link RuleEvent} variant the orchestrator iterates.
+ *
+ * Carries `profileId` through so the cascaded rule event only fires
+ * same-profile candidates (#281).
  */
 function toRuleEvent(event: StateChangedEvent): RuleEvent {
   if (event.scope.kind === StateScope.Symbol) {
@@ -389,6 +412,7 @@ function toRuleEvent(event: StateChangedEvent): RuleEvent {
       kind: RuleEventKind.SymbolStateChanged,
       ts: event.ts,
       symbolId: event.scope.symbolId,
+      profileId: event.profileId,
       key: event.key,
       prev: event.prev,
       current: event.current,
@@ -398,6 +422,7 @@ function toRuleEvent(event: StateChangedEvent): RuleEvent {
     kind: RuleEventKind.GlobalStateChanged,
     ts: event.ts,
     symbolId: null,
+    profileId: event.profileId,
     key: event.key,
     prev: event.prev,
     current: event.current,

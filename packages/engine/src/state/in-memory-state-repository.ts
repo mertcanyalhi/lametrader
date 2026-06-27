@@ -11,39 +11,45 @@ import {
  *
  * Real (not a test double): backs the unit tier and offline/demo wiring; also
  * doubles as the fake used by unit tests for the rest of the engine.
+ *
+ * Partitioned by `profileId` (#281): the outer map's key is `profileId`, so
+ * two profiles operating on the same `(symbolId, key)` see independent
+ * values.
  */
 export class InMemoryStateRepository implements StateRepository {
-  /** symbolId → key → value. */
-  private readonly symbolStore = new Map<string, Map<string, StateValue>>();
-  /** Global key-value store. */
-  private readonly globalStore = new Map<string, StateValue>();
+  /** profileId → symbolId → key → value. */
+  private readonly symbolStore = new Map<string, Map<string, Map<string, StateValue>>>();
+  /** profileId → key → value. */
+  private readonly globalStore = new Map<string, Map<string, StateValue>>();
   /** Active change listeners. */
   private readonly listeners = new Set<StateChangedListener>();
 
-  async listSymbolState(symbolId: string): Promise<Record<string, StateValue>> {
-    const bucket = this.symbolStore.get(symbolId);
+  async listSymbolState(profileId: string, symbolId: string): Promise<Record<string, StateValue>> {
+    const bucket = this.symbolStore.get(profileId)?.get(symbolId);
     return bucket ? Object.fromEntries(bucket) : {};
   }
 
-  async getSymbolState(symbolId: string, key: string): Promise<StateValue | null> {
-    return this.symbolStore.get(symbolId)?.get(key) ?? null;
+  async getSymbolState(
+    profileId: string,
+    symbolId: string,
+    key: string,
+  ): Promise<StateValue | null> {
+    return this.symbolStore.get(profileId)?.get(symbolId)?.get(key) ?? null;
   }
 
   async setSymbolState(
+    profileId: string,
     symbolId: string,
     key: string,
     value: StateValue,
     ts: number,
   ): Promise<void> {
-    let bucket = this.symbolStore.get(symbolId);
-    if (bucket === undefined) {
-      bucket = new Map();
-      this.symbolStore.set(symbolId, bucket);
-    }
+    const bucket = this.openSymbolBucket(profileId, symbolId);
     const prev = bucket.get(key) ?? null;
     if (prev !== null && stateValueEquals(prev, value)) return;
     bucket.set(key, value);
     this.emit({
+      profileId,
       scope: { kind: StateScope.Symbol, symbolId },
       key,
       prev,
@@ -52,12 +58,18 @@ export class InMemoryStateRepository implements StateRepository {
     });
   }
 
-  async removeSymbolState(symbolId: string, key: string, ts: number): Promise<void> {
-    const bucket = this.symbolStore.get(symbolId);
+  async removeSymbolState(
+    profileId: string,
+    symbolId: string,
+    key: string,
+    ts: number,
+  ): Promise<void> {
+    const bucket = this.symbolStore.get(profileId)?.get(symbolId);
     const prev = bucket?.get(key) ?? null;
     if (prev === null) return;
     bucket?.delete(key);
     this.emit({
+      profileId,
       scope: { kind: StateScope.Symbol, symbolId },
       key,
       prev,
@@ -66,19 +78,27 @@ export class InMemoryStateRepository implements StateRepository {
     });
   }
 
-  async listGlobalState(): Promise<Record<string, StateValue>> {
-    return Object.fromEntries(this.globalStore);
+  async listGlobalState(profileId: string): Promise<Record<string, StateValue>> {
+    const bucket = this.globalStore.get(profileId);
+    return bucket ? Object.fromEntries(bucket) : {};
   }
 
-  async getGlobalState(key: string): Promise<StateValue | null> {
-    return this.globalStore.get(key) ?? null;
+  async getGlobalState(profileId: string, key: string): Promise<StateValue | null> {
+    return this.globalStore.get(profileId)?.get(key) ?? null;
   }
 
-  async setGlobalState(key: string, value: StateValue, ts: number): Promise<void> {
-    const prev = this.globalStore.get(key) ?? null;
+  async setGlobalState(
+    profileId: string,
+    key: string,
+    value: StateValue,
+    ts: number,
+  ): Promise<void> {
+    const bucket = this.openGlobalBucket(profileId);
+    const prev = bucket.get(key) ?? null;
     if (prev !== null && stateValueEquals(prev, value)) return;
-    this.globalStore.set(key, value);
+    bucket.set(key, value);
     this.emit({
+      profileId,
       scope: { kind: StateScope.Global },
       key,
       prev,
@@ -87,11 +107,13 @@ export class InMemoryStateRepository implements StateRepository {
     });
   }
 
-  async removeGlobalState(key: string, ts: number): Promise<void> {
-    const prev = this.globalStore.get(key) ?? null;
+  async removeGlobalState(profileId: string, key: string, ts: number): Promise<void> {
+    const bucket = this.globalStore.get(profileId);
+    const prev = bucket?.get(key) ?? null;
     if (prev === null) return;
-    this.globalStore.delete(key);
+    bucket?.delete(key);
     this.emit({
+      profileId,
       scope: { kind: StateScope.Global },
       key,
       prev,
@@ -105,6 +127,29 @@ export class InMemoryStateRepository implements StateRepository {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  private openSymbolBucket(profileId: string, symbolId: string): Map<string, StateValue> {
+    let perProfile = this.symbolStore.get(profileId);
+    if (perProfile === undefined) {
+      perProfile = new Map();
+      this.symbolStore.set(profileId, perProfile);
+    }
+    let bucket = perProfile.get(symbolId);
+    if (bucket === undefined) {
+      bucket = new Map();
+      perProfile.set(symbolId, bucket);
+    }
+    return bucket;
+  }
+
+  private openGlobalBucket(profileId: string): Map<string, StateValue> {
+    let bucket = this.globalStore.get(profileId);
+    if (bucket === undefined) {
+      bucket = new Map();
+      this.globalStore.set(profileId, bucket);
+    }
+    return bucket;
   }
 
   private emit(event: StateChangedEvent): void {
