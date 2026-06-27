@@ -58,7 +58,7 @@ Every change: **spec → red → green → refactor → check → commit**, one 
 7. **Commit** — one logical concern, Conventional Commits message.
    Do **not** bump package `version`s here — versioning is a separate flow (`/release`), driven off the conventional-commit history.
 
-`/feature`, `/adr`, `/ship` automate this loop.
+`/implement`, `/adr`, `/ship` automate this loop.
 `/release` is the separate versioning flow — run it when cutting a release, not per change.
 
 ### Fast-track (bug fixes, trivial changes)

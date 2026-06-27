@@ -1,5 +1,5 @@
 ---
-description: Simplified feature flow — climb the YAGNI ladder, ship the shortest diff that holds. Lazy alternative to /feature.
+description: Simplified feature flow — climb the YAGNI ladder, ship the shortest diff that holds. Lazy alternative to /implement.
 argument-hint: <feature-name> [short description]
 ---
 
@@ -23,7 +23,7 @@ Two rungs work → take the higher one and move on. First lazy solution that wor
 
 1. **Scope it down.** State in one or two lines what you'll build and what you're deliberately *not* building. If the request implies abstraction (interface, factory, config, port), don't — wait for the second instance (CLAUDE.md: abstract on the second instance). If anything's genuinely ambiguous or a decision could cost a refactor, ask — don't guess (CLAUDE.md).
 2. **Build.** Minimal code, shortest diff, fewest files. Respect the one rule: adapters → application → domain. Resolve config via `loadSettings`, never `process.env`. Mark deliberate simplifications with a `// Lazy:` comment naming the ceiling and upgrade path.
-3. **One check behind it.** Non-trivial logic (a branch, loop, parser, money/security path) leaves ONE runnable check — a unit test, full-payload `toEqual`, `expect.closeTo` for floats. Trivial one-liners need no test. No spec file, no e2e, no scaffolding unless the behavior is a documented spec change — if it is, stop and use `/feature` instead.
+3. **One check behind it.** Non-trivial logic (a branch, loop, parser, money/security path) leaves ONE runnable check — a unit test, full-payload `toEqual`, `expect.closeTo` for floats. Trivial one-liners need no test. No spec file, no e2e, no scaffolding unless the behavior is a documented spec change — if it is, stop and use `/implement` instead.
 4. **Gate.** `npm run check`. Fix red.
 
 Don't commit — leave that to `/ship`.
