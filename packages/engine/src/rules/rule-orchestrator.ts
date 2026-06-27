@@ -1,8 +1,5 @@
 import {
-  type ConditionNode,
-  type ConditionOperand,
   type EventLog,
-  NumericOperator,
   type Rule,
   type RuleEvent,
   type RuleEventEntry,
@@ -11,7 +8,6 @@ import {
   type RuleRepository,
   RuleScopeKind,
   type StateChangedEvent,
-  type StateOperator,
   type StateRepository,
   StateScope,
   TriggerKind,
@@ -19,14 +15,11 @@ import {
 } from '@lametrader/core';
 import { getLogger } from '../log.js';
 import type { ActionRunner } from './action-runner.js';
-import { type ComparisonOperator, evaluateComparison } from './comparison-evaluator.js';
-import { evaluateConditionTree } from './condition-tree-evaluator.js';
-import { type CrossingOperator, evaluateCrossing } from './crossing-evaluator.js';
+import { evaluateCondition } from './condition-evaluator.js';
 import { CycleGuard, CycleOverflowError } from './cycle-guard.js';
 import { buildEvaluationContext } from './evaluation-context.js';
 import type { EvaluationContext, EvaluationLookups } from './evaluation-context.types.js';
 import { RuleOutcome } from './rule-orchestrator-trace.types.js';
-import { evaluateState } from './state-evaluator.js';
 import type { TriggerEvaluator } from './trigger-evaluator.js';
 
 /** Scope-bound logger for the rule orchestrator (#306). */
@@ -235,11 +228,7 @@ export class RuleOrchestrator {
     }
 
     const context = buildEvaluationContext(event, this.lookups, rule.profileId, firingSymbolId);
-    let leafIndex = 0;
-    const conditionTrue = evaluateConditionTree(rule.condition, (leaf) => {
-      const idx = leafIndex++;
-      return evaluateLeaf(leaf, context, rule.id, idx);
-    });
+    const conditionTrue = evaluateCondition(rule.condition, context, rule.id);
 
     const triggerAllows = await this.triggers.mayFire(rule, event, firingSymbolId, conditionTrue);
 
@@ -332,89 +321,6 @@ export class RuleOrchestrator {
     };
     await this.log.appendSymbolEvent(symbolId, entry);
   }
-}
-
-/**
- * Evaluate one condition-tree leaf against the context — dispatches on the
- * leaf operator's category (comparison / crossing / state).
- *
- * State and crossing operators consume operand-specific `(prev, current)` pairs
- * from {@link EvaluationContext.resolvePrevCurrent}, so the operator's
- * history reads off the **operand's** history rather than the inbound event's
- * value axis (#357). Comparison operators read `.current` only.
- *
- * Emits one `leaf_decision` trace per call (#354). The trace records the
- * resolution source via {@link EvaluationContext.resolveTraced} (event vs
- * lookup vs literal) so a stale-lookup value is one grep apart from an
- * event-derived one.
- */
-function evaluateLeaf(
-  leaf:
-    | Extract<ConditionNode, { kind: never } extends never ? never : never>
-    | {
-        operator: ComparisonOperator | CrossingOperator | StateOperator;
-        left: ConditionOperand;
-        right: ConditionOperand;
-      },
-  context: EvaluationContext,
-  ruleId: string,
-  leafIndex: number,
-): boolean {
-  const op = leaf.operator;
-  const leftResolved = context.resolveTraced(leaf.left);
-  const rightResolved = context.resolveTraced(leaf.right);
-  const left = leftResolved.value;
-  const right = rightResolved.value;
-  let result: boolean;
-  if (isComparisonOp(op)) {
-    result = evaluateComparison(op, left, right);
-  } else if (isCrossingOp(op)) {
-    const leftPc = context.resolvePrevCurrent(leaf.left);
-    const rightPc = context.resolvePrevCurrent(leaf.right);
-    result = evaluateCrossing(op, leftPc.prev, leftPc.current, rightPc.prev, rightPc.current);
-  } else {
-    const leftPc = context.resolvePrevCurrent(leaf.left);
-    result = evaluateState(op, leftPc.prev, leftPc.current, right);
-  }
-  log.trace(
-    {
-      ruleId,
-      leafIndex,
-      operator: op,
-      leftDescriptor: leaf.left,
-      leftValue: left,
-      leftSource: leftResolved.source,
-      rightDescriptor: leaf.right,
-      rightValue: right,
-      rightSource: rightResolved.source,
-      result,
-    },
-    'leaf_decision',
-  );
-  return result;
-}
-
-const COMPARISON_OPS = new Set<string>([
-  NumericOperator.Gt,
-  NumericOperator.Lt,
-  NumericOperator.Gte,
-  NumericOperator.Lte,
-  NumericOperator.Eq,
-  NumericOperator.Neq,
-]);
-
-const CROSSING_OPS = new Set<string>([
-  NumericOperator.Crossing,
-  NumericOperator.CrossingUp,
-  NumericOperator.CrossingDown,
-]);
-
-function isComparisonOp(op: string): op is ComparisonOperator {
-  return COMPARISON_OPS.has(op);
-}
-
-function isCrossingOp(op: string): op is CrossingOperator {
-  return CROSSING_OPS.has(op);
 }
 
 /**
