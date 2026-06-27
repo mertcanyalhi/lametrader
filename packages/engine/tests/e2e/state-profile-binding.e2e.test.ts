@@ -128,7 +128,7 @@ function readsTrendRule(profileId: string, id: string, marker: string, order: nu
  */
 function buildDriver(seedRules: Rule[], activeProfile: string) {
   const notifier = new InMemoryNotifier(['main']);
-  const log = new InMemoryEventLog();
+  const log = new InMemoryEventLog(() => 999);
   const state = new InMemoryStateRepository();
   const firingState = new InMemoryFiringStateRepository();
   const rules = new InMemoryRuleRepository(seedRules);
@@ -200,6 +200,7 @@ describe('state profile binding (e2e)', () => {
         scope: StateScope.Symbol,
         key: 'trend',
         value: { type: StateValueType.Enum, value: 'up' },
+        firedAt: 999,
       },
     ]);
   });

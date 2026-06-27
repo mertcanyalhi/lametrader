@@ -84,7 +84,8 @@ export function EventsDialog({
           <Table.Root variant="surface" size="1">
             <Table.Header>
               <Table.Row>
-                <Table.ColumnHeaderCell>Timestamp</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Bar time</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Fired at</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Kind</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Payload</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell> </Table.ColumnHeaderCell>
@@ -95,6 +96,15 @@ export function EventsDialog({
                 // biome-ignore lint/suspicious/noArrayIndexKey: events stream in newest-first order; no stable per-row id.
                 <Table.Row key={`${event.ts}-${event.type}-${index}`}>
                   <Table.Cell>{formatTimestamp(event.ts)}</Table.Cell>
+                  <Table.Cell>
+                    {event.firedAt === undefined ? (
+                      <Text size="2" color="gray">
+                        —
+                      </Text>
+                    ) : (
+                      formatTimestamp(event.firedAt)
+                    )}
+                  </Table.Cell>
                   <Table.Cell>{event.type}</Table.Cell>
                   <Table.Cell>
                     <Text size="2" color="gray">

@@ -36,7 +36,7 @@ describe('MongoEventLog (e2e)', () => {
     await db.collection('rules').deleteMany({});
     await db.collection('watchlist').insertOne({ _id: 'AAPL' });
     await db.collection('rules').insertOne({ _id: 'rule-1' });
-    log = new MongoEventLog(db);
+    log = new MongoEventLog(db, () => 999);
   });
 
   it('appendSymbolEvent pushes the entry onto the symbol document events array', async () => {
@@ -47,7 +47,7 @@ describe('MongoEventLog (e2e)', () => {
       symbolId: 'AAPL',
     };
     await log.appendSymbolEvent('AAPL', entry);
-    expect(await log.symbolEvents('AAPL')).toEqual([entry]);
+    expect(await log.symbolEvents('AAPL')).toEqual([{ ...entry, firedAt: 999 }]);
   });
 
   it('appendRuleEvent pushes the entry onto the rule document events array', async () => {
@@ -58,7 +58,7 @@ describe('MongoEventLog (e2e)', () => {
       symbolId: 'AAPL',
     };
     await log.appendRuleEvent('rule-1', entry);
-    expect(await log.ruleEvents('rule-1')).toEqual([entry]);
+    expect(await log.ruleEvents('rule-1')).toEqual([{ ...entry, firedAt: 999 }]);
   });
 
   it('symbolEvents returns the events in append order across multiple writes', async () => {
@@ -77,7 +77,10 @@ describe('MongoEventLog (e2e)', () => {
     };
     await log.appendSymbolEvent('AAPL', first);
     await log.appendSymbolEvent('AAPL', second);
-    expect(await log.symbolEvents('AAPL')).toEqual([first, second]);
+    expect(await log.symbolEvents('AAPL')).toEqual([
+      { ...first, firedAt: 999 },
+      { ...second, firedAt: 999 },
+    ]);
   });
 
   it('symbolEvents returns an empty array for a symbol with no events field', async () => {

@@ -100,7 +100,7 @@ function buildDriver(
   options: { orchestratorOptions?: RuleOrchestratorOptions; watched?: string[] } = {},
 ) {
   const notifier = new InMemoryNotifier(['main']);
-  const log = new InMemoryEventLog();
+  const log = new InMemoryEventLog(() => 999);
   const state = new InMemoryStateRepository();
   const firingState = new InMemoryFiringStateRepository();
   const rules = new InMemoryRuleRepository(seedRules);
@@ -160,6 +160,7 @@ describe('rule orchestrator (e2e)', () => {
         ts: 1000,
         ruleId: 'above-zero',
         symbolId: 'AAPL',
+        firedAt: 999,
         context: {
           inboundEvent: {
             kind: RuleEventKind.CurrentValueChanged,
@@ -252,6 +253,7 @@ describe('rule orchestrator (e2e)', () => {
         ruleId: '',
         symbolId: 'AAPL',
         cycleLimit: 1,
+        firedAt: 999,
       },
     ]);
     expect(overflows).toEqual([]);
@@ -275,6 +277,7 @@ describe('rule orchestrator (e2e)', () => {
         ts: 1000,
         ruleId: 'expired',
         symbolId: 'AAPL',
+        firedAt: 999,
       },
     ]);
   });
