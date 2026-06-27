@@ -7,6 +7,7 @@ import {
   Period,
   ProfileScope,
   type Rule,
+  RuleEventKind,
   RuleEventType,
   RuleScopeKind,
   StateValueType,
@@ -156,6 +157,24 @@ describe('rule orchestrator wiring (e2e)', () => {
           ts: 1_000_000,
           ruleId: RULE_ID,
           symbolId: SYMBOL_ID,
+          context: {
+            inboundEvent: {
+              kind: RuleEventKind.CloseValueChanged,
+              ts: 1_000_000,
+              symbolId: SYMBOL_ID,
+              prev: null,
+              current: 105,
+              final: true,
+            },
+            lookupSnapshot: {
+              current: null,
+              open: 105,
+              high: 105,
+              low: 105,
+              close: 105,
+              volume: null,
+            },
+          },
         },
       ],
     });
