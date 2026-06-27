@@ -61,7 +61,7 @@ export function RulesTable({
     <Table.Root variant="surface" size="1">
       <Table.Header>
         <Table.Row>
-          <Table.ColumnHeaderCell aria-label="Status" width="140px" />
+          <Table.ColumnHeaderCell aria-label="Toggle" width="52px" />
           <Table.ColumnHeaderCell aria-label="Reorder" width="76px" />
           <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
           <Table.ColumnHeaderCell>Scope</Table.ColumnHeaderCell>
@@ -132,26 +132,21 @@ function RuleRow({
   return (
     <Table.Row className="align-middle">
       <Table.Cell>
-        <Flex gap="2" align="center">
-          <Badge color={rule.enabled ? 'green' : 'red'} variant="soft">
-            {rule.enabled ? 'Active' : 'Inactive'}
-          </Badge>
-          <Tooltip content={rule.enabled ? 'Pause' : 'Resume'}>
-            <IconButton
-              type="button"
-              variant="ghost"
-              color="gray"
-              aria-label={`${rule.enabled ? 'Pause' : 'Resume'} ${rule.name}`}
-              onClick={() => toggleEnabled(!rule.enabled)}
-            >
-              {rule.enabled ? (
-                <Pause size={14} aria-hidden="true" />
-              ) : (
-                <Play size={14} aria-hidden="true" />
-              )}
-            </IconButton>
-          </Tooltip>
-        </Flex>
+        <Tooltip content={rule.enabled ? 'Pause' : 'Resume'}>
+          <IconButton
+            type="button"
+            variant="ghost"
+            color="gray"
+            aria-label={`${rule.enabled ? 'Pause' : 'Resume'} ${rule.name}`}
+            onClick={() => toggleEnabled(!rule.enabled)}
+          >
+            {rule.enabled ? (
+              <Pause size={14} aria-hidden="true" />
+            ) : (
+              <Play size={14} aria-hidden="true" />
+            )}
+          </IconButton>
+        </Tooltip>
       </Table.Cell>
       <Table.Cell>
         <Flex gap="1">
@@ -182,14 +177,19 @@ function RuleRow({
         </Flex>
       </Table.Cell>
       <Table.Cell>
-        <button
-          type="button"
-          onClick={() => onEdit(rule)}
-          aria-label={rowName}
-          className="text-left font-medium text-[var(--gray-12)] hover:underline"
-        >
-          {rule.name}
-        </button>
+        <Flex gap="2" align="center">
+          <button
+            type="button"
+            onClick={() => onEdit(rule)}
+            aria-label={rowName}
+            className="text-left font-medium text-[var(--gray-12)] hover:underline"
+          >
+            {rule.name}
+          </button>
+          <Badge color={rule.enabled ? 'green' : 'red'} variant="soft">
+            {rule.enabled ? 'Active' : 'Inactive'}
+          </Badge>
+        </Flex>
       </Table.Cell>
       <Table.Cell>
         <Text size="2" color="gray">
