@@ -21,8 +21,9 @@ All records emit through `getLogger('rule-orchestrator')`; Pino auto-injects `ts
 | `gate_decision` | `{ ruleId, triggerKind, allowed, reason }` |
 | `rule_summary` | `{ ruleId, outcome }` |
 
-`leftSource` / `rightSource` ∈ `'event' | 'lookup' | 'literal'` — distinguishes a value pulled from the inbound `RuleEvent` (the #312 fix path), from `EvaluationLookups`, or from the operand's own `Literal`.
-`outcome` ∈ `'fired' | 'condition_false' | 'gate_blocked' | 'expired'`.
+`leftSource` / `rightSource` come from the `OperandValueSource` enum (`evaluation-context.types.ts`) with members `Event` / `Lookup` / `Literal` — distinguishes a value pulled from the inbound `RuleEvent` (the #312 fix path), from `EvaluationLookups`, or from the operand's own `Literal`.
+`outcome` comes from the `RuleOutcome` enum (`rule-orchestrator-trace.types.ts`) with members `Fired` / `ConditionFalse` / `GateBlocked` / `Expired`.
+`reason` comes from the `GateReason` enum (same file) with members `Allowed` / `AlreadyFired` / `SameBar` / `NotFinal` / `WithinInterval` / `NotActive` / `NoTransition`.
 
 ## Acceptance criteria
 

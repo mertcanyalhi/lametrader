@@ -74,13 +74,24 @@ export interface EvaluationContext {
 }
 
 /**
- * Where {@link EvaluationContext.resolveTraced} pulled its value from —
- * `'literal'` for an in-tree literal operand, `'event'` for an OHLCV operand
- * whose axis matches the inbound `*ValueChanged` event on the same symbol,
- * and `'lookup'` for everything else (live OHLCV cache, indicator state,
- * symbol / global state).
+ * Where {@link EvaluationContext.resolveTraced} pulled its value from.
+ * Used by the orchestrator's `leaf_decision` trace so a stale-lookup value
+ * is one grep apart from an event-derived one (the #312-class diagnostic).
  */
-export type OperandValueSource = 'event' | 'lookup' | 'literal';
+export enum OperandValueSource {
+  /**
+   * The value came from the inbound `RuleEvent` payload — an OHLCV operand
+   * whose axis matches the event's `*ValueChanged` kind on the same symbol.
+   */
+  Event = 'event',
+  /**
+   * The value came from the injected {@link EvaluationLookups} — the live
+   * OHLCV cache, indicator state, or symbol / global state store.
+   */
+  Lookup = 'lookup',
+  /** The value is a tree-local {@link OperandKind.Literal}. */
+  Literal = 'literal',
+}
 
 /**
  * The resolved value plus the path it took to get there.

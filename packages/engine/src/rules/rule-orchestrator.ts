@@ -35,6 +35,7 @@ import { appendStateActionEvent } from './event-appender.js';
 import { mayFireOncePerBar, mayFireOncePerBarClose } from './once-per-bar-trigger-gate.js';
 import { mayFireOncePerMinute } from './once-per-minute-trigger-gate.js';
 import { mayFireOnce } from './once-trigger-gate.js';
+import { GateReason, RuleOutcome } from './rule-orchestrator-trace.types.js';
 import { executeStateAction, type StateMutationAction } from './state-action-executor.js';
 import { evaluateState } from './state-evaluator.js';
 import { executeTelegramAction } from './telegram-action-executor.js';
@@ -240,7 +241,7 @@ export class RuleOrchestrator {
     log.trace({ ruleId: rule.id, ruleName: rule.name, firingSymbolId }, 'rule_starting');
     if (rule.expiration !== null && event.ts >= rule.expiration.at) {
       await this.maybeEmitExpired(rule, firingSymbolId, event.ts);
-      log.trace({ ruleId: rule.id, outcome: 'expired' }, 'rule_summary');
+      log.trace({ ruleId: rule.id, outcome: RuleOutcome.Expired }, 'rule_summary');
       return false;
     }
 
@@ -276,16 +277,16 @@ export class RuleOrchestrator {
     );
 
     if (!conditionTrue) {
-      log.trace({ ruleId: rule.id, outcome: 'condition_false' }, 'rule_summary');
+      log.trace({ ruleId: rule.id, outcome: RuleOutcome.ConditionFalse }, 'rule_summary');
       return false;
     }
     if (!triggerAllows) {
-      log.trace({ ruleId: rule.id, outcome: 'gate_blocked' }, 'rule_summary');
+      log.trace({ ruleId: rule.id, outcome: RuleOutcome.GateBlocked }, 'rule_summary');
       return false;
     }
 
     await this.fire(rule, firingSymbolId, event.ts, context);
-    log.trace({ ruleId: rule.id, outcome: 'fired' }, 'rule_summary');
+    log.trace({ ruleId: rule.id, outcome: RuleOutcome.Fired }, 'rule_summary');
     return true;
   }
 
@@ -519,19 +520,19 @@ function gateReason(
   final: boolean,
   prevActive: boolean,
   nowActive: boolean,
-): string {
-  if (allowed) return 'allowed';
+): GateReason {
+  if (allowed) return GateReason.Allowed;
   switch (trigger.kind) {
     case TriggerKind.Once:
-      return 'already_fired';
+      return GateReason.AlreadyFired;
     case TriggerKind.OncePerBar:
-      return 'same_bar';
+      return GateReason.SameBar;
     case TriggerKind.OncePerBarClose:
-      return !final ? 'not_final' : 'same_bar';
+      return !final ? GateReason.NotFinal : GateReason.SameBar;
     case TriggerKind.OncePerMinute:
-      if (!nowActive) return 'not_active';
-      if (prevActive) return 'no_transition';
-      return 'within_interval';
+      if (!nowActive) return GateReason.NotActive;
+      if (prevActive) return GateReason.NoTransition;
+      return GateReason.WithinInterval;
   }
 }
 

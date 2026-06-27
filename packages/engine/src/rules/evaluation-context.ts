@@ -6,10 +6,11 @@ import {
   type StateValue,
   StateValueType,
 } from '@lametrader/core';
-import type {
-  EvaluationContext,
-  EvaluationLookups,
-  TracedResolution,
+import {
+  type EvaluationContext,
+  type EvaluationLookups,
+  OperandValueSource,
+  type TracedResolution,
 } from './evaluation-context.types.js';
 
 /**
@@ -99,7 +100,7 @@ function resolveOperand(
 ): TracedResolution {
   switch (operand.kind) {
     case OperandKind.Literal:
-      return { value: operand.value, source: 'literal' };
+      return { value: operand.value, source: OperandValueSource.Literal };
     case OperandKind.CurrentValue:
       return resolveOhlcv(event, symbolId, operand.kind, (id) => lookups.getCurrentValue(id));
     case OperandKind.OpenValue:
@@ -115,15 +116,18 @@ function resolveOperand(
     case OperandKind.IndicatorRef:
       return {
         value: lookups.getIndicatorValue(operand.instanceId, operand.stateKey),
-        source: 'lookup',
+        source: OperandValueSource.Lookup,
       };
     case OperandKind.SymbolStateRef:
       return {
         value: lookupOnSymbol(symbolId, (id) => lookups.getSymbolState(profileId, id, operand.key)),
-        source: 'lookup',
+        source: OperandValueSource.Lookup,
       };
     case OperandKind.GlobalStateRef:
-      return { value: lookups.getGlobalState(profileId, operand.key), source: 'lookup' };
+      return {
+        value: lookups.getGlobalState(profileId, operand.key),
+        source: OperandValueSource.Lookup,
+      };
   }
 }
 
@@ -140,9 +144,12 @@ function resolveOhlcv(
 ): TracedResolution {
   const matchingKind = OHLCV_OPERAND_TO_EVENT_KIND[operandKind];
   if (event.kind === matchingKind && symbolId !== null && event.symbolId === symbolId) {
-    return { value: wrapNumber(event.current), source: 'event' };
+    return { value: wrapNumber(event.current), source: OperandValueSource.Event };
   }
-  return { value: wrapNumber(lookupOnSymbol(symbolId, lookup)), source: 'lookup' };
+  return {
+    value: wrapNumber(lookupOnSymbol(symbolId, lookup)),
+    source: OperandValueSource.Lookup,
+  };
 }
 
 /**

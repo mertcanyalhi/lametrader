@@ -16,12 +16,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { _resetLogRoot, _setLogLevel } from '../log.js';
 import { InMemoryStateRepository } from '../state/in-memory-state-repository.js';
 import { InMemoryWatchlistRepository } from '../symbols/in-memory-watchlist-repository.js';
-import type { EvaluationLookups } from './evaluation-context.types.js';
+import { type EvaluationLookups, OperandValueSource } from './evaluation-context.types.js';
 import { InMemoryEventLog } from './in-memory-event-log.js';
 import { InMemoryFiringStateRepository } from './in-memory-firing-state-repository.js';
 import { InMemoryNotifier } from './in-memory-notifier.js';
 import { InMemoryRuleRepository } from './in-memory-rule-repository.js';
 import { RuleOrchestrator } from './rule-orchestrator.js';
+import { GateReason, RuleOutcome } from './rule-orchestrator-trace.types.js';
 
 /**
  * One captured Pino record (already JSON-parsed). Tests filter by `msg` /
@@ -193,13 +194,13 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       operator: NumericOperator.Gt,
       leftDescriptor: { kind: OperandKind.CurrentValue, valueType: StateValueType.Number },
       leftValue: { type: StateValueType.Number, value: 100 },
-      leftSource: 'event',
+      leftSource: OperandValueSource.Event,
       rightDescriptor: {
         kind: OperandKind.Literal,
         value: { type: StateValueType.Number, value: 0 },
       },
       rightValue: { type: StateValueType.Number, value: 0 },
-      rightSource: 'literal',
+      rightSource: OperandValueSource.Literal,
       result: true,
     });
   });
@@ -249,7 +250,7 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       result: leaf.result,
     }).toEqual({
       leftValue: { type: StateValueType.Number, value: 0.02633 },
-      leftSource: 'event',
+      leftSource: OperandValueSource.Event,
       result: false,
     });
   });
@@ -272,7 +273,7 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       ruleId: 'r-1',
       triggerKind: TriggerKind.OncePerMinute,
       allowed: true,
-      reason: 'allowed',
+      reason: GateReason.Allowed,
     });
   });
 
@@ -292,7 +293,7 @@ describe('RuleOrchestrator trace logging (#354)', () => {
     expect(payloadOf(find(records, 'rule_summary'))).toEqual({
       msg: 'rule_summary',
       ruleId: 'r-1',
-      outcome: 'fired',
+      outcome: RuleOutcome.Fired,
     });
   });
 
