@@ -1,7 +1,6 @@
-# 0008. Backfill is an asynchronous job resource (202 + poll/stream)
+# Backfill is an asynchronous job resource (202 + poll/stream)
 
 - Status: accepted
-- Date: 2026-06-13
 
 ## Context
 

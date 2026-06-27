@@ -1,7 +1,6 @@
-# 0011. Web form validation with Yup, scoped to the UI
+# Web form validation with Yup, scoped to the UI
 
 - Status: accepted
-- Date: 2026-06-16
 
 ## Context
 

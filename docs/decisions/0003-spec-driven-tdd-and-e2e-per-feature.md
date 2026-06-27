@@ -1,7 +1,6 @@
-# 0003. Spec-driven TDD, with an e2e test per major feature
+# Spec-driven TDD, with an e2e test per major feature
 
 - Status: accepted
-- Date: 2026-06-10
 
 ## Context
 

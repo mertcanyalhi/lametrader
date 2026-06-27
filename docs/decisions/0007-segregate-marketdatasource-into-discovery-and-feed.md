@@ -1,7 +1,6 @@
-# 0007. Segregate MarketDataSource into discovery and candle-feed ports
+# Segregate MarketDataSource into discovery and candle-feed ports
 
 - Status: accepted
-- Date: 2026-06-13
 
 ## Context
 

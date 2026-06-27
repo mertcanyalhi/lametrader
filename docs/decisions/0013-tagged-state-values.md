@@ -1,7 +1,6 @@
-# 0013. State values are a tagged union, not bare `unknown`
+# State values are a tagged union, not bare `unknown`
 
 - Status: accepted
-- Date: 2026-06-21
 
 ## Context
 

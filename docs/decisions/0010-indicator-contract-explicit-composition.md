@@ -1,7 +1,6 @@
-# 0010. Indicator contract: explicit composition over a self-registering registry
+# Indicator contract: explicit composition over a self-registering registry
 
 - Status: accepted
-- Date: 2026-06-15
 
 ## Context
 

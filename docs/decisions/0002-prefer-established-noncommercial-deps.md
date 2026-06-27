@@ -1,7 +1,6 @@
-# 0002. Prefer established, non-commercial dependencies
+# Prefer established, non-commercial dependencies
 
 - Status: accepted
-- Date: 2026-06-10
 
 ## Context
 
