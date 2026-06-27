@@ -81,3 +81,9 @@ Or "None - can start immediately" if no blockers.
 
 Do NOT close or modify any parent issue.
 
+## Invocation
+
+- "Break this plan into issues"
+- "Slice #<N> into vertical tracer bullets"
+- "Decompose the <feature> PRD into shippable issues with dependencies"
+

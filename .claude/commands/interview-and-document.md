@@ -70,3 +70,9 @@ Only offer to create an ADR when all three are true:
 If any of the three is missing, skip the ADR.
 When all three hold, run `/adr` to create the ADR under this repo's existing `docs/decisions/` convention.
 
+## Invocation
+
+- "Walk me through the <domain> model and update `CONTEXT.md` as we go"
+- "Interview me on this design and capture the glossary + any ADRs"
+- "Sharpen the language for the <feature> context"
+

@@ -78,3 +78,9 @@ A description of the things that are out of scope for this PRD.
 Any further notes about the feature.
 ```
 
+## Invocation
+
+- "Turn this conversation into a PRD"
+- "We've discussed enough — write the PRD and publish it"
+- "Synthesize what we covered about <feature> into a PRD on the tracker"
+

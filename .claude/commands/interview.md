@@ -11,3 +11,9 @@ Asking multiple questions at once is bewildering.
 
 If a question can be answered by exploring the codebase, explore the codebase instead.
 
+## Invocation
+
+- "Grill me on this plan before I start building"
+- "Interview me on the <feature> design"
+- "Push back on this approach — what am I missing?"
+
