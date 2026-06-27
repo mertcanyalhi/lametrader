@@ -1,7 +1,6 @@
-# 0006. fetchCandles returns a batch carrying completeness
+# fetchCandles returns a batch carrying completeness
 
 - Status: accepted
-- Date: 2026-06-13
 
 ## Context
 

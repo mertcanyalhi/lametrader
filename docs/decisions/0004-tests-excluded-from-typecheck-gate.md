@@ -1,7 +1,6 @@
-# 0004. Test files are excluded from the build, leaving a type-check gap
+# Test files are excluded from the build, leaving a type-check gap
 
 - Status: accepted
-- Date: 2026-06-11
 
 ## Context
 

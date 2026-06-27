@@ -1,7 +1,6 @@
-# 0012. Rules engine architecture: timestamp-per-event, cascading with cycle-limit, embedded runtime state
+# Rules engine architecture: timestamp-per-event, cascading with cycle-limit, embedded runtime state
 
 - Status: accepted
-- Date: 2026-06-21 (firing-state amendment: 2026-06-27)
 
 ## Context
 

@@ -1,7 +1,6 @@
-# 0009. Profile scope and the symbol-removal cascade
+# Profile scope and the symbol-removal cascade
 
 - Status: accepted
-- Date: 2026-06-15
 
 ## Context
 

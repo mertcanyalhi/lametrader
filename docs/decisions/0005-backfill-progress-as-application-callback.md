@@ -1,7 +1,6 @@
-# 0005. Backfill progress as an application callback, rendered by transports
+# Backfill progress as an application callback, rendered by transports
 
 - Status: accepted
-- Date: 2026-06-11
 
 ## Context
 

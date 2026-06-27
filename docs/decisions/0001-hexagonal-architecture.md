@@ -1,7 +1,6 @@
-# 0001. Hexagonal architecture with SOLID, kept pragmatic
+# Hexagonal architecture with SOLID, kept pragmatic
 
 - Status: accepted
-- Date: 2026-06-10
 
 ## Context
 
