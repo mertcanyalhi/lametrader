@@ -58,7 +58,7 @@ npm run cli -- config set --periods 1h,1d --default-period 1d
 #### Notification destinations (sub-group)
 
 Inspect, edit, and test-send to named Telegram destinations rules' `notifyTelegram` actions resolve by `name`.
-Stored under `ConfigKey.TelegramDestinations` in the shared K/V config store (one fewer collection + port + adapter — see ADR-0014).
+Stored under `ConfigKey.TelegramDestinations` in the shared K/V config store (see `specs/config-layer.spec.md` for the storage trade-off).
 Bot tokens stay server-side: the `list` projection never includes them.
 
 - **`notifications telegram list`** — print configured destinations as `<name>\t<chatId>`, one per line. `(none)` when no destinations are configured.

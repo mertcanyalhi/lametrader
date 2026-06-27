@@ -63,20 +63,44 @@ previously persisted value is unchanged.
 Telegram destinations live alongside the scalar config in the same K/V store
 under a new key `ConfigKey.TelegramDestinations`, holding a
 `TelegramDestination[]` (last-write-wins on the whole array).
-Storage choice — array under a single K/V key rather than its own collection +
-port + adapter — is documented in
-`docs/decisions/0014-notification-destinations-in-config-store.md`.
 
 The `TelegramDestinationsService` is the only writer/reader; the scalar
 `/config` endpoints are untouched and do not expose destinations.
 
-API (`/config/notifications/telegram`):
+### Storage choice
+
+Destinations are stored as an array under a single K/V key rather than in
+their own collection with a dedicated repository port + in-memory + Mongo
+adapter + shared contract — the shape every other list resource
+(`rules`, `profiles`, `watchlist`) uses.
+
+The divergence is deliberate. Notification destinations are admin-edited,
+hold 1–10 entries, see a handful of writes per day, and are reached for
+from the same Settings page as the scalar `Config`. None of the reasons
+the other list resources earn their own collection apply: no growth, no
+indexed queries, no concurrent writers, no per-row ACL.
+
+Trade-offs accepted:
+
+- Array-level writes (no partial update) — fine at this rate.
+- Last-write-wins concurrency — acceptable single-tenant; two admin saves
+  racing pick a winner instead of a merge.
+- Name uniqueness moves from a unique index to service-level validation
+  (replace-or-append by `name` on every upsert).
+
+In exchange: one fewer collection, port, adapter pair, and contract suite
+per notification channel; admin settings live together in the API
+(`/config`, `/config/notifications/*`) and the UI's Settings page; adding
+a sibling channel is a new `ConfigKey` + sibling sub-route, not a new
+storage layer.
+
+### API (`/config/notifications/telegram`)
 
 - `GET /config/notifications/telegram` — list `[{ name, chatId }]` (no bot tokens).
 - `POST /config/notifications/telegram` — upsert `{ name, botToken, chatId }`; returns the summary.
 - `DELETE /config/notifications/telegram/:name` — remove; **404** when absent.
 
-CLI (`lametrader config notifications telegram …`):
+### CLI (`lametrader config notifications telegram …`)
 
 - `list` — same projection as the API.
 - `set --name --bot-token --chat-id` — upsert.

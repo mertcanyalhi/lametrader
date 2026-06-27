@@ -13,8 +13,8 @@ import {
  *
  * Stored as a single `TelegramDestination[]` under
  * {@link ConfigKey.TelegramDestinations} in the shared K/V config store —
- * deliberately not its own collection. See ADR
- * `docs/decisions/0014-notification-destinations-in-config-store.md` for the
+ * deliberately not its own collection. See `specs/config-layer.spec.md`
+ * (Notification destinations sub-resource → Storage choice) for the
  * trade-off (admin-edited, rare writes, < 10 entries → array-level writes +
  * app-level uniqueness in exchange for one fewer collection + port + adapter).
  *

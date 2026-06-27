@@ -79,34 +79,8 @@ curl -X PATCH http://localhost:3000/config \
   -d '{ "defaultPeriod": "1h" }'
 ```
 
-### Notification destinations (sub-resource)
-
-Named Telegram destinations rules' `notifyTelegram` actions resolve by `name`.
-Stored alongside the scalar config in the same K/V store under
-`ConfigKey.TelegramDestinations` (`TelegramDestination[]`) — one fewer
-collection + port + adapter, see ADR-0014.
-
-Bot tokens are write-only on the wire; reads return the summary projection
-(`{ name, chatId }`) so tokens never escape the server.
-
-| Method   | Path                                          | Body                            | Description                                 |
-| -------- | --------------------------------------------- | ------------------------------- | ------------------------------------------- |
-| `GET`    | `/config/notifications/telegram`              | —                               | List destinations (`[{ name, chatId }]`).   |
-| `POST`   | `/config/notifications/telegram`              | `{ name, botToken, chatId }`    | Upsert by `name`; returns the summary. 200 / 400. |
-| `DELETE` | `/config/notifications/telegram/:name`        | —                               | Remove by name. **204** / 404.              |
-
-```sh
-# Add a destination
-curl -X POST http://localhost:3000/config/notifications/telegram \
-  -H 'content-type: application/json' \
-  -d '{ "name": "main", "botToken": "123456:abcdef", "chatId": "987654" }'
-
-# List destinations (no bot tokens)
-curl http://localhost:3000/config/notifications/telegram
-
-# Remove a destination
-curl -X DELETE http://localhost:3000/config/notifications/telegram/main
-```
+Notification destinations (Telegram for now) live as a sub-resource under
+`/config/notifications/*` and are documented in the OpenAPI spec at `/docs`.
 
 ## Symbols resource
 

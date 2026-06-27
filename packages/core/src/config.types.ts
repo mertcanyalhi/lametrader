@@ -50,7 +50,7 @@ export enum ConfigKey {
    * Holds the `TelegramDestination[]` array.
    * Folded into the config K/V store instead of its own collection
    * (admin-edited, 1–10 entries, handful of writes per day) — see
-   * `docs/decisions/0014-notification-destinations-in-config-store.md`.
+   * `specs/config-layer.spec.md` for the storage trade-off.
    */
   TelegramDestinations = 'telegramDestinations',
 }
