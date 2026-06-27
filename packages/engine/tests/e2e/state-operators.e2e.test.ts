@@ -256,4 +256,86 @@ describe('state operators (e2e)', () => {
       fires: await fireCount(driver, 'r-to-noop'),
     }).toEqual({ notified: [], fires: 0 });
   });
+
+  it('`NotEquals BUY` fires on the first bar when `signal` is unset (null != BUY under the sentinel model)', async () => {
+    const driver = buildDriver([reader('r-neq-bootstrap', StateOperator.NotEquals, BUY)]);
+
+    // No writers, no pre-seed: `signal` is null. `null != BUY` evaluates true
+    // under the null-sentinel model so the reader fires on the inbound quote.
+    await pushQuote(driver, 5, 0);
+
+    expect({
+      notified: driver.notifier.sent,
+      fires: await fireCount(driver, 'r-neq-bootstrap'),
+    }).toEqual({
+      notified: [{ destinationName: 'main', body: 'r-neq-bootstrap' }],
+      fires: 1,
+    });
+  });
+
+  it('`ChangesTo BUY` fires on the null → BUY cascade when `signal` was never set before the writer fires', async () => {
+    const driver = buildDriver([
+      writer('w-buy', 10, BUY, 1),
+      reader('r-to-bootstrap', StateOperator.ChangesTo, BUY),
+    ]);
+
+    // No pre-seed: writer's `SetSymbolState` produces a cascade
+    // `SymbolStateChanged(prev=null, current=BUY)`. The reader sees prev=null,
+    // current=BUY on this operand and the ChangesTo gate accepts the null
+    // edge as a real transition into the target.
+    await pushQuote(driver, 10, 0);
+
+    expect({
+      notified: driver.notifier.sent,
+      fires: await fireCount(driver, 'r-to-bootstrap'),
+    }).toEqual({
+      notified: [{ destinationName: 'main', body: 'r-to-bootstrap' }],
+      fires: 1,
+    });
+  });
+
+  it('`ChangesFrom BUY` fires on the BUY → null cascade when `RemoveSymbolState` clears the key', async () => {
+    const removerRule: Rule = {
+      id: 'w-remove',
+      profileId: PROFILE_ID,
+      name: 'w-remove',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: SYMBOL_ID },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        left: { kind: OperandKind.CurrentValue, valueType: StateValueType.Number },
+        operator: NumericOperator.Eq,
+        right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 10 } },
+      },
+      trigger: { kind: TriggerKind.Once },
+      expiration: null,
+      actions: [{ kind: ActionKind.RemoveSymbolState, key: 'signal' }],
+      enabled: true,
+      events: [],
+      history: [],
+      createdAt: 0,
+      updatedAt: 0,
+      order: 1,
+    };
+    const driver = buildDriver([
+      removerRule,
+      reader('r-from-clear', StateOperator.ChangesFrom, BUY),
+    ]);
+
+    // Pre-seed `signal = BUY` so the remover's action produces a cascade
+    // `SymbolStateChanged(prev=BUY, current=null)`. The reader sees prev=BUY,
+    // current=null on this operand and the ChangesFrom gate accepts the null
+    // edge as a real transition out of the source.
+    await driver.state.setSymbolState(PROFILE_ID, SYMBOL_ID, 'signal', BUY, 0);
+    await pushQuote(driver, 10, 0);
+
+    expect({
+      notified: driver.notifier.sent,
+      fires: await fireCount(driver, 'r-from-clear'),
+      stored: await driver.state.getSymbolState(PROFILE_ID, SYMBOL_ID, 'signal'),
+    }).toEqual({
+      notified: [{ destinationName: 'main', body: 'r-from-clear' }],
+      fires: 1,
+      stored: null,
+    });
+  });
 });

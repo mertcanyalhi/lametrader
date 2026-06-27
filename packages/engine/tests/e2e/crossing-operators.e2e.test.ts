@@ -338,4 +338,85 @@ describe('crossing operators (e2e)', () => {
       enabled: false,
     });
   });
+
+  it('`close CrossingUp ema(N)` fires when ema drops below a stationary close — operand-specific prev/current', async () => {
+    // CrossingUp's contract is "left moved from ≤ right to > right." With
+    // `close` stationary at 100 and `ema` jumping 110 → 90, `close` moves
+    // from "at most ema" to "above ema" — a true crossing-up from close's
+    // perspective. The fix wires each operand's own prev/current into the
+    // crossing evaluator (left.prev/current from the live close lookup, no
+    // transition; right.prev/current from the ema event payload, transition
+    // 110 → 90). Under the old wiring `rightPrev = rightCurrent` and the
+    // event's prev was used as the left operand's prev — both wrong, both
+    // suppressed this fire.
+    const INSTANCE_ID = 'ema-21';
+    const STATE_KEY = 'value';
+    const SUBSCRIPTION_ID = 'sub-cu';
+    const ruleDef: Rule = {
+      id: 'cu-close-vs-ema',
+      profileId: PROFILE_ID,
+      name: 'cu-close-vs-ema',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: SYMBOL_ID },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        left: { kind: OperandKind.CloseValue, valueType: StateValueType.Number },
+        operator: NumericOperator.CrossingUp,
+        right: {
+          kind: OperandKind.IndicatorRef,
+          instanceId: INSTANCE_ID,
+          stateKey: STATE_KEY,
+          valueType: StateValueType.Number,
+        },
+      },
+      trigger: { kind: TriggerKind.Once },
+      expiration: null,
+      actions: [
+        { kind: ActionKind.NotifyTelegram, destinationName: 'main', template: 'cu-close-vs-ema' },
+      ],
+      enabled: true,
+      events: [],
+      history: [],
+      createdAt: 0,
+      updatedAt: 0,
+      order: 1,
+    };
+    const driver = buildDriver(ruleDef);
+    driver.wired.indicatorBridge.bindSubscription(SUBSCRIPTION_ID, INSTANCE_ID);
+
+    driver.wired.candleBridge.handleCandle({
+      id: SYMBOL_ID,
+      period: Period.OneMinute,
+      candle: candle(1_000, { open: 100, high: 100, low: 100, close: 100, volume: 1_000 }),
+      final: false,
+    });
+    await driver.wired.drain();
+    driver.wired.indicatorBridge.handleState({
+      subscriptionId: SUBSCRIPTION_ID,
+      id: SYMBOL_ID,
+      period: Period.OneMinute,
+      indicatorKey: 'ema',
+      state: { time: 2_000, [STATE_KEY]: 110 },
+      final: false,
+    });
+    await driver.wired.drain();
+    driver.wired.indicatorBridge.handleState({
+      subscriptionId: SUBSCRIPTION_ID,
+      id: SYMBOL_ID,
+      period: Period.OneMinute,
+      indicatorKey: 'ema',
+      state: { time: 3_000, [STATE_KEY]: 90 },
+      final: false,
+    });
+    await driver.wired.drain();
+
+    expect({
+      notified: driver.notifier.sent,
+      fires: await fireCount(driver, 'cu-close-vs-ema'),
+      enabled: (await driver.rules.get('cu-close-vs-ema'))?.enabled,
+    }).toEqual({
+      notified: [{ destinationName: 'main', body: 'cu-close-vs-ema' }],
+      fires: 1,
+      enabled: false,
+    });
+  });
 });

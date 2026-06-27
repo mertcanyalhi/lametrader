@@ -27,8 +27,14 @@ describe('evaluateState — Equals', () => {
   it('returns false on type mismatch', () => {
     expect(evaluateState(StateOperator.Equals, null, bool(true), enumValue('true'))).toBe(false);
   });
-  it('returns false when leftCurrent is null', () => {
+  it('returns true on (null, null) — both unset are equal', () => {
+    expect(evaluateState(StateOperator.Equals, null, null, null)).toBe(true);
+  });
+  it('returns false on (null, concrete) — null is distinct from any concrete value', () => {
     expect(evaluateState(StateOperator.Equals, null, null, bool(true))).toBe(false);
+  });
+  it('returns false on (concrete, null) — null is distinct from any concrete value', () => {
+    expect(evaluateState(StateOperator.Equals, null, bool(true), null)).toBe(false);
   });
 });
 
@@ -46,6 +52,15 @@ describe('evaluateState — NotEquals', () => {
   });
   it('returns false on type mismatch (defensive — not equal but not actionable)', () => {
     expect(evaluateState(StateOperator.NotEquals, null, bool(true), enumValue('true'))).toBe(false);
+  });
+  it('returns false on (null, null) — Equals XOR NotEquals = true', () => {
+    expect(evaluateState(StateOperator.NotEquals, null, null, null)).toBe(false);
+  });
+  it('returns true on (null, concrete) — bootstrap pattern fires on first observation', () => {
+    expect(evaluateState(StateOperator.NotEquals, null, null, enumValue('SELL'))).toBe(true);
+  });
+  it('returns true on (concrete, null)', () => {
+    expect(evaluateState(StateOperator.NotEquals, null, enumValue('SELL'), null)).toBe(true);
   });
 });
 
@@ -65,8 +80,13 @@ describe('evaluateState — ChangesTo', () => {
       evaluateState(StateOperator.ChangesTo, enumValue('down'), enumValue('flat'), enumValue('up')),
     ).toBe(false);
   });
-  it('returns false on first-ever observation (no prev)', () => {
+  it('fires on (prev=null, current=target) — null edge counts as transition into target', () => {
     expect(evaluateState(StateOperator.ChangesTo, null, enumValue('up'), enumValue('up'))).toBe(
+      true,
+    );
+  });
+  it('does not fire on (prev=null, current=other) — current must match the target', () => {
+    expect(evaluateState(StateOperator.ChangesTo, null, enumValue('down'), enumValue('up'))).toBe(
       false,
     );
   });
@@ -93,7 +113,12 @@ describe('evaluateState — ChangesFrom', () => {
       evaluateState(StateOperator.ChangesFrom, enumValue('up'), enumValue('up'), enumValue('up')),
     ).toBe(false);
   });
-  it('returns false on first-ever observation (no prev)', () => {
+  it('fires on (prev=source, current=null) — null edge counts as transition out of source', () => {
+    expect(evaluateState(StateOperator.ChangesFrom, enumValue('up'), null, enumValue('up'))).toBe(
+      true,
+    );
+  });
+  it('does not fire on (prev=null, current=anything) — can not change from a source never observed', () => {
     expect(evaluateState(StateOperator.ChangesFrom, null, enumValue('down'), enumValue('up'))).toBe(
       false,
     );

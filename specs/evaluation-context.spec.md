@@ -6,7 +6,9 @@
 ## Goal
 
 Build a fresh `EvaluationContext` for one inbound `RuleEvent` — pure, taking the event plus a set of injected lookups and never touching I/O or a clock.
-The returned context exposes the event's `prev`/`current` in the uniform `StateValue` shape and resolves any `ConditionOperand` by dispatching on its `kind`.
+The returned context exposes the event's `prev`/`current` in the uniform `StateValue` shape (for telegram templates) and resolves any `ConditionOperand` to its current value (for comparison ops) or its `(prev, current)` pair (for state and crossing ops).
+
+See also: `state-operator-null-and-operand-prev-current.spec.md` for the unified prev/current contract across the evaluator.
 
 ## Acceptance criteria
 
@@ -19,3 +21,8 @@ The returned context exposes the event's `prev`/`current` in the uniform `StateV
 - [ ] An `IndicatorRef` operand resolves via the indicator lookup using its `instanceId` and `stateKey`.
 - [ ] A `SymbolStateRef` operand resolves via the symbol-state lookup using the target `symbolId` and the operand's `key`.
 - [ ] A `GlobalStateRef` operand resolves via the global-state lookup using the operand's `key`.
+- [ ] `resolvePrevCurrent(Literal)` returns `prev = current = literal value`.
+- [ ] `resolvePrevCurrent(OHLCV)` returns `(event.prev, event.current)` when the inbound event is the matching `*ValueChanged` for the same `symbolId`; otherwise `(lookup, lookup)`.
+- [ ] `resolvePrevCurrent(IndicatorRef)` returns `(event.prev, event.current)` when the inbound event is `IndicatorValueChanged` matching `(instanceId, stateKey)`; otherwise `(lookup, lookup)`.
+- [ ] `resolvePrevCurrent(SymbolStateRef)` returns `(event.prev, event.current)` when the inbound event is `SymbolStateChanged` matching `(profileId, symbolId, key)`; otherwise `(lookup, lookup)`.
+- [ ] `resolvePrevCurrent(GlobalStateRef)` returns `(event.prev, event.current)` when the inbound event is `GlobalStateChanged` matching `(profileId, key)`; otherwise `(lookup, lookup)`.
