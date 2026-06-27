@@ -159,8 +159,13 @@ export class RuleOrchestrator {
       // first fire so the user sees the rule as inactive without having to
       // flip the toggle themselves. For an AllSymbols-scoped Once, this stops
       // the fan-out at the first match (any remaining symbols stay un-fired).
+      // Reload before save: `fire()` has just $push-ed a `Fired` entry onto
+      // the rule doc (per the Mongo `EventLog` adapter); saving the stale
+      // captured `rule` would replaceOne it back to its pre-fire state and
+      // wipe the entry. See issue #300.
       if (didFire && rule.trigger.kind === TriggerKind.Once) {
-        await this.rules.save({ ...rule, enabled: false });
+        const fresh = await this.rules.get(rule.id);
+        if (fresh !== null) await this.rules.save({ ...fresh, enabled: false });
         return;
       }
     }
