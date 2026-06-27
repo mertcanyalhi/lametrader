@@ -11,6 +11,7 @@ import {
   TriggerKind,
 } from '@lametrader/core';
 import {
+  ActionRunner,
   type EvaluationLookups,
   InMemoryEventLog,
   InMemoryFiringStateRepository,
@@ -93,14 +94,16 @@ describe('minute timer (e2e)', () => {
       },
     ]);
     const eventLog = new InMemoryEventLog();
+    const state = new InMemoryStateRepository();
+    const lookups = emptyLookups();
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([timerRule()]),
       watchlist,
-      emptyLookups(),
-      new InMemoryStateRepository(),
-      notifier,
+      lookups,
+      state,
       eventLog,
       new TriggerEvaluator(eventLog, new InMemoryFiringStateRepository()),
+      new ActionRunner(state, notifier, lookups),
     );
     let pending: Promise<void> = Promise.resolve();
     const timer = new MinuteTimerSource(

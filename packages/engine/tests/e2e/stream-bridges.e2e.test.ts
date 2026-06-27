@@ -17,6 +17,7 @@ import {
   TriggerKind,
 } from '@lametrader/core';
 import {
+  ActionRunner,
   CandleRuleEventBridge,
   ConfigService,
   defaultIndicators,
@@ -151,9 +152,9 @@ function buildDriver(seedRules: Rule[]) {
     watchlist,
     lookups,
     state,
-    notifier,
     log,
     new TriggerEvaluator(log, firingState),
+    new ActionRunner(state, notifier, lookups),
   );
   let pending: Promise<void> = Promise.resolve();
   const sink = (event: Parameters<RuleOrchestrator['process']>[0]) => {

@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { _resetLogRoot, _setLogLevel } from '../log.js';
 import { InMemoryStateRepository } from '../state/in-memory-state-repository.js';
 import { InMemoryWatchlistRepository } from '../symbols/in-memory-watchlist-repository.js';
+import { ActionRunner } from './action-runner.js';
 import { type EvaluationLookups, OperandValueSource } from './evaluation-context.types.js';
 import { InMemoryEventLog } from './in-memory-event-log.js';
 import { InMemoryFiringStateRepository } from './in-memory-firing-state-repository.js';
@@ -26,13 +27,20 @@ import { GateReason, RuleOutcome } from './rule-orchestrator-trace.types.js';
 import { TriggerEvaluator } from './trigger-evaluator.js';
 
 /**
- * Build an `[eventLog, triggers]` pair that shares the same `EventLog`
- * instance — needed because the trigger evaluator reads the rule's events
- * log to find prior `Fired` entries.
+ * Build the `[eventLog, triggers, actions]` triplet for the orchestrator —
+ * shares one `EventLog` between the trigger evaluator and the action runner.
  */
-function makeOrchestratorIo(): [InMemoryEventLog, TriggerEvaluator] {
+function makeOrchestratorTail(
+  state: InMemoryStateRepository,
+  notifier: InMemoryNotifier,
+  lookups: EvaluationLookups,
+): [InMemoryEventLog, TriggerEvaluator, ActionRunner] {
   const eventLog = new InMemoryEventLog();
-  return [eventLog, new TriggerEvaluator(eventLog, new InMemoryFiringStateRepository())];
+  return [
+    eventLog,
+    new TriggerEvaluator(eventLog, new InMemoryFiringStateRepository()),
+    new ActionRunner(state, notifier, lookups),
+  ];
 }
 
 /**
@@ -141,13 +149,15 @@ afterEach(() => {
 
 describe('RuleOrchestrator trace logging (#354)', () => {
   it('emits event_received with cascadeDepth 0 and no triggeredByRuleId for the inbound event', async () => {
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
+    const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([rule({ id: 'r-1' })]),
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      new InMemoryNotifier(['main']),
-      ...makeOrchestratorIo(),
+      lookups,
+      state,
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
 
     await orchestrator.process(priceEvent());
@@ -164,13 +174,15 @@ describe('RuleOrchestrator trace logging (#354)', () => {
   });
 
   it('emits rule_starting with ruleId, ruleName, firingSymbolId at the start of a rule evaluation', async () => {
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
+    const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([rule({ id: 'r-1', name: 'BTC alert' })]),
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      new InMemoryNotifier(['main']),
-      ...makeOrchestratorIo(),
+      lookups,
+      state,
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
 
     await orchestrator.process(priceEvent());
@@ -184,13 +196,15 @@ describe('RuleOrchestrator trace logging (#354)', () => {
   });
 
   it('emits leaf_decision with leftSource=event when the operand axis matches the inbound event', async () => {
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
+    const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([rule({ id: 'r-1' })]),
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      new InMemoryNotifier(['main']),
-      ...makeOrchestratorIo(),
+      lookups,
+      state,
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
 
     await orchestrator.process(priceEvent());
@@ -232,13 +246,14 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       // The live cache still holds the prior bar's open.
       getOpenValue: (id) => (id === 'AAPL' ? 0.02634 : null),
     };
+    const state = new InMemoryStateRepository();
+    const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([buy]),
       new InMemoryWatchlistRepository(),
       staleOpenLookups,
-      new InMemoryStateRepository(),
-      new InMemoryNotifier(['main']),
-      ...makeOrchestratorIo(),
+      state,
+      ...makeOrchestratorTail(state, notifier, staleOpenLookups),
     );
 
     await orchestrator.process({
@@ -263,13 +278,15 @@ describe('RuleOrchestrator trace logging (#354)', () => {
   });
 
   it('emits gate_decision with allowed=true and reason=allowed when the trigger gate lets the rule fire', async () => {
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
+    const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([rule({ id: 'r-1' })]),
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      new InMemoryNotifier(['main']),
-      ...makeOrchestratorIo(),
+      lookups,
+      state,
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
 
     await orchestrator.process(priceEvent());
@@ -284,13 +301,15 @@ describe('RuleOrchestrator trace logging (#354)', () => {
   });
 
   it('emits rule_summary with outcome=fired when the rule fires', async () => {
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
+    const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([rule({ id: 'r-1' })]),
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      new InMemoryNotifier(['main']),
-      ...makeOrchestratorIo(),
+      lookups,
+      state,
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
 
     await orchestrator.process(priceEvent());
@@ -325,13 +344,14 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       },
     });
     const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
+    const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([trigger, downstream]),
       new InMemoryWatchlistRepository(),
-      priceLookups(),
+      lookups,
       state,
-      new InMemoryNotifier(['main']),
-      ...makeOrchestratorIo(),
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
 
     await orchestrator.process(priceEvent());
@@ -352,13 +372,15 @@ describe('RuleOrchestrator trace logging (#354)', () => {
 
   it('emits zero trace records when logLevel stays at info (default)', async () => {
     _setLogLevel('info');
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
+    const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([rule({ id: 'r-1' })]),
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      new InMemoryNotifier(['main']),
-      ...makeOrchestratorIo(),
+      lookups,
+      state,
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
 
     await orchestrator.process(priceEvent());

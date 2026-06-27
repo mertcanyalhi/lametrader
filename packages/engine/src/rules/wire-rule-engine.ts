@@ -8,6 +8,7 @@ import type {
   WatchlistRepository,
 } from '@lametrader/core';
 
+import { ActionRunner } from './action-runner.js';
 import { CandleRuleEventBridge } from './candle-rule-event-bridge.js';
 import { handleCascadeError } from './cascade-error-handler.js';
 import { IndicatorRuleEventBridge } from './indicator-rule-event-bridge.js';
@@ -69,14 +70,15 @@ export interface WiredRuleEngine {
 export function wireRuleEngine(deps: RuleEngineDeps): WiredRuleEngine {
   const lookups = new LiveEvaluationLookups(deps.state);
   const triggers = new TriggerEvaluator(deps.eventLog, deps.firingState);
+  const actions = new ActionRunner(deps.state, deps.notifier, lookups);
   const orchestrator = new RuleOrchestrator(
     deps.rules,
     deps.watchlist,
     lookups,
     deps.state,
-    deps.notifier,
     deps.eventLog,
     triggers,
+    actions,
   );
   const serializer = createPerSymbolSerializer(async (event) => {
     try {

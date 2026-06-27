@@ -15,6 +15,7 @@ import {
   TriggerKind,
 } from '@lametrader/core';
 import {
+  ActionRunner,
   type EvaluationLookups,
   InMemoryEventLog,
   InMemoryFiringStateRepository,
@@ -158,9 +159,9 @@ function buildDriver(seedRules: Rule[], activeProfile: string) {
     watchlist,
     lookups,
     state,
-    notifier,
     log,
     new TriggerEvaluator(log, firingState),
+    new ActionRunner(state, notifier, lookups),
   );
   // `activeProfile` historically gated rule visibility via an orchestrator
   // option that no longer exists; profile binding is now driven by event

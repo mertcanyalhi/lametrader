@@ -14,6 +14,7 @@ import {
   TriggerKind,
 } from '@lametrader/core';
 import {
+  ActionRunner,
   InMemoryEventLog,
   InMemoryFiringStateRepository,
   InMemoryNotifier,
@@ -79,9 +80,9 @@ function buildHarness(seedRules: Rule[]): Harness {
     watchlist,
     lookups,
     state,
-    notifier,
     eventLog,
     new TriggerEvaluator(eventLog, firingState),
+    new ActionRunner(state, notifier, lookups),
   );
   let pending: Promise<void> = Promise.resolve();
   const timer = new MinuteTimerSource(
