@@ -1,15 +1,15 @@
 import { type Rule, RuleEventType, RuleScopeKind, TriggerKind } from '@lametrader/core';
 import {
   AlertDialog,
+  Badge,
   Button,
   Flex,
   IconButton,
-  Switch,
   Table,
   Text,
   Tooltip,
 } from '@radix-ui/themes';
-import { ChevronDown, ChevronUp, ListChecks, Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, ListChecks, Pause, Pencil, Play, Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { toast } from 'sonner';
 import { ApiError } from '../../lib/api-fetch.js';
@@ -61,8 +61,8 @@ export function RulesTable({
     <Table.Root variant="surface" size="1">
       <Table.Header>
         <Table.Row>
-          <Table.ColumnHeaderCell aria-label="Enabled" width="56px" />
-          <Table.ColumnHeaderCell aria-label="Reorder" width="76px" />
+          <Table.ColumnHeaderCell aria-label="Toggle" width="26px" />
+          <Table.ColumnHeaderCell aria-label="Reorder" width="52px" />
           <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
           <Table.ColumnHeaderCell>Scope</Table.ColumnHeaderCell>
           <Table.ColumnHeaderCell>Trigger</Table.ColumnHeaderCell>
@@ -132,11 +132,21 @@ function RuleRow({
   return (
     <Table.Row className="align-middle">
       <Table.Cell>
-        <Switch
-          checked={rule.enabled}
-          onCheckedChange={(checked) => toggleEnabled(checked === true)}
-          aria-label={`Enable ${rule.name}`}
-        />
+        <Tooltip content={rule.enabled ? 'Pause' : 'Resume'}>
+          <IconButton
+            type="button"
+            variant="ghost"
+            color="gray"
+            aria-label={`${rule.enabled ? 'Pause' : 'Resume'} ${rule.name}`}
+            onClick={() => toggleEnabled(!rule.enabled)}
+          >
+            {rule.enabled ? (
+              <Pause size={14} aria-hidden="true" />
+            ) : (
+              <Play size={14} aria-hidden="true" />
+            )}
+          </IconButton>
+        </Tooltip>
       </Table.Cell>
       <Table.Cell>
         <Flex gap="1">
@@ -167,14 +177,19 @@ function RuleRow({
         </Flex>
       </Table.Cell>
       <Table.Cell>
-        <button
-          type="button"
-          onClick={() => onEdit(rule)}
-          aria-label={rowName}
-          className="text-left font-medium text-[var(--gray-12)] hover:underline"
-        >
-          {rule.name}
-        </button>
+        <Flex gap="2" align="center">
+          <button
+            type="button"
+            onClick={() => onEdit(rule)}
+            aria-label={rowName}
+            className="text-left font-medium text-[var(--gray-12)] hover:underline"
+          >
+            {rule.name}
+          </button>
+          <Badge color={rule.enabled ? 'green' : 'red'} variant="soft">
+            {rule.enabled ? 'Active' : 'Inactive'}
+          </Badge>
+        </Flex>
       </Table.Cell>
       <Table.Cell>
         <Text size="2" color="gray">
