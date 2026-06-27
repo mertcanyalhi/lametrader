@@ -25,7 +25,7 @@ Two rungs work → take the higher one and move on. First lazy solution that wor
 
 Follow these steps, in order, and do not skip any:
 
-1. **Scope it down.** State in one or two lines what you'll build and what you're deliberately *not* building. If the request implies abstraction (interface, factory, config, port), don't — wait for the second instance (CLAUDE.md: abstract on the second instance). If anything's genuinely ambiguous or a decision could cost a refactor, ask — don't guess (CLAUDE.md).
+1. **Scope it down.** State in one or two lines what you'll build and what you're deliberately *not* building. If anything's genuinely ambiguous or a decision could cost a refactor, ask — don't guess (CLAUDE.md).
 2. **Spec.** Create `specs/<kebab-name>.spec.md` from `specs/_template.md`. Fill in the goal, acceptance criteria (one bullet per intended behavior), the port(s)/use-case touched, and the end-to-end expectation. Each criterion must pass the ladder — drop it if it doesn't. Show me the spec and pause if anything is ambiguous.
 3. **Red.** For each acceptance criterion, write a failing unit test (full-payload `toEqual`). Run `npm test` and confirm each fails for the right reason.
 4. **Green.** Write the minimal code to pass. Nothing the spec didn't ask for. Climb the ladder per piece. Respect the dependency rule (adapters → application → domain). Resolve config via `loadSettings`, never `process.env`. Mark deliberate simplifications with a `// Lazy:` comment naming the ceiling and upgrade path. Run `npm test` until green.
