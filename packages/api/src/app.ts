@@ -28,12 +28,12 @@ import type { AppDependencies, AppOptions } from './app.types.js';
 import { candlesController } from './controllers/candles.controller.js';
 import { configController } from './controllers/config.controller.js';
 import { indicatorsController } from './controllers/indicators.controller.js';
+import { notificationsController } from './controllers/notifications.controller.js';
 import { profilesController } from './controllers/profiles.controller.js';
 import { rulesController } from './controllers/rules.controller.js';
 import { stateController } from './controllers/state.controller.js';
 import { streamController } from './controllers/stream.controller.js';
 import { symbolsController } from './controllers/symbols.controller.js';
-import { telegramController } from './controllers/telegram.controller.js';
 import { StreamHub } from './stream-hub.js';
 
 /**
@@ -68,7 +68,6 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
         { name: 'rules', description: 'Rule definitions, events and state' },
         { name: 'candles', description: 'Historical candle backfill and reads' },
         { name: 'indicators', description: 'Indicator catalog (descriptors only)' },
-        { name: 'notification', description: 'Notification adapters (Telegram, …)' },
       ],
     },
   });
@@ -137,7 +136,7 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
     app.register(stateController(deps.state));
   }
   if (deps.telegramDestinations) {
-    app.register(telegramController(deps.telegramDestinations));
+    app.register(notificationsController(deps.telegramDestinations));
   }
   app.register(indicatorsController(deps.indicators.registry, deps.indicators.compute));
   if (deps.backfill) {

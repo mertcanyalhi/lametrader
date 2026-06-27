@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { InMemoryTelegramDestinationsRepository } from '../notification/in-memory-telegram-destinations-repository.js';
+import { InMemoryConfigRepository } from '../config/in-memory-config-repository.js';
+import { TelegramDestinationsService } from '../notification/telegram-destinations-service.js';
 import { loadSettings } from '../settings.js';
 import { TelegramNotifier } from './telegram-notifier.js';
 
@@ -15,9 +16,9 @@ describe('TelegramNotifier (live)', () => {
     if (settings.telegramDestinations.length === 0) {
       throw new Error('TELEGRAM_DESTINATIONS not configured');
     }
-    const repo = new InMemoryTelegramDestinationsRepository();
-    for (const destination of settings.telegramDestinations) await repo.upsert(destination);
-    const notifier = new TelegramNotifier(repo);
+    const service = new TelegramDestinationsService(new InMemoryConfigRepository());
+    for (const destination of settings.telegramDestinations) await service.upsert(destination);
+    const notifier = new TelegramNotifier(service);
     await expect(
       notifier.send(destinationName, `lametrader live test ${new Date().toISOString()}`),
     ).resolves.toBeUndefined();

@@ -146,9 +146,9 @@ describe('ActionsEditor', () => {
     ]);
   });
 
-  it('lists the destinations from `GET /notification/telegram/destinations` in the destination Select', async () => {
+  it('lists the destinations from `GET /config/notifications/telegram` in the destination Select', async () => {
     globalThis.fetch = vi.fn(async (url: string) => {
-      if (String(url).endsWith('/notification/telegram/destinations')) {
+      if (String(url).endsWith('/config/notifications/telegram')) {
         return new Response(JSON.stringify([{ name: 'main' }, { name: 'alerts' }]), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },

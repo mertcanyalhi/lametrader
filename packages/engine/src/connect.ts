@@ -3,7 +3,6 @@ import type {
   Period,
   StateRepository,
   SymbolQuoteListener,
-  TelegramDestinationsRepository,
 } from '@lametrader/core';
 import { MongoClient } from 'mongodb';
 import { BackfillService } from './candles/backfill-service.js';
@@ -16,7 +15,6 @@ import { defaultIndicators } from './indicators/default-indicators.js';
 import { IndicatorComputeService } from './indicators/indicator-compute-service.js';
 import type { IndicatorRegistry } from './indicators/indicator-registry.js';
 import { IndicatorStreamService } from './indicators/indicator-stream-service.js';
-import { MongoTelegramDestinationsRepository } from './notification/mongo-telegram-destinations-repository.js';
 import { TelegramDestinationsService } from './notification/telegram-destinations-service.js';
 import { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 import { ProfileService } from './profiles/profile-service.js';
@@ -42,10 +40,11 @@ export interface ConnectOptions {
   /** Per-period poll cadence in ms (required to enable a useful polling loop). */
   pollIntervals: Record<Period, number>;
   /**
-   * Optional one-time seed for the Telegram destinations repository — at
-   * startup, every entry here is upserted into the repo before any service
-   * is returned. Used to migrate the legacy `TELEGRAM_DESTINATIONS` env
-   * path: subsequent CRUD via the API takes over from there.
+   * Optional one-time seed for the Telegram destinations — at startup, every
+   * entry here is upserted via {@link TelegramDestinationsService} into the
+   * shared config K/V store before any service is returned. Used to migrate
+   * the legacy `TELEGRAM_DESTINATIONS` env path: subsequent CRUD via the API
+   * takes over from there.
    */
   seedTelegramDestinations?: Array<{ name: string; botToken: string; chatId: string }>;
 }
@@ -72,15 +71,13 @@ export interface ConnectedServices {
   quoteStream: QuoteStreamService;
   /** The rule-engine state store (read-side; the engine's writes flow through the orchestrator). */
   state: StateRepository;
-  /** The Telegram destinations CRUD use-case (drives `/notification/telegram/destinations`). */
-  telegramDestinations: TelegramDestinationsService;
   /**
-   * The Telegram destinations repository (read source for the
-   * `TelegramNotifier`). Exposed alongside the service so the notifier can
-   * resolve `findByName` directly without going through the service's
-   * validation shell.
+   * The Telegram destinations CRUD use-case
+   * (drives `/config/notifications/telegram` and the `TelegramNotifier`).
+   * Stored under {@link ConfigKey.TelegramDestinations} in the shared K/V
+   * config store.
    */
-  telegramDestinationsRepo: TelegramDestinationsRepository;
+  telegramDestinations: TelegramDestinationsService;
   /** The backfill use-case (historical candles). */
   backfill: BackfillService;
   /** The continuous polling + live-streaming loop. */
@@ -113,7 +110,8 @@ export async function connectServices(
   const watchlist = new MongoWatchlistRepository(db);
   const candleRepo = new MongoCandleRepository(db);
   await candleRepo.ensureIndexes();
-  const config = new ConfigService(new MongoConfigRepository(db));
+  const configRepo = new MongoConfigRepository(db);
+  const config = new ConfigService(configRepo);
   const indicators = defaultIndicators();
   const indicatorCompute = new IndicatorComputeService(indicators, watchlist, candleRepo);
   const indicatorStream = new IndicatorStreamService(indicators, watchlist, indicatorCompute, {
@@ -126,12 +124,10 @@ export async function connectServices(
   await ruleRepo.ensureIndexes();
   const stateRepo = new MongoStateRepository(db);
   await stateRepo.ensureIndexes();
-  const telegramDestinationsRepo = new MongoTelegramDestinationsRepository(db);
-  await telegramDestinationsRepo.ensureIndexes();
+  const telegramDestinations = new TelegramDestinationsService(configRepo);
   for (const seed of options.seedTelegramDestinations ?? []) {
-    await telegramDestinationsRepo.upsert(seed);
+    await telegramDestinations.upsert(seed);
   }
-  const telegramDestinations = new TelegramDestinationsService(telegramDestinationsRepo);
   const profiles = new ProfileService(new MongoProfileRepository(db), watchlist, indicators);
   const rules = new RuleService(ruleRepo);
   const symbols = new SymbolService(sources, watchlist, config, candleRepo, profiles, stateRepo);
@@ -161,7 +157,6 @@ export async function connectServices(
     quoteStream,
     state: stateRepo,
     telegramDestinations,
-    telegramDestinationsRepo,
     backfill,
     polling,
     close: async () => {

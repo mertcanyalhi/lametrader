@@ -34,7 +34,7 @@ describe('telegram hooks', () => {
     return { wrapper, client };
   }
 
-  it('useTelegramDestinations GETs /api/notification/telegram/destinations and returns name+chatId', async () => {
+  it('useTelegramDestinations GETs /api/config/notifications/telegram and returns name+chatId', async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response(
         JSON.stringify([
@@ -52,7 +52,7 @@ describe('telegram hooks', () => {
         { name: 'alerts', chatId: '456' },
       ]);
     });
-    expect(fetchSpy.mock.calls[0]?.[0]).toBe('/api/notification/telegram/destinations');
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe('/api/config/notifications/telegram');
   });
 
   it('useUpsertTelegramDestination POSTs the input body and returns the summary', async () => {
@@ -69,13 +69,13 @@ describe('telegram hooks', () => {
     });
     const init = (fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined) ?? {};
     expect({ url: fetchSpy.mock.calls[0]?.[0], method: init.method, body: init.body }).toEqual({
-      url: '/api/notification/telegram/destinations',
+      url: '/api/config/notifications/telegram',
       method: 'POST',
       body: JSON.stringify({ name: 'main', botToken: 'TOKEN-1', chatId: '123' }),
     });
   });
 
-  it('useDeleteTelegramDestination DELETEs /api/notification/telegram/destinations/:name', async () => {
+  it('useDeleteTelegramDestination DELETEs /api/config/notifications/telegram/:name', async () => {
     fetchSpy.mockResolvedValueOnce(new Response(null, { status: 204 }));
     const { wrapper } = makeWrapper();
     const { result } = renderHook(() => useDeleteTelegramDestination(), { wrapper });
@@ -84,7 +84,7 @@ describe('telegram hooks', () => {
     });
     const init = (fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined) ?? {};
     expect({ url: fetchSpy.mock.calls[0]?.[0], method: init.method }).toEqual({
-      url: '/api/notification/telegram/destinations/main',
+      url: '/api/config/notifications/telegram/main',
       method: 'DELETE',
     });
   });

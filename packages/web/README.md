@@ -91,10 +91,10 @@ A thrown `ConfigError` becomes a form-level error rendered inline as a Radix The
 
 **Telegram destinations**
 
-A second Card on the same page manages the API's named Telegram destinations (`GET / POST / DELETE /api/notification/telegram/destinations` — see the API README's `/notification` section).
+A second Card on the same page manages the API's named Telegram destinations (`GET / POST / DELETE /api/config/notifications/telegram` — see the API README's `Notification destinations` section).
 The table shows `Name` and `Chat id` only — bot tokens stay server-side; the API never reads them back.
 **Add destination** opens a Radix `Dialog` with a Yup-validated form (every field required, non-blank; bot token rendered as `type="password"`).
-A per-row Delete affordance opens a Radix `AlertDialog` confirm before firing `DELETE /api/notification/telegram/destinations/:name`.
+A per-row Delete affordance opens a Radix `AlertDialog` confirm before firing `DELETE /api/config/notifications/telegram/:name`.
 
 The same `/settings` page is the home for every future notification adapter — add a sibling component alongside `TelegramDestinationsSection` when one lands.
 
@@ -119,9 +119,9 @@ The mutations invalidate `['profiles']` so the profile's embedded `indicators[]`
 `src/lib/hooks/rules.ts` exposes the rules data layer — `useRules({ profileId?, symbolId? })` (`GET /rules`), `useRule(id)` (`GET /rules/:id`), `useCreateRule` (`POST /rules`), `useReplaceRule` (`PUT /rules/:id`), `usePatchRule` (`PATCH /rules/:id` — currently just `enabled`; performs an optimistic write across every cached rules query, rolls back on error), `useDeleteRule` (`DELETE /rules/:id`; same snapshot rollback pattern), `useReorderRules` (`PUT /rules/order`), `useRuleEvents(id, { limit?, before? })` (`GET /rules/:id/events`), and `useSymbolRuleEvents(symbolId, { limit?, before? })` (`GET /symbols/:id/rule-events`).
 The chart's Events panel and the per-rule / per-symbol `EventsDialog` build on top of these via `useInfiniteQuery` for "Load more" pagination keyed by the oldest event's `ts`.
 
-`src/lib/hooks/telegram.ts` exposes the notification-destinations data layer behind the rule editor's destination dropdown and the settings page's destinations CRUD — `useTelegramDestinations` (`GET /notification/telegram/destinations` → `{ name, chatId }[]`), `useUpsertTelegramDestination` (`POST` upsert; tokens are write-only), and `useDeleteTelegramDestination` (`DELETE /notification/telegram/destinations/:name`).
+`src/lib/hooks/telegram.ts` exposes the notification-destinations data layer behind the rule editor's destination dropdown and the settings page's destinations CRUD — `useTelegramDestinations` (`GET /config/notifications/telegram` → `{ name, chatId }[]`), `useUpsertTelegramDestination` (`POST` upsert; tokens are write-only), and `useDeleteTelegramDestination` (`DELETE /config/notifications/telegram/:name`).
 Token reads aren't possible: the API never returns `botToken` on a list, so there's no client-side bot-token handling beyond the Add form.
-The matching CRUD CLI surface lives under `lametrader telegram` (see the CLI README's Telegram section).
+The matching CRUD CLI surface lives under `lametrader config notifications telegram` (see the CLI README's `config` section).
 
 Both modules go through the package's `apiFetch` wrapper, so logging + `ApiError` mapping happen at the boundary, not at each call site.
 

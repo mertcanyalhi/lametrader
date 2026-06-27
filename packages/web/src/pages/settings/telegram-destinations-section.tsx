@@ -38,7 +38,7 @@ const log = getLogger('telegram-destinations-section');
 /**
  * The settings page's Telegram destinations section — list + Add dialog +
  * Delete confirm. Bot tokens are never read back from the server; the table
- * shows only name + chat id (matches `GET /notification/telegram/destinations`).
+ * shows only name + chat id (matches `GET /config/notifications/telegram`).
  *
  * The Settings page is the home for every future notification-channel
  * section; add a sibling component for the next adapter alongside this one.
