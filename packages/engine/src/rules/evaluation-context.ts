@@ -6,7 +6,12 @@ import {
   type StateValue,
   StateValueType,
 } from '@lametrader/core';
-import type { EvaluationContext, EvaluationLookups } from './evaluation-context.types.js';
+import {
+  type EvaluationContext,
+  type EvaluationLookups,
+  OperandValueSource,
+  type TracedResolution,
+} from './evaluation-context.types.js';
 
 /**
  * For every OHLCV operand kind, the {@link RuleEventKind} that carries the
@@ -68,6 +73,9 @@ export function buildEvaluationContext(
     prev,
     current,
     resolve(operand) {
+      return resolveOperand(operand, event, profileId, targetSymbolId, lookups).value;
+    },
+    resolveTraced(operand) {
       return resolveOperand(operand, event, profileId, targetSymbolId, lookups);
     },
   };
@@ -89,10 +97,10 @@ function resolveOperand(
   profileId: string,
   symbolId: string | null,
   lookups: EvaluationLookups,
-): StateValue | null {
+): TracedResolution {
   switch (operand.kind) {
     case OperandKind.Literal:
-      return operand.value;
+      return { value: operand.value, source: OperandValueSource.Literal };
     case OperandKind.CurrentValue:
       return resolveOhlcv(event, symbolId, operand.kind, (id) => lookups.getCurrentValue(id));
     case OperandKind.OpenValue:
@@ -106,11 +114,20 @@ function resolveOperand(
     case OperandKind.VolumeValue:
       return resolveOhlcv(event, symbolId, operand.kind, (id) => lookups.getVolumeValue(id));
     case OperandKind.IndicatorRef:
-      return lookups.getIndicatorValue(operand.instanceId, operand.stateKey);
+      return {
+        value: lookups.getIndicatorValue(operand.instanceId, operand.stateKey),
+        source: OperandValueSource.Lookup,
+      };
     case OperandKind.SymbolStateRef:
-      return lookupOnSymbol(symbolId, (id) => lookups.getSymbolState(profileId, id, operand.key));
+      return {
+        value: lookupOnSymbol(symbolId, (id) => lookups.getSymbolState(profileId, id, operand.key)),
+        source: OperandValueSource.Lookup,
+      };
     case OperandKind.GlobalStateRef:
-      return lookups.getGlobalState(profileId, operand.key);
+      return {
+        value: lookups.getGlobalState(profileId, operand.key),
+        source: OperandValueSource.Lookup,
+      };
   }
 }
 
@@ -124,12 +141,15 @@ function resolveOhlcv(
   symbolId: string | null,
   operandKind: keyof typeof OHLCV_OPERAND_TO_EVENT_KIND,
   lookup: (symbolId: string) => number | null,
-): StateValue | null {
+): TracedResolution {
   const matchingKind = OHLCV_OPERAND_TO_EVENT_KIND[operandKind];
   if (event.kind === matchingKind && symbolId !== null && event.symbolId === symbolId) {
-    return wrapNumber(event.current);
+    return { value: wrapNumber(event.current), source: OperandValueSource.Event };
   }
-  return wrapNumber(lookupOnSymbol(symbolId, lookup));
+  return {
+    value: wrapNumber(lookupOnSymbol(symbolId, lookup)),
+    source: OperandValueSource.Lookup,
+  };
 }
 
 /**

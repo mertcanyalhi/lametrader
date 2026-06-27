@@ -63,6 +63,7 @@ services:
       MONGODB_URI: mongodb://${MONGO_USER:-lametrader}:${MONGO_PASSWORD:-lametrader}@mongo:27017/${MONGO_DB:-lametrader}?authSource=admin
       PORT: "3000"
       NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
       mongo:
         condition: service_healthy
