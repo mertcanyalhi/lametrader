@@ -45,6 +45,10 @@ export { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 export { type IndicatorInstanceInput, ProfileService } from './profiles/profile-service.js';
 export type { ProfileServiceOptions } from './profiles/profile-service.types.js';
 export { CandleRuleEventBridge } from './rules/candle-rule-event-bridge.js';
+export {
+  type CascadeErrorLogger,
+  handleCascadeError,
+} from './rules/cascade-error-handler.js';
 export { type ComparisonOperator, evaluateComparison } from './rules/comparison-evaluator.js';
 export {
   type ConditionLeaf,
@@ -61,7 +65,9 @@ export { InMemoryFiringStateRepository } from './rules/in-memory-firing-state-re
 export { InMemoryNotifier, type SentMessage } from './rules/in-memory-notifier.js';
 export { InMemoryRuleRepository } from './rules/in-memory-rule-repository.js';
 export { IndicatorRuleEventBridge } from './rules/indicator-rule-event-bridge.js';
+export { LiveEvaluationLookups } from './rules/live-evaluation-lookups.js';
 export { MinuteTimerSource } from './rules/minute-timer-source.js';
+export { MongoEventLog } from './rules/mongo-event-log.js';
 export { MongoFiringStateRepository } from './rules/mongo-firing-state-repository.js';
 export { MongoRuleRepository } from './rules/mongo-rule-repository.js';
 export {
@@ -92,6 +98,11 @@ export {
   type TelegramNotifierOptions,
   TelegramSendError,
 } from './rules/telegram-notifier.js';
+export {
+  type RuleEngineDeps,
+  type WiredRuleEngine,
+  wireRuleEngine,
+} from './rules/wire-rule-engine.js';
 export { loadSettings } from './settings.js';
 export type { Settings, TelegramDestination } from './settings.types.js';
 export { InMemoryStateRepository } from './state/in-memory-state-repository.js';

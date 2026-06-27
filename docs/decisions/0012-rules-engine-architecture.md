@@ -51,6 +51,23 @@ The standalone `firing_state` collection is dropped; the explicit `removeByRule`
 The port survives — the orchestrator and gate stay decoupled from storage — but loses `removeByRule`.
 The field is marked optional and is intentionally absent from `RuleSchema`, so Fastify strips it from API responses (internal plumbing, not user-facing state).
 
+**5. The orchestrator runs across every enabled profile by default and treats `Profile.enabled === false` as a runtime kill-switch.** (added 2026-06-27, #290)
+There is no `getActiveProfileId` / "active profile" concept; the option is dropped from `RuleOrchestratorOptions`.
+On every non-cascade event, `RuleRepository.listEnabledForSymbol(symbolId)` returns every rule whose own `enabled` is true AND whose parent profile's `enabled` is true.
+Cascaded `SymbolStateChanged` / `GlobalStateChanged` events still scope by `event.profileId` (per the #281 partitioning) — they call `listEnabledForSymbol(symbolId, event.profileId)`.
+Profile-level disable thus stops the entire child rule set from firing on live events; re-enable resumes them on the next tick.
+
+**6. Cascade failures emit a synthetic `Error` rule event on the affected symbol, with `ruleId: ''` as the sentinel.** (added 2026-06-27, #290)
+When `orchestrator.process(event)` rejects, the chain's cascade error handler:
+
+  1. Logs the primary error via the injected logger (Pino-shaped: `log.error({ err, event }, 'rule orchestration failed')`).
+  2. If the rejecting event carries a `symbolId`, appends one `Error` entry to that symbol's `events[]` via `EventLog.appendSymbolEvent`, with `ruleId: ''` (matching the existing `CycleOverflow` convention for orchestrator-level events that have no single owning rule) and `reason: 'rule orchestration failed: <err.message>'`.
+  3. Wraps the synthetic-event write itself in a try/catch — if writing the `Error` event also throws, the secondary failure is logged but never re-thrown.
+
+The `Error` entry surfaces in the existing chart Events dialog (which already renders `RuleEventType.Error` via `event.reason`), so a user sees engine-level failures without leaving the chart.
+The serialized rule chain in `wireRuleEngine` extends a `pending` promise with each inbound event; the cascade handler's `.catch` keeps the chain alive past failures so the next event still processes.
+The same logger pattern is applied to the polling fan-out's previously-`void` indicator/quote stream calls — no silent error swallows remain.
+
 ## Consequences
 
 **Timestamp-per-event**
@@ -88,6 +105,20 @@ The field is marked optional and is intentionally absent from `RuleSchema`, so F
 - Migration: orphan documents in the pre-existing `firing_state` collection can be dropped — they were only ever a per-`(rule, symbol)` cache.
   No data loss; the gate's worst case after the cutover is one spurious or one missed transition on the first evaluation after restart, the same window the system already tolerates between writes.
 
+**Multi-profile fire + `Profile.enabled` kill-switch** (added 2026-06-27, #290)
+
+- Disabling a profile is a one-flag operation: a single `PATCH /profiles/:id { enabled: false }` stops every child rule from firing on the next tick, without touching the rules themselves.
+- The orchestrator stays stateless about "which profile is active" — multiple profiles legitimately fire in parallel against the same live event (e.g. a long-term-trend profile and a short-term-scalper profile both watching `AAPL`).
+- `RuleRepository.listEnabledForSymbol` is the single read path with both kill-switches baked in; CRUD listings still go through `listForSymbol` and return all rules (enabled or not).
+- The shared contract suite now hands `(repo, profiles)` pairs to its tests; both the in-memory and the Mongo `RuleRepository` constructor accept an optional `ProfileRepository` (omitting it reads every profile as enabled, preserving back-compat for existing call sites).
+
+**Cascade error pattern** (added 2026-06-27, #290)
+
+- A failure inside `orchestrator.process` no longer poisons the rule chain — the next inbound event still processes because `pending = pending.then(orchestrator.process).catch(handleCascadeError)`.
+- The user sees engine failures in the same chart Events dialog they use to verify the rule fires — no new UI surface; existing `events-dialog.tsx` renders `RuleEventType.Error.reason`.
+- The recursive-write guard (try/catch around the synthetic-event write) means a full Mongo outage produces exactly one log line per failed event and zero exceptions in the polling fan-out.
+- The injected `logger` lets test code observe the failure structurally (`logger.error.mock.calls`) and production code emit through Fastify's Pino instance; the no-op default keeps the engine optional-dep-free.
+
 ## Closes
 
-#98, #279.
+#98, #279, #290.

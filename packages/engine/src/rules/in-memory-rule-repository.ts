@@ -1,21 +1,36 @@
-import { type Rule, type RuleRepository, RuleScopeKind } from '@lametrader/core';
+import {
+  type ProfileRepository,
+  type Rule,
+  type RuleRepository,
+  RuleScopeKind,
+} from '@lametrader/core';
 
 /**
  * A {@link RuleRepository} backed by an in-memory map.
  *
  * Real (not a test double): backs the unit tier and offline/demo wiring.
+ *
+ * `listEnabledForSymbol` consults the optional injected
+ * {@link ProfileRepository} to enforce the parent `profile.enabled`
+ * runtime kill-switch (#290); when no profile repo is provided, every
+ * profile reads as enabled (back-compat for tests that pre-date the
+ * filter).
  */
 export class InMemoryRuleRepository implements RuleRepository {
   /** ruleId → rule. */
   private readonly store = new Map<string, Rule>();
+  /** Optional profile repo consulted for the `profile.enabled` filter. */
+  private readonly profiles: ProfileRepository | undefined;
 
   /**
    * @param seed - initial rules to pre-populate with (default: empty).
+   * @param profiles - optional profile repo for the `profile.enabled` filter.
    */
-  constructor(seed: Iterable<Rule> = []) {
+  constructor(seed: Iterable<Rule> = [], profiles?: ProfileRepository) {
     for (const rule of seed) {
       this.store.set(rule.id, rule);
     }
+    this.profiles = profiles;
   }
 
   async list(): Promise<Rule[]> {
@@ -35,6 +50,19 @@ export class InMemoryRuleRepository implements RuleRepository {
       }
     }
     return result;
+  }
+
+  async listEnabledForSymbol(symbolId: string | null, profileId?: string): Promise<Rule[]> {
+    const candidates = await this.listForSymbol(symbolId, profileId);
+    const enabled = candidates.filter((rule) => rule.enabled);
+    if (this.profiles === undefined) return enabled;
+    const profileIds = [...new Set(enabled.map((rule) => rule.profileId))];
+    const enabledProfileIds = new Set<string>();
+    for (const id of profileIds) {
+      const profile = await this.profiles.get(id);
+      if (profile?.enabled === true) enabledProfileIds.add(id);
+    }
+    return enabled.filter((rule) => enabledProfileIds.has(rule.profileId));
   }
 
   async get(id: string): Promise<Rule | null> {

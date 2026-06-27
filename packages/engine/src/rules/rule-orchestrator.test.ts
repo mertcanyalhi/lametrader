@@ -3,6 +3,7 @@ import {
   ConditionNodeKind,
   NumericOperator,
   OperandKind,
+  ProfileScope,
   type Rule,
   RuleEventKind,
   RuleEventType,
@@ -14,6 +15,7 @@ import {
 } from '@lametrader/core';
 import { describe, expect, it } from 'vitest';
 
+import { InMemoryProfileRepository } from '../profiles/in-memory-profile-repository.js';
 import { InMemoryStateRepository } from '../state/in-memory-state-repository.js';
 import { InMemoryWatchlistRepository } from '../symbols/in-memory-watchlist-repository.js';
 import type { EvaluationLookups } from './evaluation-context.types.js';
@@ -532,23 +534,85 @@ describe('RuleOrchestrator', () => {
     ]);
   });
 
-  it('fires only rules belonging to the active profile when getActiveProfileId is configured', async () => {
+  it('fires every enabled rule across enabled profiles on a non-cascade event', async () => {
+    const profiles = new InMemoryProfileRepository([
+      {
+        id: 'profile-1',
+        name: 'p1',
+        description: '',
+        enabled: true,
+        scope: { type: ProfileScope.All },
+        indicators: [],
+        createdAt: 0,
+        updatedAt: 0,
+      },
+      {
+        id: 'profile-2',
+        name: 'p2',
+        description: '',
+        enabled: true,
+        scope: { type: ProfileScope.All },
+        indicators: [],
+        createdAt: 0,
+        updatedAt: 0,
+      },
+    ]);
     const p1Rule = rule({ id: 'p1', order: 1, profileId: 'profile-1' });
     const p2Rule = rule({ id: 'p2', order: 1, profileId: 'profile-2' });
     const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
-      new InMemoryRuleRepository([p1Rule, p2Rule]),
+      new InMemoryRuleRepository([p1Rule, p2Rule], profiles),
       new InMemoryWatchlistRepository(),
       priceLookups(),
       new InMemoryStateRepository(),
       notifier,
       new InMemoryEventLog(),
       new InMemoryFiringStateRepository(),
-      { getActiveProfileId: () => 'profile-2' },
     );
 
     await orchestrator.process(priceEvent());
 
-    expect(notifier.sent.map((sent) => sent.body)).toEqual(['p2']);
+    expect(notifier.sent.map((sent) => sent.body)).toEqual(['p1', 'p2']);
+  });
+
+  it('does not fire a rule whose parent profile is disabled', async () => {
+    const profiles = new InMemoryProfileRepository([
+      {
+        id: 'profile-on',
+        name: 'on',
+        description: '',
+        enabled: true,
+        scope: { type: ProfileScope.All },
+        indicators: [],
+        createdAt: 0,
+        updatedAt: 0,
+      },
+      {
+        id: 'profile-off',
+        name: 'off',
+        description: '',
+        enabled: false,
+        scope: { type: ProfileScope.All },
+        indicators: [],
+        createdAt: 0,
+        updatedAt: 0,
+      },
+    ]);
+    const onRule = rule({ id: 'on', order: 1, profileId: 'profile-on' });
+    const offRule = rule({ id: 'off', order: 2, profileId: 'profile-off' });
+    const notifier = new InMemoryNotifier(['main']);
+    const orchestrator = new RuleOrchestrator(
+      new InMemoryRuleRepository([onRule, offRule], profiles),
+      new InMemoryWatchlistRepository(),
+      priceLookups(),
+      new InMemoryStateRepository(),
+      notifier,
+      new InMemoryEventLog(),
+      new InMemoryFiringStateRepository(),
+    );
+
+    await orchestrator.process(priceEvent());
+
+    expect(notifier.sent.map((sent) => sent.body)).toEqual(['on']);
   });
 });

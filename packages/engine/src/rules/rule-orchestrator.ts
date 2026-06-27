@@ -38,13 +38,6 @@ import { executeTelegramAction } from './telegram-action-executor.js';
 export interface RuleOrchestratorOptions {
   /** Maximum cascading state-change re-entries per tick. Default `4`. */
   cycleLimit?: number;
-  /**
-   * Resolve the active profile id. Called once per inbound event; the result
-   * is passed to `RuleRepository.listForSymbol` so only rules belonging to
-   * the active profile are evaluated. Omit to evaluate rules across every
-   * profile (the default).
-   */
-  getActiveProfileId?: () => Promise<string | undefined> | string | undefined;
 }
 
 /**
@@ -122,12 +115,15 @@ export class RuleOrchestrator {
    * For cascaded state-change events (which carry their originating
    * `profileId` per #281), the profile is taken from the event itself so a
    * profile-A write never wakes profile-B rules.
-   * For all other events, the configured `getActiveProfileId` filter applies.
+   * For all other events, every enabled profile's rules are candidates
+   * (multi-profile fire is the default; #290 — no active-profile concept).
+   *
+   * The repository's `listEnabledForSymbol` enforces both the rule's own
+   * `enabled` flag and the parent profile's `enabled` flag.
    */
   private async processOneEvent(event: RuleEvent): Promise<void> {
-    const profileId = await this.resolveProfileIdForEvent(event);
-    const candidates = await this.rules.listForSymbol(event.symbolId, profileId);
-    const enabled = candidates.filter((rule) => rule.enabled);
+    const profileId = this.resolveProfileIdForEvent(event);
+    const enabled = await this.rules.listEnabledForSymbol(event.symbolId, profileId);
     enabled.sort((a, b) => a.order - b.order);
     for (const rule of enabled) {
       await this.processRule(rule, event);
@@ -137,26 +133,17 @@ export class RuleOrchestrator {
   /**
    * Pick the `profileId` filter for `event`'s evaluation. Cascaded state
    * changes carry their originating profile on the event itself (#281); other
-   * events fall through to the configured active-profile getter.
+   * events have no profile filter and every enabled profile's rules are
+   * candidates (#290).
    */
-  private async resolveProfileIdForEvent(event: RuleEvent): Promise<string | undefined> {
+  private resolveProfileIdForEvent(event: RuleEvent): string | undefined {
     if (
       event.kind === RuleEventKind.SymbolStateChanged ||
       event.kind === RuleEventKind.GlobalStateChanged
     ) {
       return event.profileId;
     }
-    return await this.resolveActiveProfileId();
-  }
-
-  /**
-   * Resolve the active profile id from the configured getter (if any);
-   * `undefined` means no profile filter and rules across every profile fire.
-   */
-  private async resolveActiveProfileId(): Promise<string | undefined> {
-    const getter = this.options.getActiveProfileId;
-    if (getter === undefined) return undefined;
-    return await getter();
+    return undefined;
   }
 
   /**

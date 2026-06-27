@@ -1,7 +1,7 @@
 # Spec: rule orchestrator wiring — live engine boot
 
-- Status: draft
-- Touches: `core` (`packages/core/src/rule-repository.types.ts`), `engine` (`packages/engine/src/connect.ts`, `packages/engine/src/rules/in-memory-rule-repository.ts`, `packages/engine/src/rules/mongo-rule-repository.ts`, `packages/engine/src/rules/rule-orchestrator.ts`, new `packages/engine/src/rules/live-evaluation-lookups.ts`, new `packages/engine/src/rules/cascade-error-handler.ts`, new `packages/engine/src/rules/mongo-event-log.ts`), `docs` (`docs/decisions/0012-rules-engine-architecture.md` amendment).
+- Status: implemented
+- Touches: `core` (`packages/core/src/rule-repository.types.ts`), `engine` (`packages/engine/src/connect.ts`, `packages/engine/src/rules/in-memory-rule-repository.ts`, `packages/engine/src/rules/mongo-rule-repository.ts`, `packages/engine/src/rules/rule-orchestrator.ts`, new `packages/engine/src/rules/live-evaluation-lookups.ts`, new `packages/engine/src/rules/cascade-error-handler.ts`, new `packages/engine/src/rules/mongo-event-log.ts`, new `packages/engine/src/rules/wire-rule-engine.ts`), `docs` (`docs/decisions/0012-rules-engine-architecture.md` amendment).
 
 ## Goal
 

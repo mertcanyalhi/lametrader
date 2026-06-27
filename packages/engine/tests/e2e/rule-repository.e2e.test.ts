@@ -1,4 +1,4 @@
-import { MongoRuleRepository } from '@lametrader/engine';
+import { MongoProfileRepository, MongoRuleRepository } from '@lametrader/engine';
 import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import { type Db, MongoClient } from 'mongodb';
 import { afterAll, beforeAll, describe } from 'vitest';
@@ -28,8 +28,10 @@ describe('rule persistence (e2e)', () => {
 
   runRuleRepositoryContract(async () => {
     await db.collection('rules').deleteMany({});
-    const repo = new MongoRuleRepository(db);
+    await db.collection('profiles').deleteMany({});
+    const profiles = new MongoProfileRepository(db);
+    const repo = new MongoRuleRepository(db, profiles);
     await repo.ensureIndexes();
-    return repo;
+    return { repo, profiles };
   });
 });
