@@ -3,6 +3,7 @@ import {
   ConditionNodeKind,
   NumericOperator,
   OperandKind,
+  Period,
   ProfileScope,
   type Rule,
   RuleEventKind,
@@ -614,6 +615,208 @@ describe('RuleOrchestrator', () => {
       { destinationName: 'main', body: 'tick' },
       { destinationName: 'main', body: 'tick' },
     ]);
+  });
+
+  describe('mutually-exclusive Open-threshold rules on one candle (#312)', () => {
+    /**
+     * Build the BUY rule from the issue: Open >= 0.02634 ∧ signal != "BUY"
+     * → SetSymbolState signal="BUY", OncePerBar(1m). String state type
+     * matches the user's actual rule JSON.
+     */
+    function buyRule(): Rule {
+      return rule({
+        id: 'buy',
+        order: 1,
+        trigger: { kind: TriggerKind.OncePerBar, period: Period.OneMinute },
+        condition: {
+          kind: ConditionNodeKind.And,
+          children: [
+            {
+              kind: ConditionNodeKind.Leaf,
+              left: { kind: OperandKind.OpenValue, valueType: StateValueType.Number },
+              operator: NumericOperator.Gte,
+              right: {
+                kind: OperandKind.Literal,
+                value: { type: StateValueType.Number, value: 0.02634 },
+              },
+            },
+            {
+              kind: ConditionNodeKind.Leaf,
+              left: {
+                kind: OperandKind.SymbolStateRef,
+                key: 'signal',
+                valueType: StateValueType.String,
+              },
+              operator: StateOperator.NotEquals,
+              right: {
+                kind: OperandKind.Literal,
+                value: { type: StateValueType.String, value: 'BUY' },
+              },
+            },
+          ],
+        },
+        actions: [
+          {
+            kind: ActionKind.SetSymbolState,
+            key: 'signal',
+            value: { type: StateValueType.String, value: 'BUY' },
+          },
+        ],
+      });
+    }
+
+    /**
+     * The SELL rule from the issue: Open < 0.02634 ∧ signal != "SELL" →
+     * SetSymbolState signal="SELL", OncePerBar(1m).
+     */
+    function sellRule(): Rule {
+      return rule({
+        id: 'sell',
+        order: 2,
+        trigger: { kind: TriggerKind.OncePerBar, period: Period.OneMinute },
+        condition: {
+          kind: ConditionNodeKind.And,
+          children: [
+            {
+              kind: ConditionNodeKind.Leaf,
+              left: { kind: OperandKind.OpenValue, valueType: StateValueType.Number },
+              operator: NumericOperator.Lt,
+              right: {
+                kind: OperandKind.Literal,
+                value: { type: StateValueType.Number, value: 0.02634 },
+              },
+            },
+            {
+              kind: ConditionNodeKind.Leaf,
+              left: {
+                kind: OperandKind.SymbolStateRef,
+                key: 'signal',
+                valueType: StateValueType.String,
+              },
+              operator: StateOperator.NotEquals,
+              right: {
+                kind: OperandKind.Literal,
+                value: { type: StateValueType.String, value: 'SELL' },
+              },
+            },
+          ],
+        },
+        actions: [
+          {
+            kind: ActionKind.SetSymbolState,
+            key: 'signal',
+            value: { type: StateValueType.String, value: 'SELL' },
+          },
+        ],
+      });
+    }
+
+    /**
+     * Wire state + a state-cache mirror via `onStateChanged`, just like the
+     * live wiring. Pre-seed `signal=<initial>` so the BUY/SELL `!=` leaves
+     * have a non-null `current` to compare.
+     */
+    async function buildStateWithSignal(initial: 'BUY' | 'SELL') {
+      const state = new InMemoryStateRepository();
+      await state.setSymbolState(
+        'profile-1',
+        'AAPL',
+        'signal',
+        { type: StateValueType.String, value: initial },
+        999_000,
+      );
+      const stateCache = new Map<string, StateValue>([
+        ['profile-1|AAPL|signal', { type: StateValueType.String, value: initial }],
+      ]);
+      state.onStateChanged((event) => {
+        if (event.scope.kind === 'symbol' && event.current !== null) {
+          stateCache.set(`${event.profileId}|${event.scope.symbolId}|${event.key}`, event.current);
+        }
+      });
+      return { state, stateCache };
+    }
+
+    it('cascade leaves at most one Fired per bar when the live cache is fresh (signal=BUY pre-state, Open drops to 0.02633)', async () => {
+      // Sane wiring: cache reflects bar N+1's open before process() runs.
+      // BUY can't fire (signal=BUY); SELL fires once, cascade re-evals SELL
+      // and OncePerBar suppresses the second fire.
+      const { state, stateCache } = await buildStateWithSignal('BUY');
+      const lookups: EvaluationLookups = {
+        ...emptyLookups(),
+        getOpenValue: (id) => (id === 'AAPL' ? 0.02633 : null),
+        getSymbolState: (profileId, symbolId, key) =>
+          stateCache.get(`${profileId}|${symbolId}|${key}`) ?? null,
+      };
+      const log = new InMemoryEventLog();
+      const orchestrator = new RuleOrchestrator(
+        new InMemoryRuleRepository([buyRule(), sellRule()]),
+        new InMemoryWatchlistRepository(),
+        lookups,
+        state,
+        new InMemoryNotifier(['main']),
+        log,
+        new InMemoryFiringStateRepository(),
+      );
+
+      const barOpenTs = 1_000_000;
+      await orchestrator.process({
+        kind: RuleEventKind.OpenValueChanged,
+        ts: barOpenTs,
+        symbolId: 'AAPL',
+        prev: 0.02634,
+        current: 0.02633,
+        final: false,
+      });
+
+      const fired = (await log.symbolEvents('AAPL')).filter(
+        (event) => event.type === RuleEventType.Fired,
+      );
+      expect(fired.map(({ firedAt: _firedAt, context: _context, ...rest }) => rest)).toEqual([
+        { type: RuleEventType.Fired, ts: barOpenTs, ruleId: 'sell', symbolId: 'AAPL' },
+      ]);
+    });
+
+    it('uses the inbound `OpenValueChanged.current` for OpenValue operands so a stale Open cache cannot fire BUY on a 0.02633 bar', async () => {
+      // The bug from #312: prior bar set signal=BUY, then SELL fired and set
+      // signal=SELL; the new bar's open is 0.02633 but the live cache hasn't
+      // caught up (still 0.02634). On the inbound OpenValueChanged for this
+      // bar, BUY's `Open >= 0.02634` must NOT resolve via the stale lookup —
+      // it has to read `event.current=0.02633` directly. signal=SELL then
+      // blocks SELL too, so no rule fires on this candle.
+      const { state, stateCache } = await buildStateWithSignal('SELL');
+      const lookups: EvaluationLookups = {
+        ...emptyLookups(),
+        // Stale: the live cache still holds the prior bar's open value.
+        getOpenValue: (id) => (id === 'AAPL' ? 0.02634 : null),
+        getSymbolState: (profileId, symbolId, key) =>
+          stateCache.get(`${profileId}|${symbolId}|${key}`) ?? null,
+      };
+      const log = new InMemoryEventLog();
+      const orchestrator = new RuleOrchestrator(
+        new InMemoryRuleRepository([buyRule(), sellRule()]),
+        new InMemoryWatchlistRepository(),
+        lookups,
+        state,
+        new InMemoryNotifier(['main']),
+        log,
+        new InMemoryFiringStateRepository(),
+      );
+
+      const barOpenTs = 1_000_000;
+      await orchestrator.process({
+        kind: RuleEventKind.OpenValueChanged,
+        ts: barOpenTs,
+        symbolId: 'AAPL',
+        prev: 0.02634,
+        current: 0.02633,
+        final: false,
+      });
+
+      const fired = (await log.symbolEvents('AAPL')).filter(
+        (event) => event.type === RuleEventType.Fired,
+      );
+      expect(fired).toEqual([]);
+    });
   });
 
   it('fires every enabled rule across enabled profiles on a non-cascade event', async () => {
