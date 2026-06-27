@@ -60,15 +60,19 @@ export class RuleService {
    * - With only `profileId` set, returns every rule belonging to that profile
    *   across all symbol scopes.
    * - With neither set, returns every stored rule.
+   *
+   * Always returns the result sorted by `order` ascending so reorder
+   * mutations are visible on the next read — the repositories themselves
+   * return rows in storage-natural order.
    */
   async list(filters: { profileId?: string; symbolId?: string } = {}): Promise<Rule[]> {
-    if (filters.symbolId !== undefined) {
-      return await this.rules.listForSymbol(filters.symbolId, filters.profileId);
-    }
-    const all = await this.rules.list();
-    return filters.profileId === undefined
-      ? all
-      : all.filter((rule) => rule.profileId === filters.profileId);
+    const rules =
+      filters.symbolId !== undefined
+        ? await this.rules.listForSymbol(filters.symbolId, filters.profileId)
+        : filters.profileId === undefined
+          ? await this.rules.list()
+          : (await this.rules.list()).filter((rule) => rule.profileId === filters.profileId);
+    return [...rules].sort((a, b) => a.order - b.order);
   }
 
   /**
