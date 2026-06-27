@@ -61,7 +61,7 @@ export function RulesTable({
     <Table.Root variant="surface" size="1">
       <Table.Header>
         <Table.Row>
-          <Table.ColumnHeaderCell>Order</Table.ColumnHeaderCell>
+          <Table.ColumnHeaderCell aria-label="Enable and reorder" />
           <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
           <Table.ColumnHeaderCell>Scope</Table.ColumnHeaderCell>
           <Table.ColumnHeaderCell>Trigger</Table.ColumnHeaderCell>
@@ -130,7 +130,6 @@ function RuleRow({
   }
   return (
     <Table.Row className="align-middle">
-      <Table.Cell>{rule.order}</Table.Cell>
       <Table.Cell>
         <Flex align="center" gap="2">
           <Switch
@@ -138,33 +137,6 @@ function RuleRow({
             onCheckedChange={(checked) => toggleEnabled(checked === true)}
             aria-label={`Enable ${rule.name}`}
           />
-          <button
-            type="button"
-            onClick={() => onEdit(rule)}
-            aria-label={rowName}
-            className="text-left font-medium text-[var(--gray-12)] hover:underline"
-          >
-            {rule.name}
-          </button>
-        </Flex>
-      </Table.Cell>
-      <Table.Cell>
-        <Text size="2" color="gray">
-          {formatScope(rule)}
-        </Text>
-      </Table.Cell>
-      <Table.Cell>
-        <Text size="2" color="gray">
-          {formatTrigger(rule)}
-        </Text>
-      </Table.Cell>
-      <Table.Cell>
-        <Text size="2" color="gray">
-          {formatLastFired(rule)}
-        </Text>
-      </Table.Cell>
-      <Table.Cell>
-        <Flex gap="2" justify="end">
           <Tooltip content="Move up">
             <IconButton
               type="button"
@@ -189,6 +161,35 @@ function RuleRow({
               <ChevronDown size={14} aria-hidden="true" />
             </IconButton>
           </Tooltip>
+        </Flex>
+      </Table.Cell>
+      <Table.Cell>
+        <button
+          type="button"
+          onClick={() => onEdit(rule)}
+          aria-label={rowName}
+          className="text-left font-medium text-[var(--gray-12)] hover:underline"
+        >
+          {rule.name}
+        </button>
+      </Table.Cell>
+      <Table.Cell>
+        <Text size="2" color="gray">
+          {formatScope(rule)}
+        </Text>
+      </Table.Cell>
+      <Table.Cell>
+        <Text size="2" color="gray">
+          {formatTrigger(rule)}
+        </Text>
+      </Table.Cell>
+      <Table.Cell>
+        <Text size="2" color="gray">
+          {formatLastFired(rule)}
+        </Text>
+      </Table.Cell>
+      <Table.Cell>
+        <Flex gap="2" justify="end">
           <Tooltip content="Edit">
             <IconButton
               type="button"
