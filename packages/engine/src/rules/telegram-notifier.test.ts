@@ -1,13 +1,14 @@
 import type { TelegramDestination } from '@lametrader/core';
 import { UnknownDestinationError } from '@lametrader/core';
 import { describe, expect, it } from 'vitest';
-import { InMemoryTelegramDestinationsRepository } from '../notification/in-memory-telegram-destinations-repository.js';
+import { InMemoryConfigRepository } from '../config/in-memory-config-repository.js';
+import { TelegramDestinationsService } from '../notification/telegram-destinations-service.js';
 import { TelegramNotifier, TelegramSendError } from './telegram-notifier.js';
 
 /**
- * Build a notifier with one mock destination and a fetch recorder.
+ * Build a notifier with the given destinations and a fetch recorder.
  */
-function build(
+async function build(
   response: { ok: boolean; status: number } = { ok: true, status: 200 },
   destinations: TelegramDestination[] = [
     { name: 'main', botToken: 'TOKEN-1', chatId: '123' },
@@ -25,15 +26,15 @@ function build(
     calls.push({ url, init });
     return response;
   };
-  const repo = new InMemoryTelegramDestinationsRepository();
-  for (const destination of destinations) void repo.upsert(destination);
-  const notifier = new TelegramNotifier(repo, { fetch: fetchMock });
-  return { notifier, calls, repo };
+  const service = new TelegramDestinationsService(new InMemoryConfigRepository());
+  for (const destination of destinations) await service.upsert(destination);
+  const notifier = new TelegramNotifier(service, { fetch: fetchMock });
+  return { notifier, calls, service };
 }
 
 describe('TelegramNotifier', () => {
   it('POSTs to the Bot API with the destination token + chat id and message body', async () => {
-    const { notifier, calls } = build();
+    const { notifier, calls } = await build();
     await notifier.send('main', 'hello');
     expect(calls).toEqual([
       {
@@ -48,19 +49,19 @@ describe('TelegramNotifier', () => {
   });
 
   it('routes to the correct destination when several are registered', async () => {
-    const { notifier, calls } = build();
+    const { notifier, calls } = await build();
     await notifier.send('alerts', 'beep');
     expect(calls[0]?.url).toBe('https://api.telegram.org/botTOKEN-2/sendMessage');
     expect(calls[0]?.init.body).toBe(JSON.stringify({ chat_id: '456', text: 'beep' }));
   });
 
   it('throws UnknownDestinationError when the name is not registered', async () => {
-    const { notifier } = build();
+    const { notifier } = await build();
     await expect(notifier.send('missing', 'hi')).rejects.toBeInstanceOf(UnknownDestinationError);
   });
 
   it('throws TelegramSendError on a non-2xx Bot API response, carrying the status', async () => {
-    const { notifier } = build({ ok: false, status: 401 });
+    const { notifier } = await build({ ok: false, status: 401 });
     const err = (await notifier.send('main', 'hi').catch((e) => e)) as TelegramSendError;
     expect(err).toBeInstanceOf(TelegramSendError);
     expect({ name: err.name, destinationName: err.destinationName, status: err.status }).toEqual({
@@ -74,9 +75,9 @@ describe('TelegramNotifier', () => {
     const fetchMock = async () => {
       throw new Error('network down');
     };
-    const repo = new InMemoryTelegramDestinationsRepository();
-    await repo.upsert({ name: 'main', botToken: 'TOKEN-1', chatId: '123' });
-    const notifier = new TelegramNotifier(repo, { fetch: fetchMock });
+    const service = new TelegramDestinationsService(new InMemoryConfigRepository());
+    await service.upsert({ name: 'main', botToken: 'TOKEN-1', chatId: '123' });
+    const notifier = new TelegramNotifier(service, { fetch: fetchMock });
     const err = (await notifier.send('main', 'hi').catch((e) => e)) as TelegramSendError;
     expect(err).toBeInstanceOf(TelegramSendError);
     expect({ name: err.name, destinationName: err.destinationName, status: err.status }).toEqual({
@@ -87,15 +88,15 @@ describe('TelegramNotifier', () => {
   });
 
   it('the TelegramSendError instance is detectable via instanceof', async () => {
-    const { notifier } = build({ ok: false, status: 500 });
+    const { notifier } = await build({ ok: false, status: 500 });
     await expect(notifier.send('main', 'hi')).rejects.toBeInstanceOf(TelegramSendError);
   });
 
-  it('picks up a destination added via the repo after the notifier was built', async () => {
-    const { notifier, repo } = build({ ok: true, status: 200 }, [
+  it('picks up a destination added via the service after the notifier was built', async () => {
+    const { notifier, service } = await build({ ok: true, status: 200 }, [
       { name: 'main', botToken: 'TOKEN-1', chatId: '123' },
     ]);
-    await repo.upsert({ name: 'late', botToken: 'LATE', chatId: '999' });
+    await service.upsert({ name: 'late', botToken: 'LATE', chatId: '999' });
     await expect(notifier.send('late', 'hi')).resolves.toBeUndefined();
   });
 });

@@ -12,7 +12,6 @@ import { runProfiles } from './profile.js';
 import { runRules } from './rules.js';
 import { runState } from './state.js';
 import { runSymbols } from './symbols.js';
-import { runTelegram } from './telegram.js';
 
 const [, , command, ...args] = process.argv;
 const { mongoUri, pollIntervals, telegramDestinations: telegramDestinationsSeed } = loadSettings();
@@ -24,8 +23,7 @@ if (
   command !== 'candles' &&
   command !== 'indicators' &&
   command !== 'rules' &&
-  command !== 'state' &&
-  command !== 'telegram'
+  command !== 'state'
 ) {
   console.error(`unknown command: ${command ?? '(none)'}`);
   process.exitCode = 1;
@@ -46,7 +44,6 @@ if (
       indicators,
       indicatorCompute,
       telegramDestinations,
-      telegramDestinationsRepo,
       close: disconnect,
     } = await connectServices(mongoUri, {
       pollIntervals,
@@ -55,7 +52,13 @@ if (
     close = disconnect;
     switch (command) {
       case 'config':
-        console.log(await runConfig(args, config));
+        console.log(
+          await runConfig(args, {
+            config,
+            telegramDestinations,
+            notifier: new TelegramNotifier(telegramDestinations),
+          }),
+        );
         break;
       case 'symbols':
         console.log(await runSymbols(args, symbols));
@@ -74,15 +77,6 @@ if (
         break;
       case 'state':
         console.log(await runState(args, symbols, state));
-        break;
-      case 'telegram':
-        console.log(
-          await runTelegram(
-            args,
-            telegramDestinations,
-            new TelegramNotifier(telegramDestinationsRepo),
-          ),
-        );
         break;
     }
   } catch (error) {

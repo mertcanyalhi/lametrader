@@ -49,8 +49,8 @@ export interface TelegramDestination {
 
 /**
  * The list-friendly projection of a {@link TelegramDestination} — strips the
- * sensitive `botToken`. The repository's `list()` returns these, and the
- * REST controller exposes the same shape on `GET /notification/telegram/destinations`.
+ * sensitive `botToken`. The service's `list()` returns these, and the
+ * REST controller exposes the same shape on `GET /config/notifications/telegram`.
  */
 export interface TelegramDestinationSummary {
   /** The destination's human-readable name. */
@@ -60,30 +60,17 @@ export interface TelegramDestinationSummary {
 }
 
 /**
- * Driven port for persisting Telegram destinations, keyed by `name`.
+ * Narrow lookup port the `TelegramNotifier` resolves a destination by name
+ * through. One method only — the notifier's hot path.
  *
- * Implemented by driven adapters (Mongo) and an in-memory adapter for the
- * unit tier. The shared contract test asserts the two behave identically.
+ * The destinations service implements this; the dedicated repository port +
+ * adapters were removed when storage folded into the config K/V store.
  */
-export interface TelegramDestinationsRepository {
-  /**
-   * All stored destinations, projected to the {@link TelegramDestinationSummary}
-   * shape so bot tokens never escape the server.
-   */
-  list(): Promise<TelegramDestinationSummary[]>;
+export interface TelegramDestinationLookup {
   /**
    * Find one destination by name, including its bot token. Used by the
    * notifier when delivering a message. Returns `null` when no destination
    * with that name exists.
    */
   findByName(name: string): Promise<TelegramDestination | null>;
-  /**
-   * Upsert a destination keyed by `name`. A subsequent upsert with the same
-   * name replaces the previous bot token + chat id atomically.
-   */
-  upsert(destination: TelegramDestination): Promise<void>;
-  /**
-   * Delete a destination by name. Idempotent (no-op when absent).
-   */
-  remove(name: string): Promise<void>;
 }

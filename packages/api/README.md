@@ -79,6 +79,9 @@ curl -X PATCH http://localhost:3000/config \
   -d '{ "defaultPeriod": "1h" }'
 ```
 
+Notification destinations (Telegram for now) live as a sub-resource under
+`/config/notifications/*` and are documented in the OpenAPI spec at `/docs`.
+
 ## Symbols resource
 
 Discover instruments and manage the watchlist. Canonical ids are `<type>:<ticker>`

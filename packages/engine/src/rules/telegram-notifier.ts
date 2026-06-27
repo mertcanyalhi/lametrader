@@ -1,6 +1,6 @@
 import {
   type Notifier,
-  type TelegramDestinationsRepository,
+  type TelegramDestinationLookup,
   UnknownDestinationError,
 } from '@lametrader/core';
 
@@ -40,11 +40,11 @@ export interface TelegramNotifierOptions {
 
 /**
  * {@link Notifier} adapter that resolves a destination by `name` against the
- * destinations repository and POSTs to the Telegram Bot API's `sendMessage`
+ * destinations lookup and POSTs to the Telegram Bot API's `sendMessage`
  * endpoint.
  *
  * Reads the destination on every send so an upsert / remove via the
- * `/notification/telegram/destinations` API takes effect immediately —
+ * `/config/notifications/telegram` API takes effect immediately —
  * no notifier restart required.
  */
 export class TelegramNotifier implements Notifier {
@@ -52,12 +52,12 @@ export class TelegramNotifier implements Notifier {
   private readonly fetch: FetchLike;
 
   /**
-   * @param destinations - the destinations repository the notifier resolves
-   *   names against.
+   * @param destinations - the lookup the notifier resolves names against
+   *   (typically the `TelegramDestinationsService`).
    * @param options - injectable transport.
    */
   constructor(
-    private readonly destinations: TelegramDestinationsRepository,
+    private readonly destinations: TelegramDestinationLookup,
     options: TelegramNotifierOptions = {},
   ) {
     this.fetch = options.fetch ?? (globalThis.fetch as unknown as FetchLike);

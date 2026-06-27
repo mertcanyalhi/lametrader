@@ -17,7 +17,7 @@ Resolved from the environment (with defaults) via the engine settings layer:
 | Variable                | Default                                                                       | Notes                                                                 |
 | ----------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | `MONGODB_URI`           | `mongodb://lametrader:lametrader@localhost:27017/lametrader?authSource=admin` |                                                                       |
-| `TELEGRAM_DESTINATIONS` | `[]`                                                                          | JSON array of `{ name, botToken, chatId }` — surfaces in `telegram list`. |
+| `TELEGRAM_DESTINATIONS` | `[]`                                                                          | JSON array of `{ name, botToken, chatId }` — one-time seed for `config notifications telegram` (subsequent writes via the CLI / API take over). |
 
 ## Commands
 
@@ -53,6 +53,24 @@ Set the supported periods and the default:
 
 ```sh
 npm run cli -- config set --periods 1h,1d --default-period 1d
+```
+
+#### Notification destinations (sub-group)
+
+Inspect, edit, and test-send to named Telegram destinations rules' `notifyTelegram` actions resolve by `name`.
+Stored under `ConfigKey.TelegramDestinations` in the shared K/V config store (see `specs/config-layer.spec.md` for the storage trade-off).
+Bot tokens stay server-side: the `list` projection never includes them.
+
+- **`notifications telegram list`** — print configured destinations as `<name>\t<chatId>`, one per line. `(none)` when no destinations are configured.
+- **`notifications telegram set --name <n> --bot-token <t> --chat-id <id>`** — upsert a destination; prints `set <name>`.
+- **`notifications telegram delete --name <n>`** — remove a destination; prints `deleted <name>`. `TelegramDestinationNotFoundError` propagates as a non-zero exit.
+- **`notifications telegram test --destination <name> --message <text>`** — send a one-off message through the wired `Notifier` (real Telegram Bot API in production). Prints `sent` on success; `UnknownDestinationError` / `TelegramSendError` propagate as non-zero exits.
+
+```sh
+npm run cli -- config notifications telegram list
+npm run cli -- config notifications telegram set --name main --bot-token 123456:abcdef --chat-id 987654
+npm run cli -- config notifications telegram delete --name main
+npm run cli -- config notifications telegram test --destination main --message "hello from cli"
 ```
 
 ### `symbols`
@@ -241,18 +259,6 @@ npm run cli -- state remove --symbol crypto:BTCUSDT --key armed
 npm run cli -- state remove --global --key regime
 ```
 
-### `telegram`
+### Telegram destinations
 
-Inspect and test-send to configured Telegram destinations from the settings layer.
-
-#### Subcommands
-
-- **`list`** — print each destination as `<name>\t<chatId>\t<redacted token>` (last 4 chars of the token only, prefixed with `****`). `(none)` when no destinations are configured. The full token is never echoed.
-- **`test --destination <name> --message <text>`** — send a one-off message through the `Notifier` port (real Telegram Bot API in production). Prints `sent` on success; `UnknownDestinationError` / `TelegramSendError` propagate as non-zero exits.
-
-#### Examples
-
-```sh
-npm run cli -- telegram list
-npm run cli -- telegram test --destination main --message "hello from cli"
-```
+Now part of `config notifications telegram` — see the `config` section above.

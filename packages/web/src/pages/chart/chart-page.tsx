@@ -10,7 +10,7 @@ import { useQueries } from '@tanstack/react-query';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router';
 import { getStoredPeriod, setStoredPeriod } from '../../lib/chart-period.js';
-import { formatChange, formatChangePct, formatPrice } from '../../lib/format.js';
+import { formatChangePct, formatPrice } from '../../lib/format.js';
 import { liveCandleForPeriod, useCandleStream, usePagedCandles } from '../../lib/hooks/candles.js';
 import { computeIndicatorQueryOptions, useIndicatorCatalog } from '../../lib/hooks/indicators.js';
 import { useProfiles } from '../../lib/hooks/profiles.js';
@@ -192,7 +192,7 @@ function parsePeriod(raw: string | null): Period | null {
 }
 
 /**
- * Drives the document title to `<id> · <close> <change> (<pct>%) - lametrader`
+ * Drives the document title to `<id> <close> <arrow> <pct>% (<change>) - lametrader`
  * from the chart's latest loaded candle on the current period, so the browser
  * tab matches what's on screen (the selected period — not the default-period
  * snapshot). Restores the previous title on unmount.
@@ -224,10 +224,11 @@ function DocumentTitle({
 function chartTitle(id: string, latest: Candle | null, previous: Candle | null): string {
   if (!latest) return `${id} - lametrader`;
   const price = formatPrice(latest.close);
-  if (!previous) return `${id} · ${price} - lametrader`;
+  if (!previous) return `${id} ${price} - lametrader`;
   const change = latest.close - previous.close;
   const pct = previous.close === 0 ? 0 : change / previous.close;
-  return `${id} · ${price} ${formatChange(change)} (${formatChangePct(pct)}) - lametrader`;
+  const arrow = change > 0 ? '▲ ' : change < 0 ? '▼ ' : '';
+  return `${id} ${price} ${arrow}${formatChangePct(pct)} (${formatPrice(Math.abs(change))}) - lametrader`;
 }
 
 /**

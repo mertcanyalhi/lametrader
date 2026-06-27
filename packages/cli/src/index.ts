@@ -6,9 +6,9 @@
  */
 export { runCandles } from './candles.js';
 export { runConfig } from './config.js';
+export { runConfigNotifications } from './config-notifications.js';
 export { runIndicators } from './indicators.js';
 export { runProfiles } from './profile.js';
 export { runRules } from './rules.js';
 export { runState } from './state.js';
 export { runSymbols } from './symbols.js';
-export { runTelegram } from './telegram.js';
