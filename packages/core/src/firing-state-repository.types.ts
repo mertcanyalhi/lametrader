@@ -8,7 +8,7 @@
  * unit tier and offline/demo wiring. The Mongo implementation stores the
  * latch as a `firingState: { [symbolId]: boolean }` sub-doc map on each rule
  * document — entries vanish implicitly when the rule is deleted (see ADR
- * 0014).
+ * 0012).
  */
 export interface FiringStateRepository {
   /**

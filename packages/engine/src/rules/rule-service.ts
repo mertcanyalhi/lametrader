@@ -154,7 +154,7 @@ export class RuleService {
 
   /**
    * Delete a rule by id. The rule's embedded `firingState` map dies with the
-   * rule document — no explicit firing-state cascade needed (see ADR 0014).
+   * rule document — no explicit firing-state cascade needed (see ADR 0012).
    *
    * @throws {@link RuleNotFoundError} when the id is unknown.
    */

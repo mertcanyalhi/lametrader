@@ -8,7 +8,7 @@ import type { RuleRepository } from '@lametrader/core';
  * `newId` and `now` default for production (nanoid / `Date.now`) and are
  * overridable in tests. `rules` is optional — when present, deleting a profile
  * also removes every rule belonging to it. The rules' embedded `firingState`
- * maps die with the rule documents (see ADR 0014).
+ * maps die with the rule documents (see ADR 0012).
  */
 export interface ProfileServiceOptions {
   /** Generate a new profile id; defaults to nanoid. */

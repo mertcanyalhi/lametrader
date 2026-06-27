@@ -162,7 +162,7 @@ export class ProfileService {
    *
    * When the optional `rules` port is wired in, every rule belonging to the
    * profile is removed. The deleted rules' embedded `firingState` maps die
-   * with the rule documents (see ADR 0014) — no separate firing-state
+   * with the rule documents (see ADR 0012) — no separate firing-state
    * cascade needed.
    *
    * @throws {@link ProfileNotFoundError} when the id is unknown.

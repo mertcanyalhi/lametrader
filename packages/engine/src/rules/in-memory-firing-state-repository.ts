@@ -4,7 +4,7 @@ import type { FiringStateRepository } from '@lametrader/core';
  * An in-memory {@link FiringStateRepository} — backs the unit tier and
  * offline/demo wiring. Holds a flat `${ruleId}|${symbolId}` → boolean map;
  * the Mongo adapter embeds the same shape on the rule document (see ADR
- * 0014), but the in-memory copy mirrors only the read/write contract since
+ * 0012), but the in-memory copy mirrors only the read/write contract since
  * the orchestrator never reaches for the rule's `firingState` field
  * directly.
  */

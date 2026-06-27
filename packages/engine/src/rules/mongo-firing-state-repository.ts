@@ -5,7 +5,7 @@ import type { RuleDocument } from './mongo-rule-repository.types.js';
 /**
  * MongoDB-backed {@link FiringStateRepository}.
  *
- * Per ADR 0014, the firing-state latch lives as a `firingState: { [symbolId]:
+ * Per ADR 0012, the firing-state latch lives as a `firingState: { [symbolId]:
  * boolean }` sub-doc map on the rule document itself. Reads project the
  * single keyed entry; writes use `$set` on the dotted path so concurrent
  * writes for different symbols don't replace each other's slot. Entries

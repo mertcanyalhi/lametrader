@@ -7,7 +7,7 @@ import { expect, it } from 'vitest';
  * adapter in the e2e tier.
  *
  * The Mongo adapter writes the latch as a sub-doc on each rule document
- * (ADR 0014), so writes only apply to rules that exist. `make` accepts the
+ * (ADR 0012), so writes only apply to rules that exist. `make` accepts the
  * set of rule ids the test will reference so the adapter under test can be
  * seeded accordingly.
  *

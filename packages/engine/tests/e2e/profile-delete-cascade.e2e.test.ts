@@ -24,7 +24,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
  * E2E: deleting a profile through `ProfileService` against real Mongo also
  * removes every rule belonging to that profile. The deleted rules' embedded
  * `firingState` maps die with the rule documents — no separate firing-state
- * cascade (ADR 0014).
+ * cascade (ADR 0012).
  */
 describe('profile delete cascade (e2e)', () => {
   let container: StartedMongoDBContainer;

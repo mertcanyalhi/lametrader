@@ -228,7 +228,7 @@ export interface Rule {
    * the rule's condition was true on the most recent evaluation. Internal
    * plumbing for the trigger gate (not user-visible; stripped from API
    * responses by the schema). Missing entries default to `false`. Owned by
-   * the {@link FiringStateRepository} adapter — see ADR 0014.
+   * the {@link FiringStateRepository} adapter — see ADR 0012.
    */
   firingState?: Record<string, boolean>;
   /** Creation time (epoch ms). */

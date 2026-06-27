@@ -8,7 +8,7 @@ import { runFiringStateRepositoryContract } from '../../src/rules/testing/firing
  * E2e: the firing-state persistence adapter against an ephemeral Mongo
  * (Testcontainers), run through the same shared contract as the in-memory
  * adapter. The Mongo adapter embeds the latch on the rule document (ADR
- * 0014), so the harness seeds stub rule docs for each id the contract
+ * 0012), so the harness seeds stub rule docs for each id the contract
  * references.
  */
 describe('firing-state persistence (e2e)', () => {
