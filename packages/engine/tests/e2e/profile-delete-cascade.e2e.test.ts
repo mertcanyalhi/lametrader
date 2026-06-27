@@ -22,8 +22,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 /**
  * E2E: deleting a profile through `ProfileService` against real Mongo also
- * removes every rule belonging to that profile and the rules' persisted
- * firing-state entries — same pattern as the candle cascade in ADR-0009.
+ * removes every rule belonging to that profile. The deleted rules' embedded
+ * `firingState` maps die with the rule documents — no separate firing-state
+ * cascade (ADR 0014).
  */
 describe('profile delete cascade (e2e)', () => {
   let container: StartedMongoDBContainer;
@@ -45,7 +46,6 @@ describe('profile delete cascade (e2e)', () => {
   beforeEach(async () => {
     await db.collection('profiles').deleteMany({});
     await db.collection('rules').deleteMany({});
-    await db.collection('firing_state').deleteMany({});
   });
 
   it('leaves no orphan rule documents or firing-state entries for the deleted profile', async () => {
@@ -61,7 +61,6 @@ describe('profile delete cascade (e2e)', () => {
         newId: () => `p${++counter}`,
         now: () => 1000,
         rules,
-        firingState,
       },
     );
 
@@ -94,9 +93,7 @@ describe('profile delete cascade (e2e)', () => {
     await service.remove(doomed.id);
 
     expect(await db.collection('rules').find({ profileId: doomed.id }).toArray()).toEqual([]);
-    expect(
-      await db.collection('firing_state').find({ '_id.ruleId': 'doomed-rule' }).toArray(),
-    ).toEqual([]);
+    expect(await firingState.getActive('doomed-rule', 'AAPL')).toBe(false);
     expect((await rules.list()).map((r) => r.id)).toEqual(['survivor-rule']);
     expect(await firingState.getActive('survivor-rule', 'AAPL')).toBe(true);
   });

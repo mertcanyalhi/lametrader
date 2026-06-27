@@ -8,11 +8,7 @@ import {
   StateValueType,
   TriggerKind,
 } from '@lametrader/core';
-import {
-  InMemoryFiringStateRepository,
-  InMemoryRuleRepository,
-  RuleService,
-} from '@lametrader/engine';
+import { InMemoryRuleRepository, RuleService } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../app';
 import { buildAppDeps } from '../testing/app-deps';
@@ -55,13 +51,11 @@ function sequentialIds(): () => string {
  */
 function buildApp(seed: Rule[] = []) {
   const ruleRepo = new InMemoryRuleRepository(seed);
-  const firingState = new InMemoryFiringStateRepository();
   const rules = new RuleService(ruleRepo, {
     newId: sequentialIds(),
     now: () => 1000,
-    firingState,
   });
-  return { app: createApp(buildAppDeps({ rules })), ruleRepo, firingState };
+  return { app: createApp(buildAppDeps({ rules })), ruleRepo };
 }
 
 describe('GET /rules', () => {
@@ -506,16 +500,14 @@ describe('PATCH /rules/:id', () => {
 });
 
 describe('DELETE /rules/:id', () => {
-  it('removes the rule and its firing state, returns 204', async () => {
+  it('removes the rule, returns 204', async () => {
     const seed = rule({ id: 'r1', profileId: 'p1', order: 1 });
-    const { app, ruleRepo, firingState } = buildApp([seed]);
-    await firingState.setActive('r1', 'AAPL', true);
+    const { app, ruleRepo } = buildApp([seed]);
 
     const res = await app.inject({ method: 'DELETE', url: '/rules/r1' });
 
     expect(res.statusCode).toBe(204);
     expect(await ruleRepo.list()).toEqual([]);
-    expect(await firingState.getActive('r1', 'AAPL')).toBe(false);
   });
 
   it('returns 404 for an unknown id', async () => {

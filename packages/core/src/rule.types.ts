@@ -223,6 +223,14 @@ export interface Rule {
   events: RuleEventEntry[];
   /** Embedded lifecycle history log. */
   history: RuleHistoryEntry[];
+  /**
+   * Embedded `OncePerMinute` trigger latch — per-symbol bit recording whether
+   * the rule's condition was true on the most recent evaluation. Internal
+   * plumbing for the trigger gate (not user-visible; stripped from API
+   * responses by the schema). Missing entries default to `false`. Owned by
+   * the {@link FiringStateRepository} adapter — see ADR 0014.
+   */
+  firingState?: Record<string, boolean>;
   /** Creation time (epoch ms). */
   createdAt: number;
   /** Last-update time (epoch ms). */

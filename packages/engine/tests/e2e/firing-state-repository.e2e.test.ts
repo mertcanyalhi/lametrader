@@ -7,7 +7,9 @@ import { runFiringStateRepositoryContract } from '../../src/rules/testing/firing
 /**
  * E2e: the firing-state persistence adapter against an ephemeral Mongo
  * (Testcontainers), run through the same shared contract as the in-memory
- * adapter.
+ * adapter. The Mongo adapter embeds the latch on the rule document (ADR
+ * 0014), so the harness seeds stub rule docs for each id the contract
+ * references.
  */
 describe('firing-state persistence (e2e)', () => {
   let container: StartedMongoDBContainer;
@@ -26,8 +28,13 @@ describe('firing-state persistence (e2e)', () => {
     await container?.stop();
   });
 
-  runFiringStateRepositoryContract(async () => {
-    await db.collection('firing_state').deleteMany({});
+  runFiringStateRepositoryContract(async (ruleIds) => {
+    await db.collection('rules').deleteMany({});
+    if (ruleIds.length > 0) {
+      await db
+        .collection('rules')
+        .insertMany(ruleIds.map((id) => ({ _id: id as unknown as never })));
+    }
     return new MongoFiringStateRepository(db);
   });
 });
