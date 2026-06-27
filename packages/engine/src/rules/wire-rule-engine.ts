@@ -77,14 +77,16 @@ export function wireRuleEngine(deps: RuleEngineDeps): WiredRuleEngine {
     deps.eventLog,
     deps.firingState,
   );
-  let pending: Promise<void> = Promise.resolve();
+  const serializer = createPerSymbolSerializer(async (event) => {
+    try {
+      await orchestrator.process(event);
+    } catch (err) {
+      await handleCascadeError(err, event, deps.eventLog, deps.logger);
+    }
+  });
   const enqueue = (event: RuleEvent): void => {
     lookups.record(event);
-    pending = pending.then(() =>
-      orchestrator
-        .process(event)
-        .catch((err) => handleCascadeError(err, event, deps.eventLog, deps.logger)),
-    );
+    serializer.enqueue(event);
   };
   const candleBridge = new CandleRuleEventBridge(enqueue);
   const indicatorBridge = new IndicatorRuleEventBridge(enqueue);
@@ -94,12 +96,49 @@ export function wireRuleEngine(deps: RuleEngineDeps): WiredRuleEngine {
     indicatorBridge,
     quoteBridge,
     lookups,
-    async drain(): Promise<void> {
-      let last: Promise<void> = pending;
-      do {
-        last = pending;
-        await pending;
-      } while (last !== pending);
-    },
+    drain: serializer.drain,
   };
+}
+
+/**
+ * Serialize {@link RuleEvent} processing **per `symbolId`** so events for
+ * one symbol still preserve arrival order while events for different
+ * symbols run concurrently. Events with `symbolId: null` (Timer,
+ * GlobalStateChanged) share a single "global" chain. Fixes #307: under
+ * load the previous single global chain caused rule evaluation to lag
+ * behind the live candle stream.
+ *
+ * The returned `process` callback is expected to handle its own errors;
+ * the serializer additionally swallows any leftover rejection so the
+ * per-symbol chain stays alive for subsequent events.
+ *
+ * @param process - the per-event work; must already catch and handle errors.
+ * @returns `enqueue` (push an event onto its symbol's chain) and `drain`
+ *   (await every chain — both per-symbol and the global one — to settle).
+ */
+export function createPerSymbolSerializer(process: (event: RuleEvent) => Promise<void>): {
+  enqueue: (event: RuleEvent) => void;
+  drain: () => Promise<void>;
+} {
+  const chains = new Map<string | null, Promise<void>>();
+  const enqueue = (event: RuleEvent): void => {
+    const key = event.symbolId;
+    const prev = chains.get(key) ?? Promise.resolve();
+    const next = prev
+      .then(() => process(event))
+      .catch(() => {
+        // Defense in depth — keep the chain resolvable so the next event
+        // for the same symbol still runs even if `process` somehow throws.
+      });
+    chains.set(key, next);
+    void next.finally(() => {
+      if (chains.get(key) === next) chains.delete(key);
+    });
+  };
+  const drain = async (): Promise<void> => {
+    while (chains.size > 0) {
+      await Promise.all([...chains.values()]);
+    }
+  };
+  return { enqueue, drain };
 }
