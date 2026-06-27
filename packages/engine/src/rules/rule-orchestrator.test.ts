@@ -314,6 +314,47 @@ describe('RuleOrchestrator', () => {
     expect({ enabled: stored?.enabled }).toEqual({ enabled: false });
   });
 
+  it('preserves the Fired event on the rule when auto-disabling a Once rule (issue #300)', async () => {
+    // Reproduces the Mongo contract: `appendRuleEvent` `$push`-es onto the
+    // rule doc itself. If the auto-disable branch saves a stale captured
+    // `rule`, the `replaceOne` wipes the just-pushed Fired entry.
+    const r = rule({ id: 'once', order: 1, trigger: { kind: TriggerKind.Once } });
+    const rules = new InMemoryRuleRepository([r]);
+    const baseLog = new InMemoryEventLog();
+    const couplingLog = {
+      async appendRuleEvent(ruleId: string, entry: Parameters<typeof baseLog.appendRuleEvent>[1]) {
+        await baseLog.appendRuleEvent(ruleId, entry);
+        const stored = await rules.get(ruleId);
+        if (stored !== null) {
+          await rules.save({ ...stored, events: [...stored.events, entry] });
+        }
+      },
+      appendSymbolEvent: baseLog.appendSymbolEvent.bind(baseLog),
+      ruleEvents: baseLog.ruleEvents.bind(baseLog),
+      symbolEvents: baseLog.symbolEvents.bind(baseLog),
+    };
+    const orchestrator = new RuleOrchestrator(
+      rules,
+      new InMemoryWatchlistRepository(),
+      priceLookups(),
+      new InMemoryStateRepository(),
+      new InMemoryNotifier(['main']),
+      couplingLog,
+      new InMemoryFiringStateRepository(),
+    );
+
+    await orchestrator.process(priceEvent());
+
+    const stored = await rules.get('once');
+    expect({
+      enabled: stored?.enabled,
+      eventTypes: stored?.events.map((e) => e.type) ?? [],
+    }).toEqual({
+      enabled: false,
+      eventTypes: [RuleEventType.NotificationSent, RuleEventType.Fired],
+    });
+  });
+
   it('does not fire disabled rules', async () => {
     const r = rule({ id: 'off', order: 1, enabled: false });
     const notifier = new InMemoryNotifier(['main']);
