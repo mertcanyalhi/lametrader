@@ -48,13 +48,7 @@ export type { ProfileServiceOptions } from './profiles/profile-service.types.js'
 export { ActionRunner } from './rules/action-runner.js';
 export { CandleRuleEventBridge } from './rules/candle-rule-event-bridge.js';
 export { handleCascadeError } from './rules/cascade-error-handler.js';
-export { type ComparisonOperator, evaluateComparison } from './rules/comparison-evaluator.js';
-export {
-  type ConditionLeaf,
-  evaluateConditionTree,
-  type LeafEvaluator,
-} from './rules/condition-tree-evaluator.js';
-export { type CrossingOperator, evaluateCrossing } from './rules/crossing-evaluator.js';
+export { evaluateCondition } from './rules/condition-evaluator.js';
 export { CycleGuard, CycleOverflowError } from './rules/cycle-guard.js';
 export { buildEvaluationContext } from './rules/evaluation-context.js';
 export type { EvaluationContext, EvaluationLookups } from './rules/evaluation-context.types.js';
@@ -79,7 +73,6 @@ export {
   RuleService,
   type RuleServiceOptions,
 } from './rules/rule-service.js';
-export { evaluateState } from './rules/state-evaluator.js';
 export {
   TelegramNotifier,
   type TelegramNotifierOptions,
