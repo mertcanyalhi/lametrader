@@ -76,6 +76,16 @@ export {
   type SourceFieldDescriptor,
   type StateFieldDescriptor,
 } from './indicator.types.js';
+export {
+  BOT_TOKEN_MAX,
+  CHAT_ID_MAX,
+  DESTINATION_NAME_MAX,
+  RULE_DESCRIPTION_MAX,
+  RULE_NAME_MAX,
+  STATE_KEY_MAX,
+  SYMBOL_ID_MAX,
+  TELEGRAM_TEMPLATE_MAX,
+} from './limits.js';
 export { type Notifier, UnknownDestinationError } from './notifier.types.js';
 export {
   mergeProfileFields,

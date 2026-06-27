@@ -5,6 +5,7 @@ import { ActionKind } from './action.types.js';
 import { OperandKind } from './condition-operand.types.js';
 import { ConditionNodeKind } from './condition-tree.types.js';
 import { ExpirationError } from './expiration.js';
+import { RULE_DESCRIPTION_MAX, RULE_NAME_MAX } from './limits.js';
 import { RuleError, validateRule } from './rule.js';
 import { type Rule, RuleScopeKind } from './rule.types.js';
 import { RuleOperatorError } from './rule-operator.js';
@@ -104,6 +105,16 @@ describe('validateRule', () => {
   it('propagates an ExpirationError from a past expiration', () => {
     const rule: Rule = { ...baseRule(), expiration: { at: NOW - 1 } };
     expect(() => validateRule(rule, NOW)).toThrow(ExpirationError);
+  });
+
+  it('rejects a rule whose name exceeds RULE_NAME_MAX', () => {
+    const rule: Rule = { ...baseRule(), name: 'x'.repeat(RULE_NAME_MAX + 1) };
+    expect(() => validateRule(rule, NOW)).toThrow(RuleError);
+  });
+
+  it('rejects a rule whose description exceeds RULE_DESCRIPTION_MAX', () => {
+    const rule: Rule = { ...baseRule(), description: 'x'.repeat(RULE_DESCRIPTION_MAX + 1) };
+    expect(() => validateRule(rule, NOW)).toThrow(RuleError);
   });
 
   it('propagates an ActionError from a bad action payload', () => {

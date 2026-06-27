@@ -1,4 +1,5 @@
 import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
+import { BOT_TOKEN_MAX, CHAT_ID_MAX, DESTINATION_NAME_MAX } from '@lametrader/core';
 import type { TelegramDestinationsService } from '@lametrader/engine';
 import type { FastifyInstance } from 'fastify';
 import { ErrorSchema } from '../schemas/common.schema.js';
@@ -12,15 +13,15 @@ const TelegramDestinationSummarySchema = Type.Object(
 /** Write shape for `POST /config/notifications/telegram`. */
 const TelegramDestinationInputSchema = Type.Object(
   {
-    name: Type.String({ minLength: 1 }),
-    botToken: Type.String({ minLength: 1 }),
-    chatId: Type.String({ minLength: 1 }),
+    name: Type.String({ minLength: 1, maxLength: DESTINATION_NAME_MAX }),
+    botToken: Type.String({ minLength: 1, maxLength: BOT_TOKEN_MAX }),
+    chatId: Type.String({ minLength: 1, maxLength: CHAT_ID_MAX }),
   },
   { additionalProperties: false, $id: 'TelegramDestinationInput' },
 );
 
 const TelegramDestinationNameParamSchema = Type.Object(
-  { name: Type.String({ minLength: 1 }) },
+  { name: Type.String({ minLength: 1, maxLength: DESTINATION_NAME_MAX }) },
   { additionalProperties: false, $id: 'TelegramDestinationNameParam' },
 );
 

@@ -4,7 +4,10 @@ import {
   type ConditionNode,
   ConditionNodeKind,
   Period,
+  RULE_DESCRIPTION_MAX,
+  RULE_NAME_MAX,
   RuleScopeKind,
+  SYMBOL_ID_MAX,
   TriggerKind,
 } from '@lametrader/core';
 import * as yup from 'yup';
@@ -118,8 +121,14 @@ export const ruleFormSchema: yup.ObjectSchema<RuleFormValues> = yup.object({
     .string()
     .trim()
     .required(({ label }) => `${label} is required.`)
+    .max(RULE_NAME_MAX, ({ label, max }) => `${label} must be ${max} characters or fewer.`)
     .label(FIELD_LABELS.name),
-  description: yup.string().defined().default('').label(FIELD_LABELS.description),
+  description: yup
+    .string()
+    .defined()
+    .default('')
+    .max(RULE_DESCRIPTION_MAX, ({ label, max }) => `${label} must be ${max} characters or fewer.`)
+    .label(FIELD_LABELS.description),
   scopeKind: yup
     .mixed<RuleScopeKind>()
     .oneOf(Object.values(RuleScopeKind))
@@ -131,7 +140,11 @@ export const ruleFormSchema: yup.ObjectSchema<RuleFormValues> = yup.object({
     .when('scopeKind', {
       is: RuleScopeKind.Symbol,
       // biome-ignore lint/suspicious/noThenProperty: `then` is Yup's `.when()` branch key, not a thenable.
-      then: (schema) => schema.trim().required(({ label }) => `${label} is required.`),
+      then: (schema) =>
+        schema
+          .trim()
+          .required(({ label }) => `${label} is required.`)
+          .max(SYMBOL_ID_MAX, ({ label, max }) => `${label} must be ${max} characters or fewer.`),
       otherwise: (schema) => schema.default(''),
     })
     .label(FIELD_LABELS.symbolId),

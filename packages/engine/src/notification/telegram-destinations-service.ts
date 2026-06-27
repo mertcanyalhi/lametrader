@@ -1,6 +1,9 @@
 import {
+  BOT_TOKEN_MAX,
+  CHAT_ID_MAX,
   ConfigKey,
   type ConfigRepository,
+  DESTINATION_NAME_MAX,
   type TelegramDestination,
   TelegramDestinationError,
   type TelegramDestinationLookup,
@@ -56,6 +59,14 @@ export class TelegramDestinationsService implements TelegramDestinationLookup {
     if (name === '') throw new TelegramDestinationError('name is required');
     if (botToken === '') throw new TelegramDestinationError('botToken is required');
     if (chatId === '') throw new TelegramDestinationError('chatId is required');
+    if (name.length > DESTINATION_NAME_MAX)
+      throw new TelegramDestinationError(
+        `name must be ${DESTINATION_NAME_MAX} characters or fewer`,
+      );
+    if (botToken.length > BOT_TOKEN_MAX)
+      throw new TelegramDestinationError(`botToken must be ${BOT_TOKEN_MAX} characters or fewer`);
+    if (chatId.length > CHAT_ID_MAX)
+      throw new TelegramDestinationError(`chatId must be ${CHAT_ID_MAX} characters or fewer`);
     const next: TelegramDestination = { name, botToken, chatId };
     const all = await this.readAll();
     const index = all.findIndex((d) => d.name === name);
