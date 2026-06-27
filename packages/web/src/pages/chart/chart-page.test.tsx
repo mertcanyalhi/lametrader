@@ -176,7 +176,7 @@ describe('ChartPage', () => {
     // Wait for the chart body (mock) to render, which means candles have loaded.
     await screen.findByText('candle-chart');
 
-    expect(document.title).toEqual('crypto:BTCUSDT · 102.00 +2.00 (+2.00%) - lametrader');
+    expect(document.title).toEqual('crypto:BTCUSDT 102.00 ▲ +2.00% (2.00) - lametrader');
   });
 
   it('redirects bare /chart to the last-selected period from storage when one is saved', async () => {
