@@ -61,8 +61,8 @@ export function RulesTable({
     <Table.Root variant="surface" size="1">
       <Table.Header>
         <Table.Row>
-          <Table.ColumnHeaderCell aria-label="Enabled" />
-          <Table.ColumnHeaderCell aria-label="Reorder" />
+          <Table.ColumnHeaderCell aria-label="Enabled" width="56px" />
+          <Table.ColumnHeaderCell aria-label="Reorder" width="76px" />
           <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
           <Table.ColumnHeaderCell>Scope</Table.ColumnHeaderCell>
           <Table.ColumnHeaderCell>Trigger</Table.ColumnHeaderCell>
