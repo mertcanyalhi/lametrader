@@ -19,8 +19,12 @@ const MARKER_PAGE_SIZE = 200;
  * entry to a candle-series marker keyed by its timestamp. Lazy: only
  * `state_set` events render today; expand kinds when the chart's marker
  * vocabulary grows.
+ *
+ * @param symbolId - the symbol whose events drive the markers.
+ * @param color    - resolved theme-aware marker color (canvas can't read
+ *                   CSS vars, so the caller passes the hex from `chartColors`).
  */
-export function useStateChangeMarkers(symbolId: string): SeriesMarker<Time>[] {
+export function useStateChangeMarkers(symbolId: string, color: string): SeriesMarker<Time>[] {
   const query = useQuery<RuleEventEntry[], Error>({
     queryKey: [...symbolRuleEventsKey(symbolId), 'markers'] as const,
     queryFn: () =>
@@ -37,8 +41,8 @@ export function useStateChangeMarkers(symbolId: string): SeriesMarker<Time>[] {
         time: Math.floor(event.ts / 1000) as UTCTimestamp,
         position: 'belowBar',
         shape: 'circle',
-        color: 'var(--accent-9)',
+        color,
         text: `${event.scope}.${event.key}`,
       }));
-  }, [events]);
+  }, [events, color]);
 }

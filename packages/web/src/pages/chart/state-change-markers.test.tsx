@@ -48,8 +48,8 @@ describe('useStateChangeMarkers', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns one belowBar circle marker per `state_set` event, ignoring other kinds', async () => {
-    const { result } = renderHook(() => useStateChangeMarkers('crypto:BTCUSDT'), {
+  it('returns one belowBar circle marker per `state_set` event, ignoring other kinds, with the supplied theme color', async () => {
+    const { result } = renderHook(() => useStateChangeMarkers('crypto:BTCUSDT', '#3d63dd'), {
       wrapper: wrapper(),
     });
     await waitFor(() => {
@@ -58,7 +58,7 @@ describe('useStateChangeMarkers', () => {
           time: Math.floor(STATE_SET.ts / 1000),
           position: 'belowBar',
           shape: 'circle',
-          color: 'var(--accent-9)',
+          color: '#3d63dd',
           text: 'symbol.streak',
         },
       ]);

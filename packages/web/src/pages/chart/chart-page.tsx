@@ -24,6 +24,7 @@ import { ChartEventsButton } from './chart-events-button.js';
 import { ChartLoading } from './chart-loading.js';
 import { CHART_RANGE_ORDER, type ChartRange } from './chart-range.js';
 import { ChartRulesButton } from './chart-rules-button.js';
+import { chartColors } from './chart-series.js';
 import { ChartEmptyState } from './empty-state.js';
 import type { LegendOverlay } from './indicators/indicator-legend.js';
 import { IndicatorPanelDialog } from './indicators/indicator-panel-dialog.js';
@@ -288,7 +289,8 @@ function ChartView({
     from: computeFrom,
     to: computeTo,
   });
-  const ruleEventMarkers = useStateChangeMarkers(id);
+  const { theme } = useTheme();
+  const ruleEventMarkers = useStateChangeMarkers(id, chartColors(theme).markerColor);
   const body = feed.isPending ? (
     <ChartLoading />
   ) : feed.isError ? (
