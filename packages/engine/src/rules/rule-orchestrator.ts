@@ -4,7 +4,6 @@ import {
   type ConditionOperand,
   type EventLog,
   type FiredRuleEvent,
-  type FiringStateRepository,
   type Notifier,
   NumericOperator,
   type Rule,
@@ -20,7 +19,6 @@ import {
   type StateOperator,
   type StateRepository,
   StateScope,
-  type Trigger,
   TriggerKind,
   type WatchlistRepository,
 } from '@lametrader/core';
@@ -32,13 +30,11 @@ import { CycleGuard, CycleOverflowError } from './cycle-guard.js';
 import { buildEvaluationContext } from './evaluation-context.js';
 import type { EvaluationContext, EvaluationLookups } from './evaluation-context.types.js';
 import { appendStateActionEvent } from './event-appender.js';
-import { mayFireOncePerBar, mayFireOncePerBarClose } from './once-per-bar-trigger-gate.js';
-import { mayFireOncePerMinute } from './once-per-minute-trigger-gate.js';
-import { mayFireOnce } from './once-trigger-gate.js';
-import { GateReason, RuleOutcome } from './rule-orchestrator-trace.types.js';
+import { RuleOutcome } from './rule-orchestrator-trace.types.js';
 import { executeStateAction, type StateMutationAction } from './state-action-executor.js';
 import { evaluateState } from './state-evaluator.js';
 import { executeTelegramAction } from './telegram-action-executor.js';
+import type { TriggerEvaluator } from './trigger-evaluator.js';
 
 /** Scope-bound logger for the rule orchestrator (#306). */
 const log = getLogger('rule-orchestrator');
@@ -99,7 +95,7 @@ export class RuleOrchestrator {
     private readonly state: StateRepository,
     private readonly notifier: Notifier,
     private readonly log: EventLog,
-    private readonly firingState: FiringStateRepository,
+    private readonly triggers: TriggerEvaluator,
     private readonly options: RuleOrchestratorOptions = {},
   ) {}
 
@@ -252,29 +248,7 @@ export class RuleOrchestrator {
       return evaluateLeaf(leaf, context, rule.id, idx);
     });
 
-    const events = await this.log.ruleEvents(rule.id);
-    const prevActive = await this.firingState.getActive(rule.id, firingSymbolId);
-    const final = eventFinal(event);
-    const triggerAllows = this.checkTrigger(
-      rule.trigger,
-      events,
-      firingSymbolId,
-      event.ts,
-      prevActive,
-      conditionTrue,
-      final,
-    );
-    await this.firingState.setActive(rule.id, firingSymbolId, conditionTrue);
-
-    log.trace(
-      {
-        ruleId: rule.id,
-        triggerKind: rule.trigger.kind,
-        allowed: triggerAllows,
-        reason: gateReason(rule.trigger, triggerAllows, final, prevActive, conditionTrue),
-      },
-      'gate_decision',
-    );
+    const triggerAllows = await this.triggers.mayFire(rule, event, firingSymbolId, conditionTrue);
 
     if (!conditionTrue) {
       log.trace({ ruleId: rule.id, outcome: RuleOutcome.ConditionFalse }, 'rule_summary');
@@ -371,38 +345,6 @@ export class RuleOrchestrator {
   }
 
   /**
-   * Dispatch on `trigger.kind` to the right gate; `OncePerMinute` and the
-   * bar-based variants need extra context which is threaded in here.
-   */
-  private checkTrigger(
-    trigger: Trigger,
-    events: RuleEventEntry[],
-    symbolId: string,
-    ts: number,
-    prevActive: boolean,
-    nowActive: boolean,
-    final: boolean,
-  ): boolean {
-    switch (trigger.kind) {
-      case TriggerKind.Once:
-        return mayFireOnce(events, symbolId);
-      case TriggerKind.OncePerBar:
-        return mayFireOncePerBar(events, symbolId, ts, trigger.period);
-      case TriggerKind.OncePerBarClose:
-        return mayFireOncePerBarClose(events, symbolId, ts, trigger.period, final);
-      case TriggerKind.OncePerMinute:
-        return mayFireOncePerMinute(
-          events,
-          symbolId,
-          ts,
-          trigger.intervalMs,
-          prevActive,
-          nowActive,
-        );
-    }
-  }
-
-  /**
    * Emit one `Expired` event per (rule, symbol); subsequent skips are
    * silent.
    */
@@ -436,15 +378,6 @@ export class RuleOrchestrator {
     };
     await this.log.appendSymbolEvent(symbolId, entry);
   }
-}
-
-/**
- * Whether the inbound event represents a final bar; only OHLCV events carry
- * `final` (non-OHLCV events read as forming).
- */
-function eventFinal(event: RuleEvent): boolean {
-  if ('final' in event) return event.final;
-  return false;
 }
 
 /**
@@ -518,33 +451,6 @@ function evaluateLeaf(
     'leaf_decision',
   );
   return result;
-}
-
-/**
- * The forensic `reason` string for one trigger-gate dispatch — one of a
- * fixed vocabulary so the trace is grep-friendly. Computed at the
- * call site (the gate functions themselves only return booleans).
- */
-function gateReason(
-  trigger: Trigger,
-  allowed: boolean,
-  final: boolean,
-  prevActive: boolean,
-  nowActive: boolean,
-): GateReason {
-  if (allowed) return GateReason.Allowed;
-  switch (trigger.kind) {
-    case TriggerKind.Once:
-      return GateReason.AlreadyFired;
-    case TriggerKind.OncePerBar:
-      return GateReason.SameBar;
-    case TriggerKind.OncePerBarClose:
-      return !final ? GateReason.NotFinal : GateReason.SameBar;
-    case TriggerKind.OncePerMinute:
-      if (!nowActive) return GateReason.NotActive;
-      if (prevActive) return GateReason.NoTransition;
-      return GateReason.WithinInterval;
-  }
 }
 
 const COMPARISON_OPS = new Set<string>([

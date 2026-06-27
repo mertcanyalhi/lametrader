@@ -23,6 +23,17 @@ import { InMemoryNotifier } from './in-memory-notifier.js';
 import { InMemoryRuleRepository } from './in-memory-rule-repository.js';
 import { RuleOrchestrator } from './rule-orchestrator.js';
 import { GateReason, RuleOutcome } from './rule-orchestrator-trace.types.js';
+import { TriggerEvaluator } from './trigger-evaluator.js';
+
+/**
+ * Build an `[eventLog, triggers]` pair that shares the same `EventLog`
+ * instance — needed because the trigger evaluator reads the rule's events
+ * log to find prior `Fired` entries.
+ */
+function makeOrchestratorIo(): [InMemoryEventLog, TriggerEvaluator] {
+  const eventLog = new InMemoryEventLog();
+  return [eventLog, new TriggerEvaluator(eventLog, new InMemoryFiringStateRepository())];
+}
 
 /**
  * One captured Pino record (already JSON-parsed). Tests filter by `msg` /
@@ -136,8 +147,7 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       priceLookups(),
       new InMemoryStateRepository(),
       new InMemoryNotifier(['main']),
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
 
     await orchestrator.process(priceEvent());
@@ -160,8 +170,7 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       priceLookups(),
       new InMemoryStateRepository(),
       new InMemoryNotifier(['main']),
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
 
     await orchestrator.process(priceEvent());
@@ -181,8 +190,7 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       priceLookups(),
       new InMemoryStateRepository(),
       new InMemoryNotifier(['main']),
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
 
     await orchestrator.process(priceEvent());
@@ -230,8 +238,7 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       staleOpenLookups,
       new InMemoryStateRepository(),
       new InMemoryNotifier(['main']),
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
 
     await orchestrator.process({
@@ -262,8 +269,7 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       priceLookups(),
       new InMemoryStateRepository(),
       new InMemoryNotifier(['main']),
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
 
     await orchestrator.process(priceEvent());
@@ -284,8 +290,7 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       priceLookups(),
       new InMemoryStateRepository(),
       new InMemoryNotifier(['main']),
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
 
     await orchestrator.process(priceEvent());
@@ -326,8 +331,7 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       priceLookups(),
       state,
       new InMemoryNotifier(['main']),
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
 
     await orchestrator.process(priceEvent());
@@ -354,8 +358,7 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       priceLookups(),
       new InMemoryStateRepository(),
       new InMemoryNotifier(['main']),
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
 
     await orchestrator.process(priceEvent());

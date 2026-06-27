@@ -26,6 +26,7 @@ import {
   QuoteRuleEventBridge,
   RuleOrchestrator,
   type RuleOrchestratorOptions,
+  TriggerEvaluator,
 } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 
@@ -125,7 +126,7 @@ function buildDriver(
     state,
     notifier,
     log,
-    firingState,
+    new TriggerEvaluator(log, firingState),
     options.orchestratorOptions,
   );
   let pending: Promise<void> = Promise.resolve();
