@@ -1,7 +1,7 @@
-# 0012. Rules engine architecture: timestamp-per-event, cascading with cycle-limit, embedded events
+# 0012. Rules engine architecture: timestamp-per-event, cascading with cycle-limit, embedded runtime state
 
 - Status: accepted
-- Date: 2026-06-21
+- Date: 2026-06-21 (firing-state amendment: 2026-06-27)
 
 ## Context
 
@@ -21,6 +21,11 @@ Three design choices fork the rest of the work and aren't obvious from the spec 
    The spec describes embedded `events` arrays on the rule and on each symbol.
    The alternative is a standalone `rule_events` collection indexed by `ruleId` and `symbolId`, which scales better but diverges from the spec wording and adds a second source of truth for the same data.
 
+4. **Where does the `OncePerMinute` firing-state latch live?** (added 2026-06-27, #279)
+   The trigger gate needs a per-`(ruleId, symbolId)` "currently active" bit so it can detect false → true transitions across restarts.
+   The first cut put it in its own `firing_state` collection keyed by a compound `_id`.
+   That left two cleanup call-sites (`RuleService.remove`, `ProfileService.remove` → `removeForProfile`) and a second source of truth for what's really internal trigger plumbing — the orchestrator and gate are the only readers.
+
 ## Decision
 
 **1. Every `RuleEvent` carries its own `ts`.**
@@ -39,6 +44,13 @@ Default limit is **4** — large enough for realistic cascades, small enough to 
 Each fired event is appended both to `Rule.events[]` and to the affected `Symbol.events[]`.
 Reads for "events for this rule" and "events for this symbol" are single-document fetches.
 Pagination uses `before` cursors on the event `ts`.
+
+**4. The `OncePerMinute` firing-state latch lives as an embedded sub-doc map on the rule.** (added 2026-06-27, #279)
+`Rule.firingState?: Record<symbolId, boolean>` — optional, defaults to `false` for any unset key.
+The Mongo `FiringStateRepository` reads and writes the dotted path `firingState.{symbolId}` on the `rules` collection: projected `findOne` for reads, `$set` for writes so two symbols on the same rule never replace each other's slot.
+The standalone `firing_state` collection is dropped; the explicit `removeByRule` cascade goes away with it.
+The port survives — the orchestrator and gate stay decoupled from storage — but loses `removeByRule`.
+The field is marked optional and is intentionally absent from `RuleSchema`, so Fastify strips it from API responses (internal plumbing, not user-facing state).
 
 ## Consequences
 
@@ -67,6 +79,16 @@ Pagination uses `before` cursors on the event `ts`.
   Mongo doesn't guarantee these atomically; an interleaved failure between writes leaves one side missing an entry.
   Acceptable for an events log (where occasional gaps don't change correctness) and called out in the event-append helper.
 
+**Embedded firing-state** (added 2026-06-27, #279)
+
+- Rule delete and the profile-delete cascade clean up the latch implicitly — no separate code path, no chance of orphaned firing-state docs lingering when a cascade misses a step.
+- A `RuleService.replace` race that wrote the rule between an orchestrator read and write would now overwrite the latch.
+  `replace` preserves `existing.firingState` on the in-memory `Rule` passed to `save`, which contains the read-side bit; the standing load → save window is the same one accepted for `events[]` and `history[]`.
+- Latch growth shape matches `events[]`: `Symbol`-scoped rules carry exactly one entry; `AllSymbols`-scoped rules carry one per watched symbol.
+- The shared contract test for the port now seeds rule docs upfront — Mongo's `$set` targets an existing doc (no `upsert`, which would create orphan rules); the in-memory adapter ignores the ids.
+- Migration: orphan documents in the pre-existing `firing_state` collection can be dropped — they were only ever a per-`(rule, symbol)` cache.
+  No data loss; the gate's worst case after the cutover is one spurious or one missed transition on the first evaluation after restart, the same window the system already tolerates between writes.
+
 ## Closes
 
-#98.
+#98, #279.

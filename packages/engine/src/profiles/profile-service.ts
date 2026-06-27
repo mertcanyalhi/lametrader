@@ -1,5 +1,4 @@
 import {
-  type FiringStateRepository,
   IndicatorError,
   type IndicatorInstance,
   IndicatorInstanceNotFoundError,
@@ -50,8 +49,6 @@ export class ProfileService {
   private readonly now: () => number;
   /** Rule store consulted by the profile-delete cascade (optional). */
   private readonly rules?: RuleRepository;
-  /** Firing-state store consulted by the profile-delete cascade (optional). */
-  private readonly firingState?: FiringStateRepository;
 
   /**
    * @param profiles - the profile persistence port.
@@ -68,7 +65,6 @@ export class ProfileService {
     this.newId = options.newId ?? (() => nanoid());
     this.now = options.now ?? Date.now;
     this.rules = options.rules;
-    this.firingState = options.firingState;
   }
 
   /**
@@ -164,21 +160,17 @@ export class ProfileService {
   /**
    * Delete a profile by id.
    *
-   * When the optional `rules` + `firingState` ports are wired in, every rule
-   * belonging to the profile is removed and the rules' persisted firing-state
-   * entries are purged — same pattern as the candle cascade in ADR-0009.
+   * When the optional `rules` port is wired in, every rule belonging to the
+   * profile is removed. The deleted rules' embedded `firingState` maps die
+   * with the rule documents (see ADR 0012) — no separate firing-state
+   * cascade needed.
    *
    * @throws {@link ProfileNotFoundError} when the id is unknown.
    */
   async remove(id: string): Promise<void> {
     await this.getStored(id);
     if (this.rules !== undefined) {
-      const removedRuleIds = await this.rules.removeForProfile(id);
-      if (this.firingState !== undefined) {
-        for (const ruleId of removedRuleIds) {
-          await this.firingState.removeByRule(ruleId);
-        }
-      }
+      await this.rules.removeForProfile(id);
     }
     await this.profiles.remove(id);
   }

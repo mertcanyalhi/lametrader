@@ -1,5 +1,4 @@
 import {
-  type FiringStateRepository,
   type Rule,
   type RuleEventEntry,
   RuleHistoryType,
@@ -18,16 +17,13 @@ export interface RuleServiceOptions {
   newId?: () => string;
   /** Current epoch ms; defaults to `Date.now`. */
   now?: () => number;
-  /**
-   * Firing-state store consulted by {@link RuleService.remove} to purge a
-   * deleted rule's persisted firing-state entries. Optional — when absent
-   * `remove` skips the cascade.
-   */
-  firingState?: FiringStateRepository;
 }
 
 /** Body accepted by {@link RuleService.create} — the client-controllable subset of a rule. */
-export type RuleCreateInput = Omit<Rule, 'id' | 'events' | 'history' | 'createdAt' | 'updatedAt'>;
+export type RuleCreateInput = Omit<
+  Rule,
+  'id' | 'events' | 'history' | 'firingState' | 'createdAt' | 'updatedAt'
+>;
 
 /**
  * Application use-case for managing {@link Rule}s through a single API the
@@ -42,12 +38,10 @@ export class RuleService {
   private readonly newId: () => string;
   /** Current clock (injectable; defaults to `Date.now`). */
   private readonly now: () => number;
-  /** Firing-state store consulted by the delete cascade (optional). */
-  private readonly firingState?: FiringStateRepository;
 
   /**
    * @param rules - the rule persistence port.
-   * @param options - injectable id generator, clock, and cascade ports.
+   * @param options - injectable id generator and clock.
    */
   constructor(
     private readonly rules: RuleRepository,
@@ -55,7 +49,6 @@ export class RuleService {
   ) {
     this.newId = options.newId ?? (() => nanoid());
     this.now = options.now ?? Date.now;
-    this.firingState = options.firingState;
   }
 
   /**
@@ -160,18 +153,14 @@ export class RuleService {
   }
 
   /**
-   * Delete a rule by id. When the optional `firingState` port is wired in,
-   * purges every persisted firing-state entry for the rule too — same pattern
-   * as the profile cascade in #131.
+   * Delete a rule by id. The rule's embedded `firingState` map dies with the
+   * rule document — no explicit firing-state cascade needed (see ADR 0012).
    *
    * @throws {@link RuleNotFoundError} when the id is unknown.
    */
   async remove(id: string): Promise<void> {
     await this.get(id);
     await this.rules.remove(id);
-    if (this.firingState !== undefined) {
-      await this.firingState.removeByRule(id);
-    }
   }
 
   /**
@@ -211,6 +200,7 @@ export class RuleService {
       id,
       events: existing.events,
       history: [...existing.history, { type: RuleHistoryType.Updated, ts }],
+      ...(existing.firingState !== undefined ? { firingState: existing.firingState } : {}),
       createdAt: existing.createdAt,
       updatedAt: ts,
     };

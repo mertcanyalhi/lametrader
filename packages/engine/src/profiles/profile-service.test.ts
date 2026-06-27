@@ -21,7 +21,6 @@ import {
 import { describe, expect, it } from 'vitest';
 import { defaultIndicators } from '../indicators/default-indicators.js';
 import type { IndicatorRegistry } from '../indicators/indicator-registry.js';
-import { InMemoryFiringStateRepository } from '../rules/in-memory-firing-state-repository.js';
 import { InMemoryRuleRepository } from '../rules/in-memory-rule-repository.js';
 import { InMemoryWatchlistRepository } from '../symbols/in-memory-watchlist-repository.js';
 import { InMemoryProfileRepository } from './in-memory-profile-repository.js';
@@ -155,16 +154,14 @@ describe('ProfileService.remove', () => {
     await expect(service.remove('p1')).rejects.toBeInstanceOf(ProfileNotFoundError);
   });
 
-  it('cascades to rules + firing state when the optional ports are wired in', async () => {
+  it('cascades to rules when the optional port is wired in', async () => {
     const profiles = new InMemoryProfileRepository();
     const watchlist = new InMemoryWatchlistRepository();
     const rules = new InMemoryRuleRepository();
-    const firingState = new InMemoryFiringStateRepository();
     const service = new ProfileService(profiles, watchlist, defaultIndicators(), {
       newId: sequentialIds(),
       now: () => 1000,
       rules,
-      firingState,
     });
     await service.create({ name: 'Scalper' });
     await service.create({ name: 'Other' });
@@ -192,14 +189,10 @@ describe('ProfileService.remove', () => {
     const p2Rule: Rule = { ...p1Rule, id: 'p2-rule', profileId: 'p2' };
     await rules.save(p1Rule);
     await rules.save(p2Rule);
-    await firingState.setActive('p1-rule', 'AAPL', true);
-    await firingState.setActive('p2-rule', 'AAPL', true);
 
     await service.remove('p1');
 
     expect((await rules.list()).map((r) => r.id)).toEqual(['p2-rule']);
-    expect(await firingState.getActive('p1-rule', 'AAPL')).toBe(false);
-    expect(await firingState.getActive('p2-rule', 'AAPL')).toBe(true);
   });
 });
 

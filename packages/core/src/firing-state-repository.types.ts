@@ -5,7 +5,10 @@
  * needs to detect false → true transitions across restarts.
  *
  * Implemented by driven adapters (MongoDB); an in-memory adapter backs the
- * unit tier and offline/demo wiring.
+ * unit tier and offline/demo wiring. The Mongo implementation stores the
+ * latch as a `firingState: { [symbolId]: boolean }` sub-doc map on each rule
+ * document — entries vanish implicitly when the rule is deleted (see ADR
+ * 0012).
  */
 export interface FiringStateRepository {
   /**
@@ -17,9 +20,4 @@ export interface FiringStateRepository {
    * Persist whether the rule's condition is currently true for `symbolId`.
    */
   setActive(ruleId: string, symbolId: string, active: boolean): Promise<void>;
-  /**
-   * Delete every firing-state entry for `ruleId` (all symbols). Idempotent —
-   * a no-op when the rule has no recorded state.
-   */
-  removeByRule(ruleId: string): Promise<void>;
 }
