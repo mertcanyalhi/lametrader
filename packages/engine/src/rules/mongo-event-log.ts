@@ -28,12 +28,16 @@ interface DocumentWithEvents {
 export class MongoEventLog implements EventLog {
   /** The database handle. */
   private readonly db: Db;
+  /** Wall-clock source for stamping `firedAt`; overridable for deterministic tests. */
+  private readonly now: () => number;
 
   /**
    * @param db - a connected MongoDB database handle.
+   * @param now - wall-clock source; defaults to {@link Date.now}.
    */
-  constructor(db: Db) {
+  constructor(db: Db, now: () => number = Date.now) {
     this.db = db;
+    this.now = now;
   }
 
   /** The typed `watchlist` collection. */
@@ -47,11 +51,20 @@ export class MongoEventLog implements EventLog {
   }
 
   async appendRuleEvent(ruleId: string, entry: RuleEventEntry): Promise<void> {
-    await this.rules.updateOne({ _id: ruleId }, { $push: { events: entry } });
+    await this.rules.updateOne({ _id: ruleId }, { $push: { events: this.stamp(entry) } });
   }
 
   async appendSymbolEvent(symbolId: string, entry: RuleEventEntry): Promise<void> {
-    await this.watchlist.updateOne({ _id: symbolId }, { $push: { events: entry } });
+    await this.watchlist.updateOne({ _id: symbolId }, { $push: { events: this.stamp(entry) } });
+  }
+
+  /**
+   * Stamp the entry with a persistence-time `firedAt` wall-clock if absent.
+   * Preserves a caller-supplied `firedAt`.
+   */
+  private stamp(entry: RuleEventEntry): RuleEventEntry {
+    if (entry.firedAt !== undefined) return entry;
+    return { ...entry, firedAt: this.now() };
   }
 
   async ruleEvents(ruleId: string): Promise<RuleEventEntry[]> {

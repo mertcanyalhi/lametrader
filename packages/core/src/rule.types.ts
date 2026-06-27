@@ -72,8 +72,18 @@ export enum RuleEventType {
  * which rule produced the event.
  */
 interface BaseRuleEventEntry {
-  /** The event timestamp (epoch ms). */
+  /**
+   * The event's source timestamp (epoch ms) — the time of the input that drove
+   * the fire (e.g. a candle bar's open for OHLCV events, a quote's tick time).
+   * Bar-driven events round to the bar boundary, so this can land on `:00.000`.
+   */
   ts: number;
+  /**
+   * Wall-clock at which the {@link EventLog} adapter persisted the entry
+   * (epoch ms). Stamped at append time; absent on legacy entries written
+   * before #305.
+   */
+  firedAt?: number;
   /** The rule that produced the event. */
   ruleId: string;
   /** The watched symbol the event applies to. */

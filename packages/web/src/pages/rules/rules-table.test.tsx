@@ -137,6 +137,26 @@ describe('RulesTable', () => {
     expect(row.queryByText('All symbols')).not.toBeNull();
   });
 
+  it('formats the last-fired column from firedAt (wall-clock) when present, ignoring bar-bucketed ts', () => {
+    renderTable([
+      makeRule({
+        id: 'r-1',
+        name: 'BTC alert',
+        events: [
+          {
+            type: RuleEventType.Fired,
+            ts: 1_700_000_120_000,
+            firedAt: 1_700_000_120_456,
+            ruleId: 'r-1',
+            symbolId: 's-1',
+          },
+        ],
+      }),
+    ]);
+    const row = within(rowFor('Open BTC alert'));
+    expect(row.queryByText('2023-11-14 22:15:20.456')).not.toBeNull();
+  });
+
   it('formats the last-fired column from the most recent Fired event', () => {
     renderTable([
       makeRule({

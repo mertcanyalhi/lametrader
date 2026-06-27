@@ -44,7 +44,7 @@ const sampleContext = () =>
 describe('executeTelegramAction — happy path', () => {
   it('renders the template, calls the notifier, and appends a NotificationSent event to both logs', async () => {
     const notifier = new InMemoryNotifier(['main']);
-    const log = new InMemoryEventLog();
+    const log = new InMemoryEventLog(() => 999);
     await executeTelegramAction(
       {
         kind: ActionKind.NotifyTelegram,
@@ -68,6 +68,7 @@ describe('executeTelegramAction — happy path', () => {
       symbolId: 'AAPL',
       destinationName: 'main',
       body: 'AAPL crossed 100 (prev 99) @ 1000',
+      firedAt: 999,
     };
     expect(await log.ruleEvents('rule-1')).toEqual([expectedEntry]);
     expect(await log.symbolEvents('AAPL')).toEqual([expectedEntry]);
@@ -77,7 +78,7 @@ describe('executeTelegramAction — happy path', () => {
 describe('executeTelegramAction — unknown template token', () => {
   it('does not call the notifier and appends an Error event naming the bad token', async () => {
     const notifier = new InMemoryNotifier(['main']);
-    const log = new InMemoryEventLog();
+    const log = new InMemoryEventLog(() => 999);
     await executeTelegramAction(
       {
         kind: ActionKind.NotifyTelegram,
@@ -98,6 +99,7 @@ describe('executeTelegramAction — unknown template token', () => {
       ruleId: 'rule-1',
       symbolId: 'AAPL',
       reason: 'unknown template token: {nope}',
+      firedAt: 999,
     };
     expect(await log.ruleEvents('rule-1')).toEqual([expectedEntry]);
     expect(await log.symbolEvents('AAPL')).toEqual([expectedEntry]);
@@ -107,7 +109,7 @@ describe('executeTelegramAction — unknown template token', () => {
 describe('executeTelegramAction — unknown destination', () => {
   it('appends an Error event identifying the missing destination', async () => {
     const notifier = new InMemoryNotifier(['main']);
-    const log = new InMemoryEventLog();
+    const log = new InMemoryEventLog(() => 999);
     await executeTelegramAction(
       {
         kind: ActionKind.NotifyTelegram,
@@ -129,6 +131,7 @@ describe('executeTelegramAction — unknown destination', () => {
         ruleId: 'rule-1',
         symbolId: 'AAPL',
         reason: 'Unknown notifier destination: missing',
+        firedAt: 999,
       },
     ]);
   });
@@ -141,7 +144,7 @@ describe('executeTelegramAction — transport failure', () => {
         throw new Error('telegram api down');
       },
     };
-    const log = new InMemoryEventLog();
+    const log = new InMemoryEventLog(() => 999);
     await executeTelegramAction(
       {
         kind: ActionKind.NotifyTelegram,
@@ -162,6 +165,7 @@ describe('executeTelegramAction — transport failure', () => {
         ruleId: 'rule-1',
         symbolId: 'AAPL',
         reason: 'telegram api down',
+        firedAt: 999,
       },
     ]);
   });
@@ -170,7 +174,7 @@ describe('executeTelegramAction — transport failure', () => {
 describe('executeTelegramAction — template variables', () => {
   it('stringifies null prev/current to empty strings', async () => {
     const notifier = new InMemoryNotifier(['main']);
-    const log = new InMemoryEventLog();
+    const log = new InMemoryEventLog(() => 999);
     const context = buildEvaluationContext(
       { kind: RuleEventKind.Timer, ts: 1000, symbolId: null },
       emptyLookups(),
@@ -193,7 +197,7 @@ describe('executeTelegramAction — template variables', () => {
 
   it('renders non-Number StateValue prev/current using their wrapped value', async () => {
     const notifier = new InMemoryNotifier(['main']);
-    const log = new InMemoryEventLog();
+    const log = new InMemoryEventLog(() => 999);
     const context = buildEvaluationContext(
       {
         kind: RuleEventKind.SymbolStateChanged,

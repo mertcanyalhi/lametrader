@@ -273,7 +273,7 @@ describe('RuleOrchestrator', () => {
       ],
     });
     const rules = new InMemoryRuleRepository([a, b]);
-    const log = new InMemoryEventLog();
+    const log = new InMemoryEventLog(() => 999);
     const orchestrator = new RuleOrchestrator(
       rules,
       new InMemoryWatchlistRepository(),
@@ -296,6 +296,7 @@ describe('RuleOrchestrator', () => {
         ruleId: '',
         symbolId: 'AAPL',
         cycleLimit: 1,
+        firedAt: 999,
       },
     ]);
   });
@@ -541,7 +542,7 @@ describe('RuleOrchestrator', () => {
     const expired = rule({ id: 'expired', order: 1, expiration: { at: 500 } });
     const rules = new InMemoryRuleRepository([expired]);
     const notifier = new InMemoryNotifier(['main']);
-    const log = new InMemoryEventLog();
+    const log = new InMemoryEventLog(() => 999);
     const orchestrator = new RuleOrchestrator(
       rules,
       new InMemoryWatchlistRepository(),
@@ -565,6 +566,7 @@ describe('RuleOrchestrator', () => {
         ts: 1000,
         ruleId: 'expired',
         symbolId: 'AAPL',
+        firedAt: 999,
       },
     ]);
   });

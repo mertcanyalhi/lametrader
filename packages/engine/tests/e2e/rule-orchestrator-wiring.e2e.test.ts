@@ -126,7 +126,7 @@ describe('rule orchestrator wiring (e2e)', () => {
   it('fires the rule and appends one Fired event to the symbol log on the first polled candle', async () => {
     const fixtures = await buildFixtures();
     const state = new InMemoryStateRepository();
-    const eventLog = new InMemoryEventLog();
+    const eventLog = new InMemoryEventLog(() => 999);
     const firingState = new InMemoryFiringStateRepository();
     const notifier = new InMemoryNotifier(['main']);
 
@@ -157,6 +157,7 @@ describe('rule orchestrator wiring (e2e)', () => {
           ts: 1_000_000,
           ruleId: RULE_ID,
           symbolId: SYMBOL_ID,
+          firedAt: 999,
           context: {
             // The candle bridge emits 5 OHLCV events synchronously into
             // `enqueue`, which calls `lookups.record` **synchronously**
@@ -190,7 +191,7 @@ describe('rule orchestrator wiring (e2e)', () => {
   it('logs the failure and appends one synthetic Error event when the orchestrator throws', async () => {
     const fixtures = await buildFixtures();
     const state = new InMemoryStateRepository();
-    const eventLog = new InMemoryEventLog();
+    const eventLog = new InMemoryEventLog(() => 999);
     const firingState = new InMemoryFiringStateRepository();
     const notifier = new InMemoryNotifier(['main']);
 

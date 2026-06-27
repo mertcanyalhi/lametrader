@@ -6,7 +6,7 @@ import { InMemoryEventLog } from './in-memory-event-log.js';
 
 describe('appendStateActionEvent — SetSymbolState', () => {
   it('appends a StateSet entry to both the rule and the symbol logs', async () => {
-    const log = new InMemoryEventLog();
+    const log = new InMemoryEventLog(() => 999);
     await appendStateActionEvent(
       {
         kind: ActionKind.SetSymbolState,
@@ -26,6 +26,7 @@ describe('appendStateActionEvent — SetSymbolState', () => {
       scope: StateScope.Symbol,
       key: 'armed',
       value: { type: StateValueType.Bool, value: true },
+      firedAt: 999,
     };
     expect(await log.ruleEvents('rule-1')).toEqual([expectedEntry]);
     expect(await log.symbolEvents('AAPL')).toEqual([expectedEntry]);
@@ -34,7 +35,7 @@ describe('appendStateActionEvent — SetSymbolState', () => {
 
 describe('appendStateActionEvent — SetGlobalState', () => {
   it('appends a StateSet entry with the Global scope', async () => {
-    const log = new InMemoryEventLog();
+    const log = new InMemoryEventLog(() => 999);
     await appendStateActionEvent(
       {
         kind: ActionKind.SetGlobalState,
@@ -54,6 +55,7 @@ describe('appendStateActionEvent — SetGlobalState', () => {
       scope: StateScope.Global,
       key: 'regime',
       value: { type: StateValueType.Enum, value: 'risk-on' },
+      firedAt: 999,
     };
     expect(await log.ruleEvents('rule-1')).toEqual([expectedEntry]);
     expect(await log.symbolEvents('AAPL')).toEqual([expectedEntry]);
@@ -62,7 +64,7 @@ describe('appendStateActionEvent — SetGlobalState', () => {
 
 describe('appendStateActionEvent — RemoveSymbolState', () => {
   it('appends a StateRemoved entry with the Symbol scope', async () => {
-    const log = new InMemoryEventLog();
+    const log = new InMemoryEventLog(() => 999);
     await appendStateActionEvent(
       { kind: ActionKind.RemoveSymbolState, key: 'armed' },
       'rule-1',
@@ -77,6 +79,7 @@ describe('appendStateActionEvent — RemoveSymbolState', () => {
       symbolId: 'AAPL',
       scope: StateScope.Symbol,
       key: 'armed',
+      firedAt: 999,
     };
     expect(await log.ruleEvents('rule-1')).toEqual([expectedEntry]);
     expect(await log.symbolEvents('AAPL')).toEqual([expectedEntry]);
@@ -85,7 +88,7 @@ describe('appendStateActionEvent — RemoveSymbolState', () => {
 
 describe('appendStateActionEvent — RemoveGlobalState', () => {
   it('appends a StateRemoved entry with the Global scope', async () => {
-    const log = new InMemoryEventLog();
+    const log = new InMemoryEventLog(() => 999);
     await appendStateActionEvent(
       { kind: ActionKind.RemoveGlobalState, key: 'regime' },
       'rule-1',
@@ -100,6 +103,7 @@ describe('appendStateActionEvent — RemoveGlobalState', () => {
       symbolId: 'AAPL',
       scope: StateScope.Global,
       key: 'regime',
+      firedAt: 999,
     };
     expect(await log.ruleEvents('rule-1')).toEqual([expectedEntry]);
     expect(await log.symbolEvents('AAPL')).toEqual([expectedEntry]);

@@ -68,7 +68,7 @@ describe('handleCascadeError', () => {
   });
 
   it('appends a synthetic Error rule event to the affected symbol when the event carries a symbolId', async () => {
-    const eventLog = new InMemoryEventLog();
+    const eventLog = new InMemoryEventLog(() => 999);
     recordingDestination();
     const err = new Error('boom');
     const event = {
@@ -89,6 +89,7 @@ describe('handleCascadeError', () => {
         ruleId: '',
         symbolId: 'AAPL',
         reason: 'rule orchestration failed: boom',
+        firedAt: 999,
       },
     ]);
   });

@@ -298,10 +298,15 @@ function formatTrigger(rule: Rule): string {
 }
 
 function formatLastFired(rule: Rule): string {
-  let latest = 0;
+  let latest: number | undefined;
   for (const event of rule.events) {
-    if (event.type === RuleEventType.Fired && event.ts > latest) latest = event.ts;
+    if (event.type !== RuleEventType.Fired) continue;
+    // Prefer the persistence-time wall-clock so OHLCV-driven fires don't all
+    // collapse to the bar boundary; fall back to `ts` for legacy entries
+    // written before #305.
+    const candidate = event.firedAt ?? event.ts;
+    if (latest === undefined || candidate > latest) latest = candidate;
   }
-  if (latest === 0) return 'Never';
+  if (latest === undefined) return 'Never';
   return formatTimestamp(latest);
 }
