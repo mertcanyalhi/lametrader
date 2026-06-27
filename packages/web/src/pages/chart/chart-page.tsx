@@ -290,7 +290,7 @@ function ChartView({
     to: computeTo,
   });
   const { theme } = useTheme();
-  const ruleEventMarkers = useStateChangeMarkers(id, chartColors(theme).markerColor);
+  const ruleEventMarkers = useStateChangeMarkers(id, chartColors(theme).textColor);
   const body = feed.isPending ? (
     <ChartLoading />
   ) : feed.isError ? (

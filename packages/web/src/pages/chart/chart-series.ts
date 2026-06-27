@@ -22,12 +22,6 @@ export interface ChartColors {
   volumeUpColor: string;
   /** Down volume histogram bar (semi-transparent down color). */
   volumeDownColor: string;
-  /**
-   * Below-bar event marker (dot + text). Resolved per theme because the
-   * canvas marker can't read CSS custom properties — sourced from Radix
-   * indigo-9 to match the default `--accent-9` accent.
-   */
-  markerColor: string;
 }
 
 /** Up/down stay constant across themes; only the chrome (bg/text/grid) flips. */
@@ -44,18 +38,8 @@ const VOLUME_DOWN = '#e5484d80';
 export function chartColors(theme: Theme): ChartColors {
   const chrome =
     theme === Theme.Dark
-      ? {
-          background: '#111113',
-          textColor: '#b0b4ba',
-          gridColor: '#26282c',
-          markerColor: '#3d63dd',
-        }
-      : {
-          background: '#ffffff',
-          textColor: '#60646c',
-          gridColor: '#e8e8ec',
-          markerColor: '#3358d4',
-        };
+      ? { background: '#111113', textColor: '#b0b4ba', gridColor: '#26282c' }
+      : { background: '#ffffff', textColor: '#60646c', gridColor: '#e8e8ec' };
   return {
     ...chrome,
     upColor: UP,
