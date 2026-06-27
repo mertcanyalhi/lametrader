@@ -167,21 +167,32 @@ export class RuleOrchestrator {
   private async processRule(rule: Rule, event: RuleEvent): Promise<void> {
     const firingSymbolIds = await this.firingSymbolsFor(rule, event);
     for (const firingSymbolId of firingSymbolIds) {
-      await this.processRuleForSymbol(rule, event, firingSymbolId);
+      const didFire = await this.processRuleForSymbol(rule, event, firingSymbolId);
+      // A `Once` trigger is meant to fire a single time. Auto-disable on the
+      // first fire so the user sees the rule as inactive without having to
+      // flip the toggle themselves. For an AllSymbols-scoped Once, this stops
+      // the fan-out at the first match (any remaining symbols stay un-fired).
+      if (didFire && rule.trigger.kind === TriggerKind.Once) {
+        await this.rules.save({ ...rule, enabled: false });
+        return;
+      }
     }
   }
 
   /**
-   * Evaluate one rule against one event for one firing symbol.
+   * Evaluate one rule against one event for one firing symbol. Returns `true`
+   * if the rule's actions actually fired (so the caller can disable a `Once`
+   * trigger after its first fire); `false` for any skip — expired, condition
+   * false, or the trigger gate suppressed it.
    */
   private async processRuleForSymbol(
     rule: Rule,
     event: RuleEvent,
     firingSymbolId: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (rule.expiration !== null && event.ts >= rule.expiration.at) {
       await this.maybeEmitExpired(rule, firingSymbolId, event.ts);
-      return;
+      return false;
     }
 
     const context = buildEvaluationContext(event, this.lookups, rule.profileId, firingSymbolId);
@@ -202,9 +213,10 @@ export class RuleOrchestrator {
     );
     await this.firingState.setActive(rule.id, firingSymbolId, conditionTrue);
 
-    if (!conditionTrue || !triggerAllows) return;
+    if (!conditionTrue || !triggerAllows) return false;
 
     await this.fire(rule, firingSymbolId, event.ts, context);
+    return true;
   }
 
   /**

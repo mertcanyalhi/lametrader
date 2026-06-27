@@ -278,7 +278,7 @@ describe('RulesTable', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('sends PATCH /rules/:id { enabled: false } when the enable switch is toggled off', async () => {
+  it('sends PATCH /rules/:id { enabled: false } when the active rule is paused', async () => {
     const rule = makeRule({ id: 'r-1', name: 'Live alert', enabled: true });
     const fetchSpy = vi.fn().mockResolvedValueOnce(
       new Response(JSON.stringify({ ...rule, enabled: false }), {
@@ -290,7 +290,7 @@ describe('RulesTable', () => {
     renderTable([rule]);
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('switch', { name: 'Enable Live alert' }));
+    await user.click(screen.getByRole('button', { name: 'Pause Live alert' }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
     const init = (fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined) ?? {};

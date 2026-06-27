@@ -293,6 +293,25 @@ describe('RuleOrchestrator', () => {
     ]);
   });
 
+  it('auto-disables a Once rule after its first fire', async () => {
+    const r = rule({ id: 'once', order: 1, trigger: { kind: TriggerKind.Once } });
+    const rules = new InMemoryRuleRepository([r]);
+    const orchestrator = new RuleOrchestrator(
+      rules,
+      new InMemoryWatchlistRepository(),
+      priceLookups(),
+      new InMemoryStateRepository(),
+      new InMemoryNotifier(['main']),
+      new InMemoryEventLog(),
+      new InMemoryFiringStateRepository(),
+    );
+
+    await orchestrator.process(priceEvent());
+
+    const stored = await rules.get('once');
+    expect({ enabled: stored?.enabled }).toEqual({ enabled: false });
+  });
+
   it('does not fire disabled rules', async () => {
     const r = rule({ id: 'off', order: 1, enabled: false });
     const notifier = new InMemoryNotifier(['main']);
@@ -473,6 +492,9 @@ describe('RuleOrchestrator', () => {
       id: 'timer-all',
       order: 1,
       scope: { kind: RuleScopeKind.AllSymbols },
+      // Use a per-minute trigger so the fan-out isn't curtailed by the
+      // `Once`-trigger auto-disable that stops at the first matching symbol.
+      trigger: { kind: TriggerKind.OncePerMinute, intervalMs: 1 },
       condition: {
         kind: ConditionNodeKind.Leaf,
         left: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 1 } },
