@@ -2,13 +2,16 @@ import {
   ActionKind,
   type ConditionNode,
   type EventLog,
+  type FiredRuleEvent,
   type FiringStateRepository,
   type Notifier,
   NumericOperator,
   type Rule,
   type RuleEvent,
+  type RuleEventContext,
   type RuleEventEntry,
   RuleEventKind,
+  type RuleEventLookupSnapshot,
   RuleEventType,
   type RuleRepository,
   RuleScopeKind,
@@ -247,14 +250,32 @@ export class RuleOrchestrator {
         );
       }
     }
-    const fired: RuleEventEntry = {
+    const fired: FiredRuleEvent = {
       type: RuleEventType.Fired,
       ts,
       ruleId: rule.id,
       symbolId: firingSymbolId,
+      context: this.captureContext(context.event, firingSymbolId),
     };
     await this.log.appendRuleEvent(rule.id, fired);
     await this.log.appendSymbolEvent(firingSymbolId, fired);
+  }
+
+  /**
+   * Snapshot the inbound event and the firing symbol's OHLCV lookups —
+   * the "why did this fire here?" payload persisted alongside the
+   * {@link FiredRuleEvent} entry (#304).
+   */
+  private captureContext(inboundEvent: RuleEvent, firingSymbolId: string): RuleEventContext {
+    const lookupSnapshot: RuleEventLookupSnapshot = {
+      current: this.lookups.getCurrentValue(firingSymbolId),
+      open: this.lookups.getOpenValue(firingSymbolId),
+      high: this.lookups.getHighValue(firingSymbolId),
+      low: this.lookups.getLowValue(firingSymbolId),
+      close: this.lookups.getCloseValue(firingSymbolId),
+      volume: this.lookups.getVolumeValue(firingSymbolId),
+    };
+    return { inboundEvent, lookupSnapshot };
   }
 
   /**

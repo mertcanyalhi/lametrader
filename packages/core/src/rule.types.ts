@@ -1,6 +1,7 @@
 import type { Action } from './action.types.js';
 import type { ConditionNode } from './condition-tree.types.js';
 import type { Expiration } from './expiration.types.js';
+import type { RuleEvent } from './rule-event.types.js';
 import type { StateValue } from './state.types.js';
 import type { StateScope } from './state-repository.types.js';
 import type { Trigger } from './trigger.types.js';
@@ -80,11 +81,56 @@ interface BaseRuleEventEntry {
 }
 
 /**
+ * The OHLCV snapshot of the firing symbol at fire-time — what the rule
+ * actually saw (per `EvaluationLookups`) when its actions ran.
+ *
+ * Each field is `null` when the underlying lookup had no value yet for the
+ * firing symbol (e.g. `current` on an open-driven event, before any quote
+ * stream has populated it).
+ */
+export interface RuleEventLookupSnapshot {
+  /** Latest current ("last") price for the firing symbol, or `null`. */
+  current: number | null;
+  /** Latest open value, or `null`. */
+  open: number | null;
+  /** Latest high value, or `null`. */
+  high: number | null;
+  /** Latest low value, or `null`. */
+  low: number | null;
+  /** Latest close value, or `null`. */
+  close: number | null;
+  /** Latest volume value, or `null`. */
+  volume: number | null;
+}
+
+/**
+ * Per-event context captured at fire-time — the "why did this fire here?"
+ * payload (#304). Inlined on the {@link FiredRuleEvent} entry so the
+ * existing events log carries it without a sibling collection.
+ *
+ * Carries the inbound {@link RuleEvent} that satisfied the gate plus the
+ * firing symbol's OHLCV snapshot at fire-time. Indicators / state lookups
+ * and the per-leaf condition truth-table are out of scope for this slice;
+ * they land when a concrete debugging need shows up.
+ */
+export interface RuleEventContext {
+  /** The {@link RuleEvent} the orchestrator was processing at fire-time. */
+  inboundEvent: RuleEvent;
+  /** OHLCV snapshot for the firing symbol at fire-time. */
+  lookupSnapshot: RuleEventLookupSnapshot;
+}
+
+/**
  * A `Fired` event on the embedded events log — the umbrella entry written
  * once per fire alongside one per-action entry.
  */
 export interface FiredRuleEvent extends BaseRuleEventEntry {
   type: RuleEventType.Fired;
+  /**
+   * Optional per-event context (#304). Absent on historical entries
+   * written before the orchestrator started capturing it.
+   */
+  context?: RuleEventContext;
 }
 
 /**

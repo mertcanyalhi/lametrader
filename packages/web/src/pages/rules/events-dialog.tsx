@@ -1,7 +1,24 @@
-import { type RuleEventEntry, RuleEventType } from '@lametrader/core';
-import { Box, Button, Callout, Dialog, Flex, Skeleton, Table, Text } from '@radix-ui/themes';
+import {
+  type FiredRuleEvent,
+  type RuleEventContext,
+  type RuleEventEntry,
+  RuleEventType,
+} from '@lametrader/core';
+import {
+  Box,
+  Button,
+  Callout,
+  Dialog,
+  Flex,
+  IconButton,
+  Skeleton,
+  Table,
+  Text,
+  Tooltip,
+} from '@radix-ui/themes';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { Info } from 'lucide-react';
+import { type ReactNode, useState } from 'react';
 import { apiFetch } from '../../lib/api-fetch.js';
 import { formatTimestamp } from '../../lib/format.js';
 import { ruleEventsKey, symbolRuleEventsKey } from '../../lib/hooks/rules.js';
@@ -47,6 +64,7 @@ export function EventsDialog({
       lastPage.length < PAGE_SIZE ? undefined : lastPage[lastPage.length - 1]?.ts,
   });
   const events = query.data?.pages.flat() ?? [];
+  const [contextEvent, setContextEvent] = useState<FiredRuleEvent | null>(null);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -69,6 +87,7 @@ export function EventsDialog({
                 <Table.ColumnHeaderCell>Timestamp</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Kind</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Payload</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell> </Table.ColumnHeaderCell>
               </Table.Row>
             </Table.Header>
             <Table.Body>
@@ -81,6 +100,22 @@ export function EventsDialog({
                     <Text size="2" color="gray">
                       {summarize(event)}
                     </Text>
+                  </Table.Cell>
+                  <Table.Cell>
+                    {hasContext(event) ? (
+                      <Tooltip content="Show fire context">
+                        <IconButton
+                          type="button"
+                          size="1"
+                          variant="ghost"
+                          color="gray"
+                          aria-label="Show fire context"
+                          onClick={() => setContextEvent(event)}
+                        >
+                          <Info size={14} />
+                        </IconButton>
+                      </Tooltip>
+                    ) : null}
                   </Table.Cell>
                 </Table.Row>
               ))}
@@ -101,6 +136,107 @@ export function EventsDialog({
               </Button>
             ) : null}
           </Box>
+          <Dialog.Close>
+            <Button type="button" variant="soft" color="gray">
+              Close
+            </Button>
+          </Dialog.Close>
+        </Flex>
+        <FireContextDialog
+          event={contextEvent}
+          onOpenChange={(open) => {
+            if (!open) setContextEvent(null);
+          }}
+        />
+      </Dialog.Content>
+    </Dialog.Root>
+  );
+}
+
+/**
+ * Whether `event` carries the per-event context captured at fire-time
+ * (#304). Historical entries written before context capture have no
+ * payload to show, so the info icon is suppressed for them.
+ */
+function hasContext(
+  event: RuleEventEntry,
+): event is FiredRuleEvent & { context: RuleEventContext } {
+  return event.type === RuleEventType.Fired && event.context !== undefined;
+}
+
+/**
+ * Nested modal showing the `Fired` event's captured context — the inbound
+ * `RuleEvent` and the firing symbol's OHLCV snapshot. Renders nothing when
+ * `event` is `null` so the parent dialog can drive open/close via state.
+ */
+function FireContextDialog({
+  event,
+  onOpenChange,
+}: {
+  event: FiredRuleEvent | null;
+  onOpenChange: (open: boolean) => void;
+}): ReactNode {
+  if (event === null || event.context === undefined) return null;
+  const { inboundEvent, lookupSnapshot } = event.context;
+  return (
+    <Dialog.Root open onOpenChange={onOpenChange}>
+      <Dialog.Content maxWidth="520px">
+        <Dialog.Title>Fire context</Dialog.Title>
+        <Box mt="3">
+          <Text size="2" weight="bold">
+            Inbound event
+          </Text>
+          <Table.Root variant="surface" size="1" mt="1">
+            <Table.Body>
+              <Table.Row>
+                <Table.RowHeaderCell>kind</Table.RowHeaderCell>
+                <Table.Cell>{inboundEvent.kind}</Table.Cell>
+              </Table.Row>
+              <Table.Row>
+                <Table.RowHeaderCell>ts</Table.RowHeaderCell>
+                <Table.Cell>{formatTimestamp(inboundEvent.ts)}</Table.Cell>
+              </Table.Row>
+              <Table.Row>
+                <Table.RowHeaderCell>symbolId</Table.RowHeaderCell>
+                <Table.Cell>{inboundEvent.symbolId ?? '—'}</Table.Cell>
+              </Table.Row>
+            </Table.Body>
+          </Table.Root>
+        </Box>
+        <Box mt="3">
+          <Text size="2" weight="bold">
+            Lookup snapshot
+          </Text>
+          <Table.Root variant="surface" size="1" mt="1">
+            <Table.Body>
+              <Table.Row>
+                <Table.RowHeaderCell>current</Table.RowHeaderCell>
+                <Table.Cell>{lookupSnapshot.current ?? '—'}</Table.Cell>
+              </Table.Row>
+              <Table.Row>
+                <Table.RowHeaderCell>open</Table.RowHeaderCell>
+                <Table.Cell>{lookupSnapshot.open ?? '—'}</Table.Cell>
+              </Table.Row>
+              <Table.Row>
+                <Table.RowHeaderCell>high</Table.RowHeaderCell>
+                <Table.Cell>{lookupSnapshot.high ?? '—'}</Table.Cell>
+              </Table.Row>
+              <Table.Row>
+                <Table.RowHeaderCell>low</Table.RowHeaderCell>
+                <Table.Cell>{lookupSnapshot.low ?? '—'}</Table.Cell>
+              </Table.Row>
+              <Table.Row>
+                <Table.RowHeaderCell>close</Table.RowHeaderCell>
+                <Table.Cell>{lookupSnapshot.close ?? '—'}</Table.Cell>
+              </Table.Row>
+              <Table.Row>
+                <Table.RowHeaderCell>volume</Table.RowHeaderCell>
+                <Table.Cell>{lookupSnapshot.volume ?? '—'}</Table.Cell>
+              </Table.Row>
+            </Table.Body>
+          </Table.Root>
+        </Box>
+        <Flex justify="end" mt="4">
           <Dialog.Close>
             <Button type="button" variant="soft" color="gray">
               Close

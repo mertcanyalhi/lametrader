@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { type RuleEventEntry, RuleEventType } from '@lametrader/core';
+import {
+  type FiredRuleEvent,
+  type RuleEventContext,
+  type RuleEventEntry,
+  RuleEventKind,
+  RuleEventType,
+} from '@lametrader/core';
 import { Theme } from '@radix-ui/themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
@@ -28,6 +34,39 @@ function renderDialog(node: ReturnType<typeof EventsDialog>): void {
 /** Build a `Fired` event with the given timestamp. */
 function fired(ts: number, ruleId = 'r-1'): RuleEventEntry {
   return { type: RuleEventType.Fired, ts, ruleId, symbolId: 'crypto:BTCUSDT' };
+}
+
+/** A captured per-event context (#304). */
+function sampleContext(): RuleEventContext {
+  return {
+    inboundEvent: {
+      kind: RuleEventKind.CurrentValueChanged,
+      ts: 1_700_000_000_000,
+      symbolId: 'crypto:BTCUSDT',
+      prev: null,
+      current: 65000,
+      final: false,
+    },
+    lookupSnapshot: {
+      current: 65000,
+      open: 64500,
+      high: 65100,
+      low: 64400,
+      close: 65000,
+      volume: 1234.56,
+    },
+  };
+}
+
+/** A `Fired` event carrying captured per-event context. */
+function firedWithContext(ts: number): FiredRuleEvent {
+  return {
+    type: RuleEventType.Fired,
+    ts,
+    ruleId: 'r-1',
+    symbolId: 'crypto:BTCUSDT',
+    context: sampleContext(),
+  };
 }
 
 describe('EventsDialog', () => {
@@ -106,6 +145,87 @@ describe('EventsDialog', () => {
     expect(
       String((fetchSpy as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]?.[0] ?? ''),
     ).toBe('/api/symbols/crypto%3ABTCUSDT/rule-events?limit=50');
+  });
+
+  it('renders an info icon on Fired rows whose entry carries a context (#304)', async () => {
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify([firedWithContext(1_700_000_000_000)]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    ) as unknown as typeof fetch;
+    renderDialog(
+      <EventsDialog
+        open={true}
+        onOpenChange={vi.fn()}
+        mode={{ kind: 'rule', ruleId: 'r-1', ruleName: 'BTC alert' }}
+      />,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Show fire context' })).toBeInTheDocument();
+  });
+
+  it('omits the info icon on Fired rows without a captured context (#304)', async () => {
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify([fired(1_700_000_000_000)]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    ) as unknown as typeof fetch;
+    renderDialog(
+      <EventsDialog
+        open={true}
+        onOpenChange={vi.fn()}
+        mode={{ kind: 'rule', ruleId: 'r-1', ruleName: 'BTC alert' }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole('dialog')).queryByRole('cell', {
+          name: '2023-11-14 22:13:20.000',
+        }),
+      ).not.toBeNull();
+    });
+    expect(screen.queryByRole('button', { name: 'Show fire context' })).toBeNull();
+  });
+
+  it('opens a Fire context modal with inbound event + lookup snapshot when the info icon is clicked (#304)', async () => {
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify([firedWithContext(1_700_000_000_000)]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    ) as unknown as typeof fetch;
+    renderDialog(
+      <EventsDialog
+        open={true}
+        onOpenChange={vi.fn()}
+        mode={{ kind: 'rule', ruleId: 'r-1', ruleName: 'BTC alert' }}
+      />,
+    );
+    const trigger = await screen.findByRole('button', { name: 'Show fire context' });
+    const user = userEvent.setup();
+
+    await user.click(trigger);
+
+    const modal = await screen.findByRole('dialog', { name: 'Fire context' });
+    expect({
+      kind: within(modal).getByRole('rowheader', { name: 'kind' }).nextSibling?.textContent,
+      symbolId: within(modal).getByRole('rowheader', { name: 'symbolId' }).nextSibling?.textContent,
+      open: within(modal).getByRole('rowheader', { name: 'open' }).nextSibling?.textContent,
+      close: within(modal).getByRole('rowheader', { name: 'close' }).nextSibling?.textContent,
+      volume: within(modal).getByRole('rowheader', { name: 'volume' }).nextSibling?.textContent,
+    }).toEqual({
+      kind: 'currentValueChanged',
+      symbolId: 'crypto:BTCUSDT',
+      open: '64500',
+      close: '65000',
+      volume: '1234.56',
+    });
   });
 
   it('paginates with "Load more" using the oldest event\'s `ts` as the `before` cursor', async () => {

@@ -7,6 +7,7 @@ import {
   Period,
   ProfileScope,
   type Rule,
+  RuleEventKind,
   RuleEventType,
   RuleScopeKind,
   StateValueType,
@@ -156,6 +157,31 @@ describe('rule orchestrator wiring (e2e)', () => {
           ts: 1_000_000,
           ruleId: RULE_ID,
           symbolId: SYMBOL_ID,
+          context: {
+            // The candle bridge emits 5 OHLCV events synchronously into
+            // `enqueue`, which calls `lookups.record` **synchronously**
+            // before scheduling the orchestrator (#290 wire). So every
+            // OHLCV slot is already populated by the time the orchestrator
+            // processes the first emitted event (open).
+            inboundEvent: {
+              kind: RuleEventKind.OpenValueChanged,
+              ts: 1_000_000,
+              symbolId: SYMBOL_ID,
+              prev: null,
+              current: 105,
+              final: true,
+            },
+            lookupSnapshot: {
+              // `current` falls back to the latest close when no quote
+              // stream has set it (see LiveEvaluationLookups.getCurrentValue).
+              current: 105,
+              open: 105,
+              high: 105,
+              low: 105,
+              close: 105,
+              volume: 1_000,
+            },
+          },
         },
       ],
     });

@@ -5,6 +5,7 @@ import {
   OperandKind,
   Period,
   type Rule,
+  RuleEventKind,
   RuleEventType,
   RuleScopeKind,
   StateOperator,
@@ -159,6 +160,24 @@ describe('rule orchestrator (e2e)', () => {
         ts: 1000,
         ruleId: 'above-zero',
         symbolId: 'AAPL',
+        context: {
+          inboundEvent: {
+            kind: RuleEventKind.CurrentValueChanged,
+            ts: 1000,
+            symbolId: 'AAPL',
+            prev: null,
+            current: 100,
+            final: false,
+          },
+          lookupSnapshot: {
+            current: 100,
+            open: null,
+            high: null,
+            low: null,
+            close: null,
+            volume: null,
+          },
+        },
       },
     ]);
   });
