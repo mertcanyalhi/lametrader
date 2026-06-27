@@ -82,6 +82,40 @@ describe('LiveEvaluationLookups', () => {
     });
   });
 
+  it('getCurrentValue falls back to the latest CloseValueChanged when no CurrentValueChanged has been observed', () => {
+    const lookups = new LiveEvaluationLookups(new InMemoryStateRepository());
+    lookups.record({
+      kind: RuleEventKind.CloseValueChanged,
+      ts: 1000,
+      symbolId: 'AAPL',
+      prev: null,
+      current: 105,
+      final: false,
+    });
+    expect(lookups.getCurrentValue('AAPL')).toEqual(105);
+  });
+
+  it('getCurrentValue prefers a CurrentValueChanged value over a CloseValueChanged fallback', () => {
+    const lookups = new LiveEvaluationLookups(new InMemoryStateRepository());
+    lookups.record({
+      kind: RuleEventKind.CloseValueChanged,
+      ts: 1000,
+      symbolId: 'AAPL',
+      prev: null,
+      current: 105,
+      final: false,
+    });
+    lookups.record({
+      kind: RuleEventKind.CurrentValueChanged,
+      ts: 1001,
+      symbolId: 'AAPL',
+      prev: null,
+      current: 106.5,
+      final: false,
+    });
+    expect(lookups.getCurrentValue('AAPL')).toEqual(106.5);
+  });
+
   it('returns null for getters whose underlying slot has never been written', () => {
     const lookups = new LiveEvaluationLookups(new InMemoryStateRepository());
     expect({

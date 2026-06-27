@@ -26,6 +26,12 @@ import type { EvaluationLookups } from './evaluation-context.types.js';
  * recent observation wins regardless of which period it came from). Symbol
  * and global state slots are keyed by `(profileId, …)` per #281's
  * partitioning.
+ *
+ * `getCurrentValue` falls back to the latest close when no live
+ * `CurrentValueChanged` has been observed — so rules conditioning on
+ * `Current` still fire under the polling loop even before any
+ * `QuoteStreamService` subscription is open. A subsequent live quote
+ * always overrides the fallback.
  */
 export class LiveEvaluationLookups implements EvaluationLookups {
   /** Latest current price per symbol. */
@@ -106,7 +112,7 @@ export class LiveEvaluationLookups implements EvaluationLookups {
   }
 
   getCurrentValue(symbolId: string): number | null {
-    return this.currentValues.get(symbolId) ?? null;
+    return this.currentValues.get(symbolId) ?? this.closeValues.get(symbolId) ?? null;
   }
 
   getOpenValue(symbolId: string): number | null {
