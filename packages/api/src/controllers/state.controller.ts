@@ -4,11 +4,23 @@ import type { FastifyInstance } from 'fastify';
 import { StateValueSchema } from '../schemas/rule.schema.js';
 
 /**
- * Register the read endpoints of the `/state` resource against a
+ * Path params for `/profiles/:profileId/state/global`.
+ */
+const ProfileIdParamSchema = Type.Object(
+  {
+    profileId: Type.String({ minLength: 1 }),
+  },
+  { additionalProperties: false },
+);
+
+/**
+ * Register the read endpoints of the `/state` sub-resource against a
  * {@link StateRepository}.
  *
- * Currently exposes the global state map only — the per-symbol state map
- * lives under `/symbols/:id/state` (sub-resource of symbols).
+ * State is partitioned by `profileId` (#281), so the global-state read sits
+ * under the profile resource: `GET /profiles/:profileId/state/global`. The
+ * per-symbol read lives under `/symbols/:id/state` (sub-resource of symbols,
+ * with `profileId` as a required query param).
  *
  * @param state - the rule-engine state store to drive.
  */
@@ -17,15 +29,16 @@ export function stateController(state: StateRepository) {
     const app = instance.withTypeProvider<TypeBoxTypeProvider>();
 
     app.get(
-      '/state/global',
+      '/profiles/:profileId/state/global',
       {
         schema: {
           tags: ['rules'],
-          summary: 'Get the current global rule-engine state map',
+          summary: 'Get the current global rule-engine state map for a profile',
+          params: ProfileIdParamSchema,
           response: { 200: Type.Record(Type.String(), StateValueSchema) },
         },
       },
-      async () => state.listGlobalState(),
+      async (request) => state.listGlobalState(request.params.profileId),
     );
   };
 }

@@ -27,6 +27,8 @@ export type StateMutationAction =
  * picks up and re-enters the engine with.
  *
  * @param action - the mutation to apply.
+ * @param profileId - the firing rule's profile id; state is partitioned per
+ *   profile (#281), so writes happen under this namespace.
  * @param firingSymbolId - the symbol the firing rule is scoped to; used for
  *   symbol-scoped writes (ignored for global writes).
  * @param ts - the event timestamp the write is recorded at (per ADR 0012).
@@ -34,22 +36,23 @@ export type StateMutationAction =
  */
 export async function executeStateAction(
   action: StateMutationAction,
+  profileId: string,
   firingSymbolId: string,
   ts: number,
   state: StateRepository,
 ): Promise<void> {
   switch (action.kind) {
     case ActionKind.SetSymbolState:
-      await state.setSymbolState(firingSymbolId, action.key, action.value, ts);
+      await state.setSymbolState(profileId, firingSymbolId, action.key, action.value, ts);
       return;
     case ActionKind.RemoveSymbolState:
-      await state.removeSymbolState(firingSymbolId, action.key, ts);
+      await state.removeSymbolState(profileId, firingSymbolId, action.key, ts);
       return;
     case ActionKind.SetGlobalState:
-      await state.setGlobalState(action.key, action.value, ts);
+      await state.setGlobalState(profileId, action.key, action.value, ts);
       return;
     case ActionKind.RemoveGlobalState:
-      await state.removeGlobalState(action.key, ts);
+      await state.removeGlobalState(profileId, action.key, ts);
       return;
   }
 }

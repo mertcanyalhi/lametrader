@@ -295,18 +295,20 @@ describe('symbols API (e2e)', () => {
 
       const empty = await stateApp.inject({
         method: 'GET',
-        url: `/symbols/${BTC.id}/state`,
+        url: `/symbols/${BTC.id}/state?profileId=profile-1`,
       });
       expect(empty.statusCode).toBe(200);
       expect(empty.json()).toEqual({});
 
       await stateRepo.setSymbolState(
+        'profile-1',
         BTC.id,
         'armed',
         { type: StateValueType.Bool, value: true },
         100,
       );
       await stateRepo.setSymbolState(
+        'profile-1',
         BTC.id,
         'cooldown',
         { type: StateValueType.Number, value: 42 },
@@ -315,7 +317,7 @@ describe('symbols API (e2e)', () => {
 
       const populated = await stateApp.inject({
         method: 'GET',
-        url: `/symbols/${BTC.id}/state`,
+        url: `/symbols/${BTC.id}/state?profileId=profile-1`,
       });
       expect(populated.statusCode).toBe(200);
       expect(populated.json()).toEqual({
@@ -325,7 +327,7 @@ describe('symbols API (e2e)', () => {
 
       const missing = await stateApp.inject({
         method: 'GET',
-        url: '/symbols/crypto:NOPEUSDT/state',
+        url: '/symbols/crypto:NOPEUSDT/state?profileId=profile-1',
       });
       expect(missing.statusCode).toBe(404);
     } finally {

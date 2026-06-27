@@ -22,10 +22,18 @@ export interface EvaluationLookups {
   getVolumeValue(symbolId: string): number | null;
   /** Indicator-instance state by `(instanceId, stateKey)`, or `null`. */
   getIndicatorValue(instanceId: string, stateKey: string): StateValue | null;
-  /** Symbol-scoped state by `(symbolId, key)`, or `null`. */
-  getSymbolState(symbolId: string, key: string): StateValue | null;
-  /** Global-scope state by `key`, or `null`. */
-  getGlobalState(key: string): StateValue | null;
+  /**
+   * Symbol-scoped state by `(profileId, symbolId, key)`, or `null`.
+   * State is partitioned by profile (#281), so the rule's `profileId` is
+   * the first arg.
+   */
+  getSymbolState(profileId: string, symbolId: string, key: string): StateValue | null;
+  /**
+   * Global-scope state by `(profileId, key)`, or `null`.
+   * State is partitioned by profile (#281), so the rule's `profileId` is
+   * the first arg.
+   */
+  getGlobalState(profileId: string, key: string): StateValue | null;
 }
 
 /**

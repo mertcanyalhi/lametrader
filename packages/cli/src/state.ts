@@ -20,16 +20,23 @@ enum StateSubcommand {
  * through the symbols use-case) and a {@link StateRepository} (for the
  * global-scope read).
  *
+ * State is partitioned by profile (#281), so every subcommand requires
+ * `--profile <id>`.
+ *
  * Subcommands:
  *
- * - `list --symbol <id>` — print the symbol's current state map as JSON;
- *   `SymbolNotFoundError` propagates to the entry point as a non-zero exit.
- * - `list --global` — print the global state map as JSON.
- * - `set --symbol <id>|--global --key <k> --value <v> --type <t>` — write a
- *   value (`string|number|bool|enum`); the type flag validates `--value`
- *   against the chosen variant. On success, prints the new state map.
- * - `remove --symbol <id>|--global --key <k>` — drop a key; on success
- *   prints the new state map (a no-op when the key was already absent).
+ * - `list --profile <id> --symbol <id>` — print the symbol's current state map
+ *   under the profile as JSON; `SymbolNotFoundError` propagates to the entry
+ *   point as a non-zero exit.
+ * - `list --profile <id> --global` — print the profile's global state map as
+ *   JSON.
+ * - `set --profile <id> --symbol <id>|--global --key <k> --value <v> --type <t>`
+ *   — write a value under the profile (`string|number|bool|enum`); the type
+ *   flag validates `--value` against the chosen variant. On success, prints
+ *   the new state map.
+ * - `remove --profile <id> --symbol <id>|--global --key <k>` — drop a key
+ *   under the profile; on success prints the new state map (a no-op when the
+ *   key was already absent).
  *
  * Exactly one of `--symbol` / `--global` must be provided for every
  * subcommand.
@@ -49,18 +56,20 @@ export async function runState(
       const { values } = parseArgs({
         args: rest,
         options: {
+          profile: { type: 'string' },
           symbol: { type: 'string' },
           global: { type: 'boolean' },
         },
       });
+      const profileId = requireProfile(values.profile);
       if (values.symbol !== undefined && values.global) {
         throw new Error('state list: pass only one of --symbol or --global');
       }
       if (values.symbol !== undefined) {
-        return json(await symbols.listSymbolState(values.symbol));
+        return json(await symbols.listSymbolState(profileId, values.symbol));
       }
       if (values.global) {
-        return json(await state.listGlobalState());
+        return json(await state.listGlobalState(profileId));
       }
       throw new Error('state list requires --symbol <id> or --global');
     }
@@ -68,6 +77,7 @@ export async function runState(
       const { values } = parseArgs({
         args: rest,
         options: {
+          profile: { type: 'string' },
           symbol: { type: 'string' },
           global: { type: 'boolean' },
           key: { type: 'string' },
@@ -75,6 +85,7 @@ export async function runState(
           type: { type: 'string' },
         },
       });
+      const profileId = requireProfile(values.profile);
       const scope = pickScope(values);
       if (!values.key) throw new Error('state set requires --key');
       if (values.value === undefined) throw new Error('state set requires --value');
@@ -82,34 +93,47 @@ export async function runState(
       const stateValue = parseStateValue(values.type, values.value);
       const ts = Date.now();
       if (scope.kind === 'symbol') {
-        await state.setSymbolState(scope.symbolId, values.key, stateValue, ts);
-        return json(await symbols.listSymbolState(scope.symbolId));
+        await state.setSymbolState(profileId, scope.symbolId, values.key, stateValue, ts);
+        return json(await symbols.listSymbolState(profileId, scope.symbolId));
       }
-      await state.setGlobalState(values.key, stateValue, ts);
-      return json(await state.listGlobalState());
+      await state.setGlobalState(profileId, values.key, stateValue, ts);
+      return json(await state.listGlobalState(profileId));
     }
     case StateSubcommand.Remove: {
       const { values } = parseArgs({
         args: rest,
         options: {
+          profile: { type: 'string' },
           symbol: { type: 'string' },
           global: { type: 'boolean' },
           key: { type: 'string' },
         },
       });
+      const profileId = requireProfile(values.profile);
       const scope = pickScope(values);
       if (!values.key) throw new Error('state remove requires --key');
       const ts = Date.now();
       if (scope.kind === 'symbol') {
-        await state.removeSymbolState(scope.symbolId, values.key, ts);
-        return json(await symbols.listSymbolState(scope.symbolId));
+        await state.removeSymbolState(profileId, scope.symbolId, values.key, ts);
+        return json(await symbols.listSymbolState(profileId, scope.symbolId));
       }
-      await state.removeGlobalState(values.key, ts);
-      return json(await state.listGlobalState());
+      await state.removeGlobalState(profileId, values.key, ts);
+      return json(await state.listGlobalState(profileId));
     }
     default:
       throw new Error(`unknown state subcommand: ${subcommand ?? '(none)'}`);
   }
+}
+
+/**
+ * Validate that `--profile <id>` was supplied. Throws a readable error
+ * otherwise.
+ */
+function requireProfile(profile: string | undefined): string {
+  if (profile === undefined || profile === '') {
+    throw new Error('state command requires --profile <id>');
+  }
+  return profile;
 }
 
 /**

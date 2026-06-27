@@ -27,6 +27,17 @@ const SymbolEventsQuerySchema = Type.Object(
 );
 
 /**
+ * Required `?profileId=...` query for `GET /symbols/:id/state` — state is
+ * partitioned by profile (#281), so the caller has to name one.
+ */
+const SymbolStateQuerySchema = Type.Object(
+  {
+    profileId: Type.String({ minLength: 1 }),
+  },
+  { additionalProperties: false },
+);
+
+/**
  * Register the RESTful symbol routes against a {@link SymbolService}.
  *
  * Schemas (TypeBox) validate input at the boundary and type the handlers;
@@ -137,12 +148,13 @@ export function symbolsController(service: SymbolService) {
       {
         schema: {
           tags: ['symbols'],
-          summary: "Get the symbol's current rule-engine state map",
+          summary: "Get the symbol's current rule-engine state map for a profile",
           params: SymbolIdParamSchema,
+          querystring: SymbolStateQuerySchema,
           response: { 200: Type.Record(Type.String(), StateValueSchema), 404: ErrorSchema },
         },
       },
-      async (request) => service.listSymbolState(request.params.id),
+      async (request) => service.listSymbolState(request.query.profileId, request.params.id),
     );
   };
 }

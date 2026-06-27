@@ -49,25 +49,57 @@ describe('state persistence (e2e)', () => {
         await db.collection('state').deleteMany({});
         const repo = new MongoStateRepository(db);
         await repo.ensureIndexes();
-        await repo.setSymbolState('AAPL', 'k', value, 100);
-        expect(await repo.getSymbolState('AAPL', 'k')).toEqual(value);
+        await repo.setSymbolState('profile-1', 'AAPL', 'k', value, 100);
+        expect(await repo.getSymbolState('profile-1', 'AAPL', 'k')).toEqual(value);
       });
     }
   });
 
   describe('indexes', () => {
-    it('creates a unique index on (scope, symbolId, key) named scope_symbolId_key_unique', async () => {
+    it('creates a unique index on (profileId, scope, symbolId, key) named profileId_scope_symbolId_key_unique', async () => {
       await db.collection('state').deleteMany({});
       const repo = new MongoStateRepository(db);
       await repo.ensureIndexes();
       const indexes = await db.collection('state').indexes();
-      const target = indexes.find((index) => index.name === 'scope_symbolId_key_unique');
+      const target = indexes.find((index) => index.name === 'profileId_scope_symbolId_key_unique');
       expect(target).toEqual({
         v: expect.any(Number),
-        key: { scope: 1, symbolId: 1, key: 1 },
-        name: 'scope_symbolId_key_unique',
+        key: { profileId: 1, scope: 1, symbolId: 1, key: 1 },
+        name: 'profileId_scope_symbolId_key_unique',
         unique: true,
       });
+    });
+
+    it('drops the legacy (scope, symbolId, key) index and pre-#281 documents on ensureIndexes', async () => {
+      await db.collection('state').deleteMany({});
+      // Seed a legacy doc (no profileId) and a legacy unique index, as if from
+      // before #281.
+      await db
+        .collection('state')
+        .createIndex(
+          { scope: 1, symbolId: 1, key: 1 },
+          { unique: true, name: 'scope_symbolId_key_unique' },
+        );
+      await db.collection('state').insertOne({
+        scope: 'symbol',
+        symbolId: 'AAPL',
+        key: 'legacy',
+        value: { type: 'bool', value: true },
+        updatedAt: 0,
+      });
+
+      const repo = new MongoStateRepository(db);
+      await repo.ensureIndexes();
+
+      const indexes = await db.collection('state').indexes();
+      const names = indexes.map((index) => index.name);
+      expect(names).not.toContain('scope_symbolId_key_unique');
+      expect(names).toContain('profileId_scope_symbolId_key_unique');
+      const remaining = await db
+        .collection('state')
+        .find({ profileId: { $exists: false } })
+        .toArray();
+      expect(remaining).toEqual([]);
     });
   });
 });

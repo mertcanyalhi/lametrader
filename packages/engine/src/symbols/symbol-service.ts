@@ -173,8 +173,11 @@ export class SymbolService {
   }
 
   /**
-   * Return the symbol's current rule-engine state as a key → value map.
-   * Empty state yields `{}`.
+   * Return the symbol's current rule-engine state as a key → value map under
+   * `profileId`. Empty state yields `{}`.
+   *
+   * State is partitioned per profile (#281) so callers must specify which
+   * profile's namespace to read.
    *
    * Lazy: requires the optional `state` port to be wired; an unwired
    * deployment can't expose the route, so this throws explicitly rather
@@ -182,7 +185,7 @@ export class SymbolService {
    *
    * @throws {@link SymbolNotFoundError} when the symbol is not on the watchlist.
    */
-  async listSymbolState(id: string): Promise<Record<string, StateValue>> {
+  async listSymbolState(profileId: string, id: string): Promise<Record<string, StateValue>> {
     const existing = await this.watchlist.get(id);
     if (!existing) {
       throw new SymbolNotFoundError(`symbol not watched: ${id}`);
@@ -190,7 +193,7 @@ export class SymbolService {
     if (!this.state) {
       throw new Error('SymbolService.listSymbolState requires the state port to be wired');
     }
-    return await this.state.listSymbolState(id);
+    return await this.state.listSymbolState(profileId, id);
   }
 
   /**

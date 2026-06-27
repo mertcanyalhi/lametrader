@@ -71,11 +71,16 @@ export type VolumeValueChangedEvent = OhlcvChangedEvent<RuleEventKind.VolumeValu
 /**
  * One key in a specific symbol's state mutated. `current` is `null` when the
  * key was removed; `prev` is `null` when the key was just created.
+ *
+ * `profileId` identifies which profile's namespace the mutation happened in;
+ * the orchestrator uses it to scope cascaded re-evaluation to the same
+ * profile (#281).
  */
 export interface SymbolStateChangedEvent {
   kind: RuleEventKind.SymbolStateChanged;
   ts: number;
   symbolId: string;
+  profileId: string;
   key: string;
   prev: StateValue | null;
   current: StateValue | null;
@@ -84,11 +89,16 @@ export interface SymbolStateChangedEvent {
 /**
  * One key in the global state mutated. `symbolId` is `null` because the
  * mutation isn't scoped to a single symbol.
+ *
+ * `profileId` identifies which profile's namespace the mutation happened in;
+ * the orchestrator uses it to scope cascaded re-evaluation to the same
+ * profile (#281).
  */
 export interface GlobalStateChangedEvent {
   kind: RuleEventKind.GlobalStateChanged;
   ts: number;
   symbolId: null;
+  profileId: string;
   key: string;
   prev: StateValue | null;
   current: StateValue | null;

@@ -167,6 +167,7 @@ export {
   type WatchedSymbol,
   type WatchlistRepository,
 } from './symbol.types.js';
+export { listSymbolStateEvents } from './symbol-state-events.js';
 export {
   type TelegramDestination,
   TelegramDestinationError,

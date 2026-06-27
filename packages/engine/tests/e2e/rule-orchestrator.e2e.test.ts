@@ -108,14 +108,14 @@ function buildDriver(
   const symbolState = new Map<string, StateValue>();
   state.onStateChanged((event) => {
     if (event.scope.kind !== StateScope.Symbol) return;
-    const slot = `${event.scope.symbolId}|${event.key}`;
+    const slot = `${event.profileId}|${event.scope.symbolId}|${event.key}`;
     if (event.current === null) symbolState.delete(slot);
     else symbolState.set(slot, event.current);
   });
   const lookups: EvaluationLookups = {
     ...emptyLookups(),
     getCurrentValue: (id) => currentValues.get(id) ?? null,
-    getSymbolState: (id, key) => symbolState.get(`${id}|${key}`) ?? null,
+    getSymbolState: (profileId, id, key) => symbolState.get(`${profileId}|${id}|${key}`) ?? null,
   };
   const orchestrator = new RuleOrchestrator(
     rules,
