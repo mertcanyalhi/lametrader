@@ -29,6 +29,7 @@ import {
 import { Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { type SubmitHandler, useForm } from 'react-hook-form';
+import { toast } from 'sonner';
 import { ApiError } from '../../lib/api-fetch.js';
 import { useProfiles } from '../../lib/hooks/profiles.js';
 import {
@@ -393,7 +394,22 @@ function DeleteRuleButton({
             </Button>
           </AlertDialog.Cancel>
           <AlertDialog.Action>
-            <Button color="red" onClick={() => del.mutate(id, { onSuccess: onDeleted })}>
+            <Button
+              color="red"
+              onClick={() =>
+                del.mutate(id, {
+                  onSuccess: () => {
+                    toast.success(`Deleted ${name}`);
+                    onDeleted();
+                  },
+                  onError: (cause) => {
+                    const message =
+                      cause instanceof ApiError ? cause.message : `Failed to delete ${name}`;
+                    toast.error(message);
+                  },
+                })
+              }
+            >
               Delete
             </Button>
           </AlertDialog.Action>
