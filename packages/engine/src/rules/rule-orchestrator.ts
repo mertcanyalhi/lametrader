@@ -1,17 +1,12 @@
 import {
-  ActionKind,
   type ConditionNode,
   type ConditionOperand,
   type EventLog,
-  type FiredRuleEvent,
-  type Notifier,
   NumericOperator,
   type Rule,
   type RuleEvent,
-  type RuleEventContext,
   type RuleEventEntry,
   RuleEventKind,
-  type RuleEventLookupSnapshot,
   RuleEventType,
   type RuleRepository,
   RuleScopeKind,
@@ -23,17 +18,15 @@ import {
   type WatchlistRepository,
 } from '@lametrader/core';
 import { getLogger } from '../log.js';
+import type { ActionRunner } from './action-runner.js';
 import { type ComparisonOperator, evaluateComparison } from './comparison-evaluator.js';
 import { evaluateConditionTree } from './condition-tree-evaluator.js';
 import { type CrossingOperator, evaluateCrossing } from './crossing-evaluator.js';
 import { CycleGuard, CycleOverflowError } from './cycle-guard.js';
 import { buildEvaluationContext } from './evaluation-context.js';
 import type { EvaluationContext, EvaluationLookups } from './evaluation-context.types.js';
-import { appendStateActionEvent } from './event-appender.js';
 import { RuleOutcome } from './rule-orchestrator-trace.types.js';
-import { executeStateAction, type StateMutationAction } from './state-action-executor.js';
 import { evaluateState } from './state-evaluator.js';
-import { executeTelegramAction } from './telegram-action-executor.js';
 import type { TriggerEvaluator } from './trigger-evaluator.js';
 
 /** Scope-bound logger for the rule orchestrator (#306). */
@@ -93,9 +86,9 @@ export class RuleOrchestrator {
     private readonly watchlist: WatchlistRepository,
     private readonly lookups: EvaluationLookups,
     private readonly state: StateRepository,
-    private readonly notifier: Notifier,
     private readonly log: EventLog,
     private readonly triggers: TriggerEvaluator,
+    private readonly actions: ActionRunner,
     private readonly options: RuleOrchestratorOptions = {},
   ) {}
 
@@ -265,8 +258,8 @@ export class RuleOrchestrator {
   }
 
   /**
-   * Execute every action on a rule, append the per-action event entries,
-   * then append the umbrella `Fired` event.
+   * Execute every action on a rule, then append the rule-event entries it
+   * produces (one per action, plus the trailing `Fired` umbrella).
    *
    * Sets {@link currentFiringRuleId} for the duration so the `onStateChanged`
    * subscriber tags any cascaded event with `triggeredByRuleId = rule.id`
@@ -280,53 +273,14 @@ export class RuleOrchestrator {
   ): Promise<void> {
     this.currentFiringRuleId = rule.id;
     try {
-      for (const action of rule.actions) {
-        if (isStateAction(action)) {
-          await executeStateAction(action, rule.profileId, firingSymbolId, ts, this.state);
-          await appendStateActionEvent(action, rule.id, firingSymbolId, ts, this.log);
-          continue;
-        }
-        if (action.kind === ActionKind.NotifyTelegram) {
-          await executeTelegramAction(
-            action,
-            context,
-            rule.id,
-            firingSymbolId,
-            ts,
-            this.notifier,
-            this.log,
-          );
-        }
+      const entries = await this.actions.run(rule, firingSymbolId, ts, context);
+      for (const entry of entries) {
+        await this.log.appendRuleEvent(rule.id, entry);
+        await this.log.appendSymbolEvent(firingSymbolId, entry);
       }
-      const fired: FiredRuleEvent = {
-        type: RuleEventType.Fired,
-        ts,
-        ruleId: rule.id,
-        symbolId: firingSymbolId,
-        context: this.captureContext(context.event, firingSymbolId),
-      };
-      await this.log.appendRuleEvent(rule.id, fired);
-      await this.log.appendSymbolEvent(firingSymbolId, fired);
     } finally {
       this.currentFiringRuleId = undefined;
     }
-  }
-
-  /**
-   * Snapshot the inbound event and the firing symbol's OHLCV lookups —
-   * the "why did this fire here?" payload persisted alongside the
-   * {@link FiredRuleEvent} entry (#304).
-   */
-  private captureContext(inboundEvent: RuleEvent, firingSymbolId: string): RuleEventContext {
-    const lookupSnapshot: RuleEventLookupSnapshot = {
-      current: this.lookups.getCurrentValue(firingSymbolId),
-      open: this.lookups.getOpenValue(firingSymbolId),
-      high: this.lookups.getHighValue(firingSymbolId),
-      low: this.lookups.getLowValue(firingSymbolId),
-      close: this.lookups.getCloseValue(firingSymbolId),
-      volume: this.lookups.getVolumeValue(firingSymbolId),
-    };
-    return { inboundEvent, lookupSnapshot };
   }
 
   /**
@@ -378,19 +332,6 @@ export class RuleOrchestrator {
     };
     await this.log.appendSymbolEvent(symbolId, entry);
   }
-}
-
-/**
- * Narrow `Action` to the state-mutation subset the {@link executeStateAction}
- * helper consumes.
- */
-function isStateAction(action: { kind: ActionKind }): action is StateMutationAction {
-  return (
-    action.kind === ActionKind.SetSymbolState ||
-    action.kind === ActionKind.SetGlobalState ||
-    action.kind === ActionKind.RemoveSymbolState ||
-    action.kind === ActionKind.RemoveGlobalState
-  );
 }
 
 /**

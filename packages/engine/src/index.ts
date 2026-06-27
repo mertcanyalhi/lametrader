@@ -45,6 +45,7 @@ export { InMemoryProfileRepository } from './profiles/in-memory-profile-reposito
 export { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 export { type IndicatorInstanceInput, ProfileService } from './profiles/profile-service.js';
 export type { ProfileServiceOptions } from './profiles/profile-service.types.js';
+export { ActionRunner } from './rules/action-runner.js';
 export { CandleRuleEventBridge } from './rules/candle-rule-event-bridge.js';
 export { handleCascadeError } from './rules/cascade-error-handler.js';
 export { type ComparisonOperator, evaluateComparison } from './rules/comparison-evaluator.js';
@@ -57,7 +58,6 @@ export { type CrossingOperator, evaluateCrossing } from './rules/crossing-evalua
 export { CycleGuard, CycleOverflowError } from './rules/cycle-guard.js';
 export { buildEvaluationContext } from './rules/evaluation-context.js';
 export type { EvaluationContext, EvaluationLookups } from './rules/evaluation-context.types.js';
-export { appendStateActionEvent } from './rules/event-appender.js';
 export { InMemoryEventLog } from './rules/in-memory-event-log.js';
 export { InMemoryFiringStateRepository } from './rules/in-memory-firing-state-repository.js';
 export { InMemoryNotifier, type SentMessage } from './rules/in-memory-notifier.js';
@@ -79,12 +79,7 @@ export {
   RuleService,
   type RuleServiceOptions,
 } from './rules/rule-service.js';
-export {
-  executeStateAction,
-  type StateMutationAction,
-} from './rules/state-action-executor.js';
 export { evaluateState } from './rules/state-evaluator.js';
-export { executeTelegramAction } from './rules/telegram-action-executor.js';
 export {
   TelegramNotifier,
   type TelegramNotifierOptions,
