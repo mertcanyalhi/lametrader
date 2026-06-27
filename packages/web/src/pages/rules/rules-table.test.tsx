@@ -87,19 +87,17 @@ describe('RulesTable', () => {
     expect(screen.getByRole('status')).toHaveTextContent('No rules in this profile yet.');
   });
 
-  it('renders the column headers when rules are present (first column is untitled for the enable + reorder controls)', () => {
+  it('renders the column headers when rules are present', () => {
     renderTable([makeRule({ id: 'r-1' })]);
     expect({
       order: screen.queryByRole('columnheader', { name: 'Order' }) !== null,
-      controls: screen.queryByRole('columnheader', { name: 'Enable and reorder' }) !== null,
       name: screen.queryByRole('columnheader', { name: 'Name' }) !== null,
       scope: screen.queryByRole('columnheader', { name: 'Scope' }) !== null,
       trigger: screen.queryByRole('columnheader', { name: 'Trigger' }) !== null,
       lastFired: screen.queryByRole('columnheader', { name: 'Last fired' }) !== null,
       actions: screen.queryByRole('columnheader', { name: 'Actions' }) !== null,
     }).toEqual({
-      order: false,
-      controls: true,
+      order: true,
       name: true,
       scope: true,
       trigger: true,
@@ -108,7 +106,7 @@ describe('RulesTable', () => {
     });
   });
 
-  it('renders one body row per rule with the name, symbol-scope, trigger, and never-fired cells (no Order cell)', () => {
+  it('renders one body row per rule with the order, name, symbol-scope, trigger, and never-fired cells', () => {
     renderTable([
       makeRule({
         id: 'r-1',
@@ -121,13 +119,13 @@ describe('RulesTable', () => {
 
     const row = within(rowFor('Open Above 70k'));
     expect({
-      orderCell: row.queryByRole('cell', { name: '2' }) !== null,
+      order: row.getByRole('cell', { name: '2' }) !== null,
       name: row.getByRole('button', { name: 'Open Above 70k' }) !== null,
       scope: row.queryByText('crypto:BTCUSDT') !== null,
       trigger: row.queryByText('Once per bar (15m)') !== null,
       lastFired: row.queryByText('Never') !== null,
     }).toEqual({
-      orderCell: false,
+      order: true,
       name: true,
       scope: true,
       trigger: true,
