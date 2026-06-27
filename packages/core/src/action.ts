@@ -1,4 +1,5 @@
 import { type Action, ActionKind } from './action.types.js';
+import { DESTINATION_NAME_MAX, STATE_KEY_MAX, TELEGRAM_TEMPLATE_MAX } from './limits.js';
 
 /**
  * Thrown when an {@link Action} payload is invalid — empty `key`,
@@ -27,6 +28,15 @@ function requireNonEmpty(value: string, field: string, kind: ActionKind): void {
 }
 
 /**
+ * Reject strings longer than `max`.
+ */
+function requireMaxLength(value: string, field: string, kind: ActionKind, max: number): void {
+  if (value.length > max) {
+    throw new ActionError(`'${kind}' action '${field}' must be ${max} characters or fewer.`);
+  }
+}
+
+/**
  * Validate an {@link Action}'s per-variant payload.
  *
  * - State mutations require a non-empty `key`.
@@ -40,14 +50,23 @@ export function validateAction(action: Action): void {
     case ActionKind.SetSymbolState:
     case ActionKind.SetGlobalState:
       requireNonEmpty(action.key, 'key', action.kind);
+      requireMaxLength(action.key, 'key', action.kind, STATE_KEY_MAX);
       return;
     case ActionKind.RemoveSymbolState:
     case ActionKind.RemoveGlobalState:
       requireNonEmpty(action.key, 'key', action.kind);
+      requireMaxLength(action.key, 'key', action.kind, STATE_KEY_MAX);
       return;
     case ActionKind.NotifyTelegram:
       requireNonEmpty(action.destinationName, 'destinationName', action.kind);
+      requireMaxLength(
+        action.destinationName,
+        'destinationName',
+        action.kind,
+        DESTINATION_NAME_MAX,
+      );
       requireNonEmpty(action.template, 'template', action.kind);
+      requireMaxLength(action.template, 'template', action.kind, TELEGRAM_TEMPLATE_MAX);
       return;
   }
 }

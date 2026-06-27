@@ -1,3 +1,4 @@
+import { BOT_TOKEN_MAX, CHAT_ID_MAX, DESTINATION_NAME_MAX } from '@lametrader/core';
 import * as yup from 'yup';
 
 /**
@@ -31,15 +32,18 @@ export const telegramDestinationFormSchema: yup.ObjectSchema<TelegramDestination
       .string()
       .trim()
       .required(({ label }) => `${label} is required.`)
+      .max(DESTINATION_NAME_MAX, ({ label, max }) => `${label} must be ${max} characters or fewer.`)
       .label(TELEGRAM_DESTINATION_LABELS.name),
     botToken: yup
       .string()
       .trim()
       .required(({ label }) => `${label} is required.`)
+      .max(BOT_TOKEN_MAX, ({ label, max }) => `${label} must be ${max} characters or fewer.`)
       .label(TELEGRAM_DESTINATION_LABELS.botToken),
     chatId: yup
       .string()
       .trim()
       .required(({ label }) => `${label} is required.`)
+      .max(CHAT_ID_MAX, ({ label, max }) => `${label} must be ${max} characters or fewer.`)
       .label(TELEGRAM_DESTINATION_LABELS.chatId),
   });

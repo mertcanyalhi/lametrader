@@ -1,6 +1,7 @@
 import { validateAction } from './action.js';
 import { validateConditionTree } from './condition-tree.js';
 import { validateExpiration } from './expiration.js';
+import { RULE_DESCRIPTION_MAX, RULE_NAME_MAX, SYMBOL_ID_MAX } from './limits.js';
 import { type Rule, RuleScopeKind } from './rule.types.js';
 import { validateTrigger } from './trigger.js';
 
@@ -48,6 +49,15 @@ function requireNonEmpty(value: string, field: string): void {
 }
 
 /**
+ * Reject strings longer than `max`.
+ */
+function requireMaxLength(value: string, field: string, max: number): void {
+  if (value.length > max) {
+    throw new RuleError(`Rule '${field}' must be ${max} characters or fewer.`);
+  }
+}
+
+/**
  * Validate a full {@link Rule} — rule-level checks (non-empty `id`,
  * `profileId`, `name`; non-empty `actions`; scope's `symbolId`) plus every
  * per-piece validator on the embedded condition, trigger, expiration, and each
@@ -64,9 +74,14 @@ export function validateRule(rule: Rule, now: number): void {
   requireNonEmpty(rule.id, 'id');
   requireNonEmpty(rule.profileId, 'profileId');
   requireNonEmpty(rule.name, 'name');
+  requireMaxLength(rule.name, 'name', RULE_NAME_MAX);
+  if (rule.description !== undefined) {
+    requireMaxLength(rule.description, 'description', RULE_DESCRIPTION_MAX);
+  }
 
   if (rule.scope.kind === RuleScopeKind.Symbol) {
     requireNonEmpty(rule.scope.symbolId, 'scope.symbolId');
+    requireMaxLength(rule.scope.symbolId, 'scope.symbolId', SYMBOL_ID_MAX);
   }
 
   validateConditionTree(rule.condition);

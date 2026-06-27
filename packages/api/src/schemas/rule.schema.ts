@@ -2,15 +2,21 @@ import { Type } from '@fastify/type-provider-typebox';
 import {
   ActionKind,
   ConditionNodeKind,
+  DESTINATION_NAME_MAX,
   NumericOperator,
   OperandKind,
   Period,
+  RULE_DESCRIPTION_MAX,
+  RULE_NAME_MAX,
   RuleEventType,
   RuleHistoryType,
   RuleScopeKind,
+  STATE_KEY_MAX,
   StateOperator,
   StateScope,
   StateValueType,
+  SYMBOL_ID_MAX,
+  TELEGRAM_TEMPLATE_MAX,
   TriggerKind,
 } from '@lametrader/core';
 
@@ -118,13 +124,13 @@ export const ActionSchema = Type.Object(
   {
     kind: Type.Enum(ActionKind),
     /** State actions: the key being set/removed. */
-    key: Type.Optional(Type.String()),
+    key: Type.Optional(Type.String({ maxLength: STATE_KEY_MAX })),
     /** State set actions: the value written. */
     value: Type.Optional(StateValueSchema),
     /** NotifyTelegram: the destination name from the settings layer. */
-    destinationName: Type.Optional(Type.String()),
+    destinationName: Type.Optional(Type.String({ maxLength: DESTINATION_NAME_MAX })),
     /** NotifyTelegram: the message template. */
-    template: Type.Optional(Type.String()),
+    template: Type.Optional(Type.String({ maxLength: TELEGRAM_TEMPLATE_MAX })),
   },
   { additionalProperties: false },
 );
@@ -136,7 +142,7 @@ export const RuleScopeSchema = Type.Object(
   {
     kind: Type.Enum(RuleScopeKind),
     /** Carried by Symbol scope: the watched symbol id. */
-    symbolId: Type.Optional(Type.String()),
+    symbolId: Type.Optional(Type.String({ maxLength: SYMBOL_ID_MAX })),
   },
   { additionalProperties: false },
 );
@@ -213,8 +219,8 @@ export const RuleSchema = Type.Object(
 export const RuleInputSchema = Type.Object(
   {
     profileId: Type.String(),
-    name: Type.String(),
-    description: Type.Optional(Type.String()),
+    name: Type.String({ minLength: 1, maxLength: RULE_NAME_MAX }),
+    description: Type.Optional(Type.String({ maxLength: RULE_DESCRIPTION_MAX })),
     scope: RuleScopeSchema,
     condition: ConditionNodeSchema,
     trigger: TriggerSchema,
