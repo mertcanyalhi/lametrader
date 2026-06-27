@@ -10,6 +10,7 @@ import { useQueries } from '@tanstack/react-query';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router';
 import { getStoredPeriod, setStoredPeriod } from '../../lib/chart-period.js';
+import { getStoredSymbolId, setStoredSymbolId } from '../../lib/chart-symbol.js';
 import { formatChangePct, formatPrice } from '../../lib/format.js';
 import { liveCandleForPeriod, useCandleStream, usePagedCandles } from '../../lib/hooks/candles.js';
 import { computeIndicatorQueryOptions, useIndicatorCatalog } from '../../lib/hooks/indicators.js';
@@ -61,14 +62,19 @@ export function ChartPage(): ReactNode {
 
   // Bare /chart (or a missing half) → resolve a sensible default, or bounce home.
   // The period prefers the last-selected one (persisted), as long as it's still
-  // enabled in config; otherwise the config default.
+  // enabled in config; otherwise the config default. The id prefers the
+  // last-viewed one (persisted), as long as it's still in the watchlist;
+  // otherwise the first watched symbol.
   if (!id || !period) {
     const first = symbols[0];
     if (!first || !cfg) return <Navigate to="/" replace />;
     const stored = getStoredPeriod();
     const resolvedPeriod =
       period ?? (stored && cfg.periods.includes(stored) ? stored : cfg.defaultPeriod);
-    const target = new URLSearchParams({ id: id ?? first.id, period: resolvedPeriod });
+    const storedId = getStoredSymbolId();
+    const fallbackId =
+      storedId && symbols.some((symbol) => symbol.id === storedId) ? storedId : first.id;
+    const target = new URLSearchParams({ id: id ?? fallbackId, period: resolvedPeriod });
     return <Navigate to={`/chart?${target}`} replace />;
   }
 
@@ -134,6 +140,11 @@ function ChartLayout({
       return next;
     });
   }, []);
+  // Remember the last-viewed symbol id so bare /chart (the sidebar Chart link)
+  // reopens on it instead of falling back to the first watched symbol.
+  useEffect(() => {
+    setStoredSymbolId(id);
+  }, [id]);
   return (
     <div className="grid h-full grid-rows-[minmax(0,1fr)_auto] gap-3">
       <div className="min-h-0">
