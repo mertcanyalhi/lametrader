@@ -63,4 +63,31 @@ export interface EvaluationContext {
    * a `TimerEvent` whose `symbolId` is `null`).
    */
   resolve(operand: ConditionOperand): StateValue | null;
+  /**
+   * Resolve a {@link ConditionOperand} like {@link resolve}, but also report
+   * which path produced the value — the inbound event's payload, the live
+   * lookups, or the operand's own literal. Used by the orchestrator's trace
+   * logging to distinguish event-derived from stale-lookup-derived values
+   * (the #312-class diagnostic).
+   */
+  resolveTraced(operand: ConditionOperand): TracedResolution;
+}
+
+/**
+ * Where {@link EvaluationContext.resolveTraced} pulled its value from —
+ * `'literal'` for an in-tree literal operand, `'event'` for an OHLCV operand
+ * whose axis matches the inbound `*ValueChanged` event on the same symbol,
+ * and `'lookup'` for everything else (live OHLCV cache, indicator state,
+ * symbol / global state).
+ */
+export type OperandValueSource = 'event' | 'lookup' | 'literal';
+
+/**
+ * The resolved value plus the path it took to get there.
+ */
+export interface TracedResolution {
+  /** Resolved value, or `null` when the lookup has no answer. */
+  value: StateValue | null;
+  /** Which resolution path produced {@link value}. */
+  source: OperandValueSource;
 }

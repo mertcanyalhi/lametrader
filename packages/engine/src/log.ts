@@ -33,6 +33,13 @@ const proxyStream: DestinationStream = {
 const root: Logger = pino({ level: loadSettings().logLevel, base: { app: 'engine' } }, proxyStream);
 
 /**
+ * Every child returned by {@link getLogger}, tracked so {@link _setLogLevel}
+ * can propagate a level change into the captured module-top loggers (Pino
+ * does not re-read parent level after the child is created).
+ */
+const childRegistry: Logger[] = [];
+
+/**
  * Return a Pino child logger with `{ scope }` baked into every entry — the
  * engine's equivalent of the web package's `getLogger`.
  *
@@ -43,7 +50,9 @@ const root: Logger = pino({ level: loadSettings().logLevel, base: { app: 'engine
  * Closes #306.
  */
 export function getLogger(scope: string): Logger {
-  return root.child({ scope });
+  const child = root.child({ scope });
+  childRegistry.push(child);
+  return child;
 }
 
 /**
@@ -53,4 +62,15 @@ export function getLogger(scope: string): Logger {
  */
 export function _resetLogRoot(stream?: DestinationStream): void {
   activeStream = stream;
+}
+
+/**
+ * Internal: raise or lower the active log level on the root logger and every
+ * already-created child. Tests use this to enable `'trace'` before driving
+ * the orchestrator, so trace records reach the captured sink (Pino's level
+ * filter is evaluated per-logger and is not re-inherited from the root).
+ */
+export function _setLogLevel(level: string): void {
+  root.level = level;
+  for (const child of childRegistry) child.level = level;
 }
