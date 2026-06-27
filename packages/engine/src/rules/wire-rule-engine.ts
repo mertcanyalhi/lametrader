@@ -9,7 +9,7 @@ import type {
 } from '@lametrader/core';
 
 import { CandleRuleEventBridge } from './candle-rule-event-bridge.js';
-import { type CascadeErrorLogger, handleCascadeError } from './cascade-error-handler.js';
+import { handleCascadeError } from './cascade-error-handler.js';
 import { IndicatorRuleEventBridge } from './indicator-rule-event-bridge.js';
 import { LiveEvaluationLookups } from './live-evaluation-lookups.js';
 import { QuoteRuleEventBridge } from './quote-rule-event-bridge.js';
@@ -17,7 +17,8 @@ import { RuleOrchestrator } from './rule-orchestrator.js';
 
 /**
  * Dependencies the {@link wireRuleEngine} helper composes into a live rule
- * chain (#290).
+ * chain (#290). Per #306, modules now construct their own Pino loggers via
+ * `getLogger(scope)`, so no `logger` field is threaded in here.
  */
 export interface RuleEngineDeps {
   /** Rule repository the orchestrator queries on each inbound event. */
@@ -32,8 +33,6 @@ export interface RuleEngineDeps {
   eventLog: EventLog;
   /** Firing-state repository owning per-`(ruleId, symbolId)` trigger latches. */
   firingState: FiringStateRepository;
-  /** Logger used for cascade errors and stream swallowed errors. */
-  logger: CascadeErrorLogger;
 }
 
 /**
@@ -81,7 +80,7 @@ export function wireRuleEngine(deps: RuleEngineDeps): WiredRuleEngine {
     try {
       await orchestrator.process(event);
     } catch (err) {
-      await handleCascadeError(err, event, deps.eventLog, deps.logger);
+      await handleCascadeError(err, event, deps.eventLog);
     }
   });
   const enqueue = (event: RuleEvent): void => {

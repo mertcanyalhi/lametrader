@@ -15,10 +15,10 @@ import { defaultIndicators } from './indicators/default-indicators.js';
 import { IndicatorComputeService } from './indicators/indicator-compute-service.js';
 import type { IndicatorRegistry } from './indicators/indicator-registry.js';
 import { IndicatorStreamService } from './indicators/indicator-stream-service.js';
+import { getLogger } from './log.js';
 import { TelegramDestinationsService } from './notification/telegram-destinations-service.js';
 import { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 import { ProfileService } from './profiles/profile-service.js';
-import type { CascadeErrorLogger } from './rules/cascade-error-handler.js';
 import { MongoEventLog } from './rules/mongo-event-log.js';
 import { MongoFiringStateRepository } from './rules/mongo-firing-state-repository.js';
 import { MongoRuleRepository } from './rules/mongo-rule-repository.js';
@@ -31,28 +31,8 @@ import { MongoWatchlistRepository } from './symbols/mongo-watchlist-repository.j
 import { QuoteStreamService } from './symbols/quote-stream-service.js';
 import { SymbolService } from './symbols/symbol-service.js';
 
-/**
- * The structural shape of the logger {@link connectServices} accepts.
- *
- * Pino-compatible: `error`, `warn` (used for stream-error catches and the
- * cascade error handler). A no-op default is supplied so existing callers
- * (CLI, tests) need no change.
- */
-export interface ConnectLogger extends CascadeErrorLogger {
-  /**
-   * Log a `warn`-level entry; matches Pino's two-argument signature.
-   *
-   * @param context - structured fields.
-   * @param message - the human-readable log message.
-   */
-  warn(context: { err: unknown; event?: unknown }, message: string): void;
-}
-
-/** A no-op logger satisfying {@link ConnectLogger}; the default when none is passed. */
-const SILENT_LOGGER: ConnectLogger = {
-  error: () => {},
-  warn: () => {},
-};
+/** Scope-bound logger for `connectServices` lifecycle + stream catch paths (#306). */
+const log = getLogger('connect');
 
 /**
  * Options for {@link connectServices}: the live-candle sink and per-period poll
@@ -67,13 +47,6 @@ export interface ConnectOptions {
   onSymbolQuote?: SymbolQuoteListener;
   /** Per-period poll cadence in ms (required to enable a useful polling loop). */
   pollIntervals: Record<Period, number>;
-  /**
-   * Optional structured logger (Pino-shaped) used by the rule chain's
-   * cascade error handler and the indicator/quote stream `catch` paths.
-   * Defaults to a silent no-op so existing callers (CLI, tests) need no
-   * change.
-   */
-  logger?: ConnectLogger;
   /**
    * Optional one-time seed for the Telegram destinations — at startup, every
    * entry here is upserted via {@link TelegramDestinationsService} into the
@@ -170,7 +143,6 @@ export async function connectServices(
   const rules = new RuleService(ruleRepo);
   const symbols = new SymbolService(sources, watchlist, config, candleRepo, profiles, stateRepo);
   const backfill = new BackfillService(sources, candleRepo, watchlist);
-  const logger = options.logger ?? SILENT_LOGGER;
   const eventLog = new MongoEventLog(db);
   const firingState = new MongoFiringStateRepository(db);
   const notifier = new TelegramNotifier(telegramDestinations);
@@ -181,7 +153,6 @@ export async function connectServices(
     notifier,
     eventLog,
     firingState,
-    logger,
   });
   const indicatorStream = new IndicatorStreamService(indicators, watchlist, indicatorCompute, {
     onState: (event) => {
@@ -208,11 +179,11 @@ export async function connectServices(
       candleListener(event);
       indicatorStream
         .handleCandle(event)
-        .catch((err) => logger.error({ err, event }, 'indicator stream failed'));
+        .catch((err) => log.error({ err, event }, 'indicator stream failed'));
       try {
         quoteStream.handleCandle(event);
       } catch (err) {
-        logger.error({ err, event }, 'quote stream failed');
+        log.error({ err, event }, 'quote stream failed');
       }
       wiredRuleEngine.candleBridge.handleCandle(event);
     },

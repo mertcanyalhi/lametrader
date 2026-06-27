@@ -5,32 +5,24 @@ import {
   RuleEventType,
 } from '@lametrader/core';
 
+import { getLogger } from '../log.js';
+
 /**
- * The subset of Pino's API the cascade error handler consumes — a single
- * `error(context, message)` call. Captured as a structural interface so the
- * unit tests can pass a recording stand-in (and so the engine layer doesn't
- * pull `pino` as a hard dependency).
+ * Scope-bound logger for the cascade error handler. Mirrors the per-module
+ * pattern in the rest of the engine — the scope appears on every entry so
+ * the handler's logs can be filtered out of the stream.
  */
-export interface CascadeErrorLogger {
-  /**
-   * Log an `error`-level entry; matches Pino's two-argument signature.
-   *
-   * @param context - structured fields (Pino's `err` key triggers its
-   *   error serializer).
-   * @param message - the human-readable log message.
-   */
-  error(context: { err: unknown; event?: unknown }, message: string): void;
-}
+const log = getLogger('cascade-error-handler');
 
 /**
  * Handle one cascade failure from the serialized rule chain (#290).
  *
- * Logs the primary error via `logger.error`. When the rejecting `event`
- * carries a `symbolId`, additionally appends a synthetic `Error` rule event
- * to that symbol's `events[]` via `log.appendSymbolEvent` so the failure
- * surfaces in the chart's existing Events dialog. Uses `ruleId: ''` as the
- * orchestrator-level sentinel, matching the `CycleOverflow` convention from
- * {@link RuleOrchestrator}.
+ * Logs the primary error via the engine's shared Pino logger. When the
+ * rejecting `event` carries a `symbolId`, additionally appends a synthetic
+ * `Error` rule event to that symbol's `events[]` via `log.appendSymbolEvent`
+ * so the failure surfaces in the chart's existing Events dialog. Uses
+ * `ruleId: ''` as the orchestrator-level sentinel, matching the
+ * `CycleOverflow` convention from {@link RuleOrchestrator}.
  *
  * The synthetic-event write is itself wrapped in a try/catch — if writing
  * also throws, the secondary failure is logged but never re-thrown, so the
@@ -38,16 +30,14 @@ export interface CascadeErrorLogger {
  *
  * @param err - the error the orchestrator rejected with.
  * @param event - the `RuleEvent` that was being processed.
- * @param log - the event log to append the synthetic `Error` event to.
- * @param logger - the structured logger to record the failure on.
+ * @param eventLog - the event log to append the synthetic `Error` event to.
  */
 export async function handleCascadeError(
   err: unknown,
   event: RuleEvent,
-  log: EventLog,
-  logger: CascadeErrorLogger,
+  eventLog: EventLog,
 ): Promise<void> {
-  logger.error({ err, event }, 'rule orchestration failed');
+  log.error({ err, event }, 'rule orchestration failed');
   if (event.symbolId === null) return;
   const reason = `rule orchestration failed: ${errorMessage(err)}`;
   const entry: RuleEventEntry = {
@@ -58,9 +48,9 @@ export async function handleCascadeError(
     reason,
   };
   try {
-    await log.appendSymbolEvent(event.symbolId, entry);
+    await eventLog.appendSymbolEvent(event.symbolId, entry);
   } catch (writeErr) {
-    logger.error({ err: writeErr }, 'failed to write cascade error event');
+    log.error({ err: writeErr }, 'failed to write cascade error event');
   }
 }
 

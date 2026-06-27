@@ -39,16 +39,14 @@ export {
 } from './indicators/indicator-stream-service.js';
 export { movingAverage } from './indicators/sma.js';
 export { volumeWeightedMovingAverage } from './indicators/vwma.js';
+export { getLogger } from './log.js';
 export { TelegramDestinationsService } from './notification/telegram-destinations-service.js';
 export { InMemoryProfileRepository } from './profiles/in-memory-profile-repository.js';
 export { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 export { type IndicatorInstanceInput, ProfileService } from './profiles/profile-service.js';
 export type { ProfileServiceOptions } from './profiles/profile-service.types.js';
 export { CandleRuleEventBridge } from './rules/candle-rule-event-bridge.js';
-export {
-  type CascadeErrorLogger,
-  handleCascadeError,
-} from './rules/cascade-error-handler.js';
+export { handleCascadeError } from './rules/cascade-error-handler.js';
 export { type ComparisonOperator, evaluateComparison } from './rules/comparison-evaluator.js';
 export {
   type ConditionLeaf,
@@ -104,7 +102,7 @@ export {
   wireRuleEngine,
 } from './rules/wire-rule-engine.js';
 export { loadSettings } from './settings.js';
-export type { Settings, TelegramDestination } from './settings.types.js';
+export type { LogLevel, Settings, TelegramDestination } from './settings.types.js';
 export { InMemoryStateRepository } from './state/in-memory-state-repository.js';
 export { MongoStateRepository } from './state/mongo-state-repository.js';
 export { BinanceMarketDataSource } from './symbols/binance-market-data-source.js';
