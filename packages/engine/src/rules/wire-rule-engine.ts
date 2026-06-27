@@ -14,6 +14,7 @@ import { IndicatorRuleEventBridge } from './indicator-rule-event-bridge.js';
 import { LiveEvaluationLookups } from './live-evaluation-lookups.js';
 import { QuoteRuleEventBridge } from './quote-rule-event-bridge.js';
 import { RuleOrchestrator } from './rule-orchestrator.js';
+import { TriggerEvaluator } from './trigger-evaluator.js';
 
 /**
  * Dependencies the {@link wireRuleEngine} helper composes into a live rule
@@ -67,6 +68,7 @@ export interface WiredRuleEngine {
  */
 export function wireRuleEngine(deps: RuleEngineDeps): WiredRuleEngine {
   const lookups = new LiveEvaluationLookups(deps.state);
+  const triggers = new TriggerEvaluator(deps.eventLog, deps.firingState);
   const orchestrator = new RuleOrchestrator(
     deps.rules,
     deps.watchlist,
@@ -74,7 +76,7 @@ export function wireRuleEngine(deps: RuleEngineDeps): WiredRuleEngine {
     deps.state,
     deps.notifier,
     deps.eventLog,
-    deps.firingState,
+    triggers,
   );
   const serializer = createPerSymbolSerializer(async (event) => {
     try {

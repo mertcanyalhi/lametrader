@@ -37,6 +37,7 @@ import {
   QuoteRuleEventBridge,
   QuoteStreamService,
   RuleOrchestrator,
+  TriggerEvaluator,
 } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 
@@ -152,7 +153,7 @@ function buildDriver(seedRules: Rule[]) {
     state,
     notifier,
     log,
-    firingState,
+    new TriggerEvaluator(log, firingState),
   );
   let pending: Promise<void> = Promise.resolve();
   const sink = (event: Parameters<RuleOrchestrator['process']>[0]) => {

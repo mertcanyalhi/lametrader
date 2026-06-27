@@ -1,3 +1,4 @@
+import type { EventLog } from '@lametrader/core';
 import {
   ActionKind,
   ConditionNodeKind,
@@ -15,7 +16,6 @@ import {
   TriggerKind,
 } from '@lametrader/core';
 import { afterEach, describe, expect, it } from 'vitest';
-
 import { _resetLogRoot } from '../log.js';
 import { InMemoryProfileRepository } from '../profiles/in-memory-profile-repository.js';
 import { InMemoryStateRepository } from '../state/in-memory-state-repository.js';
@@ -26,6 +26,22 @@ import { InMemoryFiringStateRepository } from './in-memory-firing-state-reposito
 import { InMemoryNotifier } from './in-memory-notifier.js';
 import { InMemoryRuleRepository } from './in-memory-rule-repository.js';
 import { RuleOrchestrator } from './rule-orchestrator.js';
+import { TriggerEvaluator } from './trigger-evaluator.js';
+
+/**
+ * Build an `[eventLog, triggers]` pair that shares the same `EventLog`
+ * instance — needed because the trigger evaluator reads the rule's events
+ * log to find prior `Fired` entries.
+ */
+function makeOrchestratorIo(now?: () => number): [InMemoryEventLog, TriggerEvaluator] {
+  const eventLog = new InMemoryEventLog(now);
+  return [eventLog, new TriggerEvaluator(eventLog, new InMemoryFiringStateRepository())];
+}
+
+/** Build a `TriggerEvaluator` over a caller-owned `EventLog`. */
+function triggersFor(log: EventLog): TriggerEvaluator {
+  return new TriggerEvaluator(log, new InMemoryFiringStateRepository());
+}
 
 afterEach(() => {
   _resetLogRoot();
@@ -109,8 +125,7 @@ describe('RuleOrchestrator', () => {
       priceLookups(),
       new InMemoryStateRepository(),
       notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
 
     await orchestrator.process(priceEvent());
@@ -164,8 +179,7 @@ describe('RuleOrchestrator', () => {
       syncLookups,
       state,
       notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
 
     await orchestrator.process(priceEvent());
@@ -236,8 +250,7 @@ describe('RuleOrchestrator', () => {
       syncLookups,
       state,
       notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
       { getActiveProfileId: () => 'profile-1' },
     );
 
@@ -282,7 +295,7 @@ describe('RuleOrchestrator', () => {
       new InMemoryStateRepository(),
       new InMemoryNotifier(),
       log,
-      new InMemoryFiringStateRepository(),
+      triggersFor(log),
       { cycleLimit: 1 },
     );
 
@@ -311,8 +324,7 @@ describe('RuleOrchestrator', () => {
       priceLookups(),
       new InMemoryStateRepository(),
       new InMemoryNotifier(['main']),
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
 
     await orchestrator.process(priceEvent());
@@ -336,8 +348,7 @@ describe('RuleOrchestrator', () => {
       priceLookups(),
       new InMemoryStateRepository(),
       new InMemoryNotifier(['main']),
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
 
     await orchestrator.process(priceEvent());
@@ -381,7 +392,7 @@ describe('RuleOrchestrator', () => {
       new InMemoryStateRepository(),
       new InMemoryNotifier(['main']),
       couplingLog,
-      new InMemoryFiringStateRepository(),
+      triggersFor(couplingLog),
     );
 
     await orchestrator.process(priceEvent());
@@ -405,8 +416,7 @@ describe('RuleOrchestrator', () => {
       priceLookups(),
       new InMemoryStateRepository(),
       notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
     await orchestrator.process(priceEvent());
     expect(notifier.sent).toEqual([]);
@@ -430,8 +440,7 @@ describe('RuleOrchestrator', () => {
       priceLookups(),
       new InMemoryStateRepository(),
       notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
     await orchestrator.process(priceEvent());
     expect(notifier.sent.map((sent) => sent.body)).toEqual(['aapl']);
@@ -450,8 +459,7 @@ describe('RuleOrchestrator', () => {
       priceLookups(),
       new InMemoryStateRepository(),
       notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
     await orchestrator.process(priceEvent());
     expect(notifier.sent.map((sent) => sent.body)).toEqual(['all']);
@@ -475,7 +483,7 @@ describe('RuleOrchestrator', () => {
       new InMemoryStateRepository(),
       notifier,
       log,
-      new InMemoryFiringStateRepository(),
+      triggersFor(log),
     );
     await orchestrator.process(priceEvent());
     expect(notifier.sent.map((sent) => sent.body)).toEqual(['first', 'second']);
@@ -494,8 +502,7 @@ describe('RuleOrchestrator', () => {
       priceLookups(),
       new InMemoryStateRepository(),
       notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
     await orchestrator.process(priceEvent(1000));
     expect(notifier.sent.map((sent) => sent.body)).toEqual(['active']);
@@ -526,8 +533,7 @@ describe('RuleOrchestrator', () => {
       lookups,
       new InMemoryStateRepository(),
       notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
 
     await orchestrator.process({ ...priceEvent(0), current: 100 });
@@ -551,7 +557,7 @@ describe('RuleOrchestrator', () => {
       new InMemoryStateRepository(),
       notifier,
       log,
-      new InMemoryFiringStateRepository(),
+      triggersFor(log),
     );
 
     await orchestrator.process(priceEvent(1000));
@@ -605,8 +611,7 @@ describe('RuleOrchestrator', () => {
       emptyLookups(),
       new InMemoryStateRepository(),
       notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
 
     await orchestrator.process({ kind: RuleEventKind.Timer, ts: 1000, symbolId: null });
@@ -755,7 +760,7 @@ describe('RuleOrchestrator', () => {
         state,
         new InMemoryNotifier(['main']),
         log,
-        new InMemoryFiringStateRepository(),
+        triggersFor(log),
       );
 
       const barOpenTs = 1_000_000;
@@ -799,7 +804,7 @@ describe('RuleOrchestrator', () => {
         state,
         new InMemoryNotifier(['main']),
         log,
-        new InMemoryFiringStateRepository(),
+        triggersFor(log),
       );
 
       const barOpenTs = 1_000_000;
@@ -851,8 +856,7 @@ describe('RuleOrchestrator', () => {
       priceLookups(),
       new InMemoryStateRepository(),
       notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
 
     await orchestrator.process(priceEvent());
@@ -892,8 +896,7 @@ describe('RuleOrchestrator', () => {
       priceLookups(),
       new InMemoryStateRepository(),
       notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorIo(),
     );
 
     await orchestrator.process(priceEvent());

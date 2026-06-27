@@ -68,12 +68,6 @@ export { MinuteTimerSource } from './rules/minute-timer-source.js';
 export { MongoEventLog } from './rules/mongo-event-log.js';
 export { MongoFiringStateRepository } from './rules/mongo-firing-state-repository.js';
 export { MongoRuleRepository } from './rules/mongo-rule-repository.js';
-export {
-  mayFireOncePerBar,
-  mayFireOncePerBarClose,
-} from './rules/once-per-bar-trigger-gate.js';
-export { mayFireOncePerMinute } from './rules/once-per-minute-trigger-gate.js';
-export { mayFireOnce } from './rules/once-trigger-gate.js';
 export { type PrevCurrent, PrevCurrentCache } from './rules/prev-current-cache.js';
 export { QuoteRuleEventBridge } from './rules/quote-rule-event-bridge.js';
 export {
@@ -96,6 +90,7 @@ export {
   type TelegramNotifierOptions,
   TelegramSendError,
 } from './rules/telegram-notifier.js';
+export { TriggerEvaluator } from './rules/trigger-evaluator.js';
 export {
   type RuleEngineDeps,
   type WiredRuleEngine,

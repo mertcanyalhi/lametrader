@@ -23,6 +23,7 @@ import {
   LiveEvaluationLookups,
   MinuteTimerSource,
   RuleOrchestrator,
+  TriggerEvaluator,
 } from '@lametrader/engine';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -80,7 +81,7 @@ function buildHarness(seedRules: Rule[]): Harness {
     state,
     notifier,
     eventLog,
-    firingState,
+    new TriggerEvaluator(eventLog, firingState),
   );
   let pending: Promise<void> = Promise.resolve();
   const timer = new MinuteTimerSource(

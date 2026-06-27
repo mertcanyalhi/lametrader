@@ -20,6 +20,7 @@ import {
   InMemoryWatchlistRepository,
   MinuteTimerSource,
   RuleOrchestrator,
+  TriggerEvaluator,
 } from '@lametrader/engine';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -91,14 +92,15 @@ describe('minute timer (e2e)', () => {
         periods: [],
       },
     ]);
+    const eventLog = new InMemoryEventLog();
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([timerRule()]),
       watchlist,
       emptyLookups(),
       new InMemoryStateRepository(),
       notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      eventLog,
+      new TriggerEvaluator(eventLog, new InMemoryFiringStateRepository()),
     );
     let pending: Promise<void> = Promise.resolve();
     const timer = new MinuteTimerSource(
