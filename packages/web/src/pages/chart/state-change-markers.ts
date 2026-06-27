@@ -1,4 +1,10 @@
-import { type RuleEventEntry, RuleEventType } from '@lametrader/core';
+import {
+  type RuleEventEntry,
+  RuleEventType,
+  StateScope,
+  type StateValue,
+  StateValueType,
+} from '@lametrader/core';
 import { useQuery } from '@tanstack/react-query';
 import type { SeriesMarker, Time, UTCTimestamp } from 'lightweight-charts';
 import { useMemo } from 'react';
@@ -15,12 +21,34 @@ import { symbolRuleEventsKey } from '../../lib/hooks/rules.js';
 const MARKER_PAGE_SIZE = 200;
 
 /**
- * Fetch a window of the symbol's rule events and map every `state_set`
- * entry to a candle-series marker keyed by its timestamp. Lazy: only
- * `state_set` events render today; expand kinds when the chart's marker
- * vocabulary grows.
+ * Render a `StateValue` as the value half of a marker label. Booleans are
+ * substituted with a check / cross emoji per #301-2c; the rest fall through
+ * to their literal stringification.
+ *
+ * Lazy: emoji as a stand-in for the lucide `Check` / `X` icons the issue
+ * sketched — the canvas marker text can't host a DOM icon, so the next
+ * upgrade is a custom DOM overlay layer (issue #301-2a/b), not this string.
  */
-export function useStateChangeMarkers(symbolId: string): SeriesMarker<Time>[] {
+function formatStateValue(value: StateValue): string {
+  if (value.type === StateValueType.Bool) return value.value ? '✅' : '❌';
+  return String(value.value);
+}
+
+/**
+ * Fetch a window of the symbol's rule events and map every `state_set`
+ * entry to a candle-series marker keyed by its timestamp. The label is
+ * `{key}: {value}` (with bool values rendered as ✅ / ❌), prefixed with
+ * `🌐 ` when the state lives in the global scope.
+ *
+ * Lazy: only `state_set` events render today; expand kinds when the chart's
+ * marker vocabulary grows. The richer two-line + bold layout from issue
+ * #301-2a needs a DOM-overlay refactor — out of scope for this fix.
+ *
+ * @param symbolId - the symbol whose events drive the markers.
+ * @param color    - resolved theme-aware marker color (canvas can't read
+ *                   CSS vars, so the caller passes the hex from `chartColors`).
+ */
+export function useStateChangeMarkers(symbolId: string, color: string): SeriesMarker<Time>[] {
   const query = useQuery<RuleEventEntry[], Error>({
     queryKey: [...symbolRuleEventsKey(symbolId), 'markers'] as const,
     queryFn: () =>
@@ -33,12 +61,15 @@ export function useStateChangeMarkers(symbolId: string): SeriesMarker<Time>[] {
     if (!events) return [];
     return events
       .filter((event) => event.type === RuleEventType.StateSet)
-      .map((event) => ({
-        time: Math.floor(event.ts / 1000) as UTCTimestamp,
-        position: 'belowBar',
-        shape: 'circle',
-        color: 'var(--accent-9)',
-        text: `${event.scope}.${event.key}`,
-      }));
-  }, [events]);
+      .map((event) => {
+        const prefix = event.scope === StateScope.Global ? '🌐 ' : '';
+        return {
+          time: Math.floor(event.ts / 1000) as UTCTimestamp,
+          position: 'belowBar',
+          shape: 'circle',
+          color,
+          text: `${prefix}${event.key}: ${formatStateValue(event.value)}`,
+        };
+      });
+  }, [events, color]);
 }
