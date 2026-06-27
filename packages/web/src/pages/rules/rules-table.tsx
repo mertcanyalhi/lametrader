@@ -13,6 +13,7 @@ import { ChevronDown, ChevronUp, ListChecks, Pause, Pencil, Play, Trash2 } from 
 import { type ReactNode, useState } from 'react';
 import { toast } from 'sonner';
 import { ApiError } from '../../lib/api-fetch.js';
+import { formatTimestamp } from '../../lib/format.js';
 import { useDeleteRule, usePatchRule, useReorderRules } from '../../lib/hooks/rules.js';
 import { EventsDialog } from './events-dialog.js';
 
@@ -302,5 +303,5 @@ function formatLastFired(rule: Rule): string {
     if (event.type === RuleEventType.Fired && event.ts > latest) latest = event.ts;
   }
   if (latest === 0) return 'Never';
-  return new Date(latest).toISOString().replace('T', ' ').slice(0, 16);
+  return formatTimestamp(latest);
 }

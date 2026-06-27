@@ -76,7 +76,9 @@ describe('EventsDialog', () => {
     );
     await waitFor(() => {
       expect(
-        within(screen.getByRole('dialog')).queryByRole('cell', { name: '2023-11-14 22:13:20' }),
+        within(screen.getByRole('dialog')).queryByRole('cell', {
+          name: '2023-11-14 22:13:20.000',
+        }),
       ).not.toBeNull();
     });
     expect(

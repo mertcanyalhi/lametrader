@@ -158,7 +158,7 @@ describe('RulesTable', () => {
       }),
     ]);
     const row = within(rowFor('Open BTC alert'));
-    expect(row.queryByText('2023-11-14 22:15')).not.toBeNull();
+    expect(row.queryByText('2023-11-14 22:15:20.000')).not.toBeNull();
   });
 
   it('invokes onEdit with the rule when the row body is clicked', async () => {

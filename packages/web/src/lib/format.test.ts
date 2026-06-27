@@ -3,6 +3,7 @@ import {
   formatChange,
   formatChangePct,
   formatPrice,
+  formatTimestamp,
   formatVolume,
   priceDecimals,
 } from './format.js';
@@ -122,5 +123,15 @@ describe('formatVolume', () => {
       smallInteger: '258',
       hundreds: '742.5',
     });
+  });
+});
+
+describe('formatTimestamp', () => {
+  it('renders an epoch-ms timestamp as YYYY-MM-DD HH:MM:SS.SSS (UTC)', () => {
+    expect(formatTimestamp(1700000000123)).toEqual('2023-11-14 22:13:20.123');
+  });
+
+  it('zero pads ms below 100 so sub-second ordering stays lexicographic', () => {
+    expect(formatTimestamp(1700000000007)).toEqual('2023-11-14 22:13:20.007');
   });
 });

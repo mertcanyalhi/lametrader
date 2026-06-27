@@ -3,6 +3,7 @@ import { Box, Button, Callout, Dialog, Flex, Skeleton, Table, Text } from '@radi
 import { useInfiniteQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { apiFetch } from '../../lib/api-fetch.js';
+import { formatTimestamp } from '../../lib/format.js';
 import { ruleEventsKey, symbolRuleEventsKey } from '../../lib/hooks/rules.js';
 
 /** Page size we request from the API; matches the server default. */
@@ -74,7 +75,7 @@ export function EventsDialog({
               {events.map((event, index) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: events stream in newest-first order; no stable per-row id.
                 <Table.Row key={`${event.ts}-${event.type}-${index}`}>
-                  <Table.Cell>{formatTs(event.ts)}</Table.Cell>
+                  <Table.Cell>{formatTimestamp(event.ts)}</Table.Cell>
                   <Table.Cell>{event.type}</Table.Cell>
                   <Table.Cell>
                     <Text size="2" color="gray">
@@ -135,10 +136,6 @@ async function fetchPage(
 function titleFor(mode: EventsDialogMode): string {
   if (mode.kind === 'rule') return `Events — ${mode.ruleName}`;
   return `Events — ${mode.symbolId}`;
-}
-
-function formatTs(ts: number): string {
-  return new Date(ts).toISOString().replace('T', ' ').slice(0, 19);
 }
 
 /**
