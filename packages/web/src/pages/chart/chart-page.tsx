@@ -19,7 +19,7 @@ import { useConfig } from '../../lib/hooks/use-config.js';
 import { useSelectedProfile } from '../../lib/selected-profile-context.js';
 import { useTheme } from '../../lib/theme-context.js';
 import { CandleChart, type IndicatorOverlay } from './candle-chart.js';
-import { ChartEventsPanel } from './chart-events-panel.js';
+import { ChartEventsButton } from './chart-events-button.js';
 import { ChartLoading } from './chart-loading.js';
 import { CHART_RANGE_ORDER, type ChartRange } from './chart-range.js';
 import { ChartRulesButton } from './chart-rules-button.js';
@@ -174,6 +174,7 @@ function ChartLayout({
           onToggleVisible={toggleVisible}
         />
         <ChartRulesButton symbolId={id} />
+        <ChartEventsButton symbolId={id} />
       </Flex>
     </div>
   );
@@ -302,7 +303,6 @@ function ChartView({
     <>
       <DocumentTitle id={id} latest={latest} previous={previous} />
       {body}
-      <ChartEventsPanel symbolId={id} />
     </>
   );
 }

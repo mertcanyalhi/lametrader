@@ -63,11 +63,12 @@ describe('TriggerPicker', () => {
     expect(screen.getByRole('spinbutton', { name: 'Trigger interval (ms)' })).toHaveValue(45_000);
   });
 
-  it('updates the kind snapshot when the user picks a different radio option', async () => {
+  it('updates the kind snapshot when the user picks a different dropdown option', async () => {
     render(<Harness initialKind={TriggerKind.Once} />);
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('radio', { name: 'Once per bar close' }));
+    await user.click(screen.getByRole('combobox', { name: 'Trigger' }));
+    await user.click(screen.getByRole('option', { name: 'Once per bar close' }));
 
     expect(snapshot().kind).toEqual(TriggerKind.OncePerBarClose);
   });

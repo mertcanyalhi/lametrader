@@ -103,7 +103,7 @@ describe('ChartRulesButton', () => {
     setStoredProfileId('p-1');
     rules = [makeRule({ id: 'r-1' }), makeRule({ id: 'r-2' })];
     renderButton();
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Rules 2' })).not.toBeNull());
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Rules (2)' })).not.toBeNull());
   });
 
   it('opens a dialog with the filtered rules table on click', async () => {
@@ -112,7 +112,7 @@ describe('ChartRulesButton', () => {
     renderButton();
     const user = userEvent.setup();
 
-    await user.click(await screen.findByRole('button', { name: 'Rules 1' }));
+    await user.click(await screen.findByRole('button', { name: 'Rules (1)' }));
     const dialog = await screen.findByRole('dialog', { name: /Rules for crypto:BTCUSDT/ });
 
     expect(within(dialog).getByRole('button', { name: 'Open BTC alert' })).toBeInTheDocument();
@@ -123,7 +123,7 @@ describe('ChartRulesButton', () => {
     renderButton();
     const user = userEvent.setup();
 
-    await user.click(await screen.findByRole('button', { name: 'Rules 0' }));
+    await user.click(await screen.findByRole('button', { name: 'Rules (0)' }));
     await user.click(
       within(await screen.findByRole('dialog', { name: /Rules for crypto:BTCUSDT/ })).getByRole(
         'button',

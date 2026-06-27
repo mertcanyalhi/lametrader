@@ -1,8 +1,8 @@
 import { Period, TriggerKind } from '@lametrader/core';
-import { Box, Flex, RadioGroup, Select, Text, TextField } from '@radix-ui/themes';
+import { Box, Flex, Select, Text, TextField } from '@radix-ui/themes';
 import type { ReactNode } from 'react';
 
-/** Human label for every trigger kind — used as the radio option text. */
+/** Human label for every trigger kind — used as the dropdown option text. */
 const TRIGGER_LABELS: Record<TriggerKind, string> = {
   [TriggerKind.Once]: 'Once',
   [TriggerKind.OncePerBar]: 'Once per bar',
@@ -11,7 +11,7 @@ const TRIGGER_LABELS: Record<TriggerKind, string> = {
 };
 
 /**
- * The trigger-gate picker for the rule editor. A radio over the four trigger
+ * The trigger-gate picker for the rule editor. A dropdown over the four trigger
  * kinds plus the variant-specific extra control — a bar-size dropdown for
  * the bar-based triggers, a milliseconds input for `OncePerMinute`.
  *
@@ -46,24 +46,16 @@ export function TriggerPicker({
   const periodErrorId = periodError ? 'rule-trigger-period-error' : undefined;
   return (
     <Flex direction="column" gap="2">
-      <RadioGroup.Root
-        value={kind}
-        onValueChange={(next) => onKindChange(next as TriggerKind)}
-        aria-label="Trigger"
-      >
-        <RadioGroup.Item value={TriggerKind.Once}>
-          {TRIGGER_LABELS[TriggerKind.Once]}
-        </RadioGroup.Item>
-        <RadioGroup.Item value={TriggerKind.OncePerBar}>
-          {TRIGGER_LABELS[TriggerKind.OncePerBar]}
-        </RadioGroup.Item>
-        <RadioGroup.Item value={TriggerKind.OncePerBarClose}>
-          {TRIGGER_LABELS[TriggerKind.OncePerBarClose]}
-        </RadioGroup.Item>
-        <RadioGroup.Item value={TriggerKind.OncePerMinute}>
-          {TRIGGER_LABELS[TriggerKind.OncePerMinute]}
-        </RadioGroup.Item>
-      </RadioGroup.Root>
+      <Select.Root value={kind} onValueChange={(next) => onKindChange(next as TriggerKind)}>
+        <Select.Trigger aria-label="Trigger" />
+        <Select.Content>
+          {Object.values(TriggerKind).map((value) => (
+            <Select.Item key={value} value={value}>
+              {TRIGGER_LABELS[value]}
+            </Select.Item>
+          ))}
+        </Select.Content>
+      </Select.Root>
       {kind === TriggerKind.OncePerBar || kind === TriggerKind.OncePerBarClose ? (
         <Box>
           <Select.Root

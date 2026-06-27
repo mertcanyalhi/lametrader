@@ -5,7 +5,6 @@ import {
   Card,
   Flex,
   IconButton,
-  RadioGroup,
   Select,
   Switch,
   Text,
@@ -164,84 +163,81 @@ function ActionCard({
   const key = 'key' in action ? action.key : '';
   return (
     <Card variant="surface">
-      <Flex direction="column" gap="2">
-        <Flex align="center" justify="between" gap="2">
-          <RadioGroup.Root
+      <Flex gap="2" align="center">
+        <Flex gap="2" align="center" wrap="wrap" flexGrow="1">
+          <Select.Root
             value={op}
             onValueChange={(next) =>
               update(index, swapKindOrScope(action, { op: next as 'set' | 'remove' }))
             }
-            aria-label={`Action ${index + 1} operation`}
           >
-            <RadioGroup.Item value="set">Set</RadioGroup.Item>
-            <RadioGroup.Item value="remove">Remove</RadioGroup.Item>
-          </RadioGroup.Root>
-          <Tooltip content="Remove">
-            <IconButton
-              type="button"
-              variant="ghost"
-              color="gray"
-              aria-label={`Remove action ${index + 1}`}
-              onClick={() => remove(index)}
-            >
-              <Trash2 size={14} aria-hidden="true" />
-            </IconButton>
-          </Tooltip>
+            <Select.Trigger aria-label={`Action ${index + 1} operation`} />
+            <Select.Content>
+              <Select.Item value="set">Set</Select.Item>
+              <Select.Item value="remove">Remove</Select.Item>
+            </Select.Content>
+          </Select.Root>
+          <Select.Root
+            value={scope}
+            onValueChange={(next) =>
+              update(index, swapKindOrScope(action, { scope: next as 'symbol' | 'global' }))
+            }
+          >
+            <Select.Trigger aria-label={`Action ${index + 1} scope`} />
+            <Select.Content>
+              <Select.Item value="symbol">Symbol state</Select.Item>
+              <Select.Item value="global">Global state</Select.Item>
+            </Select.Content>
+          </Select.Root>
+          <Box className="min-w-28 flex-1">
+            <TextField.Root
+              placeholder="State key"
+              aria-label={`Action ${index + 1} key`}
+              value={key}
+              onChange={(event) => update(index, { ...action, key: event.target.value } as Action)}
+            />
+          </Box>
+          {op === 'set' && 'value' in action ? (
+            <>
+              <Text size="2" color="gray" aria-hidden="true">
+                =
+              </Text>
+              <Select.Root
+                value={action.value.type}
+                onValueChange={(next) =>
+                  update(index, {
+                    ...action,
+                    value: defaultStateValue(next as StateValueType),
+                  } as Action)
+                }
+              >
+                <Select.Trigger aria-label={`Action ${index + 1} value type`} />
+                <Select.Content>
+                  <Select.Item value={StateValueType.Number}>Number</Select.Item>
+                  <Select.Item value={StateValueType.String}>String</Select.Item>
+                  <Select.Item value={StateValueType.Bool}>Boolean</Select.Item>
+                  <Select.Item value={StateValueType.Enum}>Enum</Select.Item>
+                </Select.Content>
+              </Select.Root>
+              <Box className="min-w-28 flex-1">
+                <ValueInput index={index} action={action} update={update} />
+              </Box>
+            </>
+          ) : null}
         </Flex>
-        <RadioGroup.Root
-          value={scope}
-          onValueChange={(next) =>
-            update(index, swapKindOrScope(action, { scope: next as 'symbol' | 'global' }))
-          }
-          aria-label={`Action ${index + 1} scope`}
-        >
-          <RadioGroup.Item value="symbol">Symbol state</RadioGroup.Item>
-          <RadioGroup.Item value="global">Global state</RadioGroup.Item>
-        </RadioGroup.Root>
-        <TextField.Root
-          placeholder="State key"
-          aria-label={`Action ${index + 1} key`}
-          value={key}
-          onChange={(event) => update(index, { ...action, key: event.target.value } as Action)}
-        />
-        {op === 'set' && 'value' in action ? (
-          <SetValueEditor index={index} action={action} update={update} />
-        ) : null}
+        <Tooltip content="Remove">
+          <IconButton
+            type="button"
+            variant="ghost"
+            color="gray"
+            aria-label={`Remove action ${index + 1}`}
+            onClick={() => remove(index)}
+          >
+            <Trash2 size={14} aria-hidden="true" />
+          </IconButton>
+        </Tooltip>
       </Flex>
     </Card>
-  );
-}
-
-function SetValueEditor({
-  index,
-  action,
-  update,
-}: {
-  index: number;
-  action: Action & { value: StateValue };
-  update: (index: number, next: Action) => void;
-}): ReactNode {
-  return (
-    <Flex direction="column" gap="2">
-      <Select.Root
-        value={action.value.type}
-        onValueChange={(next) =>
-          update(index, {
-            ...action,
-            value: defaultStateValue(next as StateValueType),
-          } as Action)
-        }
-      >
-        <Select.Trigger aria-label={`Action ${index + 1} value type`} />
-        <Select.Content>
-          <Select.Item value={StateValueType.Number}>Number</Select.Item>
-          <Select.Item value={StateValueType.String}>String</Select.Item>
-          <Select.Item value={StateValueType.Bool}>Boolean</Select.Item>
-          <Select.Item value={StateValueType.Enum}>Enum</Select.Item>
-        </Select.Content>
-      </Select.Root>
-      <ValueInput index={index} action={action} update={update} />
-    </Flex>
   );
 }
 

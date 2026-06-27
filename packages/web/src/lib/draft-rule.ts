@@ -1,10 +1,8 @@
 import {
-  ActionKind,
   ConditionNodeKind,
   type Expiration,
   type Rule,
   RuleScopeKind,
-  StateValueType,
   TriggerKind,
 } from '@lametrader/core';
 
@@ -40,13 +38,7 @@ export function makeDraftRule({
     condition: { kind: ConditionNodeKind.And, children: [] },
     trigger: { kind: TriggerKind.Once },
     expiration,
-    actions: [
-      {
-        kind: ActionKind.SetSymbolState,
-        key: '',
-        value: { type: StateValueType.Number, value: 0 },
-      },
-    ],
+    actions: [],
     enabled: true,
     events: [],
     history: [],

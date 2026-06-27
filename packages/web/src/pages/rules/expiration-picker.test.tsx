@@ -52,11 +52,12 @@ describe('ExpirationPicker', () => {
     expect(screen.getByLabelText('Expiration date')).toHaveValue('2030-01-01T12:00');
   });
 
-  it('switches the kind snapshot when the user picks the other radio option', async () => {
+  it('switches the kind snapshot when the user picks the other dropdown option', async () => {
     render(<Harness initialKind={ExpirationKind.Never} />);
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('radio', { name: 'On date' }));
+    await user.click(screen.getByRole('combobox', { name: 'Expiration' }));
+    await user.click(screen.getByRole('option', { name: 'On date' }));
 
     expect(snapshot().kind).toEqual(ExpirationKind.OnDate);
   });

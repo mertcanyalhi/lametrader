@@ -1,9 +1,9 @@
-import { Box, Flex, RadioGroup, Text, TextField } from '@radix-ui/themes';
+import { Box, Flex, Select, Text, TextField } from '@radix-ui/themes';
 import type { ReactNode } from 'react';
 import { ExpirationKind } from '../../lib/rule-form-schema.js';
 
 /**
- * The expiration picker for the rule editor — a radio between `Never`
+ * The expiration picker for the rule editor — a dropdown between `Never`
  * (persisted as `null`) and `On date` (persisted as `{ at: <epoch ms> }`),
  * with a native `datetime-local` text input revealed for the `On date` mode.
  *
@@ -33,14 +33,13 @@ export function ExpirationPicker({
   const errorId = error ? 'rule-expiration-error' : undefined;
   return (
     <Flex direction="column" gap="2">
-      <RadioGroup.Root
-        value={kind}
-        onValueChange={(next) => onKindChange(next as ExpirationKind)}
-        aria-label="Expiration"
-      >
-        <RadioGroup.Item value={ExpirationKind.Never}>Never</RadioGroup.Item>
-        <RadioGroup.Item value={ExpirationKind.OnDate}>On date</RadioGroup.Item>
-      </RadioGroup.Root>
+      <Select.Root value={kind} onValueChange={(next) => onKindChange(next as ExpirationKind)}>
+        <Select.Trigger aria-label="Expiration" />
+        <Select.Content>
+          <Select.Item value={ExpirationKind.Never}>Never</Select.Item>
+          <Select.Item value={ExpirationKind.OnDate}>On date</Select.Item>
+        </Select.Content>
+      </Select.Root>
       {kind === ExpirationKind.OnDate ? (
         <Box>
           <TextField.Root
