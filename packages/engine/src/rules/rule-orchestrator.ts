@@ -464,11 +464,15 @@ function isStateAction(action: { kind: ActionKind }): action is StateMutationAct
  * Evaluate one condition-tree leaf against the context — dispatches on the
  * leaf operator's category (comparison / crossing / state).
  *
- * Lazy: crossing/state operators use `context.prev` and `context.current` as
- * the left operand's prev/current — accurate for change-triggered rules
- * where the leaf's `left` corresponds to the event's "value axis".
+ * State and crossing operators consume operand-specific `(prev, current)` pairs
+ * from {@link EvaluationContext.resolvePrevCurrent}, so the operator's
+ * history reads off the **operand's** history rather than the inbound event's
+ * value axis (#357). Comparison operators read `.current` only.
  *
- * Emits one `leaf_decision` trace per call (#354).
+ * Emits one `leaf_decision` trace per call (#354). The trace records the
+ * resolution source via {@link EvaluationContext.resolveTraced} (event vs
+ * lookup vs literal) so a stale-lookup value is one grep apart from an
+ * event-derived one.
  */
 function evaluateLeaf(
   leaf:
@@ -488,9 +492,16 @@ function evaluateLeaf(
   const left = leftResolved.value;
   const right = rightResolved.value;
   let result: boolean;
-  if (isComparisonOp(op)) result = evaluateComparison(op, left, right);
-  else if (isCrossingOp(op)) result = evaluateCrossing(op, context.prev, left, right, right);
-  else result = evaluateState(op, context.prev, left, right);
+  if (isComparisonOp(op)) {
+    result = evaluateComparison(op, left, right);
+  } else if (isCrossingOp(op)) {
+    const leftPc = context.resolvePrevCurrent(leaf.left);
+    const rightPc = context.resolvePrevCurrent(leaf.right);
+    result = evaluateCrossing(op, leftPc.prev, leftPc.current, rightPc.prev, rightPc.current);
+  } else {
+    const leftPc = context.resolvePrevCurrent(leaf.left);
+    result = evaluateState(op, leftPc.prev, leftPc.current, right);
+  }
   log.trace(
     {
       ruleId,

@@ -3,15 +3,17 @@ import { StateOperator, type StateValue } from '@lametrader/core';
 /**
  * Evaluate a {@link StateOperator} against tagged {@link StateValue} operands.
  *
- * - `Equals` / `NotEquals` — value comparison; type mismatch is treated as a
- *   mismatch and yields `false`.
- * - `ChangesTo target` — `leftPrev ≠ target ∧ leftCurrent == target`.
- * - `ChangesFrom source` — `leftPrev == source ∧ leftCurrent ≠ source`.
+ * `null` is treated as a distinct sentinel value (the "unset" value) — it's
+ * equal to itself, distinct from every concrete value, and counts as a real
+ * transition endpoint for {@link StateOperator.ChangesTo} /
+ * {@link StateOperator.ChangesFrom}. This gives `Equals XOR NotEquals = true`
+ * for every input pair so the bootstrap pattern (`signal != "SELL"` on the
+ * first bar) fires as expected.
  *
- * Returns `false` (never throws) when any required operand is `null` (e.g.
- * first-ever observation has no prev) or when the value types disagree —
- * which the validator already rejects upstream, but we stay defensive in
- * case the resolved type drifts at runtime.
+ * `NotEquals` keeps the defensive type-mismatch carve-out from the validator
+ * boundary: two concrete operands of different `StateValueType` produce `false`
+ * for both `Equals` and `NotEquals` (the validator already rejects this
+ * upstream, but we stay defensive in case the resolved type drifts at runtime).
  */
 export function evaluateState(
   operator: StateOperator,
@@ -19,27 +21,26 @@ export function evaluateState(
   leftCurrent: StateValue | null,
   right: StateValue | null,
 ): boolean {
-  if (right === null) return false;
-
   switch (operator) {
     case StateOperator.Equals:
-      return leftCurrent !== null && stateValueEquals(leftCurrent, right);
+      return nullableEquals(leftCurrent, right);
     case StateOperator.NotEquals:
-      if (leftCurrent === null) return false;
-      if (leftCurrent.type !== right.type) return false;
-      return leftCurrent.value !== right.value;
+      if (leftCurrent !== null && right !== null && leftCurrent.type !== right.type) return false;
+      return !nullableEquals(leftCurrent, right);
     case StateOperator.ChangesTo:
-      if (leftPrev === null || leftCurrent === null) return false;
-      return !stateValueEquals(leftPrev, right) && stateValueEquals(leftCurrent, right);
+      return !nullableEquals(leftPrev, right) && nullableEquals(leftCurrent, right);
     case StateOperator.ChangesFrom:
-      if (leftPrev === null || leftCurrent === null) return false;
-      return stateValueEquals(leftPrev, right) && !stateValueEquals(leftCurrent, right);
+      return nullableEquals(leftPrev, right) && !nullableEquals(leftCurrent, right);
   }
 }
 
 /**
- * Structural equality on {@link StateValue}s. Mismatched `type` → not equal.
+ * Structural equality on nullable {@link StateValue}s under the sentinel model:
+ * two `null`s are equal, `null` is unequal to any concrete value, and two
+ * concrete values are equal iff they share `type` and `value`.
  */
-function stateValueEquals(a: StateValue, b: StateValue): boolean {
+function nullableEquals(a: StateValue | null, b: StateValue | null): boolean {
+  if (a === null) return b === null;
+  if (b === null) return false;
   return a.type === b.type && a.value === b.value;
 }

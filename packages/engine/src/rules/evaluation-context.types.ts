@@ -71,6 +71,32 @@ export interface EvaluationContext {
    * (the #312-class diagnostic).
    */
   resolveTraced(operand: ConditionOperand): TracedResolution;
+  /**
+   * Resolve a {@link ConditionOperand} to its `(prev, current)` pair — the
+   * shape that history-aware operators (state, crossing) consume.
+   *
+   * When the inbound event is the `*Changed` event for this exact operand
+   * (matching axis / instance / state key), `prev` and `current` come from the
+   * event payload. Otherwise no transition has happened for this operand on
+   * this event, so `prev === current === lookup` (or both `null` if the
+   * lookup has no value yet).
+   *
+   * {@link OperandKind.Literal} operands are stationary — `prev === current ===
+   * literal value`.
+   */
+  resolvePrevCurrent(operand: ConditionOperand): OperandPrevCurrent;
+}
+
+/**
+ * Operand-specific `(prev, current)` pair returned by
+ * {@link EvaluationContext.resolvePrevCurrent}. Either side may be `null` —
+ * `null` is a distinct sentinel value the operators interpret as "unset".
+ */
+export interface OperandPrevCurrent {
+  /** Previous value for this operand, or `null` if no prior observation. */
+  prev: StateValue | null;
+  /** Current value for this operand, or `null` if the lookup has no answer. */
+  current: StateValue | null;
 }
 
 /**

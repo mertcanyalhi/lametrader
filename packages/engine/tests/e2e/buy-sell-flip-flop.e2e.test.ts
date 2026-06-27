@@ -38,7 +38,6 @@ const THRESHOLD = 0.02634;
 
 const BUY = { type: StateValueType.Enum as const, value: 'BUY' };
 const SELL = { type: StateValueType.Enum as const, value: 'SELL' };
-const NONE = { type: StateValueType.Enum as const, value: 'NONE' };
 
 function openCondition(operator: NumericOperator, value: number): ConditionNode {
   return {
@@ -136,9 +135,8 @@ async function pushCandle(
 }
 
 describe('buy/sell flip-flop oscillation (e2e)', () => {
-  it('five 1m bars with Open [0.02635, 0.02635, 0.02633, 0.02633, 0.02635] produce exactly two buy fires and one sell fire', async () => {
+  it('five 1m bars with Open [0.02635, 0.02635, 0.02633, 0.02633, 0.02635] produce exactly two buy fires and one sell fire — bootstrap with no pre-seeded `signal`', async () => {
     const driver = buildDriver();
-    await driver.state.setSymbolState(PROFILE_ID, SYMBOL_ID, 'signal', NONE, 0);
 
     await pushCandle(driver, 60_000, 0.02635); // bar 1 above → buy
     await pushCandle(driver, 120_000, 0.02635); // bar 2 above + already BUY → silent

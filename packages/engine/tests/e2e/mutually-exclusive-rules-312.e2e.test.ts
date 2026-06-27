@@ -42,7 +42,6 @@ const THRESHOLD = 0.02634;
 
 const BUY = { type: StateValueType.Enum as const, value: 'BUY' };
 const SELL = { type: StateValueType.Enum as const, value: 'SELL' };
-const NONE = { type: StateValueType.Enum as const, value: 'NONE' };
 
 function openCondition(operator: NumericOperator, value: number): ConditionNode {
   return {
@@ -147,12 +146,8 @@ async function fireCount(driver: ReturnType<typeof buildDriver>, ruleId: string)
 }
 
 describe('mutually-exclusive rules sharing `signal` state (#312 regression) (e2e)', () => {
-  it('bar with `Open = 0.02633` (below threshold) fires only test-sell', async () => {
+  it('bar with `Open = 0.02633` (below threshold) fires only test-sell — bootstrap with no pre-seeded `signal`', async () => {
     const driver = buildDriver([testBuy, testSell]);
-    // Seed `signal` to NONE so `NotEquals BUY` / `NotEquals SELL` both
-    // resolve to true (state operators return false against a `null`
-    // left, per the engine contract — see #320 coverage).
-    await driver.state.setSymbolState(PROFILE_ID, SYMBOL_ID, 'signal', NONE, 0);
 
     await pushCandle(driver, 60_000, 0.02633);
 
@@ -163,9 +158,8 @@ describe('mutually-exclusive rules sharing `signal` state (#312 regression) (e2e
     }).toEqual({ buyFires: 0, sellFires: 1, stored: SELL });
   });
 
-  it('bar with `Open = 0.02635` (above threshold) fires only test-buy', async () => {
+  it('bar with `Open = 0.02635` (above threshold) fires only test-buy — bootstrap with no pre-seeded `signal`', async () => {
     const driver = buildDriver([testBuy, testSell]);
-    await driver.state.setSymbolState(PROFILE_ID, SYMBOL_ID, 'signal', NONE, 0);
 
     await pushCandle(driver, 60_000, 0.02635);
 
@@ -176,9 +170,8 @@ describe('mutually-exclusive rules sharing `signal` state (#312 regression) (e2e
     }).toEqual({ buyFires: 1, sellFires: 0, stored: BUY });
   });
 
-  it('bar with `Open = 0.02634` (exact threshold) fires only test-buy (`>=` true, `<` false)', async () => {
+  it('bar with `Open = 0.02634` (exact threshold) fires only test-buy (`>=` true, `<` false) — bootstrap with no pre-seeded `signal`', async () => {
     const driver = buildDriver([testBuy, testSell]);
-    await driver.state.setSymbolState(PROFILE_ID, SYMBOL_ID, 'signal', NONE, 0);
 
     await pushCandle(driver, 60_000, 0.02634);
 
@@ -191,12 +184,11 @@ describe('mutually-exclusive rules sharing `signal` state (#312 regression) (e2e
 
   it('cascade isolation — test-buy fires and writes `signal = BUY`; the cascade does not re-trigger test-sell on the same bar', async () => {
     const driver = buildDriver([testBuy, testSell]);
-    await driver.state.setSymbolState(PROFILE_ID, SYMBOL_ID, 'signal', NONE, 0);
 
     await pushCandle(driver, 60_000, 0.02635);
 
     // After test-buy fires and writes `signal = BUY`, the cascade
-    // `SymbolStateChanged(prev=NONE, current=BUY)` re-enters the
+    // `SymbolStateChanged(prev=null, current=BUY)` re-enters the
     // orchestrator. test-sell's `Open < threshold` branch is still false
     // for this bar (because the inbound event's `current` is the bar's
     // open, per the #334 fix), so the And short-circuits and test-sell
@@ -209,10 +201,6 @@ describe('mutually-exclusive rules sharing `signal` state (#312 regression) (e2e
 
   it('two adjacent bars (below then above threshold) — exactly one `Fired` per bar, alternating sides', async () => {
     const driver = buildDriver([testBuy, testSell]);
-    // Seed `signal` to NONE so `NotEquals BUY` / `NotEquals SELL` both
-    // resolve to true (state operators return false against a `null`
-    // left, per the engine contract — see #320 coverage).
-    await driver.state.setSymbolState(PROFILE_ID, SYMBOL_ID, 'signal', NONE, 0);
 
     await pushCandle(driver, 60_000, 0.02633); // below → sell
     await pushCandle(driver, 120_000, 0.02635); // above → buy
