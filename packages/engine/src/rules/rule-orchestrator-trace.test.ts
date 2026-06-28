@@ -216,12 +216,18 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       operator: NumericOperator.Gt,
       leftDescriptor: { kind: OperandKind.CurrentValue, valueType: StateValueType.Number },
       leftValue: { type: StateValueType.Number, value: 100 },
+      // `priceEvent` ships `prev: null`, so the operand-specific prev for the
+      // matching axis comes through as `null` here — distinguishes "first
+      // observation" from "stale-but-known" in the trace (#381).
+      leftPrev: null,
       leftSource: OperandValueSource.Event,
       rightDescriptor: {
         kind: OperandKind.Literal,
         value: { type: StateValueType.Number, value: 0 },
       },
       rightValue: { type: StateValueType.Number, value: 0 },
+      // Literal operands are stationary — `prev === current === literal value`.
+      rightPrev: { type: StateValueType.Number, value: 0 },
       rightSource: OperandValueSource.Literal,
       result: true,
     });

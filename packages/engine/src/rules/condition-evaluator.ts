@@ -9,7 +9,7 @@ import {
 } from '@lametrader/core';
 
 import { getLogger } from '../log.js';
-import type { EvaluationContext } from './evaluation-context.types.js';
+import type { EvaluationContext, OperandPrevCurrent } from './evaluation-context.types.js';
 
 /** Scope-bound logger for the condition evaluator. */
 const log = getLogger('condition-evaluator');
@@ -96,18 +96,26 @@ function evaluateLeaf(
   const rightResolved = context.resolveTraced(leaf.right);
   const left = leftResolved.value;
   const right = rightResolved.value;
+  let leftPc: OperandPrevCurrent | undefined;
+  let rightPc: OperandPrevCurrent | undefined;
   let result: boolean;
   if (isComparisonOp(op)) {
     result = evaluateComparison(op, left, right);
   } else if (isCrossingOp(op)) {
-    const leftPc = context.resolvePrevCurrent(leaf.left);
-    const rightPc = context.resolvePrevCurrent(leaf.right);
+    leftPc = context.resolvePrevCurrent(leaf.left);
+    rightPc = context.resolvePrevCurrent(leaf.right);
     result = evaluateCrossing(op, leftPc.prev, leftPc.current, rightPc.prev, rightPc.current);
   } else {
-    const leftPc = context.resolvePrevCurrent(leaf.left);
+    leftPc = context.resolvePrevCurrent(leaf.left);
     result = evaluateState(op, leftPc.prev, leftPc.current, right);
   }
-  if (ruleId !== undefined) {
+  if (ruleId !== undefined && log.isLevelEnabled('trace')) {
+    // Resolve prev for any operand the dispatch above didn't already need —
+    // a `leaf_decision` trace records both regardless of operator category
+    // so future false-result reports can distinguish "prev was null" from
+    // "prev was already past the threshold" (#381) without a second run.
+    const leftPrev = (leftPc ?? context.resolvePrevCurrent(leaf.left)).prev;
+    const rightPrev = (rightPc ?? context.resolvePrevCurrent(leaf.right)).prev;
     log.trace(
       {
         ruleId,
@@ -115,9 +123,11 @@ function evaluateLeaf(
         operator: op,
         leftDescriptor: leaf.left,
         leftValue: left,
+        leftPrev,
         leftSource: leftResolved.source,
         rightDescriptor: leaf.right,
         rightValue: right,
+        rightPrev,
         rightSource: rightResolved.source,
         result,
       },
