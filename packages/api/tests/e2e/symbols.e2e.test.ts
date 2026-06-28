@@ -10,7 +10,7 @@ import {
   BackfillService,
   ConfigService,
   defaultIndicators,
-  IndicatorComputeService,
+  IndicatorService,
   InMemoryMarketDataSource,
   MongoCandleRepository,
   MongoConfigRepository,
@@ -59,7 +59,7 @@ describe('symbols API (e2e)', () => {
     const symbols = new SymbolService(sources, watchlist, config, candles, undefined, state);
     const backfill = new BackfillService(sources, candles, watchlist);
     const registry = defaultIndicators();
-    const compute = new IndicatorComputeService(registry, watchlist, candles);
+    const compute = new IndicatorService(registry, watchlist, candles);
     app = createApp({ config, symbols, backfill, indicators: { registry, compute } });
     await app.ready();
   });
@@ -156,7 +156,7 @@ describe('symbols API (e2e)', () => {
     const symbols = new SymbolService([source], watchlist, config, candles);
     const backfill = new BackfillService([source], candles, watchlist);
     const registry = defaultIndicators();
-    const compute = new IndicatorComputeService(registry, watchlist, candles);
+    const compute = new IndicatorService(registry, watchlist, candles);
     const enrichApp = createApp({ config, symbols, backfill, indicators: { registry, compute } });
     await enrichApp.ready();
 
@@ -216,7 +216,7 @@ describe('symbols API (e2e)', () => {
     const symbols = new SymbolService(sources, watchlist, config, candles);
     const backfill = new BackfillService(sources, candles, watchlist);
     const registry = defaultIndicators();
-    const compute = new IndicatorComputeService(registry, watchlist, candles);
+    const compute = new IndicatorService(registry, watchlist, candles);
     const eventsApp = createApp({ config, symbols, backfill, indicators: { registry, compute } });
     await eventsApp.ready();
 
@@ -286,7 +286,7 @@ describe('symbols API (e2e)', () => {
     const symbols = new SymbolService(sources, watchlist, config, candles, undefined, stateRepo);
     const backfill = new BackfillService(sources, candles, watchlist);
     const registry = defaultIndicators();
-    const compute = new IndicatorComputeService(registry, watchlist, candles);
+    const compute = new IndicatorService(registry, watchlist, candles);
     const stateApp = createApp({ config, symbols, backfill, indicators: { registry, compute } });
     await stateApp.ready();
 
@@ -352,7 +352,7 @@ describe('symbols API (e2e)', () => {
     const symbols = new SymbolService([limitedSource], watchlist, config, candles);
     const backfill = new BackfillService([limitedSource], candles, watchlist);
     const registry = defaultIndicators();
-    const compute = new IndicatorComputeService(registry, watchlist, candles);
+    const compute = new IndicatorService(registry, watchlist, candles);
     const limitedApp = createApp({
       config,
       symbols,

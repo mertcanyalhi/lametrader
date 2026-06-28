@@ -17,13 +17,13 @@ import {
   TriggerKind,
 } from '@lametrader/core';
 import {
+  ActionRunner,
   CandleRuleEventBridge,
   ConfigService,
   defaultIndicators,
   type EvaluationLookups,
-  IndicatorComputeService,
   IndicatorRuleEventBridge,
-  IndicatorStreamService,
+  IndicatorService,
   InMemoryCandleRepository,
   InMemoryConfigRepository,
   InMemoryEventLog,
@@ -37,6 +37,7 @@ import {
   QuoteRuleEventBridge,
   QuoteStreamService,
   RuleOrchestrator,
+  TriggerEvaluator,
 } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 
@@ -159,9 +160,9 @@ function buildDriver(seedRules: Rule[]) {
     watchlist,
     lookups,
     state,
-    notifier,
     log,
-    firingState,
+    new TriggerEvaluator(log, firingState),
+    new ActionRunner(state, notifier, lookups),
   );
   let pending: Promise<void> = Promise.resolve();
   const sink = (event: Parameters<RuleOrchestrator['process']>[0]) => {
@@ -367,12 +368,11 @@ describe('stream bridges (e2e)', () => {
         equityCandle(1_000_000, { open: 100, high: 106, low: 99, close: 105, volume: 1_500 }),
       ]);
       const indicators = defaultIndicators();
-      const compute = new IndicatorComputeService(indicators, watchlist, candleRepo);
       const bridge = new IndicatorRuleEventBridge((event) => driver.sink(event));
-      const indicatorStream = new IndicatorStreamService(indicators, watchlist, compute, {
+      const indicatorService = new IndicatorService(indicators, watchlist, candleRepo, {
         onState: (event: IndicatorStateEvent) => bridge.handleState(event),
       });
-      const subscriptionId = await indicatorStream.subscribe({
+      const subscriptionId = await indicatorService.subscribe({
         id: SYMBOL_ID,
         period: Period.OneMinute,
         indicatorKey: 'sma',
@@ -381,7 +381,7 @@ describe('stream bridges (e2e)', () => {
       bridge.bindSubscription(subscriptionId, instanceId);
       const polling = new PollingService([source], candleRepo, watchlist, {
         onCandle: (event) => {
-          driver.enqueue(() => indicatorStream.handleCandle(event));
+          driver.enqueue(() => indicatorService.handleCandle(event));
         },
         intervals: { [Period.OneMinute]: 60_000 } as Record<Period, number>,
         now: () => 1_500_000,

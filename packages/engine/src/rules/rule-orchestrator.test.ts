@@ -1,8 +1,10 @@
+import type { EventLog, Notifier, StateRepository } from '@lametrader/core';
 import {
   ActionKind,
   ConditionNodeKind,
   NumericOperator,
   OperandKind,
+  Period,
   ProfileScope,
   type Rule,
   RuleEventKind,
@@ -14,22 +16,54 @@ import {
   TriggerKind,
 } from '@lametrader/core';
 import { afterEach, describe, expect, it } from 'vitest';
-
-import { _resetLogRoot, _setLogLevel } from '../log.js';
+import { _resetLogRoot } from '../log.js';
 import { InMemoryProfileRepository } from '../profiles/in-memory-profile-repository.js';
 import { InMemoryStateRepository } from '../state/in-memory-state-repository.js';
 import { InMemoryWatchlistRepository } from '../symbols/in-memory-watchlist-repository.js';
+import { ActionRunner } from './action-runner.js';
 import type { EvaluationLookups } from './evaluation-context.types.js';
 import { InMemoryEventLog } from './in-memory-event-log.js';
 import { InMemoryFiringStateRepository } from './in-memory-firing-state-repository.js';
 import { InMemoryNotifier } from './in-memory-notifier.js';
 import { InMemoryRuleRepository } from './in-memory-rule-repository.js';
-import { LiveEvaluationLookups } from './live-evaluation-lookups.js';
 import { RuleOrchestrator } from './rule-orchestrator.js';
+import { TriggerEvaluator } from './trigger-evaluator.js';
+
+/**
+ * Build the `[eventLog, triggers, actions]` triplet for the orchestrator —
+ * shares one `EventLog` between the trigger evaluator (reads prior `Fired`)
+ * and the action runner's downstream entry batch.
+ */
+function makeOrchestratorTail(
+  state: StateRepository,
+  notifier: Notifier,
+  lookups: EvaluationLookups,
+  now?: () => number,
+): [InMemoryEventLog, TriggerEvaluator, ActionRunner] {
+  const eventLog = new InMemoryEventLog(now);
+  return [
+    eventLog,
+    new TriggerEvaluator(eventLog, new InMemoryFiringStateRepository()),
+    new ActionRunner(state, notifier, lookups),
+  ];
+}
+
+/** Build a `TriggerEvaluator` over a caller-owned `EventLog`. */
+function triggersFor(log: EventLog): TriggerEvaluator {
+  return new TriggerEvaluator(log, new InMemoryFiringStateRepository());
+}
+
+/** Build an `ActionRunner` over caller-owned state/notifier/lookups. */
+function actionsFor(
+  state: StateRepository,
+  notifier: Notifier,
+  lookups: EvaluationLookups,
+): ActionRunner {
+  return new ActionRunner(state, notifier, lookups);
+}
 
 afterEach(() => {
   _resetLogRoot();
-  _setLogLevel();
 });
 
 /** Baseline lookups that return null for everything. */
@@ -44,15 +78,6 @@ function emptyLookups(): EvaluationLookups {
     getIndicatorValue: () => null,
     getSymbolState: () => null,
     getGlobalState: () => null,
-    getPrevCurrentValue: () => null,
-    getPrevOpenValue: () => null,
-    getPrevHighValue: () => null,
-    getPrevLowValue: () => null,
-    getPrevCloseValue: () => null,
-    getPrevVolumeValue: () => null,
-    getPrevIndicatorValue: () => null,
-    getPrevSymbolState: () => null,
-    getPrevGlobalState: () => null,
   };
 }
 
@@ -112,15 +137,15 @@ describe('RuleOrchestrator', () => {
       rule({ id: 'rule-b', order: 2 }),
       rule({ id: 'rule-a', order: 1 }),
     ]);
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
     const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       rules,
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      lookups,
+      state,
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
 
     await orchestrator.process(priceEvent());
@@ -173,9 +198,7 @@ describe('RuleOrchestrator', () => {
       new InMemoryWatchlistRepository(),
       syncLookups,
       state,
-      notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      ...makeOrchestratorTail(state, notifier, syncLookups),
     );
 
     await orchestrator.process(priceEvent());
@@ -245,10 +268,7 @@ describe('RuleOrchestrator', () => {
       new InMemoryWatchlistRepository(),
       syncLookups,
       state,
-      notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
-      { getActiveProfileId: () => 'profile-1' },
+      ...makeOrchestratorTail(state, notifier, syncLookups),
     );
 
     await orchestrator.process(priceEvent());
@@ -285,14 +305,17 @@ describe('RuleOrchestrator', () => {
     });
     const rules = new InMemoryRuleRepository([a, b]);
     const log = new InMemoryEventLog(() => 999);
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
+    const notifier = new InMemoryNotifier();
     const orchestrator = new RuleOrchestrator(
       rules,
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      new InMemoryNotifier(),
+      lookups,
+      state,
       log,
-      new InMemoryFiringStateRepository(),
+      triggersFor(log),
+      actionsFor(state, notifier, lookups),
       { cycleLimit: 1 },
     );
 
@@ -315,85 +338,21 @@ describe('RuleOrchestrator', () => {
   it('auto-disables a Once rule after its first fire', async () => {
     const r = rule({ id: 'once', order: 1, trigger: { kind: TriggerKind.Once } });
     const rules = new InMemoryRuleRepository([r]);
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
+    const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       rules,
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      new InMemoryNotifier(['main']),
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      lookups,
+      state,
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
 
     await orchestrator.process(priceEvent());
 
     const stored = await rules.get('once');
     expect({ enabled: stored?.enabled }).toEqual({ enabled: false });
-  });
-
-  it('emits one leaf_decision trace per evaluated leaf carrying leftDescriptor/leftValue/leftPrev/leftSource and the right-operand mirror plus the boolean result (#381)', async () => {
-    const r = rule({ id: 'r', order: 1 });
-    const rules = new InMemoryRuleRepository([r]);
-    const records: Record<string, unknown>[] = [];
-    _setLogLevel('trace');
-    _resetLogRoot({
-      write: (line: string) => {
-        records.push(JSON.parse(line));
-      },
-    });
-    const orchestrator = new RuleOrchestrator(
-      rules,
-      new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      new InMemoryNotifier(['main']),
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
-    );
-
-    await orchestrator.process(priceEvent());
-
-    const traceEntries = records
-      .filter((entry) => entry.msg === 'leaf_decision')
-      .map((entry) => ({
-        level: entry.level,
-        app: entry.app,
-        scope: entry.scope,
-        ruleId: entry.ruleId,
-        leafIndex: entry.leafIndex,
-        operator: entry.operator,
-        leftDescriptor: entry.leftDescriptor,
-        leftValue: entry.leftValue,
-        leftPrev: entry.leftPrev,
-        leftSource: entry.leftSource,
-        rightDescriptor: entry.rightDescriptor,
-        rightValue: entry.rightValue,
-        rightPrev: entry.rightPrev,
-        rightSource: entry.rightSource,
-        result: entry.result,
-      }));
-    expect(traceEntries).toEqual([
-      {
-        level: 10,
-        app: 'engine',
-        scope: 'condition-evaluator',
-        ruleId: 'r',
-        leafIndex: 0,
-        operator: NumericOperator.Gt,
-        leftDescriptor: { kind: OperandKind.CurrentValue, valueType: StateValueType.Number },
-        leftValue: { type: StateValueType.Number, value: 100 },
-        leftPrev: null,
-        leftSource: 'lookup',
-        rightDescriptor: {
-          kind: OperandKind.Literal,
-          value: { type: StateValueType.Number, value: 0 },
-        },
-        rightValue: { type: StateValueType.Number, value: 0 },
-        rightPrev: { type: StateValueType.Number, value: 0 },
-        rightSource: 'literal',
-        result: true,
-      },
-    ]);
   });
 
   it('logs a warn entry when auto-disabling a Once rule after fire (#306)', async () => {
@@ -405,14 +364,15 @@ describe('RuleOrchestrator', () => {
         records.push(JSON.parse(line));
       },
     });
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
+    const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       rules,
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      new InMemoryNotifier(['main']),
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      lookups,
+      state,
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
 
     await orchestrator.process(priceEvent());
@@ -449,14 +409,17 @@ describe('RuleOrchestrator', () => {
       ruleEvents: baseLog.ruleEvents.bind(baseLog),
       symbolEvents: baseLog.symbolEvents.bind(baseLog),
     };
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
+    const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       rules,
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      new InMemoryNotifier(['main']),
+      lookups,
+      state,
       couplingLog,
-      new InMemoryFiringStateRepository(),
+      triggersFor(couplingLog),
+      actionsFor(state, notifier, lookups),
     );
 
     await orchestrator.process(priceEvent());
@@ -473,15 +436,15 @@ describe('RuleOrchestrator', () => {
 
   it('does not fire disabled rules', async () => {
     const r = rule({ id: 'off', order: 1, enabled: false });
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
     const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([r]),
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      lookups,
+      state,
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
     await orchestrator.process(priceEvent());
     expect(notifier.sent).toEqual([]);
@@ -498,15 +461,15 @@ describe('RuleOrchestrator', () => {
       order: 2,
       scope: { kind: RuleScopeKind.Symbol, symbolId: 'MSFT' },
     });
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
     const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([aapl, msft]),
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      lookups,
+      state,
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
     await orchestrator.process(priceEvent());
     expect(notifier.sent.map((sent) => sent.body)).toEqual(['aapl']);
@@ -518,15 +481,15 @@ describe('RuleOrchestrator', () => {
       order: 1,
       scope: { kind: RuleScopeKind.AllSymbols },
     });
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
     const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([all]),
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      lookups,
+      state,
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
     await orchestrator.process(priceEvent());
     expect(notifier.sent.map((sent) => sent.body)).toEqual(['all']);
@@ -541,16 +504,18 @@ describe('RuleOrchestrator', () => {
         { kind: ActionKind.NotifyTelegram, destinationName: 'main', template: 'second' },
       ],
     });
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
     const notifier = new InMemoryNotifier(['main']);
     const log = new InMemoryEventLog();
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([r]),
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      notifier,
+      lookups,
+      state,
       log,
-      new InMemoryFiringStateRepository(),
+      triggersFor(log),
+      actionsFor(state, notifier, lookups),
     );
     await orchestrator.process(priceEvent());
     expect(notifier.sent.map((sent) => sent.body)).toEqual(['first', 'second']);
@@ -562,15 +527,15 @@ describe('RuleOrchestrator', () => {
 
   it('treats expiration.at strictly greater than ts as still-active', async () => {
     const r = rule({ id: 'active', order: 1, expiration: { at: 1001 } });
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
     const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([r]),
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      lookups,
+      state,
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
     await orchestrator.process(priceEvent(1000));
     expect(notifier.sent.map((sent) => sent.body)).toEqual(['active']);
@@ -594,15 +559,14 @@ describe('RuleOrchestrator', () => {
       ...emptyLookups(),
       getCurrentValue: () => current,
     };
+    const state = new InMemoryStateRepository();
     const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([r]),
       new InMemoryWatchlistRepository(),
       lookups,
-      new InMemoryStateRepository(),
-      notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      state,
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
 
     await orchestrator.process({ ...priceEvent(0), current: 100 });
@@ -617,16 +581,18 @@ describe('RuleOrchestrator', () => {
   it('skips a rule whose expiration has passed and emits one Expired event exactly once per symbol', async () => {
     const expired = rule({ id: 'expired', order: 1, expiration: { at: 500 } });
     const rules = new InMemoryRuleRepository([expired]);
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
     const notifier = new InMemoryNotifier(['main']);
     const log = new InMemoryEventLog(() => 999);
     const orchestrator = new RuleOrchestrator(
       rules,
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      notifier,
+      lookups,
+      state,
       log,
-      new InMemoryFiringStateRepository(),
+      triggersFor(log),
+      actionsFor(state, notifier, lookups),
     );
 
     await orchestrator.process(priceEvent(1000));
@@ -674,14 +640,14 @@ describe('RuleOrchestrator', () => {
         periods: [],
       },
     ]);
+    const state = new InMemoryStateRepository();
+    const lookups = emptyLookups();
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([r]),
       watchlist,
-      emptyLookups(),
-      new InMemoryStateRepository(),
-      notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      lookups,
+      state,
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
 
     await orchestrator.process({ kind: RuleEventKind.Timer, ts: 1000, symbolId: null });
@@ -690,6 +656,210 @@ describe('RuleOrchestrator', () => {
       { destinationName: 'main', body: 'tick' },
       { destinationName: 'main', body: 'tick' },
     ]);
+  });
+
+  describe('mutually-exclusive Open-threshold rules on one candle (#312)', () => {
+    /**
+     * Build the BUY rule from the issue: Open >= 0.02634 ∧ signal != "BUY"
+     * → SetSymbolState signal="BUY", OncePerBar(1m). String state type
+     * matches the user's actual rule JSON.
+     */
+    function buyRule(): Rule {
+      return rule({
+        id: 'buy',
+        order: 1,
+        trigger: { kind: TriggerKind.OncePerBar, period: Period.OneMinute },
+        condition: {
+          kind: ConditionNodeKind.And,
+          children: [
+            {
+              kind: ConditionNodeKind.Leaf,
+              left: { kind: OperandKind.OpenValue, valueType: StateValueType.Number },
+              operator: NumericOperator.Gte,
+              right: {
+                kind: OperandKind.Literal,
+                value: { type: StateValueType.Number, value: 0.02634 },
+              },
+            },
+            {
+              kind: ConditionNodeKind.Leaf,
+              left: {
+                kind: OperandKind.SymbolStateRef,
+                key: 'signal',
+                valueType: StateValueType.String,
+              },
+              operator: StateOperator.NotEquals,
+              right: {
+                kind: OperandKind.Literal,
+                value: { type: StateValueType.String, value: 'BUY' },
+              },
+            },
+          ],
+        },
+        actions: [
+          {
+            kind: ActionKind.SetSymbolState,
+            key: 'signal',
+            value: { type: StateValueType.String, value: 'BUY' },
+          },
+        ],
+      });
+    }
+
+    /**
+     * The SELL rule from the issue: Open < 0.02634 ∧ signal != "SELL" →
+     * SetSymbolState signal="SELL", OncePerBar(1m).
+     */
+    function sellRule(): Rule {
+      return rule({
+        id: 'sell',
+        order: 2,
+        trigger: { kind: TriggerKind.OncePerBar, period: Period.OneMinute },
+        condition: {
+          kind: ConditionNodeKind.And,
+          children: [
+            {
+              kind: ConditionNodeKind.Leaf,
+              left: { kind: OperandKind.OpenValue, valueType: StateValueType.Number },
+              operator: NumericOperator.Lt,
+              right: {
+                kind: OperandKind.Literal,
+                value: { type: StateValueType.Number, value: 0.02634 },
+              },
+            },
+            {
+              kind: ConditionNodeKind.Leaf,
+              left: {
+                kind: OperandKind.SymbolStateRef,
+                key: 'signal',
+                valueType: StateValueType.String,
+              },
+              operator: StateOperator.NotEquals,
+              right: {
+                kind: OperandKind.Literal,
+                value: { type: StateValueType.String, value: 'SELL' },
+              },
+            },
+          ],
+        },
+        actions: [
+          {
+            kind: ActionKind.SetSymbolState,
+            key: 'signal',
+            value: { type: StateValueType.String, value: 'SELL' },
+          },
+        ],
+      });
+    }
+
+    /**
+     * Wire state + a state-cache mirror via `onStateChanged`, just like the
+     * live wiring. Pre-seed `signal=<initial>` so the BUY/SELL `!=` leaves
+     * have a non-null `current` to compare.
+     */
+    async function buildStateWithSignal(initial: 'BUY' | 'SELL') {
+      const state = new InMemoryStateRepository();
+      await state.setSymbolState(
+        'profile-1',
+        'AAPL',
+        'signal',
+        { type: StateValueType.String, value: initial },
+        999_000,
+      );
+      const stateCache = new Map<string, StateValue>([
+        ['profile-1|AAPL|signal', { type: StateValueType.String, value: initial }],
+      ]);
+      state.onStateChanged((event) => {
+        if (event.scope.kind === 'symbol' && event.current !== null) {
+          stateCache.set(`${event.profileId}|${event.scope.symbolId}|${event.key}`, event.current);
+        }
+      });
+      return { state, stateCache };
+    }
+
+    it('cascade leaves at most one Fired per bar when the live cache is fresh (signal=BUY pre-state, Open drops to 0.02633)', async () => {
+      // Sane wiring: cache reflects bar N+1's open before process() runs.
+      // BUY can't fire (signal=BUY); SELL fires once, cascade re-evals SELL
+      // and OncePerBar suppresses the second fire.
+      const { state, stateCache } = await buildStateWithSignal('BUY');
+      const lookups: EvaluationLookups = {
+        ...emptyLookups(),
+        getOpenValue: (id) => (id === 'AAPL' ? 0.02633 : null),
+        getSymbolState: (profileId, symbolId, key) =>
+          stateCache.get(`${profileId}|${symbolId}|${key}`) ?? null,
+      };
+      const log = new InMemoryEventLog();
+      const notifier = new InMemoryNotifier(['main']);
+      const orchestrator = new RuleOrchestrator(
+        new InMemoryRuleRepository([buyRule(), sellRule()]),
+        new InMemoryWatchlistRepository(),
+        lookups,
+        state,
+        log,
+        triggersFor(log),
+        actionsFor(state, notifier, lookups),
+      );
+
+      const barOpenTs = 1_000_000;
+      await orchestrator.process({
+        kind: RuleEventKind.OpenValueChanged,
+        ts: barOpenTs,
+        symbolId: 'AAPL',
+        prev: 0.02634,
+        current: 0.02633,
+        final: false,
+      });
+
+      const fired = (await log.symbolEvents('AAPL')).filter(
+        (event) => event.type === RuleEventType.Fired,
+      );
+      expect(fired.map(({ firedAt: _firedAt, context: _context, ...rest }) => rest)).toEqual([
+        { type: RuleEventType.Fired, ts: barOpenTs, ruleId: 'sell', symbolId: 'AAPL' },
+      ]);
+    });
+
+    it('uses the inbound `OpenValueChanged.current` for OpenValue operands so a stale Open cache cannot fire BUY on a 0.02633 bar', async () => {
+      // The bug from #312: prior bar set signal=BUY, then SELL fired and set
+      // signal=SELL; the new bar's open is 0.02633 but the live cache hasn't
+      // caught up (still 0.02634). On the inbound OpenValueChanged for this
+      // bar, BUY's `Open >= 0.02634` must NOT resolve via the stale lookup —
+      // it has to read `event.current=0.02633` directly. signal=SELL then
+      // blocks SELL too, so no rule fires on this candle.
+      const { state, stateCache } = await buildStateWithSignal('SELL');
+      const lookups: EvaluationLookups = {
+        ...emptyLookups(),
+        // Stale: the live cache still holds the prior bar's open value.
+        getOpenValue: (id) => (id === 'AAPL' ? 0.02634 : null),
+        getSymbolState: (profileId, symbolId, key) =>
+          stateCache.get(`${profileId}|${symbolId}|${key}`) ?? null,
+      };
+      const log = new InMemoryEventLog();
+      const notifier = new InMemoryNotifier(['main']);
+      const orchestrator = new RuleOrchestrator(
+        new InMemoryRuleRepository([buyRule(), sellRule()]),
+        new InMemoryWatchlistRepository(),
+        lookups,
+        state,
+        log,
+        triggersFor(log),
+        actionsFor(state, notifier, lookups),
+      );
+
+      const barOpenTs = 1_000_000;
+      await orchestrator.process({
+        kind: RuleEventKind.OpenValueChanged,
+        ts: barOpenTs,
+        symbolId: 'AAPL',
+        prev: 0.02634,
+        current: 0.02633,
+        final: false,
+      });
+
+      const fired = (await log.symbolEvents('AAPL')).filter(
+        (event) => event.type === RuleEventType.Fired,
+      );
+      expect(fired).toEqual([]);
+    });
   });
 
   it('fires every enabled rule across enabled profiles on a non-cascade event', async () => {
@@ -717,15 +887,15 @@ describe('RuleOrchestrator', () => {
     ]);
     const p1Rule = rule({ id: 'p1', order: 1, profileId: 'profile-1' });
     const p2Rule = rule({ id: 'p2', order: 1, profileId: 'profile-2' });
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
     const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([p1Rule, p2Rule], profiles),
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      lookups,
+      state,
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
 
     await orchestrator.process(priceEvent());
@@ -758,99 +928,19 @@ describe('RuleOrchestrator', () => {
     ]);
     const onRule = rule({ id: 'on', order: 1, profileId: 'profile-on' });
     const offRule = rule({ id: 'off', order: 2, profileId: 'profile-off' });
+    const state = new InMemoryStateRepository();
+    const lookups = priceLookups();
     const notifier = new InMemoryNotifier(['main']);
     const orchestrator = new RuleOrchestrator(
       new InMemoryRuleRepository([onRule, offRule], profiles),
       new InMemoryWatchlistRepository(),
-      priceLookups(),
-      new InMemoryStateRepository(),
-      notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
+      lookups,
+      state,
+      ...makeOrchestratorTail(state, notifier, lookups),
     );
 
     await orchestrator.process(priceEvent());
 
     expect(notifier.sent.map((sent) => sent.body)).toEqual(['on']);
-  });
-
-  it('fires a CrossingUp rule when CloseValue crosses above a moving IndicatorRef right operand', async () => {
-    // Regression: the dispatch used to pass `right` for both `rightPrev` and
-    // `rightCurrent`, so any time-varying right operand was evaluated as a
-    // constant — and the crossing was missed when the right side actually
-    // moved out of the way. Here the MA drops from 110 to 99 while the
-    // close ticks 100 → 102; the close therefore crossed above the MA
-    // (was 100 vs 110, now 102 vs 99) and the rule must fire.
-    const state = new InMemoryStateRepository();
-    const lookups = new LiveEvaluationLookups(state);
-    // Seed the MA's history: prev=110, current=99.
-    lookups.record({
-      kind: RuleEventKind.IndicatorValueChanged,
-      ts: 999,
-      symbolId: 'AAPL',
-      instanceId: 'sma-14',
-      stateKey: 'value',
-      prev: null,
-      current: { type: StateValueType.Number, value: 110 },
-    });
-    lookups.record({
-      kind: RuleEventKind.IndicatorValueChanged,
-      ts: 1000,
-      symbolId: 'AAPL',
-      instanceId: 'sma-14',
-      stateKey: 'value',
-      prev: { type: StateValueType.Number, value: 110 },
-      current: { type: StateValueType.Number, value: 99 },
-    });
-    // Seed close's history: prev=null then 100 — so the inbound event's
-    // prev=100 lines up with the cached prior observation.
-    lookups.record({
-      kind: RuleEventKind.CloseValueChanged,
-      ts: 1000,
-      symbolId: 'AAPL',
-      prev: null,
-      current: 100,
-      final: false,
-    });
-    const r = rule({
-      id: 'cross-ma',
-      order: 1,
-      trigger: { kind: TriggerKind.Once },
-      condition: {
-        kind: ConditionNodeKind.Leaf,
-        left: { kind: OperandKind.CloseValue, valueType: StateValueType.Number },
-        operator: NumericOperator.CrossingUp,
-        right: {
-          kind: OperandKind.IndicatorRef,
-          instanceId: 'sma-14',
-          stateKey: 'value',
-          valueType: StateValueType.Number,
-        },
-      },
-    });
-    const notifier = new InMemoryNotifier(['main']);
-    const orchestrator = new RuleOrchestrator(
-      new InMemoryRuleRepository([r]),
-      new InMemoryWatchlistRepository(),
-      lookups,
-      state,
-      notifier,
-      new InMemoryEventLog(),
-      new InMemoryFiringStateRepository(),
-    );
-    // The triggering event: close moves 100 → 102, crossing above MA's 110 → 99.
-    const event = {
-      kind: RuleEventKind.CloseValueChanged as const,
-      ts: 1001,
-      symbolId: 'AAPL',
-      prev: 100,
-      current: 102,
-      final: false,
-    };
-    lookups.record(event);
-
-    await orchestrator.process(event);
-
-    expect(notifier.sent.map((sent) => sent.body)).toEqual(['cross-ma']);
   });
 });

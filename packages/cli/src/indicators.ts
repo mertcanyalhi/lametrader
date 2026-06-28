@@ -1,6 +1,6 @@
 import { parseArgs } from 'node:util';
 import { IndicatorNotFoundError, type Period } from '@lametrader/core';
-import type { IndicatorComputeService, IndicatorRegistry } from '@lametrader/engine';
+import type { IndicatorRegistry, IndicatorService } from '@lametrader/engine';
 
 /**
  * Run the `indicators` CLI command against the catalog registry (and optionally a compute service) and return the output to print.
@@ -18,7 +18,7 @@ import type { IndicatorComputeService, IndicatorRegistry } from '@lametrader/eng
 export async function runIndicators(
   argv: string[],
   registry: IndicatorRegistry,
-  compute?: IndicatorComputeService,
+  compute?: IndicatorService,
 ): Promise<string> {
   const [subcommand, ...rest] = argv;
   switch (subcommand) {

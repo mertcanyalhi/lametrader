@@ -6,7 +6,45 @@ import {
   type StateValue,
   StateValueType,
 } from '@lametrader/core';
-import type { EvaluationContext, EvaluationLookups } from './evaluation-context.types.js';
+import {
+  type EvaluationContext,
+  type EvaluationLookups,
+  type OperandPrevCurrent,
+  OperandValueSource,
+  type TracedResolution,
+} from './evaluation-context.types.js';
+
+/**
+ * For every OHLCV operand kind, the {@link RuleEventKind} that carries the
+ * fresh value for that axis on its inbound event.
+ *
+ * Resolving the operand reads from `event.current` when the inbound event
+ * matches this kind (and same symbol) — guards against a live cache that
+ * hasn't caught up to the bar that triggered processing (#312).
+ */
+const OHLCV_OPERAND_TO_EVENT_KIND: Readonly<
+  Record<
+    | OperandKind.CurrentValue
+    | OperandKind.OpenValue
+    | OperandKind.HighValue
+    | OperandKind.LowValue
+    | OperandKind.CloseValue
+    | OperandKind.VolumeValue,
+    | RuleEventKind.CurrentValueChanged
+    | RuleEventKind.OpenValueChanged
+    | RuleEventKind.HighValueChanged
+    | RuleEventKind.LowValueChanged
+    | RuleEventKind.CloseValueChanged
+    | RuleEventKind.VolumeValueChanged
+  >
+> = {
+  [OperandKind.CurrentValue]: RuleEventKind.CurrentValueChanged,
+  [OperandKind.OpenValue]: RuleEventKind.OpenValueChanged,
+  [OperandKind.HighValue]: RuleEventKind.HighValueChanged,
+  [OperandKind.LowValue]: RuleEventKind.LowValueChanged,
+  [OperandKind.CloseValue]: RuleEventKind.CloseValueChanged,
+  [OperandKind.VolumeValue]: RuleEventKind.VolumeValueChanged,
+};
 
 /**
  * Build a fresh {@link EvaluationContext} for one inbound {@link RuleEvent}.
@@ -36,81 +74,182 @@ export function buildEvaluationContext(
     prev,
     current,
     resolve(operand) {
-      return resolveOperand(operand, profileId, targetSymbolId, lookups, false);
+      return resolveOperand(operand, event, profileId, targetSymbolId, lookups).value;
     },
-    resolvePrev(operand) {
-      return resolveOperand(operand, profileId, targetSymbolId, lookups, true);
+    resolveTraced(operand) {
+      return resolveOperand(operand, event, profileId, targetSymbolId, lookups);
+    },
+    resolvePrevCurrent(operand) {
+      return resolveOperandPrevCurrent(operand, event, profileId, targetSymbolId, lookups);
     },
   };
 }
 
 /**
  * Resolve one {@link ConditionOperand} against `targetSymbolId` + lookups,
- * scoped to `profileId` for state operands. When `prev` is `true` the
- * pre-change ("prev") cache slot is read instead of the latest one;
- * `Literal` operands ignore the flag — they have no time dimension.
+ * scoped to `profileId` for state operands.
+ *
+ * For OHLCV operands whose axis matches the inbound `event`'s
+ * `*ValueChanged` kind on the same symbol, the value is taken from
+ * `event.current` rather than the live cache — the event's payload is
+ * authoritative for that axis at this `ts`, and the live cache may not yet
+ * have caught up (#312).
  */
 function resolveOperand(
   operand: ConditionOperand,
+  event: RuleEvent,
   profileId: string,
   symbolId: string | null,
   lookups: EvaluationLookups,
-  prev: boolean,
-): StateValue | null {
+): TracedResolution {
   switch (operand.kind) {
     case OperandKind.Literal:
-      return operand.value;
+      return { value: operand.value, source: OperandValueSource.Literal };
     case OperandKind.CurrentValue:
-      return wrapNumber(
-        lookupOnSymbol(symbolId, (id) =>
-          prev ? lookups.getPrevCurrentValue(id) : lookups.getCurrentValue(id),
-        ),
-      );
+      return resolveOhlcv(event, symbolId, operand.kind, (id) => lookups.getCurrentValue(id));
     case OperandKind.OpenValue:
-      return wrapNumber(
-        lookupOnSymbol(symbolId, (id) =>
-          prev ? lookups.getPrevOpenValue(id) : lookups.getOpenValue(id),
-        ),
-      );
+      return resolveOhlcv(event, symbolId, operand.kind, (id) => lookups.getOpenValue(id));
     case OperandKind.HighValue:
-      return wrapNumber(
-        lookupOnSymbol(symbolId, (id) =>
-          prev ? lookups.getPrevHighValue(id) : lookups.getHighValue(id),
-        ),
-      );
+      return resolveOhlcv(event, symbolId, operand.kind, (id) => lookups.getHighValue(id));
     case OperandKind.LowValue:
-      return wrapNumber(
-        lookupOnSymbol(symbolId, (id) =>
-          prev ? lookups.getPrevLowValue(id) : lookups.getLowValue(id),
-        ),
-      );
+      return resolveOhlcv(event, symbolId, operand.kind, (id) => lookups.getLowValue(id));
     case OperandKind.CloseValue:
-      return wrapNumber(
-        lookupOnSymbol(symbolId, (id) =>
-          prev ? lookups.getPrevCloseValue(id) : lookups.getCloseValue(id),
-        ),
-      );
+      return resolveOhlcv(event, symbolId, operand.kind, (id) => lookups.getCloseValue(id));
     case OperandKind.VolumeValue:
-      return wrapNumber(
-        lookupOnSymbol(symbolId, (id) =>
-          prev ? lookups.getPrevVolumeValue(id) : lookups.getVolumeValue(id),
-        ),
-      );
+      return resolveOhlcv(event, symbolId, operand.kind, (id) => lookups.getVolumeValue(id));
     case OperandKind.IndicatorRef:
-      return prev
-        ? lookups.getPrevIndicatorValue(operand.instanceId, operand.stateKey)
-        : lookups.getIndicatorValue(operand.instanceId, operand.stateKey);
+      return {
+        value: lookups.getIndicatorValue(operand.instanceId, operand.stateKey),
+        source: OperandValueSource.Lookup,
+      };
     case OperandKind.SymbolStateRef:
-      return lookupOnSymbol(symbolId, (id) =>
-        prev
-          ? lookups.getPrevSymbolState(profileId, id, operand.key)
-          : lookups.getSymbolState(profileId, id, operand.key),
-      );
+      return {
+        value: lookupOnSymbol(symbolId, (id) => lookups.getSymbolState(profileId, id, operand.key)),
+        source: OperandValueSource.Lookup,
+      };
     case OperandKind.GlobalStateRef:
-      return prev
-        ? lookups.getPrevGlobalState(profileId, operand.key)
-        : lookups.getGlobalState(profileId, operand.key);
+      return {
+        value: lookups.getGlobalState(profileId, operand.key),
+        source: OperandValueSource.Lookup,
+      };
   }
+}
+
+/**
+ * Resolve one {@link ConditionOperand} to its `(prev, current)` pair against
+ * the inbound `event`. For change-aware operand kinds, the inbound event is
+ * inspected first: if it's the matching `*Changed` event for the operand's
+ * identity (axis / instance / state key), `(event.prev, event.current)` is
+ * returned. Otherwise no transition has happened for this operand on this
+ * event, so prev = current = the live lookup (or both `null`).
+ *
+ * Literals are stationary — prev = current = literal value.
+ */
+function resolveOperandPrevCurrent(
+  operand: ConditionOperand,
+  event: RuleEvent,
+  profileId: string,
+  symbolId: string | null,
+  lookups: EvaluationLookups,
+): OperandPrevCurrent {
+  switch (operand.kind) {
+    case OperandKind.Literal:
+      return { prev: operand.value, current: operand.value };
+    case OperandKind.CurrentValue:
+    case OperandKind.OpenValue:
+    case OperandKind.HighValue:
+    case OperandKind.LowValue:
+    case OperandKind.CloseValue:
+    case OperandKind.VolumeValue: {
+      const matchingKind = OHLCV_OPERAND_TO_EVENT_KIND[operand.kind];
+      if (event.kind === matchingKind && symbolId !== null && event.symbolId === symbolId) {
+        return { prev: wrapNumber(event.prev), current: wrapNumber(event.current) };
+      }
+      const value = wrapNumber(lookupOnSymbol(symbolId, ohlcvLookup(operand.kind, lookups)));
+      return { prev: value, current: value };
+    }
+    case OperandKind.IndicatorRef: {
+      if (
+        event.kind === RuleEventKind.IndicatorValueChanged &&
+        event.instanceId === operand.instanceId &&
+        event.stateKey === operand.stateKey
+      ) {
+        return { prev: event.prev, current: event.current };
+      }
+      const value = lookups.getIndicatorValue(operand.instanceId, operand.stateKey);
+      return { prev: value, current: value };
+    }
+    case OperandKind.SymbolStateRef: {
+      if (
+        event.kind === RuleEventKind.SymbolStateChanged &&
+        event.profileId === profileId &&
+        symbolId !== null &&
+        event.symbolId === symbolId &&
+        event.key === operand.key
+      ) {
+        return { prev: event.prev, current: event.current };
+      }
+      const value = lookupOnSymbol(symbolId, (id) =>
+        lookups.getSymbolState(profileId, id, operand.key),
+      );
+      return { prev: value, current: value };
+    }
+    case OperandKind.GlobalStateRef: {
+      if (
+        event.kind === RuleEventKind.GlobalStateChanged &&
+        event.profileId === profileId &&
+        event.key === operand.key
+      ) {
+        return { prev: event.prev, current: event.current };
+      }
+      const value = lookups.getGlobalState(profileId, operand.key);
+      return { prev: value, current: value };
+    }
+  }
+}
+
+/**
+ * Dispatch one OHLCV operand kind to its per-axis lookup function.
+ */
+function ohlcvLookup(
+  operandKind: keyof typeof OHLCV_OPERAND_TO_EVENT_KIND,
+  lookups: EvaluationLookups,
+): (symbolId: string) => number | null {
+  switch (operandKind) {
+    case OperandKind.CurrentValue:
+      return (id) => lookups.getCurrentValue(id);
+    case OperandKind.OpenValue:
+      return (id) => lookups.getOpenValue(id);
+    case OperandKind.HighValue:
+      return (id) => lookups.getHighValue(id);
+    case OperandKind.LowValue:
+      return (id) => lookups.getLowValue(id);
+    case OperandKind.CloseValue:
+      return (id) => lookups.getCloseValue(id);
+    case OperandKind.VolumeValue:
+      return (id) => lookups.getVolumeValue(id);
+  }
+}
+
+/**
+ * Resolve one OHLCV operand: when the inbound `event` is the matching
+ * `*ValueChanged` for the same `symbolId`, take the value from
+ * `event.current` directly. Otherwise fall through to the live `lookup`.
+ */
+function resolveOhlcv(
+  event: RuleEvent,
+  symbolId: string | null,
+  operandKind: keyof typeof OHLCV_OPERAND_TO_EVENT_KIND,
+  lookup: (symbolId: string) => number | null,
+): TracedResolution {
+  const matchingKind = OHLCV_OPERAND_TO_EVENT_KIND[operandKind];
+  if (event.kind === matchingKind && symbolId !== null && event.symbolId === symbolId) {
+    return { value: wrapNumber(event.current), source: OperandValueSource.Event };
+  }
+  return {
+    value: wrapNumber(lookupOnSymbol(symbolId, lookup)),
+    source: OperandValueSource.Lookup,
+  };
 }
 
 /**

@@ -30,13 +30,12 @@ export { MongoConfigRepository } from './config/mongo-config-repository.js';
 export { type ConnectedServices, type ConnectOptions, connectServices } from './connect.js';
 export { defaultIndicators } from './indicators/default-indicators.js';
 export { type DefineIndicatorSpec, defineIndicator } from './indicators/define-indicator.js';
-export { IndicatorComputeService } from './indicators/indicator-compute-service.js';
 export { IndicatorRegistry } from './indicators/indicator-registry.js';
 export {
-  IndicatorStreamService,
-  type IndicatorStreamServiceOptions,
+  IndicatorService,
+  type IndicatorServiceOptions,
   type IndicatorSubscribeInput,
-} from './indicators/indicator-stream-service.js';
+} from './indicators/indicator-service.js';
 export { movingAverage } from './indicators/sma.js';
 export { volumeWeightedMovingAverage } from './indicators/vwma.js';
 export { getLogger } from './log.js';
@@ -45,19 +44,13 @@ export { InMemoryProfileRepository } from './profiles/in-memory-profile-reposito
 export { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 export { type IndicatorInstanceInput, ProfileService } from './profiles/profile-service.js';
 export type { ProfileServiceOptions } from './profiles/profile-service.types.js';
+export { ActionRunner } from './rules/action-runner.js';
 export { CandleRuleEventBridge } from './rules/candle-rule-event-bridge.js';
 export { handleCascadeError } from './rules/cascade-error-handler.js';
-export { type ComparisonOperator, evaluateComparison } from './rules/comparison-evaluator.js';
-export {
-  type ConditionLeaf,
-  evaluateConditionTree,
-  type LeafEvaluator,
-} from './rules/condition-tree-evaluator.js';
-export { type CrossingOperator, evaluateCrossing } from './rules/crossing-evaluator.js';
+export { evaluateCondition } from './rules/condition-evaluator.js';
 export { CycleGuard, CycleOverflowError } from './rules/cycle-guard.js';
 export { buildEvaluationContext } from './rules/evaluation-context.js';
 export type { EvaluationContext, EvaluationLookups } from './rules/evaluation-context.types.js';
-export { appendStateActionEvent } from './rules/event-appender.js';
 export { InMemoryEventLog } from './rules/in-memory-event-log.js';
 export { InMemoryFiringStateRepository } from './rules/in-memory-firing-state-repository.js';
 export { InMemoryNotifier, type SentMessage } from './rules/in-memory-notifier.js';
@@ -68,12 +61,6 @@ export { MinuteTimerSource } from './rules/minute-timer-source.js';
 export { MongoEventLog } from './rules/mongo-event-log.js';
 export { MongoFiringStateRepository } from './rules/mongo-firing-state-repository.js';
 export { MongoRuleRepository } from './rules/mongo-rule-repository.js';
-export {
-  mayFireOncePerBar,
-  mayFireOncePerBarClose,
-} from './rules/once-per-bar-trigger-gate.js';
-export { mayFireOncePerMinute } from './rules/once-per-minute-trigger-gate.js';
-export { mayFireOnce } from './rules/once-trigger-gate.js';
 export { type PrevCurrent, PrevCurrentCache } from './rules/prev-current-cache.js';
 export { QuoteRuleEventBridge } from './rules/quote-rule-event-bridge.js';
 export {
@@ -86,16 +73,11 @@ export {
   type RuleServiceOptions,
 } from './rules/rule-service.js';
 export {
-  executeStateAction,
-  type StateMutationAction,
-} from './rules/state-action-executor.js';
-export { evaluateState } from './rules/state-evaluator.js';
-export { executeTelegramAction } from './rules/telegram-action-executor.js';
-export {
   TelegramNotifier,
   type TelegramNotifierOptions,
   TelegramSendError,
 } from './rules/telegram-notifier.js';
+export { TriggerEvaluator } from './rules/trigger-evaluator.js';
 export {
   type RuleEngineDeps,
   type WiredRuleEngine,

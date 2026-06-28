@@ -8,12 +8,14 @@ import type {
   WatchlistRepository,
 } from '@lametrader/core';
 
+import { ActionRunner } from './action-runner.js';
 import { CandleRuleEventBridge } from './candle-rule-event-bridge.js';
 import { handleCascadeError } from './cascade-error-handler.js';
 import { IndicatorRuleEventBridge } from './indicator-rule-event-bridge.js';
 import { LiveEvaluationLookups } from './live-evaluation-lookups.js';
 import { QuoteRuleEventBridge } from './quote-rule-event-bridge.js';
 import { RuleOrchestrator } from './rule-orchestrator.js';
+import { TriggerEvaluator } from './trigger-evaluator.js';
 
 /**
  * Dependencies the {@link wireRuleEngine} helper composes into a live rule
@@ -67,14 +69,16 @@ export interface WiredRuleEngine {
  */
 export function wireRuleEngine(deps: RuleEngineDeps): WiredRuleEngine {
   const lookups = new LiveEvaluationLookups(deps.state);
+  const triggers = new TriggerEvaluator(deps.eventLog, deps.firingState);
+  const actions = new ActionRunner(deps.state, deps.notifier, lookups);
   const orchestrator = new RuleOrchestrator(
     deps.rules,
     deps.watchlist,
     lookups,
     deps.state,
-    deps.notifier,
     deps.eventLog,
-    deps.firingState,
+    triggers,
+    actions,
   );
   const serializer = createPerSymbolSerializer(async (event) => {
     // Rotate the lookups cache for THIS event right before processing it,

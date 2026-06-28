@@ -14,8 +14,7 @@ import {
   type CandleEvent,
   ConfigService,
   defaultIndicators,
-  IndicatorComputeService,
-  IndicatorStreamService,
+  IndicatorService,
   MongoCandleRepository,
   MongoConfigRepository,
   MongoWatchlistRepository,
@@ -183,19 +182,18 @@ describe('quote live streaming (e2e)', () => {
     ]);
 
     const registry = defaultIndicators();
-    const compute = new IndicatorComputeService(registry, watchlist, candleRepo);
     const indicatorStream = new StreamHub<IndicatorStateEvent>();
-    const indicatorStreamService = new IndicatorStreamService(registry, watchlist, compute, {
+    const indicatorService = new IndicatorService(registry, watchlist, candleRepo, {
       onState: (event) => indicatorStream.publish(event.subscriptionId, event),
     });
 
     app = createApp({
       config,
-      indicators: { registry, compute },
+      indicators: { registry, compute: indicatorService },
       liveStream: {
         candleStream,
         indicatorStream,
-        indicatorStreamService,
+        indicatorService,
         quoteStream,
         quoteStreamService,
       },

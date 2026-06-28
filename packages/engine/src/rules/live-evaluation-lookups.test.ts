@@ -1,7 +1,16 @@
-import { RuleEventKind, type StateValue, StateValueType } from '@lametrader/core';
+import {
+  Period,
+  ProfileScope,
+  RuleEventKind,
+  type StateValue,
+  StateValueType,
+  SymbolType,
+} from '@lametrader/core';
 import { describe, expect, it } from 'vitest';
 
+import { InMemoryProfileRepository } from '../profiles/in-memory-profile-repository.js';
 import { InMemoryStateRepository } from '../state/in-memory-state-repository.js';
+import { InMemoryWatchlistRepository } from '../symbols/in-memory-watchlist-repository.js';
 import { LiveEvaluationLookups } from './live-evaluation-lookups.js';
 
 /**
@@ -116,6 +125,77 @@ describe('LiveEvaluationLookups', () => {
     expect(lookups.getCurrentValue('AAPL')).toEqual(106.5);
   });
 
+  it('warm() surfaces a symbol-state value already persisted to the repository before construction', async () => {
+    const state = new InMemoryStateRepository();
+    await state.setSymbolState(
+      'profile-1',
+      'AAPL',
+      'signal',
+      { type: StateValueType.String, value: 'SELL' },
+      0,
+    );
+    const profiles = new InMemoryProfileRepository([
+      {
+        id: 'profile-1',
+        name: 'p1',
+        description: '',
+        enabled: true,
+        scope: { type: ProfileScope.All },
+        indicators: [],
+        createdAt: 0,
+        updatedAt: 0,
+      },
+    ]);
+    const watchlist = new InMemoryWatchlistRepository([
+      {
+        id: 'AAPL',
+        type: SymbolType.Stock,
+        description: 'Apple Inc.',
+        exchange: 'NMS',
+        periods: [Period.OneDay],
+      },
+    ]);
+
+    const lookups = new LiveEvaluationLookups(state);
+    await lookups.warm({ profiles, watchlist });
+
+    expect(lookups.getSymbolState('profile-1', 'AAPL', 'signal')).toEqual({
+      type: StateValueType.String,
+      value: 'SELL',
+    });
+  });
+
+  it('warm() surfaces a global-state value already persisted to the repository before construction', async () => {
+    const state = new InMemoryStateRepository();
+    await state.setGlobalState(
+      'profile-1',
+      'regime',
+      { type: StateValueType.Enum, value: 'bull' },
+      0,
+    );
+    const profiles = new InMemoryProfileRepository([
+      {
+        id: 'profile-1',
+        name: 'p1',
+        description: '',
+        enabled: true,
+        scope: { type: ProfileScope.All },
+        indicators: [],
+        createdAt: 0,
+        updatedAt: 0,
+      },
+    ]);
+    const watchlist = new InMemoryWatchlistRepository();
+
+    const lookups = new LiveEvaluationLookups(state);
+    await lookups.warm({ profiles, watchlist });
+
+    expect(lookups.getGlobalState('profile-1', 'regime')).toEqual({
+      type: StateValueType.Enum,
+      value: 'bull',
+    });
+  });
+
   it('returns null for getters whose underlying slot has never been written', () => {
     const lookups = new LiveEvaluationLookups(new InMemoryStateRepository());
     expect({
@@ -131,124 +211,5 @@ describe('LiveEvaluationLookups', () => {
       symbolState: null,
       globalState: null,
     });
-  });
-
-  it('tracks the prev close value from successive CloseValueChanged events', () => {
-    const lookups = new LiveEvaluationLookups(new InMemoryStateRepository());
-    lookups.record({
-      kind: RuleEventKind.CloseValueChanged,
-      ts: 1000,
-      symbolId: 'AAPL',
-      prev: null,
-      current: 99,
-      final: false,
-    });
-    lookups.record({
-      kind: RuleEventKind.CloseValueChanged,
-      ts: 1001,
-      symbolId: 'AAPL',
-      prev: 99,
-      current: 101,
-      final: false,
-    });
-    expect({
-      prev: lookups.getPrevCloseValue('AAPL'),
-      current: lookups.getCloseValue('AAPL'),
-    }).toEqual({ prev: 99, current: 101 });
-  });
-
-  it('tracks the prev indicator value from successive IndicatorValueChanged events', () => {
-    const lookups = new LiveEvaluationLookups(new InMemoryStateRepository());
-    lookups.record({
-      kind: RuleEventKind.IndicatorValueChanged,
-      ts: 1000,
-      symbolId: 'AAPL',
-      instanceId: 'sma-14',
-      stateKey: 'value',
-      prev: null,
-      current: { type: StateValueType.Number, value: 110 },
-    });
-    lookups.record({
-      kind: RuleEventKind.IndicatorValueChanged,
-      ts: 1001,
-      symbolId: 'AAPL',
-      instanceId: 'sma-14',
-      stateKey: 'value',
-      prev: { type: StateValueType.Number, value: 110 },
-      current: { type: StateValueType.Number, value: 99 },
-    });
-    expect({
-      prev: lookups.getPrevIndicatorValue('sma-14', 'value'),
-      current: lookups.getIndicatorValue('sma-14', 'value'),
-    }).toEqual({
-      prev: { type: StateValueType.Number, value: 110 },
-      current: { type: StateValueType.Number, value: 99 },
-    });
-  });
-
-  it('tracks prev symbol-state through StateRepository.onStateChanged', async () => {
-    const state = new InMemoryStateRepository();
-    const lookups = new LiveEvaluationLookups(state);
-    await state.setSymbolState(
-      'profile-1',
-      'AAPL',
-      'trend',
-      { type: StateValueType.Enum, value: 'up' },
-      1000,
-    );
-    await state.setSymbolState(
-      'profile-1',
-      'AAPL',
-      'trend',
-      { type: StateValueType.Enum, value: 'down' },
-      1001,
-    );
-    expect({
-      prev: lookups.getPrevSymbolState('profile-1', 'AAPL', 'trend'),
-      current: lookups.getSymbolState('profile-1', 'AAPL', 'trend'),
-    }).toEqual({
-      prev: { type: StateValueType.Enum, value: 'up' },
-      current: { type: StateValueType.Enum, value: 'down' },
-    });
-  });
-
-  it('returns null for prev getters whose slot has never been written', () => {
-    const lookups = new LiveEvaluationLookups(new InMemoryStateRepository());
-    expect({
-      open: lookups.getPrevOpenValue('AAPL'),
-      close: lookups.getPrevCloseValue('AAPL'),
-      current: lookups.getPrevCurrentValue('AAPL'),
-      indicator: lookups.getPrevIndicatorValue('sma-1', 'value'),
-      symbolState: lookups.getPrevSymbolState('profile-1', 'AAPL', 'trend'),
-      globalState: lookups.getPrevGlobalState('profile-1', 'regime'),
-    }).toEqual({
-      open: null,
-      close: null,
-      current: null,
-      indicator: null,
-      symbolState: null,
-      globalState: null,
-    });
-  });
-
-  it('getPrevCurrentValue returns null when only CloseValueChanged events have populated the prev-close slot (no cross-axis fallback, #381)', () => {
-    const lookups = new LiveEvaluationLookups(new InMemoryStateRepository());
-    lookups.record({
-      kind: RuleEventKind.CloseValueChanged,
-      ts: 1000,
-      symbolId: 'AAPL',
-      prev: null,
-      current: 99,
-      final: false,
-    });
-    lookups.record({
-      kind: RuleEventKind.CloseValueChanged,
-      ts: 1001,
-      symbolId: 'AAPL',
-      prev: 99,
-      current: 100,
-      final: false,
-    });
-    expect(lookups.getPrevCurrentValue('AAPL')).toEqual(null);
   });
 });

@@ -1,60 +1,48 @@
 import {
-  ActionKind,
-  type ConditionNode,
-  type ConditionOperand,
   type EventLog,
-  type FiredRuleEvent,
-  type FiringStateRepository,
-  type Notifier,
-  NumericOperator,
-  OperandKind,
   type Rule,
   type RuleEvent,
-  type RuleEventContext,
   type RuleEventEntry,
   RuleEventKind,
-  type RuleEventLookupSnapshot,
   RuleEventType,
   type RuleRepository,
   RuleScopeKind,
   type StateChangedEvent,
-  type StateOperator,
   type StateRepository,
   StateScope,
-  type Trigger,
   TriggerKind,
   type WatchlistRepository,
 } from '@lametrader/core';
 import { getLogger } from '../log.js';
-import { type ComparisonOperator, evaluateComparison } from './comparison-evaluator.js';
-import { evaluateConditionTree } from './condition-tree-evaluator.js';
-import { type CrossingOperator, evaluateCrossing } from './crossing-evaluator.js';
+import type { ActionRunner } from './action-runner.js';
+import { evaluateCondition } from './condition-evaluator.js';
 import { CycleGuard, CycleOverflowError } from './cycle-guard.js';
 import { buildEvaluationContext } from './evaluation-context.js';
 import type { EvaluationContext, EvaluationLookups } from './evaluation-context.types.js';
-import { appendStateActionEvent } from './event-appender.js';
-import { mayFireOncePerBar, mayFireOncePerBarClose } from './once-per-bar-trigger-gate.js';
-import { mayFireOncePerMinute } from './once-per-minute-trigger-gate.js';
-import { mayFireOnce } from './once-trigger-gate.js';
-import { executeStateAction, type StateMutationAction } from './state-action-executor.js';
-import { evaluateState } from './state-evaluator.js';
-import { executeTelegramAction } from './telegram-action-executor.js';
+import { RuleOutcome } from './rule-orchestrator-trace.types.js';
+import type { TriggerEvaluator } from './trigger-evaluator.js';
 
 /** Scope-bound logger for the rule orchestrator (#306). */
 const log = getLogger('rule-orchestrator');
-
-/**
- * Scope-bound logger for per-leaf evaluation tracing — emits one
- * `leaf_decision` TRACE record per evaluated leaf, carrying both operands'
- * descriptor / resolved / prev / source plus the boolean outcome (#381).
- * Off by default; flip `LOG_LEVEL=trace` to surface it for diagnosis.
- */
-const conditionLog = getLogger('condition-evaluator');
 
 /** Options for {@link RuleOrchestrator}. */
 export interface RuleOrchestratorOptions {
   /** Maximum cascading state-change re-entries per tick. Default `4`. */
   cycleLimit?: number;
+}
+
+/**
+ * One inbound or cascaded event waiting in the orchestrator's per-tick
+ * queue, carrying the cascade-depth and originating-rule provenance the
+ * trace logging surfaces (#354).
+ */
+interface QueuedEvent {
+  /** The event itself. */
+  event: RuleEvent;
+  /** `0` for the inbound event; `≥ 1` for each cascade hop. */
+  cascadeDepth: number;
+  /** The rule whose state-write enqueued this event; `undefined` on the inbound. */
+  triggeredByRuleId: string | undefined;
 }
 
 /**
@@ -79,14 +67,21 @@ export interface RuleOrchestratorOptions {
  * Indicator subscription wiring lands in a later issue.
  */
 export class RuleOrchestrator {
+  /**
+   * The rule currently in {@link fire}, or `undefined` outside it. Read by
+   * the `state.onStateChanged` subscriber so cascaded events carry their
+   * originating `triggeredByRuleId` into the trace payload (#354).
+   */
+  private currentFiringRuleId: string | undefined;
+
   constructor(
     private readonly rules: RuleRepository,
     private readonly watchlist: WatchlistRepository,
     private readonly lookups: EvaluationLookups,
     private readonly state: StateRepository,
-    private readonly notifier: Notifier,
     private readonly log: EventLog,
-    private readonly firingState: FiringStateRepository,
+    private readonly triggers: TriggerEvaluator,
+    private readonly actions: ActionRunner,
     private readonly options: RuleOrchestratorOptions = {},
   ) {}
 
@@ -97,29 +92,51 @@ export class RuleOrchestrator {
    */
   async process(initialEvent: RuleEvent): Promise<void> {
     const guard = new CycleGuard(this.options.cycleLimit ?? 4);
-    const cascaded: RuleEvent[] = [];
+    const cascaded: Array<{ event: RuleEvent; triggeredByRuleId: string | undefined }> = [];
     const unsubscribe = this.state.onStateChanged((event) => {
-      cascaded.push(toRuleEvent(event));
+      cascaded.push({
+        event: toRuleEvent(event),
+        triggeredByRuleId: this.currentFiringRuleId,
+      });
     });
     try {
-      const queue: RuleEvent[] = [initialEvent];
-      let isFirst = true;
+      const queue: QueuedEvent[] = [
+        { event: initialEvent, cascadeDepth: 0, triggeredByRuleId: undefined },
+      ];
       while (queue.length > 0) {
-        const event = queue.shift() as RuleEvent;
-        if (!isFirst) {
+        const next = queue.shift() as QueuedEvent;
+        if (next.cascadeDepth > 0) {
           try {
             guard.enter();
           } catch (error) {
             if (error instanceof CycleOverflowError) {
-              await this.recordCycleOverflow(event, error.limit);
+              await this.recordCycleOverflow(next.event, error.limit);
               return;
             }
             throw error;
           }
         }
-        isFirst = false;
-        await this.processOneEvent(event);
-        queue.push(...cascaded.splice(0));
+        log.trace(
+          {
+            cascadeDepth: next.cascadeDepth,
+            ...(next.triggeredByRuleId !== undefined
+              ? { triggeredByRuleId: next.triggeredByRuleId }
+              : {}),
+            eventKind: next.event.kind,
+            eventTs: next.event.ts,
+            symbolId: next.event.symbolId,
+            eventPayload: next.event,
+          },
+          'event_received',
+        );
+        await this.processOneEvent(next.event);
+        for (const c of cascaded.splice(0)) {
+          queue.push({
+            event: c.event,
+            cascadeDepth: next.cascadeDepth + 1,
+            triggeredByRuleId: c.triggeredByRuleId,
+          });
+        }
       }
     } finally {
       unsubscribe();
@@ -203,41 +220,39 @@ export class RuleOrchestrator {
     event: RuleEvent,
     firingSymbolId: string,
   ): Promise<boolean> {
+    log.trace({ ruleId: rule.id, ruleName: rule.name, firingSymbolId }, 'rule_starting');
     if (rule.expiration !== null && event.ts >= rule.expiration.at) {
       await this.maybeEmitExpired(rule, firingSymbolId, event.ts);
+      log.trace({ ruleId: rule.id, outcome: RuleOutcome.Expired }, 'rule_summary');
       return false;
     }
 
     const context = buildEvaluationContext(event, this.lookups, rule.profileId, firingSymbolId);
-    let leafIndex = 0;
-    const conditionTrue = evaluateConditionTree(rule.condition, (leaf) => {
-      const result = evaluateLeaf(leaf, context, rule.id, leafIndex);
-      leafIndex += 1;
-      return result;
-    });
+    const conditionTrue = evaluateCondition(rule.condition, context, rule.id);
 
-    const events = await this.log.ruleEvents(rule.id);
-    const prevActive = await this.firingState.getActive(rule.id, firingSymbolId);
-    const triggerAllows = this.checkTrigger(
-      rule.trigger,
-      events,
-      firingSymbolId,
-      event.ts,
-      prevActive,
-      conditionTrue,
-      eventFinal(event),
-    );
-    await this.firingState.setActive(rule.id, firingSymbolId, conditionTrue);
+    const triggerAllows = await this.triggers.mayFire(rule, event, firingSymbolId, conditionTrue);
 
-    if (!conditionTrue || !triggerAllows) return false;
+    if (!conditionTrue) {
+      log.trace({ ruleId: rule.id, outcome: RuleOutcome.ConditionFalse }, 'rule_summary');
+      return false;
+    }
+    if (!triggerAllows) {
+      log.trace({ ruleId: rule.id, outcome: RuleOutcome.GateBlocked }, 'rule_summary');
+      return false;
+    }
 
     await this.fire(rule, firingSymbolId, event.ts, context);
+    log.trace({ ruleId: rule.id, outcome: RuleOutcome.Fired }, 'rule_summary');
     return true;
   }
 
   /**
-   * Execute every action on a rule, append the per-action event entries,
-   * then append the umbrella `Fired` event.
+   * Execute every action on a rule, then append the rule-event entries it
+   * produces (one per action, plus the trailing `Fired` umbrella).
+   *
+   * Sets {@link currentFiringRuleId} for the duration so the `onStateChanged`
+   * subscriber tags any cascaded event with `triggeredByRuleId = rule.id`
+   * (#354).
    */
   private async fire(
     rule: Rule,
@@ -245,50 +260,16 @@ export class RuleOrchestrator {
     ts: number,
     context: EvaluationContext,
   ): Promise<void> {
-    for (const action of rule.actions) {
-      if (isStateAction(action)) {
-        await executeStateAction(action, rule.profileId, firingSymbolId, ts, this.state);
-        await appendStateActionEvent(action, rule.id, firingSymbolId, ts, this.log);
-        continue;
+    this.currentFiringRuleId = rule.id;
+    try {
+      const entries = await this.actions.run(rule, firingSymbolId, ts, context);
+      for (const entry of entries) {
+        await this.log.appendRuleEvent(rule.id, entry);
+        await this.log.appendSymbolEvent(firingSymbolId, entry);
       }
-      if (action.kind === ActionKind.NotifyTelegram) {
-        await executeTelegramAction(
-          action,
-          context,
-          rule.id,
-          firingSymbolId,
-          ts,
-          this.notifier,
-          this.log,
-        );
-      }
+    } finally {
+      this.currentFiringRuleId = undefined;
     }
-    const fired: FiredRuleEvent = {
-      type: RuleEventType.Fired,
-      ts,
-      ruleId: rule.id,
-      symbolId: firingSymbolId,
-      context: this.captureContext(context.event, firingSymbolId),
-    };
-    await this.log.appendRuleEvent(rule.id, fired);
-    await this.log.appendSymbolEvent(firingSymbolId, fired);
-  }
-
-  /**
-   * Snapshot the inbound event and the firing symbol's OHLCV lookups —
-   * the "why did this fire here?" payload persisted alongside the
-   * {@link FiredRuleEvent} entry (#304).
-   */
-  private captureContext(inboundEvent: RuleEvent, firingSymbolId: string): RuleEventContext {
-    const lookupSnapshot: RuleEventLookupSnapshot = {
-      current: this.lookups.getCurrentValue(firingSymbolId),
-      open: this.lookups.getOpenValue(firingSymbolId),
-      high: this.lookups.getHighValue(firingSymbolId),
-      low: this.lookups.getLowValue(firingSymbolId),
-      close: this.lookups.getCloseValue(firingSymbolId),
-      volume: this.lookups.getVolumeValue(firingSymbolId),
-    };
-    return { inboundEvent, lookupSnapshot };
   }
 
   /**
@@ -304,38 +285,6 @@ export class RuleOrchestrator {
     if (event.symbolId !== null) return [event.symbolId];
     const watched = await this.watchlist.list();
     return watched.map((s) => s.id);
-  }
-
-  /**
-   * Dispatch on `trigger.kind` to the right gate; `OncePerMinute` and the
-   * bar-based variants need extra context which is threaded in here.
-   */
-  private checkTrigger(
-    trigger: Trigger,
-    events: RuleEventEntry[],
-    symbolId: string,
-    ts: number,
-    prevActive: boolean,
-    nowActive: boolean,
-    final: boolean,
-  ): boolean {
-    switch (trigger.kind) {
-      case TriggerKind.Once:
-        return mayFireOnce(events, symbolId);
-      case TriggerKind.OncePerBar:
-        return mayFireOncePerBar(events, symbolId, ts, trigger.period);
-      case TriggerKind.OncePerBarClose:
-        return mayFireOncePerBarClose(events, symbolId, ts, trigger.period, final);
-      case TriggerKind.OncePerMinute:
-        return mayFireOncePerMinute(
-          events,
-          symbolId,
-          ts,
-          trigger.intervalMs,
-          prevActive,
-          nowActive,
-        );
-    }
   }
 
   /**
@@ -372,117 +321,6 @@ export class RuleOrchestrator {
     };
     await this.log.appendSymbolEvent(symbolId, entry);
   }
-}
-
-/**
- * Whether the inbound event represents a final bar; only OHLCV events carry
- * `final` (non-OHLCV events read as forming).
- */
-function eventFinal(event: RuleEvent): boolean {
-  if ('final' in event) return event.final;
-  return false;
-}
-
-/**
- * Narrow `Action` to the state-mutation subset the {@link executeStateAction}
- * helper consumes.
- */
-function isStateAction(action: { kind: ActionKind }): action is StateMutationAction {
-  return (
-    action.kind === ActionKind.SetSymbolState ||
-    action.kind === ActionKind.SetGlobalState ||
-    action.kind === ActionKind.RemoveSymbolState ||
-    action.kind === ActionKind.RemoveGlobalState
-  );
-}
-
-/**
- * Evaluate one condition-tree leaf against the context — dispatches on the
- * leaf operator's category (comparison / crossing / state) — and emit one
- * `leaf_decision` TRACE log carrying the descriptor / resolved / prev /
- * source for each operand plus the boolean outcome (#381).
- *
- * Crossing and `changes-*` operators read prev *and* current per operand
- * (each operand carries its own time axis — close history is independent of
- * MA history). Comparison operators only need the current value of each
- * side; prev is still resolved here for the trace, an O(1) Map lookup.
- */
-function evaluateLeaf(
-  leaf:
-    | Extract<ConditionNode, { kind: never } extends never ? never : never>
-    | {
-        operator: ComparisonOperator | CrossingOperator | StateOperator;
-        left: Parameters<EvaluationContext['resolve']>[0];
-        right: Parameters<EvaluationContext['resolve']>[0];
-      },
-  context: EvaluationContext,
-  ruleId: string,
-  leafIndex: number,
-): boolean {
-  const op = leaf.operator;
-  const leftValue = context.resolve(leaf.left);
-  const leftPrev = context.resolvePrev(leaf.left);
-  const rightValue = context.resolve(leaf.right);
-  const rightPrev = context.resolvePrev(leaf.right);
-  let result: boolean;
-  if (isComparisonOp(op)) {
-    result = evaluateComparison(op, leftValue, rightValue);
-  } else if (isCrossingOp(op)) {
-    result = evaluateCrossing(op, leftPrev, leftValue, rightPrev, rightValue);
-  } else {
-    result = evaluateState(op, leftPrev, leftValue, rightValue);
-  }
-  conditionLog.trace(
-    {
-      ruleId,
-      leafIndex,
-      operator: op,
-      leftDescriptor: leaf.left,
-      leftValue,
-      leftPrev,
-      leftSource: operandSource(leaf.left),
-      rightDescriptor: leaf.right,
-      rightValue,
-      rightPrev,
-      rightSource: operandSource(leaf.right),
-      result,
-    },
-    'leaf_decision',
-  );
-  return result;
-}
-
-/**
- * Tag where a resolved operand came from for the `leaf_decision` trace —
- * `'literal'` for compile-time constants, `'lookup'` for every other operand
- * (OHLCV, indicator, symbol/global state — all resolved through
- * {@link EvaluationLookups}).
- */
-function operandSource(operand: ConditionOperand): 'literal' | 'lookup' {
-  return operand.kind === OperandKind.Literal ? 'literal' : 'lookup';
-}
-
-const COMPARISON_OPS = new Set<string>([
-  NumericOperator.Gt,
-  NumericOperator.Lt,
-  NumericOperator.Gte,
-  NumericOperator.Lte,
-  NumericOperator.Eq,
-  NumericOperator.Neq,
-]);
-
-const CROSSING_OPS = new Set<string>([
-  NumericOperator.Crossing,
-  NumericOperator.CrossingUp,
-  NumericOperator.CrossingDown,
-]);
-
-function isComparisonOp(op: string): op is ComparisonOperator {
-  return COMPARISON_OPS.has(op);
-}
-
-function isCrossingOp(op: string): op is CrossingOperator {
-  return CROSSING_OPS.has(op);
 }
 
 /**

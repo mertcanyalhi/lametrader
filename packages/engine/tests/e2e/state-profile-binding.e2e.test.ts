@@ -15,6 +15,7 @@ import {
   TriggerKind,
 } from '@lametrader/core';
 import {
+  ActionRunner,
   type EvaluationLookups,
   InMemoryEventLog,
   InMemoryFiringStateRepository,
@@ -24,6 +25,7 @@ import {
   InMemoryWatchlistRepository,
   QuoteRuleEventBridge,
   RuleOrchestrator,
+  TriggerEvaluator,
 } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 
@@ -166,11 +168,15 @@ function buildDriver(seedRules: Rule[], activeProfile: string) {
     watchlist,
     lookups,
     state,
-    notifier,
     log,
-    firingState,
-    { getActiveProfileId: () => activeProfile },
+    new TriggerEvaluator(log, firingState),
+    new ActionRunner(state, notifier, lookups),
   );
+  // `activeProfile` historically gated rule visibility via an orchestrator
+  // option that no longer exists; profile binding is now driven by event
+  // payload (#281) / the repository's enabled filter. The arg is kept on
+  // `buildDriver()`'s signature so individual tests still feel readable.
+  void activeProfile;
   let pending: Promise<void> = Promise.resolve();
   const bridge = new QuoteRuleEventBridge((event) => {
     pending = pending.then(() => orchestrator.process(event));

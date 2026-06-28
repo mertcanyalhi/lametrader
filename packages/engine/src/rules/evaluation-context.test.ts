@@ -16,15 +16,6 @@ function emptyLookups(): EvaluationLookups {
     getIndicatorValue: () => null,
     getSymbolState: () => null,
     getGlobalState: () => null,
-    getPrevCurrentValue: () => null,
-    getPrevOpenValue: () => null,
-    getPrevHighValue: () => null,
-    getPrevLowValue: () => null,
-    getPrevCloseValue: () => null,
-    getPrevVolumeValue: () => null,
-    getPrevIndicatorValue: () => null,
-    getPrevSymbolState: () => null,
-    getPrevGlobalState: () => null,
   };
 }
 
@@ -239,66 +230,254 @@ describe('buildEvaluationContext', () => {
       }),
     ).toEqual({ type: StateValueType.Enum, value: 'risk-on' });
   });
+});
 
-  it('resolvePrev returns the prev close value for a CloseValue operand', () => {
-    const lookups: EvaluationLookups = {
-      ...emptyLookups(),
-      getPrevCloseValue: (id) => (id === 'AAPL' ? 99 : null),
-    };
-    const context = buildEvaluationContext(
-      {
-        kind: RuleEventKind.CloseValueChanged,
-        ts: 1000,
-        symbolId: 'AAPL',
-        prev: 99,
-        current: 101,
-        final: false,
-      },
-      lookups,
-      'profile-1',
-    );
-    expect(
-      context.resolvePrev({
-        kind: OperandKind.CloseValue,
-        valueType: StateValueType.Number,
-      }),
-    ).toEqual({ type: StateValueType.Number, value: 99 });
-  });
-
-  it('resolvePrev returns the prev indicator value for an IndicatorRef operand', () => {
-    const lookups: EvaluationLookups = {
-      ...emptyLookups(),
-      getPrevIndicatorValue: (instanceId, stateKey) =>
-        instanceId === 'sma-14' && stateKey === 'value'
-          ? { type: StateValueType.Number, value: 110 }
-          : null,
-    };
-    const context = buildEvaluationContext(
-      { kind: RuleEventKind.Timer, ts: 1000, symbolId: null },
-      lookups,
-      'profile-1',
-    );
-    expect(
-      context.resolvePrev({
-        kind: OperandKind.IndicatorRef,
-        instanceId: 'sma-14',
-        stateKey: 'value',
-        valueType: StateValueType.Number,
-      }),
-    ).toEqual({ type: StateValueType.Number, value: 110 });
-  });
-
-  it('resolvePrev returns the literal value as-is (no prev concept for a constant)', () => {
+describe('buildEvaluationContext — resolvePrevCurrent', () => {
+  it('Literal operand resolves to prev = current = literal value', () => {
     const context = buildEvaluationContext(
       { kind: RuleEventKind.Timer, ts: 1000, symbolId: null },
       emptyLookups(),
       'profile-1',
     );
     expect(
-      context.resolvePrev({
+      context.resolvePrevCurrent({
         kind: OperandKind.Literal,
-        value: { type: StateValueType.Number, value: 100 },
+        value: { type: StateValueType.Number, value: 42 },
       }),
-    ).toEqual({ type: StateValueType.Number, value: 100 });
+    ).toEqual({
+      prev: { type: StateValueType.Number, value: 42 },
+      current: { type: StateValueType.Number, value: 42 },
+    });
+  });
+
+  it('OHLCV operand resolves to (event.prev, event.current) when the inbound event is the matching *ValueChanged for the same symbol', () => {
+    const context = buildEvaluationContext(
+      {
+        kind: RuleEventKind.CurrentValueChanged,
+        ts: 1000,
+        symbolId: 'AAPL',
+        prev: 99,
+        current: 100,
+        final: false,
+      },
+      emptyLookups(),
+      'profile-1',
+    );
+    expect(
+      context.resolvePrevCurrent({
+        kind: OperandKind.CurrentValue,
+        valueType: StateValueType.Number,
+      }),
+    ).toEqual({
+      prev: { type: StateValueType.Number, value: 99 },
+      current: { type: StateValueType.Number, value: 100 },
+    });
+  });
+
+  it('OHLCV operand resolves to (lookup, lookup) when the inbound event is a different kind (no transition)', () => {
+    const lookups: EvaluationLookups = {
+      ...emptyLookups(),
+      getOpenValue: (id) => (id === 'AAPL' ? 150 : null),
+    };
+    const context = buildEvaluationContext(
+      {
+        kind: RuleEventKind.CurrentValueChanged,
+        ts: 1000,
+        symbolId: 'AAPL',
+        prev: 99,
+        current: 100,
+        final: false,
+      },
+      lookups,
+      'profile-1',
+    );
+    expect(
+      context.resolvePrevCurrent({
+        kind: OperandKind.OpenValue,
+        valueType: StateValueType.Number,
+      }),
+    ).toEqual({
+      prev: { type: StateValueType.Number, value: 150 },
+      current: { type: StateValueType.Number, value: 150 },
+    });
+  });
+
+  it('IndicatorRef operand resolves to (event.prev, event.current) when the inbound event is IndicatorValueChanged matching (instanceId, stateKey)', () => {
+    const context = buildEvaluationContext(
+      {
+        kind: RuleEventKind.IndicatorValueChanged,
+        ts: 1000,
+        symbolId: 'AAPL',
+        instanceId: 'sma-14',
+        stateKey: 'value',
+        prev: { type: StateValueType.Number, value: 99 },
+        current: { type: StateValueType.Number, value: 100 },
+      },
+      emptyLookups(),
+      'profile-1',
+    );
+    expect(
+      context.resolvePrevCurrent({
+        kind: OperandKind.IndicatorRef,
+        instanceId: 'sma-14',
+        stateKey: 'value',
+        valueType: StateValueType.Number,
+      }),
+    ).toEqual({
+      prev: { type: StateValueType.Number, value: 99 },
+      current: { type: StateValueType.Number, value: 100 },
+    });
+  });
+
+  it('IndicatorRef operand resolves to (lookup, lookup) when the inbound event targets a different instance (no transition)', () => {
+    const lookups: EvaluationLookups = {
+      ...emptyLookups(),
+      getIndicatorValue: (instanceId, stateKey) =>
+        instanceId === 'sma-14' && stateKey === 'value'
+          ? { type: StateValueType.Number, value: 150 }
+          : null,
+    };
+    const context = buildEvaluationContext(
+      {
+        kind: RuleEventKind.IndicatorValueChanged,
+        ts: 1000,
+        symbolId: 'AAPL',
+        instanceId: 'ema-21',
+        stateKey: 'value',
+        prev: { type: StateValueType.Number, value: 99 },
+        current: { type: StateValueType.Number, value: 100 },
+      },
+      lookups,
+      'profile-1',
+    );
+    expect(
+      context.resolvePrevCurrent({
+        kind: OperandKind.IndicatorRef,
+        instanceId: 'sma-14',
+        stateKey: 'value',
+        valueType: StateValueType.Number,
+      }),
+    ).toEqual({
+      prev: { type: StateValueType.Number, value: 150 },
+      current: { type: StateValueType.Number, value: 150 },
+    });
+  });
+
+  it('SymbolStateRef operand resolves to (event.prev, event.current) when the inbound event is SymbolStateChanged matching (profileId, symbolId, key)', () => {
+    const context = buildEvaluationContext(
+      {
+        kind: RuleEventKind.SymbolStateChanged,
+        ts: 1000,
+        symbolId: 'AAPL',
+        profileId: 'profile-1',
+        key: 'signal',
+        prev: null,
+        current: { type: StateValueType.Enum, value: 'BUY' },
+      },
+      emptyLookups(),
+      'profile-1',
+    );
+    expect(
+      context.resolvePrevCurrent({
+        kind: OperandKind.SymbolStateRef,
+        key: 'signal',
+        valueType: StateValueType.Enum,
+      }),
+    ).toEqual({
+      prev: null,
+      current: { type: StateValueType.Enum, value: 'BUY' },
+    });
+  });
+
+  it('SymbolStateRef operand resolves to (lookup, lookup) when the inbound event is a different key (no transition)', () => {
+    const lookups: EvaluationLookups = {
+      ...emptyLookups(),
+      getSymbolState: (profileId, symbolId, key) =>
+        profileId === 'profile-1' && symbolId === 'AAPL' && key === 'signal'
+          ? { type: StateValueType.Enum, value: 'BUY' }
+          : null,
+    };
+    const context = buildEvaluationContext(
+      {
+        kind: RuleEventKind.SymbolStateChanged,
+        ts: 1000,
+        symbolId: 'AAPL',
+        profileId: 'profile-1',
+        key: 'other',
+        prev: null,
+        current: { type: StateValueType.Bool, value: true },
+      },
+      lookups,
+      'profile-1',
+    );
+    expect(
+      context.resolvePrevCurrent({
+        kind: OperandKind.SymbolStateRef,
+        key: 'signal',
+        valueType: StateValueType.Enum,
+      }),
+    ).toEqual({
+      prev: { type: StateValueType.Enum, value: 'BUY' },
+      current: { type: StateValueType.Enum, value: 'BUY' },
+    });
+  });
+
+  it('GlobalStateRef operand resolves to (event.prev, event.current) when the inbound event is GlobalStateChanged matching (profileId, key)', () => {
+    const context = buildEvaluationContext(
+      {
+        kind: RuleEventKind.GlobalStateChanged,
+        ts: 1000,
+        symbolId: null,
+        profileId: 'profile-1',
+        key: 'regime',
+        prev: { type: StateValueType.Enum, value: 'risk-off' },
+        current: { type: StateValueType.Enum, value: 'risk-on' },
+      },
+      emptyLookups(),
+      'profile-1',
+    );
+    expect(
+      context.resolvePrevCurrent({
+        kind: OperandKind.GlobalStateRef,
+        key: 'regime',
+        valueType: StateValueType.Enum,
+      }),
+    ).toEqual({
+      prev: { type: StateValueType.Enum, value: 'risk-off' },
+      current: { type: StateValueType.Enum, value: 'risk-on' },
+    });
+  });
+
+  it('GlobalStateRef operand resolves to (lookup, lookup) when the inbound event is a different profile (no transition)', () => {
+    const lookups: EvaluationLookups = {
+      ...emptyLookups(),
+      getGlobalState: (profileId, key) =>
+        profileId === 'profile-1' && key === 'regime'
+          ? { type: StateValueType.Enum, value: 'risk-on' }
+          : null,
+    };
+    const context = buildEvaluationContext(
+      {
+        kind: RuleEventKind.GlobalStateChanged,
+        ts: 1000,
+        symbolId: null,
+        profileId: 'profile-2',
+        key: 'regime',
+        prev: null,
+        current: { type: StateValueType.Enum, value: 'risk-off' },
+      },
+      lookups,
+      'profile-1',
+    );
+    expect(
+      context.resolvePrevCurrent({
+        kind: OperandKind.GlobalStateRef,
+        key: 'regime',
+        valueType: StateValueType.Enum,
+      }),
+    ).toEqual({
+      prev: { type: StateValueType.Enum, value: 'risk-on' },
+      current: { type: StateValueType.Enum, value: 'risk-on' },
+    });
   });
 });

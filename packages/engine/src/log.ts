@@ -1,7 +1,6 @@
 import pino, { type DestinationStream, type Logger } from 'pino';
 
 import { loadSettings } from './settings.js';
-import type { LogLevel } from './settings.types.js';
 
 /**
  * The active write sink for the engine's log records. `undefined` (the
@@ -34,6 +33,13 @@ const proxyStream: DestinationStream = {
 const root: Logger = pino({ level: loadSettings().logLevel, base: { app: 'engine' } }, proxyStream);
 
 /**
+ * Every child returned by {@link getLogger}, tracked so {@link _setLogLevel}
+ * can propagate a level change into the captured module-top loggers (Pino
+ * does not re-read parent level after the child is created).
+ */
+const childRegistry: Logger[] = [];
+
+/**
  * Return a Pino child logger with `{ scope }` baked into every entry — the
  * engine's equivalent of the web package's `getLogger`.
  *
@@ -44,7 +50,9 @@ const root: Logger = pino({ level: loadSettings().logLevel, base: { app: 'engine
  * Closes #306.
  */
 export function getLogger(scope: string): Logger {
-  return root.child({ scope });
+  const child = root.child({ scope });
+  childRegistry.push(child);
+  return child;
 }
 
 /**
@@ -57,12 +65,12 @@ export function _resetLogRoot(stream?: DestinationStream): void {
 }
 
 /**
- * Internal: switch the engine's root log level at runtime so tests can
- * assert against records that wouldn't fire at the default `info` level
- * (e.g. the per-leaf `leaf_decision` trace).
- *
- * Pass `undefined` to reset to the configured `loadSettings().logLevel`.
+ * Internal: raise or lower the active log level on the root logger and every
+ * already-created child. Tests use this to enable `'trace'` before driving
+ * the orchestrator, so trace records reach the captured sink (Pino's level
+ * filter is evaluated per-logger and is not re-inherited from the root).
  */
-export function _setLogLevel(level?: LogLevel): void {
-  root.level = level ?? loadSettings().logLevel;
+export function _setLogLevel(level: string): void {
+  root.level = level;
+  for (const child of childRegistry) child.level = level;
 }

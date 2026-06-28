@@ -16,6 +16,7 @@ import {
   TriggerKind,
 } from '@lametrader/core';
 import {
+  ActionRunner,
   type EvaluationLookups,
   InMemoryEventLog,
   InMemoryFiringStateRepository,
@@ -26,6 +27,7 @@ import {
   QuoteRuleEventBridge,
   RuleOrchestrator,
   type RuleOrchestratorOptions,
+  TriggerEvaluator,
 } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 
@@ -132,9 +134,9 @@ function buildDriver(
     watchlist,
     lookups,
     state,
-    notifier,
     log,
-    firingState,
+    new TriggerEvaluator(log, firingState),
+    new ActionRunner(state, notifier, lookups),
     options.orchestratorOptions,
   );
   let pending: Promise<void> = Promise.resolve();

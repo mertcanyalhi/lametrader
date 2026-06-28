@@ -34,33 +34,6 @@ export interface EvaluationLookups {
    * the first arg.
    */
   getGlobalState(profileId: string, key: string): StateValue | null;
-
-  /**
-   * Pre-change ("prev") counterparts to each `get*` lookup.
-   * Returns the value observed *before* the most recent write to the slot
-   * (or `null` until two writes have happened). The crossing and `changes-*`
-   * evaluators need per-operand history; the orchestrator's
-   * `EvaluationContext.resolvePrev` dispatches through these.
-   */
-
-  /** Previous current ("last") price for the symbol. */
-  getPrevCurrentValue(symbolId: string): number | null;
-  /** Previous open value for the symbol. */
-  getPrevOpenValue(symbolId: string): number | null;
-  /** Previous high value for the symbol. */
-  getPrevHighValue(symbolId: string): number | null;
-  /** Previous low value for the symbol. */
-  getPrevLowValue(symbolId: string): number | null;
-  /** Previous close value for the symbol. */
-  getPrevCloseValue(symbolId: string): number | null;
-  /** Previous volume value for the symbol. */
-  getPrevVolumeValue(symbolId: string): number | null;
-  /** Previous indicator-instance state by `(instanceId, stateKey)`. */
-  getPrevIndicatorValue(instanceId: string, stateKey: string): StateValue | null;
-  /** Previous symbol-scoped state by `(profileId, symbolId, key)`. */
-  getPrevSymbolState(profileId: string, symbolId: string, key: string): StateValue | null;
-  /** Previous global-scope state by `(profileId, key)`. */
-  getPrevGlobalState(profileId: string, key: string): StateValue | null;
 }
 
 /**
@@ -91,15 +64,67 @@ export interface EvaluationContext {
    */
   resolve(operand: ConditionOperand): StateValue | null;
   /**
-   * Resolve a {@link ConditionOperand} to its *previous* {@link StateValue}
-   * — the value observed before the latest write to the operand's slot.
-   * Returns `null` until the slot has been written twice. `Literal` operands
-   * have no time dimension, so `resolvePrev` returns the same value as
-   * {@link resolve}.
-   *
-   * Crossing and `changes-*` evaluators need both `prev` and `current` per
-   * operand (literal-, indicator-, OHLCV-, state-backed alike); the
-   * orchestrator's leaf dispatch reads them from here.
+   * Resolve a {@link ConditionOperand} like {@link resolve}, but also report
+   * which path produced the value — the inbound event's payload, the live
+   * lookups, or the operand's own literal. Used by the orchestrator's trace
+   * logging to distinguish event-derived from stale-lookup-derived values
+   * (the #312-class diagnostic).
    */
-  resolvePrev(operand: ConditionOperand): StateValue | null;
+  resolveTraced(operand: ConditionOperand): TracedResolution;
+  /**
+   * Resolve a {@link ConditionOperand} to its `(prev, current)` pair — the
+   * shape that history-aware operators (state, crossing) consume.
+   *
+   * When the inbound event is the `*Changed` event for this exact operand
+   * (matching axis / instance / state key), `prev` and `current` come from the
+   * event payload. Otherwise no transition has happened for this operand on
+   * this event, so `prev === current === lookup` (or both `null` if the
+   * lookup has no value yet).
+   *
+   * {@link OperandKind.Literal} operands are stationary — `prev === current ===
+   * literal value`.
+   */
+  resolvePrevCurrent(operand: ConditionOperand): OperandPrevCurrent;
+}
+
+/**
+ * Operand-specific `(prev, current)` pair returned by
+ * {@link EvaluationContext.resolvePrevCurrent}. Either side may be `null` —
+ * `null` is a distinct sentinel value the operators interpret as "unset".
+ */
+export interface OperandPrevCurrent {
+  /** Previous value for this operand, or `null` if no prior observation. */
+  prev: StateValue | null;
+  /** Current value for this operand, or `null` if the lookup has no answer. */
+  current: StateValue | null;
+}
+
+/**
+ * Where {@link EvaluationContext.resolveTraced} pulled its value from.
+ * Used by the orchestrator's `leaf_decision` trace so a stale-lookup value
+ * is one grep apart from an event-derived one (the #312-class diagnostic).
+ */
+export enum OperandValueSource {
+  /**
+   * The value came from the inbound `RuleEvent` payload — an OHLCV operand
+   * whose axis matches the event's `*ValueChanged` kind on the same symbol.
+   */
+  Event = 'event',
+  /**
+   * The value came from the injected {@link EvaluationLookups} — the live
+   * OHLCV cache, indicator state, or symbol / global state store.
+   */
+  Lookup = 'lookup',
+  /** The value is a tree-local {@link OperandKind.Literal}. */
+  Literal = 'literal',
+}
+
+/**
+ * The resolved value plus the path it took to get there.
+ */
+export interface TracedResolution {
+  /** Resolved value, or `null` when the lookup has no answer. */
+  value: StateValue | null;
+  /** Which resolution path produced {@link value}. */
+  source: OperandValueSource;
 }

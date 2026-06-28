@@ -12,9 +12,8 @@ import type { CandleListener } from './candles/polling-service.types.js';
 import { ConfigService } from './config/config-service.js';
 import { MongoConfigRepository } from './config/mongo-config-repository.js';
 import { defaultIndicators } from './indicators/default-indicators.js';
-import { IndicatorComputeService } from './indicators/indicator-compute-service.js';
 import type { IndicatorRegistry } from './indicators/indicator-registry.js';
-import { IndicatorStreamService } from './indicators/indicator-stream-service.js';
+import { IndicatorService } from './indicators/indicator-service.js';
 import { getLogger } from './log.js';
 import { TelegramDestinationsService } from './notification/telegram-destinations-service.js';
 import { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
@@ -71,10 +70,11 @@ export interface ConnectedServices {
   rules: RuleService;
   /** The shared indicator catalog registry (read-only at runtime). */
   indicators: IndicatorRegistry;
-  /** Ad-hoc indicator compute over a symbol's stored candles. */
-  indicatorCompute: IndicatorComputeService;
-  /** Live indicator-state streaming (subscription registry + onCandle reaction). */
-  indicatorStream: IndicatorStreamService;
+  /**
+   * The indicator use-case — ad-hoc compute over a symbol's stored candles AND
+   * live streaming via the subscription registry + `onCandle` reaction.
+   */
+  indicatorService: IndicatorService;
   /** Live quote streaming (subscription registry + onCandle reaction). */
   quoteStream: QuoteStreamService;
   /** The rule-engine state store (read-side; the engine's writes flow through the orchestrator). */
@@ -129,7 +129,6 @@ export async function connectServices(
   const configRepo = new MongoConfigRepository(db);
   const config = new ConfigService(configRepo);
   const indicators = defaultIndicators();
-  const indicatorCompute = new IndicatorComputeService(indicators, watchlist, candleRepo);
   const profileRepo = new MongoProfileRepository(db);
   const ruleRepo = new MongoRuleRepository(db, profileRepo);
   await ruleRepo.ensureIndexes();
@@ -154,7 +153,11 @@ export async function connectServices(
     eventLog,
     firingState,
   });
-  const indicatorStream = new IndicatorStreamService(indicators, watchlist, indicatorCompute, {
+  // Cold-start cache warm-up (#374): without this, rules reading
+  // `SymbolStateRef` / `GlobalStateRef` see `null` for any slot persisted by
+  // a previous engine process until that slot is mutated in this one.
+  await wiredRuleEngine.lookups.warm({ profiles: profileRepo, watchlist });
+  const indicatorService = new IndicatorService(indicators, watchlist, candleRepo, {
     onState: (event) => {
       (options.onIndicatorState ?? (() => {}))(event);
       wiredRuleEngine.indicatorBridge.handleState(event);
@@ -177,7 +180,7 @@ export async function connectServices(
   const polling = new PollingService(sources, candleRepo, watchlist, {
     onCandle: (event) => {
       candleListener(event);
-      indicatorStream
+      indicatorService
         .handleCandle(event)
         .catch((err) => log.error({ err, event }, 'indicator stream failed'));
       try {
@@ -195,8 +198,7 @@ export async function connectServices(
     profiles,
     rules,
     indicators,
-    indicatorCompute,
-    indicatorStream,
+    indicatorService,
     quoteStream,
     state: stateRepo,
     wiredRuleEngine,

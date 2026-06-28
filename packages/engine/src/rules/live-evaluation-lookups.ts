@@ -1,9 +1,11 @@
 import {
+  type ProfileRepository,
   type RuleEvent,
   RuleEventKind,
   type StateRepository,
   StateScope,
   type StateValue,
+  type WatchlistRepository,
 } from '@lametrader/core';
 
 import type { EvaluationLookups } from './evaluation-context.types.js';
@@ -13,19 +15,17 @@ import type { EvaluationLookups } from './evaluation-context.types.js';
  * {@link EvaluationLookups} port the {@link RuleOrchestrator}'s
  * {@link EvaluationContext} consumes.
  *
- * The caches are kept warm by two flows:
+ * The caches are kept warm by three flows:
  *
  *  - `record(event)` is called for every `RuleEvent` emitted by the three
  *    stream bridges before the orchestrator processes the event (#290);
  *  - a `StateRepository.onStateChanged` subscription set up at construction
- *    mirrors profile-scoped symbol-state and global-state writes.
+ *    mirrors profile-scoped symbol-state and global-state writes;
+ *  - `warm(...)` pre-loads every persisted `(profile, key)` and
+ *    `(profile, symbol, key)` slot from the store at startup, so a fresh
+ *    process sees state written by a prior run (#374).
  *
- * Each slot carries both the latest value (`get*`) and the value it
- * displaced — the previous observation (`getPrev*`). Crossing and
- * `changes-*` evaluators need per-operand prev/current pairs; reading both
- * from the same source keeps them consistent. All getters return `null` for
- * slots that have never been written (and prev getters return `null` until
- * the slot has been written twice).
+ * All getters return `null` for slots that have never been written.
  *
  * OHLCV slots are keyed by `symbolId` alone (period-agnostic — the most
  * recent observation wins regardless of which period it came from). Symbol
@@ -36,11 +36,7 @@ import type { EvaluationLookups } from './evaluation-context.types.js';
  * `CurrentValueChanged` has been observed — so rules conditioning on
  * `Current` still fire under the polling loop even before any
  * `QuoteStreamService` subscription is open. A subsequent live quote
- * always overrides the fallback. `getPrevCurrentValue` does **not** mirror
- * the fallback (#381): mixing a quote-axis current with a close-axis prev
- * silently broke `Current crossing X` decisions on the first live tick.
- * The prev getter returns `null` until two `CurrentValueChanged` events
- * have rotated through the quote-axis slot.
+ * always overrides the fallback.
  */
 export class LiveEvaluationLookups implements EvaluationLookups {
   /** Latest current price per symbol. */
@@ -62,84 +58,58 @@ export class LiveEvaluationLookups implements EvaluationLookups {
   /** Latest global-state value per `<profileId> <key>` slot. */
   private readonly globalState = new Map<string, StateValue>();
 
-  /** Previous-observation slots, mirroring the latest-value maps above. */
-  private readonly prevCurrentValues = new Map<string, number>();
-  private readonly prevOpenValues = new Map<string, number>();
-  private readonly prevHighValues = new Map<string, number>();
-  private readonly prevLowValues = new Map<string, number>();
-  private readonly prevCloseValues = new Map<string, number>();
-  private readonly prevVolumeValues = new Map<string, number>();
-  private readonly prevIndicatorValues = new Map<string, StateValue>();
-  private readonly prevSymbolState = new Map<string, StateValue>();
-  private readonly prevGlobalState = new Map<string, StateValue>();
-
   /**
    * @param state - the state repository whose `onStateChanged` stream
-   *   keeps the symbol/global state caches warm.
+   *   keeps the symbol/global state caches warm, and which `warm()`
+   *   reads from at startup.
    */
-  constructor(state: StateRepository) {
+  constructor(private readonly state: StateRepository) {
     state.onStateChanged((event) => {
       if (event.scope.kind === StateScope.Symbol) {
         const key = `${event.profileId} ${event.scope.symbolId} ${event.key}`;
-        rotateStateSlot(this.prevSymbolState, this.symbolState, key, event.current);
+        if (event.current === null) {
+          this.symbolState.delete(key);
+        } else {
+          this.symbolState.set(key, event.current);
+        }
         return;
       }
       const key = `${event.profileId} ${event.key}`;
-      rotateStateSlot(this.prevGlobalState, this.globalState, key, event.current);
+      if (event.current === null) {
+        this.globalState.delete(key);
+      } else {
+        this.globalState.set(key, event.current);
+      }
     });
   }
 
   /**
-   * Apply one `RuleEvent` to the matching slot cache. Each write rotates the
-   * previous latest value into the prev slot, then stores the new current
-   * value. Events whose `current` is `null` or whose `symbolId` is `null`
-   * are ignored (no slot to write).
+   * Apply one `RuleEvent` to the matching slot cache. Events whose `current`
+   * is `null` or whose `symbolId` is `null` are ignored (no slot to write).
    */
   record(event: RuleEvent): void {
     switch (event.kind) {
       case RuleEventKind.CurrentValueChanged:
-        if (event.current !== null) {
-          rotateNumberSlot(
-            this.prevCurrentValues,
-            this.currentValues,
-            event.symbolId,
-            event.current,
-          );
-        }
+        if (event.current !== null) this.currentValues.set(event.symbolId, event.current);
         return;
       case RuleEventKind.OpenValueChanged:
-        if (event.current !== null) {
-          rotateNumberSlot(this.prevOpenValues, this.openValues, event.symbolId, event.current);
-        }
+        if (event.current !== null) this.openValues.set(event.symbolId, event.current);
         return;
       case RuleEventKind.HighValueChanged:
-        if (event.current !== null) {
-          rotateNumberSlot(this.prevHighValues, this.highValues, event.symbolId, event.current);
-        }
+        if (event.current !== null) this.highValues.set(event.symbolId, event.current);
         return;
       case RuleEventKind.LowValueChanged:
-        if (event.current !== null) {
-          rotateNumberSlot(this.prevLowValues, this.lowValues, event.symbolId, event.current);
-        }
+        if (event.current !== null) this.lowValues.set(event.symbolId, event.current);
         return;
       case RuleEventKind.CloseValueChanged:
-        if (event.current !== null) {
-          rotateNumberSlot(this.prevCloseValues, this.closeValues, event.symbolId, event.current);
-        }
+        if (event.current !== null) this.closeValues.set(event.symbolId, event.current);
         return;
       case RuleEventKind.VolumeValueChanged:
-        if (event.current !== null) {
-          rotateNumberSlot(this.prevVolumeValues, this.volumeValues, event.symbolId, event.current);
-        }
+        if (event.current !== null) this.volumeValues.set(event.symbolId, event.current);
         return;
       case RuleEventKind.IndicatorValueChanged:
         if (event.current !== null) {
-          rotateStateSlot(
-            this.prevIndicatorValues,
-            this.indicatorValues,
-            `${event.instanceId} ${event.stateKey}`,
-            event.current,
-          );
+          this.indicatorValues.set(`${event.instanceId} ${event.stateKey}`, event.current);
         }
         return;
       default:
@@ -183,74 +153,30 @@ export class LiveEvaluationLookups implements EvaluationLookups {
     return this.globalState.get(`${profileId} ${key}`) ?? null;
   }
 
-  getPrevCurrentValue(symbolId: string): number | null {
-    return this.prevCurrentValues.get(symbolId) ?? null;
-  }
-
-  getPrevOpenValue(symbolId: string): number | null {
-    return this.prevOpenValues.get(symbolId) ?? null;
-  }
-
-  getPrevHighValue(symbolId: string): number | null {
-    return this.prevHighValues.get(symbolId) ?? null;
-  }
-
-  getPrevLowValue(symbolId: string): number | null {
-    return this.prevLowValues.get(symbolId) ?? null;
-  }
-
-  getPrevCloseValue(symbolId: string): number | null {
-    return this.prevCloseValues.get(symbolId) ?? null;
-  }
-
-  getPrevVolumeValue(symbolId: string): number | null {
-    return this.prevVolumeValues.get(symbolId) ?? null;
-  }
-
-  getPrevIndicatorValue(instanceId: string, stateKey: string): StateValue | null {
-    return this.prevIndicatorValues.get(`${instanceId} ${stateKey}`) ?? null;
-  }
-
-  getPrevSymbolState(profileId: string, symbolId: string, key: string): StateValue | null {
-    return this.prevSymbolState.get(`${profileId} ${symbolId} ${key}`) ?? null;
-  }
-
-  getPrevGlobalState(profileId: string, key: string): StateValue | null {
-    return this.prevGlobalState.get(`${profileId} ${key}`) ?? null;
-  }
-}
-
-/**
- * Rotate `current[key]` into `prev[key]` (if it was set) and write `next` to
- * `current[key]`. Number slots, used by every OHLCV axis.
- */
-function rotateNumberSlot(
-  prev: Map<string, number>,
-  current: Map<string, number>,
-  key: string,
-  next: number,
-): void {
-  const previousCurrent = current.get(key);
-  if (previousCurrent !== undefined) prev.set(key, previousCurrent);
-  current.set(key, next);
-}
-
-/**
- * Rotate `current[key]` into `prev[key]` (if it was set) and write `next` to
- * `current[key]`. `next === null` clears `current[key]` after rotating, so a
- * removed key still surfaces a prev value to `changes-from`-style operators.
- */
-function rotateStateSlot(
-  prev: Map<string, StateValue>,
-  current: Map<string, StateValue>,
-  key: string,
-  next: StateValue | null,
-): void {
-  const previousCurrent = current.get(key);
-  if (previousCurrent !== undefined) prev.set(key, previousCurrent);
-  if (next === null) {
-    current.delete(key);
-  } else {
-    current.set(key, next);
+  /**
+   * Pre-populate the symbol-state / global-state caches with every value the
+   * state repository already holds. Fixes #374: without this, a fresh engine
+   * process sees `null` for slots previously persisted by another run until
+   * something in-process mutates them.
+   *
+   * Iterates every profile × `(global key, value)` pair and every
+   * `(profileId × watched symbolId, key, value)` triple — `O(profiles × symbols)`
+   * extra reads at startup, done once.
+   */
+  async warm(opts: { profiles: ProfileRepository; watchlist: WatchlistRepository }): Promise<void> {
+    const profiles = await opts.profiles.list();
+    const symbols = await opts.watchlist.list();
+    for (const profile of profiles) {
+      const global = await this.state.listGlobalState(profile.id);
+      for (const [key, value] of Object.entries(global)) {
+        this.globalState.set(`${profile.id} ${key}`, value);
+      }
+      for (const symbol of symbols) {
+        const entries = await this.state.listSymbolState(profile.id, symbol.id);
+        for (const [key, value] of Object.entries(entries)) {
+          this.symbolState.set(`${profile.id} ${symbol.id} ${key}`, value);
+        }
+      }
+    }
   }
 }
