@@ -1,10 +1,11 @@
 /**
  * Public surface of the rules-v2 engine module.
  *
- * Currently exposes the history surface (series store) + the
- * `EvaluationContext` interface — the read-side every v2 operator consumes.
- * Subsequent slices (#391-#395) add operators, bridges, orchestrator,
- * persistence, and the REST surface on top of this layer.
+ * Exposes the history surface (series store), the `EvaluationContext`
+ * interface (the read-side every v2 operator consumes), and the v2
+ * persistence adapters (`RuleRepository` / `EventLog` — in-memory + Mongo).
+ * Subsequent slices add operators, bridges, orchestrator, and the REST
+ * surface on top of this layer.
  */
 
 export { type BarAxis, BarSeriesView } from './bar-series-view.js';
@@ -20,5 +21,10 @@ export {
   IndicatorSeriesStore,
   type IndicatorWarmupRequest,
 } from './indicator-series-store.js';
+export { InMemoryEventLog } from './persistence/in-memory-event-log.js';
+export { InMemoryRuleRepository } from './persistence/in-memory-rule-repository.js';
+export { MongoEventLog } from './persistence/mongo-event-log.js';
+export { MongoRuleRepository } from './persistence/mongo-rule-repository.js';
+export type { RuleV2Document } from './persistence/mongo-rule-repository.types.js';
 export type { SeriesPoint, SeriesView } from './series.types.js';
 export { TICK_RING_CAPACITY, TickRing } from './tick-ring.js';

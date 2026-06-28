@@ -46,6 +46,11 @@ export {
   type TimerEvent,
   type VolumeChangedEvent,
 } from './event.types.js';
+export type {
+  EventLog,
+  EventLogAppendListener,
+  EventLogAppendTarget,
+} from './event-log.types.js';
 export { type ConditionOperand, OperandKind } from './operand.types.js';
 export {
   ChannelOperator,
@@ -56,6 +61,20 @@ export {
   StateOperator,
 } from './operator.types.js';
 export type { Rule } from './rule.types.js';
+export {
+  type CycleOverflowRuleEvent,
+  type ErrorRuleEvent,
+  type ExpiredRuleEvent,
+  type FiredRuleEvent,
+  type NotificationSentRuleEvent,
+  type RuleEventContext,
+  type RuleEventEntry,
+  type RuleEventLookupSnapshot,
+  RuleEventType,
+  type StateRemovedRuleEvent,
+  type StateSetRuleEvent,
+} from './rule-event-entry.types.js';
+export type { RuleRepository } from './rule-repository.types.js';
 export {
   type AllSymbolsRuleScope,
   type RuleScope,
