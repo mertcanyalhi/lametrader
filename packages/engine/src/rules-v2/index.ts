@@ -10,6 +10,12 @@
 
 export { type BarAxis, BarSeriesView } from './bar-series-view.js';
 export {
+  BarLifecycleBridge,
+  IndicatorCascadeBridge,
+  StateCascadeBridge,
+  TickBridge,
+} from './bridges/index.js';
+export {
   type DispatchOptions,
   evaluateCondition,
   type FireRecord,
