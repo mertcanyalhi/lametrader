@@ -73,6 +73,6 @@ Any row with `merged: false` is the human's to triage.
 
 ## Invocation
 
-- `/implement-issues #257` — if #257 has sub-issues, walk every child in order; otherwise work #257 alone.
-- `/implement-issues 257` — same; the `#` is optional.
-- `/implement-issues #312 #313 #314` — work the listed issues in the order given.
+- `/implement-issue #257` — if #257 has sub-issues, walk every child in order; otherwise work #257 alone.
+- `/implement-issue 257` — same; the `#` is optional.
+- `/implement-issue #312 #313 #314` — work the listed issues in the order given.
