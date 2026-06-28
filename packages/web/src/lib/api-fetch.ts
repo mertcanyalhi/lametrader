@@ -60,24 +60,45 @@ function statusMessage(status: number): string {
 }
 
 /**
+ * One per-field validation entry on a v2 `{ error, fields[] }` response — see
+ * `specs/rules-v2-rest-api.spec.md` AC #2 and the global error handler in
+ * `packages/api/src/app.ts`. The `path` is a JSON-pointer-ish address into the
+ * request body (e.g. `'condition.children[0].right'`); `message` is the
+ * human-readable cause.
+ */
+export interface ApiFieldError {
+  /** Dotted / bracketed path into the rejected request body. */
+  path: string;
+  /** Human-readable explanation for that field. */
+  message: string;
+}
+
+/**
  * Raised when an API call does not succeed.
  *
  * `status` is the HTTP status of a non-2xx response, or {@link NO_RESPONSE_STATUS}
  * (`0`) when the request never reached the server (a network failure). The
  * `message` is either the server's `{ error }` string (propagated verbatim) or
  * a clean, status-derived message — never a raw response body.
+ * `fields` carries the per-field validation breakdown when the server returned
+ * the v2 `{ error, fields[] }` envelope; empty for any response that did not
+ * carry one (existing v1 surfaces, status-derived fallbacks, network drops).
  */
 export class ApiError extends Error {
   /** HTTP status code, or `0` for a network failure (no response). */
   readonly status: number;
+  /** Per-field validation entries from the v2 `{ error, fields[] }` envelope; empty otherwise. */
+  readonly fields: ApiFieldError[];
   /**
-   * @param status - HTTP status from the response, or `0` for a network failure.
+   * @param status  - HTTP status from the response, or `0` for a network failure.
    * @param message - server-supplied `{ error }` message, or a clean fallback.
+   * @param fields  - per-field validation entries (defaults to `[]` when absent).
    */
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, fields: ApiFieldError[] = []) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.fields = fields;
   }
 }
 
@@ -117,30 +138,37 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     return undefined as T;
   }
   if (!response.ok) {
-    const message = await readErrorMessage(response);
+    const { message, fields } = await readErrorPayload(response);
     log.error(
-      { method: init?.method ?? 'GET', path, status: response.status, message },
+      { method: init?.method ?? 'GET', path, status: response.status, message, fields },
       'api request failed',
     );
-    throw new ApiError(response.status, message);
+    throw new ApiError(response.status, message, fields);
   }
   return (await response.json()) as T;
 }
 
 /**
- * Derive a user-safe message from a non-2xx response.
+ * Derive a user-safe message + per-field breakdown from a non-2xx response.
  *
- * Prefers the API's `{ error: string }` shape (propagated verbatim). For any
- * other body — non-JSON, missing `error`, or empty — returns a clean
- * {@link statusMessage} rather than the raw body (an nginx 502 page is HTML,
- * not something to show a user). The non-JSON branch logs the parse failure
+ * Prefers the API's `{ error: string, fields?: [{ path, message }] }` shape:
+ * surfaces `error` verbatim and forwards `fields[]` when present. For any other
+ * body — non-JSON, missing `error`, or empty — returns a clean
+ * {@link statusMessage} (an nginx 502 page is HTML, not something to show a
+ * user) and an empty `fields` array. The non-JSON branch logs the parse failure
  * (with the body, best-effort) instead of swallowing it.
  */
-async function readErrorMessage(response: Response): Promise<string> {
+async function readErrorPayload(
+  response: Response,
+): Promise<{ message: string; fields: ApiFieldError[] }> {
   try {
-    const data = (await response.clone().json()) as { error?: unknown };
+    const data = (await response.clone().json()) as { error?: unknown; fields?: unknown };
+    const fields = parseFields(data.fields);
     if (typeof data.error === 'string' && data.error.trim() !== '') {
-      return data.error;
+      return { message: data.error, fields };
+    }
+    if (fields.length > 0) {
+      return { message: statusMessage(response.status), fields };
     }
   } catch (cause) {
     const body = await response
@@ -149,5 +177,22 @@ async function readErrorMessage(response: Response): Promise<string> {
       .catch(() => '<unreadable>');
     log.warn({ status: response.status, err: cause, body }, 'error response was not JSON');
   }
-  return statusMessage(response.status);
+  return { message: statusMessage(response.status), fields: [] };
+}
+
+/**
+ * Coerce an unknown `fields` value into an `ApiFieldError[]`. Drops entries
+ * that are not `{ path: string, message: string }` so a malformed envelope is
+ * surfaced as an empty list instead of a runtime cast.
+ */
+function parseFields(raw: unknown): ApiFieldError[] {
+  if (!Array.isArray(raw)) return [];
+  const fields: ApiFieldError[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const candidate = entry as { path?: unknown; message?: unknown };
+    if (typeof candidate.path !== 'string' || typeof candidate.message !== 'string') continue;
+    fields.push({ path: candidate.path, message: candidate.message });
+  }
+  return fields;
 }

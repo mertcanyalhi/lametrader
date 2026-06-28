@@ -62,10 +62,46 @@ describe('apiFetch', () => {
       }),
     );
     const error = await captureApiError(apiFetch('/config', { method: 'PUT', body: '{}' }));
-    expect({ name: error.name, status: error.status, message: error.message }).toEqual({
+    expect({
+      name: error.name,
+      status: error.status,
+      message: error.message,
+      fields: error.fields,
+    }).toEqual({
       name: 'ApiError',
       status: 400,
       message: 'periods must not be empty',
+      fields: [],
+    });
+  });
+
+  it('surfaces the per-field array from the v2 { error, fields[] } envelope on a 400', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: 'validation failed',
+          fields: [
+            { path: 'scope.symbolId', message: 'must reference a watched symbol' },
+            { path: 'condition.children[0].right', message: 'must match the left operand type' },
+          ],
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const error = await captureApiError(apiFetch('/v2/rules', { method: 'POST', body: '{}' }));
+    expect({
+      name: error.name,
+      status: error.status,
+      message: error.message,
+      fields: error.fields,
+    }).toEqual({
+      name: 'ApiError',
+      status: 400,
+      message: 'validation failed',
+      fields: [
+        { path: 'scope.symbolId', message: 'must reference a watched symbol' },
+        { path: 'condition.children[0].right', message: 'must match the left operand type' },
+      ],
     });
   });
 
