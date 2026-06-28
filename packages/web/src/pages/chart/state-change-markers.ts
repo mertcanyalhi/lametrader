@@ -1,4 +1,5 @@
 import {
+  type Candle,
   type RuleEventEntry,
   RuleEventType,
   StateScope,
@@ -40,6 +41,12 @@ function formatStateValue(value: StateValue): string {
  * `{key}: {value}` (with bool values rendered as ✅ / ❌), prefixed with
  * `🌐 ` when the state lives in the global scope.
  *
+ * Markers whose timestamp falls outside the loaded candle window
+ * `[candles[0].time, candles.at(-1).time]` are filtered out — `lightweight-charts`
+ * v5's `createSeriesMarkers` silently drops markers without a matching bar,
+ * and feeding it out-of-range entries surfaces as markers vanishing on zoom
+ * (issue #365).
+ *
  * Lazy: only `state_set` events render today; expand kinds when the chart's
  * marker vocabulary grows. The richer two-line + bold layout from issue
  * #301-2a needs a DOM-overlay refactor — out of scope for this fix.
@@ -47,8 +54,14 @@ function formatStateValue(value: StateValue): string {
  * @param symbolId - the symbol whose events drive the markers.
  * @param color    - resolved theme-aware marker color (canvas can't read
  *                   CSS vars, so the caller passes the hex from `chartColors`).
+ * @param candles  - the currently loaded candle window, ascending by `time`,
+ *                   used to drop events whose bar isn't in the series.
  */
-export function useStateChangeMarkers(symbolId: string, color: string): SeriesMarker<Time>[] {
+export function useStateChangeMarkers(
+  symbolId: string,
+  color: string,
+  candles: readonly Candle[],
+): SeriesMarker<Time>[] {
   const query = useQuery<RuleEventEntry[], Error>({
     queryKey: [...symbolRuleEventsKey(symbolId), 'markers'] as const,
     queryFn: () =>
@@ -57,10 +70,13 @@ export function useStateChangeMarkers(symbolId: string, color: string): SeriesMa
       ),
   });
   const events = query.data;
+  const firstTime = candles[0]?.time;
+  const lastTime = candles[candles.length - 1]?.time;
   return useMemo<SeriesMarker<Time>[]>(() => {
-    if (!events) return [];
+    if (!events || firstTime === undefined || lastTime === undefined) return [];
     return events
       .filter((event) => event.type === RuleEventType.StateSet)
+      .filter((event) => event.ts >= firstTime && event.ts <= lastTime)
       .map((event) => {
         const prefix = event.scope === StateScope.Global ? '🌐 ' : '';
         return {
@@ -71,5 +87,5 @@ export function useStateChangeMarkers(symbolId: string, color: string): SeriesMa
           text: `${prefix}${event.key}: ${formatStateValue(event.value)}`,
         };
       });
-  }, [events, color]);
+  }, [events, color, firstTime, lastTime]);
 }
