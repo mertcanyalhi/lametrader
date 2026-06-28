@@ -153,6 +153,10 @@ export async function connectServices(
     eventLog,
     firingState,
   });
+  // Cold-start cache warm-up (#374): without this, rules reading
+  // `SymbolStateRef` / `GlobalStateRef` see `null` for any slot persisted by
+  // a previous engine process until that slot is mutated in this one.
+  await wiredRuleEngine.lookups.warm({ profiles: profileRepo, watchlist });
   const indicatorService = new IndicatorService(indicators, watchlist, candleRepo, {
     onState: (event) => {
       (options.onIndicatorState ?? (() => {}))(event);
