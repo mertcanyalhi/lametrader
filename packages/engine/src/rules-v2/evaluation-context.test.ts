@@ -32,6 +32,9 @@ const fakeLookups = (partial: Partial<EvaluationLookups> = {}): EvaluationLookup
   latestIndicator: () => null,
   latestSymbolState: () => null,
   latestGlobalState: () => null,
+  prevIndicator: () => null,
+  prevSymbolState: () => null,
+  prevGlobalState: () => null,
   priceSeries: () => null,
   barSeries: () => null,
   indicatorSeries: () => null,
@@ -95,6 +98,92 @@ describe('EvaluationContext.resolveLatest', () => {
     ).toEqual({ type: StateValueType.String, value: 'live' });
     expect(
       ctx.resolveLatest({
+        kind: RulesV2.OperandKind.Literal,
+        value: { type: StateValueType.Number, value: 120 },
+      }),
+    ).toEqual({ type: StateValueType.Number, value: 120 });
+  });
+});
+
+describe('EvaluationContext.resolvePrev', () => {
+  it('returns the prior StateValue for every operand kind — series-eligible operands walk back on the series, state-refs read from prev* lookups, non-numeric indicator-refs fall back to prevIndicator, Literal returns its constant', () => {
+    const priceSamples: SeriesSample[] = [
+      { ts: 100, value: 90 },
+      { ts: 200, value: 100 },
+    ];
+    const closeSamples: SeriesSample[] = [
+      { ts: 100, value: 92 },
+      { ts: 200, value: 102 },
+    ];
+    const indicatorNumericSamples: SeriesSample[] = [
+      { ts: 100, value: 91 },
+      { ts: 200, value: 101 },
+    ];
+    const lookups = fakeLookups({
+      priceSeries: () => seriesOf(priceSamples),
+      barSeries: (_id, _period, axis) => (axis === BarAxis.Close ? seriesOf(closeSamples) : null),
+      indicatorSeries: (_id, _period, instanceId) =>
+        instanceId === 'sma-1' ? seriesOf(indicatorNumericSamples) : null,
+      prevIndicator: (instanceId, key) =>
+        instanceId === 'trend-1' && key === 'state'
+          ? ({ type: StateValueType.String, value: 'down' } satisfies StateValue)
+          : null,
+      prevSymbolState: (profile, symbol, key) =>
+        profile === 'p1' && symbol === 'BTC' && key === 'mode'
+          ? ({ type: StateValueType.String, value: 'idle' } satisfies StateValue)
+          : null,
+      prevGlobalState: (profile, key) =>
+        profile === 'p1' && key === 'session'
+          ? ({ type: StateValueType.String, value: 'pre-open' } satisfies StateValue)
+          : null,
+    });
+    const ctx = buildEvaluationContext({
+      event: tickEvent,
+      profileId: 'p1',
+      symbolId: 'BTC',
+      lookups,
+      defaultPeriod: Period.OneMinute,
+    });
+    expect(ctx.resolvePrev({ kind: RulesV2.OperandKind.Price })).toEqual({
+      type: StateValueType.Number,
+      value: 90,
+    });
+    expect(ctx.resolvePrev({ kind: RulesV2.OperandKind.Close })).toEqual({
+      type: StateValueType.Number,
+      value: 92,
+    });
+    expect(
+      ctx.resolvePrev({
+        kind: RulesV2.OperandKind.IndicatorRef,
+        instanceId: 'sma-1',
+        stateKey: 'value',
+        valueType: StateValueType.Number,
+      }),
+    ).toEqual({ type: StateValueType.Number, value: 91 });
+    expect(
+      ctx.resolvePrev({
+        kind: RulesV2.OperandKind.IndicatorRef,
+        instanceId: 'trend-1',
+        stateKey: 'state',
+        valueType: StateValueType.String,
+      }),
+    ).toEqual({ type: StateValueType.String, value: 'down' });
+    expect(
+      ctx.resolvePrev({
+        kind: RulesV2.OperandKind.SymbolStateRef,
+        key: 'mode',
+        valueType: StateValueType.String,
+      }),
+    ).toEqual({ type: StateValueType.String, value: 'idle' });
+    expect(
+      ctx.resolvePrev({
+        kind: RulesV2.OperandKind.GlobalStateRef,
+        key: 'session',
+        valueType: StateValueType.String,
+      }),
+    ).toEqual({ type: StateValueType.String, value: 'pre-open' });
+    expect(
+      ctx.resolvePrev({
         kind: RulesV2.OperandKind.Literal,
         value: { type: StateValueType.Number, value: 120 },
       }),

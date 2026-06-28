@@ -29,6 +29,18 @@ export interface EvaluationLookups {
   latestSymbolState(profileId: string, symbolId: string, key: string): StateValue | null;
   /** Latest global-state value for `(profileId, key)`, or `null`. */
   latestGlobalState(profileId: string, key: string): StateValue | null;
+  /**
+   * Previous (one-step-back) indicator state-key value for non-numeric state
+   * keys, or `null` when no prior snapshot has been observed.
+   *
+   * Numeric indicator state-keys derive prev from the series; this getter
+   * covers Bool / Enum state-keys that aren't series-eligible.
+   */
+  prevIndicator(instanceId: string, stateKey: string): StateValue | null;
+  /** Previous (one-step-back) symbol-state value for `(profileId, symbolId, key)`. */
+  prevSymbolState(profileId: string, symbolId: string, key: string): StateValue | null;
+  /** Previous (one-step-back) global-state value for `(profileId, key)`. */
+  prevGlobalState(profileId: string, key: string): StateValue | null;
   /** Numeric tick series for `symbolId`, or `null` when the ring is empty. */
   priceSeries(symbolId: string): SeriesView | null;
   /** Numeric bar-axis series for `(symbolId, period, axis)`, or `null`. */
@@ -68,6 +80,19 @@ export interface EvaluationContext {
    * or `null` when the lookup has no value for the slot.
    */
   resolveLatest(operand: RulesV2.ConditionOperand): StateValue | null;
+  /**
+   * Resolve a {@link RulesV2.ConditionOperand} to its previous {@link StateValue} —
+   * the value observed before the inbound event updated the operand's source.
+   *
+   * Series-eligible operands (Price / OHLCV / numeric indicator-refs) derive
+   * prev from the second-to-latest sample on their series; state-refs and
+   * non-numeric indicator-refs dispatch to the {@link EvaluationLookups}'s
+   * `prev*` getters; `Literal` returns its constant value (literals don't
+   * change).
+   *
+   * Returns `null` when no prior snapshot exists.
+   */
+  resolvePrev(operand: RulesV2.ConditionOperand): StateValue | null;
   /**
    * Resolve a {@link RulesV2.ConditionOperand} to its numeric series.
    *

@@ -51,6 +51,9 @@ export function buildEvaluationContext(args: {
     resolveLatest(operand) {
       return resolveLatest(operand, profileId, symbolId, lookups, defaultPeriod);
     },
+    resolvePrev(operand) {
+      return resolvePrev(operand, profileId, symbolId, lookups, defaultPeriod);
+    },
     resolveSeries(operand) {
       return resolveSeries(operand, symbolId, lookups, defaultPeriod);
     },
@@ -85,6 +88,61 @@ function resolveLatest(
     case RulesV2.OperandKind.Literal:
       return operand.value;
   }
+}
+
+/**
+ * Dispatch prev-value resolution by operand kind.
+ *
+ * Series-eligible operands (Price / OHLCV / numeric indicator-refs) walk back
+ * one sample on their series; state-refs and non-numeric indicator-refs read
+ * from the `prev*` lookups; `Literal` returns its constant value.
+ */
+function resolvePrev(
+  operand: RulesV2.ConditionOperand,
+  profileId: string,
+  symbolId: string,
+  lookups: EvaluationLookups,
+  defaultPeriod: Period,
+): StateValue | null {
+  switch (operand.kind) {
+    case RulesV2.OperandKind.Price:
+      return numberToStateValue(prevFromSeries(lookups.priceSeries(symbolId)));
+    case RulesV2.OperandKind.Open:
+    case RulesV2.OperandKind.High:
+    case RulesV2.OperandKind.Low:
+    case RulesV2.OperandKind.Close:
+    case RulesV2.OperandKind.Volume:
+      return numberToStateValue(
+        prevFromSeries(
+          lookups.barSeries(symbolId, defaultPeriod, OHLCV_OPERAND_TO_AXIS[operand.kind]),
+        ),
+      );
+    case RulesV2.OperandKind.IndicatorRef: {
+      const series = lookups.indicatorSeries(
+        symbolId,
+        defaultPeriod,
+        operand.instanceId,
+        operand.stateKey,
+      );
+      if (series !== null) return numberToStateValue(prevFromSeries(series));
+      return lookups.prevIndicator(operand.instanceId, operand.stateKey);
+    }
+    case RulesV2.OperandKind.SymbolStateRef:
+      return lookups.prevSymbolState(profileId, symbolId, operand.key);
+    case RulesV2.OperandKind.GlobalStateRef:
+      return lookups.prevGlobalState(profileId, operand.key);
+    case RulesV2.OperandKind.Literal:
+      return operand.value;
+  }
+}
+
+/** Return the second-to-latest sample's value on a series, or `null`. */
+function prevFromSeries(series: SeriesView | null): number | null {
+  if (series === null) return null;
+  const samples = series.samples();
+  if (samples.length < 2) return null;
+  const sample = samples[samples.length - 2];
+  return sample === undefined ? null : sample.value;
 }
 
 /** Dispatch series resolution by operand kind. */
