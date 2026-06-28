@@ -12,7 +12,7 @@ import {
   BackfillService,
   ConfigService,
   defaultIndicators,
-  IndicatorComputeService,
+  IndicatorService,
   InMemoryMarketDataSource,
   MongoCandleRepository,
   MongoConfigRepository,
@@ -106,7 +106,7 @@ describe('backfill UI contract (e2e)', () => {
     const symbols = new SymbolService([stub], watchlist, config, candleRepo);
     const backfill = new BackfillService([stub], candleRepo, watchlist);
     const registry = defaultIndicators();
-    const compute = new IndicatorComputeService(registry, watchlist, candleRepo);
+    const compute = new IndicatorService(registry, watchlist, candleRepo);
 
     app = createApp({ config, symbols, backfill, indicators: { registry, compute } });
     baseUrl = await app.listen({ port: 0, host: '127.0.0.1' });
@@ -171,7 +171,7 @@ describe('backfill UI contract (e2e)', () => {
       backfill: new BackfillService([failing], candleRepo, watchlist),
       indicators: {
         registry,
-        compute: new IndicatorComputeService(registry, watchlist, candleRepo),
+        compute: new IndicatorService(registry, watchlist, candleRepo),
       },
     });
     const failUrl = await failApp.listen({ port: 0, host: '127.0.0.1' });

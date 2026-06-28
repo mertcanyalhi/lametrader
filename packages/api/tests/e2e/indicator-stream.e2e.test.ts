@@ -13,8 +13,7 @@ import {
   type CandleEvent,
   ConfigService,
   defaultIndicators,
-  IndicatorComputeService,
-  IndicatorStreamService,
+  IndicatorService,
   MongoCandleRepository,
   MongoConfigRepository,
   MongoWatchlistRepository,
@@ -155,14 +154,13 @@ describe('indicator live streaming (e2e)', () => {
     const candleStream = new StreamHub<CandleEvent>();
     const indicatorStream = new StreamHub<IndicatorStateEvent>();
     const registry = defaultIndicators();
-    const compute = new IndicatorComputeService(registry, watchlist, candleRepo);
-    const indicatorStreamService = new IndicatorStreamService(registry, watchlist, compute, {
+    const indicatorService = new IndicatorService(registry, watchlist, candleRepo, {
       onState: (event) => indicatorStream.publish(event.subscriptionId, event),
     });
     polling = new PollingService([stub], candleRepo, watchlist, {
       onCandle: (event) => {
         candleStream.publish(event.id, event);
-        void indicatorStreamService.handleCandle(event);
+        void indicatorService.handleCandle(event);
       },
       intervals: allIntervals(1000),
       now: () => NOW,
@@ -178,8 +176,8 @@ describe('indicator live streaming (e2e)', () => {
 
     app = createApp({
       config,
-      indicators: { registry, compute },
-      liveStream: { candleStream, indicatorStream, indicatorStreamService },
+      indicators: { registry, compute: indicatorService },
+      liveStream: { candleStream, indicatorStream, indicatorService },
     });
     baseUrl = await app.listen({ port: 0, host: '127.0.0.1' });
   });

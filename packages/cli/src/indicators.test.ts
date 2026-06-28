@@ -8,7 +8,7 @@ import {
 } from '@lametrader/core';
 import {
   defaultIndicators,
-  IndicatorComputeService,
+  IndicatorService,
   InMemoryCandleRepository,
   InMemoryWatchlistRepository,
 } from '@lametrader/engine';
@@ -70,7 +70,7 @@ describe('runIndicators — compute', () => {
       Period.OneHour,
       [10, 20, 30, 40, 50].map((c, i) => candle(i, c)),
     );
-    const compute = new IndicatorComputeService(registry, watchlist, candles);
+    const compute = new IndicatorService(registry, watchlist, candles);
     return { registry, compute };
   }
 

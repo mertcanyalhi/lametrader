@@ -10,8 +10,7 @@ import {
   type CandleEvent,
   ConfigService,
   defaultIndicators,
-  IndicatorComputeService,
-  IndicatorStreamService,
+  IndicatorService,
   InMemoryCandleRepository,
   InMemoryConfigRepository,
   InMemoryWatchlistRepository,
@@ -59,7 +58,7 @@ interface TestApp {
   /** The base URL the WebSocket connects to (`http://127.0.0.1:<port>`). */
   baseUrl: string;
   /** The engine-side stream service; tests call `handleCandle` to drive emission. */
-  service: IndicatorStreamService;
+  service: IndicatorService;
   /** Every event the engine has emitted via `onState`, in order. */
   captured: IndicatorStateEvent[];
   /** The engine-side quote stream service; tests call `handleCandle` to drive emission. */
@@ -126,11 +125,10 @@ async function buildApp(
     candle(2 * HOUR, 30),
   ]);
   const registry = defaultIndicators();
-  const compute = new IndicatorComputeService(registry, watchlist, candles);
   const candleStream = new StreamHub<CandleEvent>();
   const indicatorStream = new StreamHub<IndicatorStateEvent>();
   const captured: IndicatorStateEvent[] = [];
-  const service = new IndicatorStreamService(registry, watchlist, compute, {
+  const service = new IndicatorService(registry, watchlist, candles, {
     onState: (event) => {
       captured.push(event);
       indicatorStream.publish(event.subscriptionId, event);
@@ -152,11 +150,11 @@ async function buildApp(
   });
   const app = createApp(
     buildAppDeps({
-      indicators: { registry, compute },
+      indicators: { registry, compute: service },
       liveStream: {
         candleStream,
         indicatorStream,
-        indicatorStreamService: gates.indicatorGate
+        indicatorService: gates.indicatorGate
           ? gateSubscribe(service, gates.indicatorGate)
           : service,
         quoteStream,

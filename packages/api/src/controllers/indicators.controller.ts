@@ -4,7 +4,7 @@ import {
   type IndicatorDefinition,
   IndicatorNotFoundError,
 } from '@lametrader/core';
-import type { IndicatorComputeService, IndicatorRegistry } from '@lametrader/engine';
+import type { IndicatorRegistry, IndicatorService } from '@lametrader/engine';
 import type { FastifyInstance } from 'fastify';
 import { ErrorSchema } from '../schemas/common.schema.js';
 import {
@@ -26,10 +26,7 @@ import type { DeepMutable } from '../util/deep-mutable.js';
  * @param registry - the indicator registry to read from.
  * @param compute - the compute use-case driving the symbol-scoped route.
  */
-export function indicatorsController(
-  registry: IndicatorRegistry,
-  compute: IndicatorComputeService,
-) {
+export function indicatorsController(registry: IndicatorRegistry, compute: IndicatorService) {
   return async (instance: FastifyInstance): Promise<void> => {
     const app = instance.withTypeProvider<TypeBoxTypeProvider>();
 
@@ -87,7 +84,7 @@ export function indicatorsController(
       async (request) => {
         const { id, key } = request.params;
         const { period, from, to, ...inputs } = request.query as {
-          period: Parameters<IndicatorComputeService['compute']>[3];
+          period: Parameters<IndicatorService['compute']>[3];
           from?: number;
           to?: number;
         } & Record<string, unknown>;

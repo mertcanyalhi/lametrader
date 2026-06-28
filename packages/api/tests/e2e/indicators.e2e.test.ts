@@ -10,7 +10,7 @@ import {
 import {
   ConfigService,
   defaultIndicators,
-  IndicatorComputeService,
+  IndicatorService,
   MongoCandleRepository,
   MongoConfigRepository,
   MongoWatchlistRepository,
@@ -76,7 +76,7 @@ describe('indicators API (e2e)', () => {
     const watchlist = new MongoWatchlistRepository(db);
     const candles = new MongoCandleRepository(db);
     await candles.ensureIndexes();
-    const compute = new IndicatorComputeService(registry, watchlist, candles);
+    const compute = new IndicatorService(registry, watchlist, candles);
 
     // Seed: watch BTC and EURUSD; store a V-shape close series so VWMA fires a
     // buy signal at bar 3 (a monotonic series never crosses the line back up).

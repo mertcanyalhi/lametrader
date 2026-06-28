@@ -42,7 +42,7 @@ if (
       state,
       backfill,
       indicators,
-      indicatorCompute,
+      indicatorService,
       telegramDestinations,
       close: disconnect,
     } = await connectServices(mongoUri, {
@@ -70,7 +70,7 @@ if (
         console.log(await runCandles(args, backfill));
         break;
       case 'indicators':
-        console.log(await runIndicators(args, indicators, indicatorCompute));
+        console.log(await runIndicators(args, indicators, indicatorService));
         break;
       case 'rules':
         console.log(await runRules(args, rules, symbols));

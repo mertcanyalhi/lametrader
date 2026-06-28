@@ -4,9 +4,8 @@ import {
   type CandleEvent,
   ConfigService,
   defaultIndicators,
-  IndicatorComputeService,
   type IndicatorRegistry,
-  IndicatorStreamService,
+  IndicatorService,
   InMemoryCandleRepository,
   InMemoryConfigRepository,
   InMemoryMarketDataSource,
@@ -29,7 +28,7 @@ import { StreamHub } from '../stream-hub.js';
 export interface BuildAppDepsOverrides extends Partial<Omit<AppDependencies, 'indicators'>> {
   indicators?: {
     registry?: IndicatorRegistry;
-    compute?: IndicatorComputeService;
+    compute?: IndicatorService;
   };
 }
 
@@ -46,8 +45,10 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
   const candles = new InMemoryCandleRepository();
   const sources = [new InMemoryMarketDataSource([])];
   const registry = overrides.indicators?.registry ?? defaultIndicators();
-  const compute =
-    overrides.indicators?.compute ?? new IndicatorComputeService(registry, watchlist, candles);
+  const indicatorService =
+    overrides.liveStream?.indicatorService ??
+    overrides.indicators?.compute ??
+    new IndicatorService(registry, watchlist, candles);
   const profiles =
     overrides.profiles ?? new ProfileService(new InMemoryProfileRepository(), watchlist, registry);
   const rules = overrides.rules ?? new RuleService(new InMemoryRuleRepository());
@@ -58,11 +59,6 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
   const candleStream = overrides.liveStream?.candleStream ?? new StreamHub<CandleEvent>();
   const indicatorStream =
     overrides.liveStream?.indicatorStream ?? new StreamHub<IndicatorStateEvent>();
-  const indicatorStreamService =
-    overrides.liveStream?.indicatorStreamService ??
-    new IndicatorStreamService(registry, watchlist, compute, {
-      onState: (event) => indicatorStream.publish(event.subscriptionId, event),
-    });
   const quoteStream = overrides.liveStream?.quoteStream ?? new StreamHub<SymbolQuoteEvent>();
   const quoteStreamService =
     overrides.liveStream?.quoteStreamService ??
@@ -80,11 +76,11 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
       ? { telegramDestinations: overrides.telegramDestinations }
       : {}),
     backfill: overrides.backfill ?? new BackfillService(sources, candles, watchlist),
-    indicators: { registry, compute },
+    indicators: { registry, compute: indicatorService },
     liveStream: {
       candleStream,
       indicatorStream,
-      indicatorStreamService,
+      indicatorService,
       quoteStream,
       quoteStreamService,
     },
