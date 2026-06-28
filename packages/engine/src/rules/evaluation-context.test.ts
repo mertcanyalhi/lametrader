@@ -16,6 +16,15 @@ function emptyLookups(): EvaluationLookups {
     getIndicatorValue: () => null,
     getSymbolState: () => null,
     getGlobalState: () => null,
+    getPrevCurrentValue: () => null,
+    getPrevOpenValue: () => null,
+    getPrevHighValue: () => null,
+    getPrevLowValue: () => null,
+    getPrevCloseValue: () => null,
+    getPrevVolumeValue: () => null,
+    getPrevIndicatorValue: () => null,
+    getPrevSymbolState: () => null,
+    getPrevGlobalState: () => null,
   };
 }
 
@@ -229,5 +238,67 @@ describe('buildEvaluationContext', () => {
         valueType: StateValueType.Enum,
       }),
     ).toEqual({ type: StateValueType.Enum, value: 'risk-on' });
+  });
+
+  it('resolvePrev returns the prev close value for a CloseValue operand', () => {
+    const lookups: EvaluationLookups = {
+      ...emptyLookups(),
+      getPrevCloseValue: (id) => (id === 'AAPL' ? 99 : null),
+    };
+    const context = buildEvaluationContext(
+      {
+        kind: RuleEventKind.CloseValueChanged,
+        ts: 1000,
+        symbolId: 'AAPL',
+        prev: 99,
+        current: 101,
+        final: false,
+      },
+      lookups,
+      'profile-1',
+    );
+    expect(
+      context.resolvePrev({
+        kind: OperandKind.CloseValue,
+        valueType: StateValueType.Number,
+      }),
+    ).toEqual({ type: StateValueType.Number, value: 99 });
+  });
+
+  it('resolvePrev returns the prev indicator value for an IndicatorRef operand', () => {
+    const lookups: EvaluationLookups = {
+      ...emptyLookups(),
+      getPrevIndicatorValue: (instanceId, stateKey) =>
+        instanceId === 'sma-14' && stateKey === 'value'
+          ? { type: StateValueType.Number, value: 110 }
+          : null,
+    };
+    const context = buildEvaluationContext(
+      { kind: RuleEventKind.Timer, ts: 1000, symbolId: null },
+      lookups,
+      'profile-1',
+    );
+    expect(
+      context.resolvePrev({
+        kind: OperandKind.IndicatorRef,
+        instanceId: 'sma-14',
+        stateKey: 'value',
+        valueType: StateValueType.Number,
+      }),
+    ).toEqual({ type: StateValueType.Number, value: 110 });
+  });
+
+  it('resolvePrev returns the literal value as-is (no prev concept for a constant)', () => {
+    const context = buildEvaluationContext(
+      { kind: RuleEventKind.Timer, ts: 1000, symbolId: null },
+      emptyLookups(),
+      'profile-1',
+    );
+    expect(
+      context.resolvePrev({
+        kind: OperandKind.Literal,
+        value: { type: StateValueType.Number, value: 100 },
+      }),
+    ).toEqual({ type: StateValueType.Number, value: 100 });
   });
 });

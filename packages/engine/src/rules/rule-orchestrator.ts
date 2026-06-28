@@ -387,9 +387,10 @@ function isStateAction(action: { kind: ActionKind }): action is StateMutationAct
  * Evaluate one condition-tree leaf against the context — dispatches on the
  * leaf operator's category (comparison / crossing / state).
  *
- * Lazy: crossing/state operators use `context.prev` and `context.current` as
- * the left operand's prev/current — accurate for change-triggered rules
- * where the leaf's `left` corresponds to the event's "value axis".
+ * Crossing and `changes-*` operators read prev *and* current per operand
+ * (each operand carries its own time axis — close history is independent of
+ * MA history). Comparison operators only need the current value of each
+ * side.
  */
 function evaluateLeaf(
   leaf:
@@ -402,11 +403,24 @@ function evaluateLeaf(
   context: EvaluationContext,
 ): boolean {
   const op = leaf.operator;
-  const left = context.resolve(leaf.left);
-  const right = context.resolve(leaf.right);
-  if (isComparisonOp(op)) return evaluateComparison(op, left, right);
-  if (isCrossingOp(op)) return evaluateCrossing(op, context.prev, left, right, right);
-  return evaluateState(op, context.prev, left, right);
+  if (isComparisonOp(op)) {
+    return evaluateComparison(op, context.resolve(leaf.left), context.resolve(leaf.right));
+  }
+  if (isCrossingOp(op)) {
+    return evaluateCrossing(
+      op,
+      context.resolvePrev(leaf.left),
+      context.resolve(leaf.left),
+      context.resolvePrev(leaf.right),
+      context.resolve(leaf.right),
+    );
+  }
+  return evaluateState(
+    op,
+    context.resolvePrev(leaf.left),
+    context.resolve(leaf.left),
+    context.resolve(leaf.right),
+  );
 }
 
 const COMPARISON_OPS = new Set<string>([

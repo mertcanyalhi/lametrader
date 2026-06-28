@@ -36,42 +36,80 @@ export function buildEvaluationContext(
     prev,
     current,
     resolve(operand) {
-      return resolveOperand(operand, profileId, targetSymbolId, lookups);
+      return resolveOperand(operand, profileId, targetSymbolId, lookups, false);
+    },
+    resolvePrev(operand) {
+      return resolveOperand(operand, profileId, targetSymbolId, lookups, true);
     },
   };
 }
 
 /**
  * Resolve one {@link ConditionOperand} against `targetSymbolId` + lookups,
- * scoped to `profileId` for state operands.
+ * scoped to `profileId` for state operands. When `prev` is `true` the
+ * pre-change ("prev") cache slot is read instead of the latest one;
+ * `Literal` operands ignore the flag — they have no time dimension.
  */
 function resolveOperand(
   operand: ConditionOperand,
   profileId: string,
   symbolId: string | null,
   lookups: EvaluationLookups,
+  prev: boolean,
 ): StateValue | null {
   switch (operand.kind) {
     case OperandKind.Literal:
       return operand.value;
     case OperandKind.CurrentValue:
-      return wrapNumber(lookupOnSymbol(symbolId, (id) => lookups.getCurrentValue(id)));
+      return wrapNumber(
+        lookupOnSymbol(symbolId, (id) =>
+          prev ? lookups.getPrevCurrentValue(id) : lookups.getCurrentValue(id),
+        ),
+      );
     case OperandKind.OpenValue:
-      return wrapNumber(lookupOnSymbol(symbolId, (id) => lookups.getOpenValue(id)));
+      return wrapNumber(
+        lookupOnSymbol(symbolId, (id) =>
+          prev ? lookups.getPrevOpenValue(id) : lookups.getOpenValue(id),
+        ),
+      );
     case OperandKind.HighValue:
-      return wrapNumber(lookupOnSymbol(symbolId, (id) => lookups.getHighValue(id)));
+      return wrapNumber(
+        lookupOnSymbol(symbolId, (id) =>
+          prev ? lookups.getPrevHighValue(id) : lookups.getHighValue(id),
+        ),
+      );
     case OperandKind.LowValue:
-      return wrapNumber(lookupOnSymbol(symbolId, (id) => lookups.getLowValue(id)));
+      return wrapNumber(
+        lookupOnSymbol(symbolId, (id) =>
+          prev ? lookups.getPrevLowValue(id) : lookups.getLowValue(id),
+        ),
+      );
     case OperandKind.CloseValue:
-      return wrapNumber(lookupOnSymbol(symbolId, (id) => lookups.getCloseValue(id)));
+      return wrapNumber(
+        lookupOnSymbol(symbolId, (id) =>
+          prev ? lookups.getPrevCloseValue(id) : lookups.getCloseValue(id),
+        ),
+      );
     case OperandKind.VolumeValue:
-      return wrapNumber(lookupOnSymbol(symbolId, (id) => lookups.getVolumeValue(id)));
+      return wrapNumber(
+        lookupOnSymbol(symbolId, (id) =>
+          prev ? lookups.getPrevVolumeValue(id) : lookups.getVolumeValue(id),
+        ),
+      );
     case OperandKind.IndicatorRef:
-      return lookups.getIndicatorValue(operand.instanceId, operand.stateKey);
+      return prev
+        ? lookups.getPrevIndicatorValue(operand.instanceId, operand.stateKey)
+        : lookups.getIndicatorValue(operand.instanceId, operand.stateKey);
     case OperandKind.SymbolStateRef:
-      return lookupOnSymbol(symbolId, (id) => lookups.getSymbolState(profileId, id, operand.key));
+      return lookupOnSymbol(symbolId, (id) =>
+        prev
+          ? lookups.getPrevSymbolState(profileId, id, operand.key)
+          : lookups.getSymbolState(profileId, id, operand.key),
+      );
     case OperandKind.GlobalStateRef:
-      return lookups.getGlobalState(profileId, operand.key);
+      return prev
+        ? lookups.getPrevGlobalState(profileId, operand.key)
+        : lookups.getGlobalState(profileId, operand.key);
   }
 }
 

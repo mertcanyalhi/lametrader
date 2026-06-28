@@ -42,6 +42,15 @@ function emptyLookups(): EvaluationLookups {
     getIndicatorValue: () => null,
     getSymbolState: () => null,
     getGlobalState: () => null,
+    getPrevCurrentValue: () => null,
+    getPrevOpenValue: () => null,
+    getPrevHighValue: () => null,
+    getPrevLowValue: () => null,
+    getPrevCloseValue: () => null,
+    getPrevVolumeValue: () => null,
+    getPrevIndicatorValue: () => null,
+    getPrevSymbolState: () => null,
+    getPrevGlobalState: () => null,
   };
 }
 

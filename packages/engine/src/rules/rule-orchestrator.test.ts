@@ -24,6 +24,7 @@ import { InMemoryEventLog } from './in-memory-event-log.js';
 import { InMemoryFiringStateRepository } from './in-memory-firing-state-repository.js';
 import { InMemoryNotifier } from './in-memory-notifier.js';
 import { InMemoryRuleRepository } from './in-memory-rule-repository.js';
+import { LiveEvaluationLookups } from './live-evaluation-lookups.js';
 import { RuleOrchestrator } from './rule-orchestrator.js';
 
 afterEach(() => {
@@ -42,6 +43,15 @@ function emptyLookups(): EvaluationLookups {
     getIndicatorValue: () => null,
     getSymbolState: () => null,
     getGlobalState: () => null,
+    getPrevCurrentValue: () => null,
+    getPrevOpenValue: () => null,
+    getPrevHighValue: () => null,
+    getPrevLowValue: () => null,
+    getPrevCloseValue: () => null,
+    getPrevVolumeValue: () => null,
+    getPrevIndicatorValue: () => null,
+    getPrevSymbolState: () => null,
+    getPrevGlobalState: () => null,
   };
 }
 
@@ -696,5 +706,85 @@ describe('RuleOrchestrator', () => {
     await orchestrator.process(priceEvent());
 
     expect(notifier.sent.map((sent) => sent.body)).toEqual(['on']);
+  });
+
+  it('fires a CrossingUp rule when CloseValue crosses above a moving IndicatorRef right operand', async () => {
+    // Regression: the dispatch used to pass `right` for both `rightPrev` and
+    // `rightCurrent`, so any time-varying right operand was evaluated as a
+    // constant — and the crossing was missed when the right side actually
+    // moved out of the way. Here the MA drops from 110 to 99 while the
+    // close ticks 100 → 102; the close therefore crossed above the MA
+    // (was 100 vs 110, now 102 vs 99) and the rule must fire.
+    const state = new InMemoryStateRepository();
+    const lookups = new LiveEvaluationLookups(state);
+    // Seed the MA's history: prev=110, current=99.
+    lookups.record({
+      kind: RuleEventKind.IndicatorValueChanged,
+      ts: 999,
+      symbolId: 'AAPL',
+      instanceId: 'sma-14',
+      stateKey: 'value',
+      prev: null,
+      current: { type: StateValueType.Number, value: 110 },
+    });
+    lookups.record({
+      kind: RuleEventKind.IndicatorValueChanged,
+      ts: 1000,
+      symbolId: 'AAPL',
+      instanceId: 'sma-14',
+      stateKey: 'value',
+      prev: { type: StateValueType.Number, value: 110 },
+      current: { type: StateValueType.Number, value: 99 },
+    });
+    // Seed close's history: prev=null then 100 — so the inbound event's
+    // prev=100 lines up with the cached prior observation.
+    lookups.record({
+      kind: RuleEventKind.CloseValueChanged,
+      ts: 1000,
+      symbolId: 'AAPL',
+      prev: null,
+      current: 100,
+      final: false,
+    });
+    const r = rule({
+      id: 'cross-ma',
+      order: 1,
+      trigger: { kind: TriggerKind.Once },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        left: { kind: OperandKind.CloseValue, valueType: StateValueType.Number },
+        operator: NumericOperator.CrossingUp,
+        right: {
+          kind: OperandKind.IndicatorRef,
+          instanceId: 'sma-14',
+          stateKey: 'value',
+          valueType: StateValueType.Number,
+        },
+      },
+    });
+    const notifier = new InMemoryNotifier(['main']);
+    const orchestrator = new RuleOrchestrator(
+      new InMemoryRuleRepository([r]),
+      new InMemoryWatchlistRepository(),
+      lookups,
+      state,
+      notifier,
+      new InMemoryEventLog(),
+      new InMemoryFiringStateRepository(),
+    );
+    // The triggering event: close moves 100 → 102, crossing above MA's 110 → 99.
+    const event = {
+      kind: RuleEventKind.CloseValueChanged as const,
+      ts: 1001,
+      symbolId: 'AAPL',
+      prev: 100,
+      current: 102,
+      final: false,
+    };
+    lookups.record(event);
+
+    await orchestrator.process(event);
+
+    expect(notifier.sent.map((sent) => sent.body)).toEqual(['cross-ma']);
   });
 });
