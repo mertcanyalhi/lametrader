@@ -62,6 +62,11 @@ export function EventsDialog({
     queryFn: ({ pageParam }) => fetchPage(mode, pageParam as number | undefined),
     getNextPageParam: (lastPage) =>
       lastPage.length < PAGE_SIZE ? undefined : lastPage[lastPage.length - 1]?.ts,
+    // Lazy: 5s polling so new events show up while the dialog is open —
+    // ceiling is up-to-5s staleness and a refetch of every loaded page each
+    // tick. Upgrade path: rule-event WebSocket pipeline that invalidates
+    // this key on push (issue #375 recommended fix).
+    refetchInterval: 5_000,
   });
   const events = query.data?.pages.flat() ?? [];
   const [contextEvent, setContextEvent] = useState<FiredRuleEvent | null>(null);

@@ -94,6 +94,11 @@ export function useStateChangeMarkers(
       apiFetch<RuleEventEntry[]>(
         `/symbols/${encodeURIComponent(symbolId)}/rule-events?limit=${MARKER_PAGE_SIZE}`,
       ),
+    // Lazy: 5s polling so new markers appear while the chart is focused —
+    // ceiling is up-to-5s staleness and a poll per chart mount whether or
+    // not anything fired. Upgrade path: rule-event WebSocket pipeline that
+    // mutates this cache via setQueryData (issue #375 recommended fix).
+    refetchInterval: 5_000,
   });
   const events = query.data;
   return useMemo<SeriesMarker<Time>[]>(() => {
