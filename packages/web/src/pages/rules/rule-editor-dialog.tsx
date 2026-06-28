@@ -4,11 +4,8 @@ import {
   type ConditionNode,
   ConditionNodeKind,
   type Expiration,
-  type Period,
   type Rule,
   RuleScopeKind,
-  type Trigger,
-  TriggerKind,
 } from '@lametrader/core';
 import {
   AlertDialog,
@@ -40,7 +37,6 @@ import {
 } from '../../lib/hooks/rules.js';
 import { useWatchlist } from '../../lib/hooks/symbols.js';
 import {
-  DEFAULT_TRIGGER_INTERVAL_MS,
   ExpirationKind,
   FIELD_LABELS,
   isConditionTreeNonEmpty,
@@ -50,7 +46,12 @@ import {
 import { ActionsEditor } from './actions-editor.js';
 import { ConditionTreeEditor } from './condition-tree-editor.js';
 import { ExpirationPicker } from './expiration-picker.js';
-import { TriggerPicker } from './trigger-picker.js';
+import {
+  TriggerFormSection,
+  triggerFormDefaults,
+  triggerFromForm,
+  triggerToForm,
+} from './trigger-form-section.js';
 
 /**
  * The reusable rule-editor `Dialog`. Owns the modal frame, the create/edit
@@ -88,7 +89,7 @@ export function RuleEditorDialog({
   const indicators = profile?.indicators ?? [];
   const [inlineError, setInlineError] = useState<string | null>(null);
   const submitting = create.isPending || replace.isPending;
-  const { register, handleSubmit, setValue, watch, formState } = useForm<RuleFormValues>({
+  const { register, handleSubmit, setValue, watch, formState, control } = useForm<RuleFormValues>({
     resolver: yupResolver(ruleFormSchema),
     defaultValues: defaultValuesFor(initial),
     mode: 'onSubmit',
@@ -97,15 +98,11 @@ export function RuleEditorDialog({
   const symbolId = watch('symbolId');
   const enabled = watch('enabled');
   const condition = watch('condition');
-  const triggerKind = watch('triggerKind');
-  const triggerPeriod = watch('triggerPeriod');
-  const triggerIntervalMs = watch('triggerIntervalMs');
   const expirationKind = watch('expirationKind');
   const expirationAt = watch('expirationAt');
   const actions = watch('actions');
   const nameError = formState.errors.name?.message;
   const symbolError = formState.errors.symbolId?.message;
-  const triggerPeriodError = formState.errors.triggerPeriod?.message;
   const expirationError = formState.errors.expirationAt?.message;
   const actionsError = formState.errors.actions?.message;
 
@@ -219,24 +216,7 @@ export function RuleEditorDialog({
             <Separator size="4" my="1" />
 
             <FieldRow label={FIELD_LABELS.trigger} align="start">
-              <TriggerPicker
-                kind={triggerKind}
-                onKindChange={(next) =>
-                  setValue('triggerKind', next, { shouldDirty: true, shouldValidate: false })
-                }
-                period={triggerPeriod}
-                onPeriodChange={(next) =>
-                  setValue('triggerPeriod', next, { shouldDirty: true, shouldValidate: false })
-                }
-                intervalMs={triggerIntervalMs}
-                onIntervalMsChange={(next) =>
-                  setValue('triggerIntervalMs', next, {
-                    shouldDirty: true,
-                    shouldValidate: false,
-                  })
-                }
-                periodError={triggerPeriodError}
-              />
+              <TriggerFormSection control={control} />
             </FieldRow>
             <FieldRow label={FIELD_LABELS.expiration} align="start">
               <ExpirationPicker
@@ -476,9 +456,7 @@ function defaultValuesFor(initial: Rule | undefined): RuleFormValues {
       symbolId: '',
       enabled: true,
       condition: defaultCondition(),
-      triggerKind: TriggerKind.Once,
-      triggerPeriod: '',
-      triggerIntervalMs: DEFAULT_TRIGGER_INTERVAL_MS,
+      ...triggerFormDefaults,
       expirationKind: ExpirationKind.Never,
       expirationAt: '',
       actions: [],
@@ -491,9 +469,7 @@ function defaultValuesFor(initial: Rule | undefined): RuleFormValues {
     symbolId: initial.scope.kind === RuleScopeKind.Symbol ? initial.scope.symbolId : '',
     enabled: initial.enabled,
     condition: initial.condition,
-    triggerKind: initial.trigger.kind,
-    triggerPeriod: triggerPeriodOf(initial.trigger),
-    triggerIntervalMs: triggerIntervalOf(initial.trigger),
+    ...triggerToForm(initial.trigger),
     expirationKind: initial.expiration === null ? ExpirationKind.Never : ExpirationKind.OnDate,
     expirationAt: initial.expiration === null ? '' : epochMsToDateTimeLocal(initial.expiration.at),
     actions: initial.actions as Action[],
@@ -505,20 +481,6 @@ function epochMsToDateTimeLocal(at: number): string {
   const d = new Date(at);
   const pad = (n: number): string => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-/** Extract a `period` from a bar-based trigger, or `''` when N/A. */
-function triggerPeriodOf(trigger: Trigger): Period | '' {
-  if (trigger.kind === TriggerKind.OncePerBar || trigger.kind === TriggerKind.OncePerBarClose) {
-    return trigger.period;
-  }
-  return '';
-}
-
-/** Extract an `intervalMs` from an `OncePerMinute` trigger, or the default. */
-function triggerIntervalOf(trigger: Trigger): number {
-  if (trigger.kind === TriggerKind.OncePerMinute) return trigger.intervalMs;
-  return DEFAULT_TRIGGER_INTERVAL_MS;
 }
 
 /** A neutral starter — an empty `And` group ready for the first child. */
@@ -543,7 +505,7 @@ function mergeInput(initial: Rule, values: RuleFormValues): RuleInput {
         : { kind: RuleScopeKind.AllSymbols },
     enabled: values.enabled,
     condition: values.condition,
-    trigger: triggerFrom(values),
+    trigger: triggerFromForm(values),
     expiration: expirationFrom(values),
     actions: values.actions,
   };
@@ -553,23 +515,4 @@ function mergeInput(initial: Rule, values: RuleFormValues): RuleInput {
 function expirationFrom(values: RuleFormValues): Expiration {
   if (values.expirationKind === ExpirationKind.Never) return null;
   return { at: Date.parse(values.expirationAt) };
-}
-
-/** Build a {@link Trigger} from the flat trigger form fields. */
-function triggerFrom(values: RuleFormValues): Trigger {
-  switch (values.triggerKind) {
-    case TriggerKind.Once:
-      return { kind: TriggerKind.Once };
-    case TriggerKind.OncePerBar:
-      return {
-        kind: TriggerKind.OncePerBar,
-        // Schema-required; `as Period` is safe — the empty string is rejected
-        // by Yup so we never reach here without a real period.
-        period: values.triggerPeriod as Period,
-      };
-    case TriggerKind.OncePerBarClose:
-      return { kind: TriggerKind.OncePerBarClose, period: values.triggerPeriod as Period };
-    case TriggerKind.OncePerMinute:
-      return { kind: TriggerKind.OncePerMinute, intervalMs: values.triggerIntervalMs };
-  }
 }

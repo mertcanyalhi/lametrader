@@ -3,22 +3,20 @@ import {
   ActionKind,
   type ConditionNode,
   ConditionNodeKind,
-  Period,
+  type Period,
   RULE_DESCRIPTION_MAX,
   RULE_NAME_MAX,
   RuleScopeKind,
   SYMBOL_ID_MAX,
-  TriggerKind,
+  type TriggerKind,
 } from '@lametrader/core';
 import * as yup from 'yup';
+import { triggerFormFields } from '../pages/rules/trigger-form-section.js';
 
 /** Whether `action` writes (or removes) state — what the actions editor edits. */
 export function isStateAction(action: Action): boolean {
   return action.kind !== ActionKind.NotifyTelegram;
 }
-
-/** Default re-fire interval for `OncePerMinute` triggers — matches the engine. */
-export const DEFAULT_TRIGGER_INTERVAL_MS = 60_000;
 
 /**
  * Walk a condition tree and return `true` when every `And` / `Or` group has
@@ -153,34 +151,7 @@ export const ruleFormSchema: yup.ObjectSchema<RuleFormValues> = yup.object({
   // #170–#171; we accept any persisted node and check non-empty groups in the
   // submit handler via `isConditionTreeNonEmpty`.
   condition: yup.mixed<ConditionNode>().required().label(FIELD_LABELS.condition),
-  triggerKind: yup
-    .mixed<TriggerKind>()
-    .oneOf(Object.values(TriggerKind))
-    .required()
-    .label(FIELD_LABELS.trigger),
-  triggerPeriod: yup
-    .mixed<Period | ''>()
-    .oneOf(['' as const, ...Object.values(Period)])
-    .defined()
-    .test(
-      'period-required-for-bar-triggers',
-      ({ label }) => `${label} is required.`,
-      function check(value) {
-        const triggerKind = this.parent.triggerKind as TriggerKind;
-        const barBased =
-          triggerKind === TriggerKind.OncePerBar || triggerKind === TriggerKind.OncePerBarClose;
-        if (!barBased) return true;
-        return Object.values(Period).includes(value as Period);
-      },
-    )
-    .label(FIELD_LABELS.triggerPeriod),
-  triggerIntervalMs: yup
-    .number()
-    .typeError(({ label }) => `${label} must be a number.`)
-    .integer()
-    .min(1, ({ label }) => `${label} must be at least 1 ms.`)
-    .required()
-    .label(FIELD_LABELS.triggerIntervalMs),
+  ...triggerFormFields,
   expirationKind: yup
     .mixed<ExpirationKind>()
     .oneOf(Object.values(ExpirationKind))
