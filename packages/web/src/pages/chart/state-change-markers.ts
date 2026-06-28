@@ -36,16 +36,42 @@ function formatStateValue(value: StateValue): string {
 }
 
 /**
+ * Index of the candle whose `[time, nextBar.time)` window contains `ts`, or
+ * `-1` when `ts` precedes the first bar.  Events past the last bar snap to
+ * the last bar — that bar is the one they happened *during* (the next bar
+ * hasn't formed yet).
+ */
+function findContainingBarIndex(candles: readonly Candle[], ts: number): number {
+  let lo = 0;
+  let hi = candles.length - 1;
+  const first = candles[0];
+  if (!first || first.time > ts) return -1;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    const bar = candles[mid];
+    if (bar && bar.time <= ts) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+}
+
+/**
  * Fetch a window of the symbol's rule events and map every `state_set`
- * entry to a candle-series marker keyed by its timestamp. The label is
- * `{key}: {value}` (with bool values rendered as ✅ / ❌), prefixed with
- * `🌐 ` when the state lives in the global scope.
+ * entry to a candle-series marker keyed by the **containing bar's** time.
+ * The label is `{key}: {value}` (with bool values rendered as ✅ / ❌),
+ * prefixed with `🌐 ` when the state lives in the global scope.
  *
- * Markers whose timestamp falls outside the loaded candle window
- * `[candles[0].time, candles.at(-1).time]` are filtered out — `lightweight-charts`
- * v5's `createSeriesMarkers` silently drops markers without a matching bar,
- * and feeding it out-of-range entries surfaces as markers vanishing on zoom
- * (issue #365).
+ * `lightweight-charts` v5's `createSeriesMarkers` requires each marker's
+ * `time` to **exactly** match an existing bar's `time` and the array to be
+ * sorted ascending — misaligned or out-of-order markers are silently
+ * dropped, surfacing as markers vanishing on zoom (issue #365).
+ * Two normalisations enforce the contract:
+ *   - **Snap to bar** — each event's `ts` is mapped to the bar whose
+ *     `[open, next-open)` window contains it (binary search over `candles`).
+ *     Events before the first loaded bar are dropped; later windows land
+ *     naturally once `loadOlder()` extends `candles`.
+ *   - **Sort ascending** — the rule-events API returns newest-first; the
+ *     output is re-sorted by `time` so the plugin's binary search holds.
  *
  * Lazy: only `state_set` events render today; expand kinds when the chart's
  * marker vocabulary grows. The richer two-line + bold layout from issue
@@ -55,7 +81,7 @@ function formatStateValue(value: StateValue): string {
  * @param color    - resolved theme-aware marker color (canvas can't read
  *                   CSS vars, so the caller passes the hex from `chartColors`).
  * @param candles  - the currently loaded candle window, ascending by `time`,
- *                   used to drop events whose bar isn't in the series.
+ *                   used to snap each event to its containing bar.
  */
 export function useStateChangeMarkers(
   symbolId: string,
@@ -70,22 +96,24 @@ export function useStateChangeMarkers(
       ),
   });
   const events = query.data;
-  const firstTime = candles[0]?.time;
-  const lastTime = candles[candles.length - 1]?.time;
   return useMemo<SeriesMarker<Time>[]>(() => {
-    if (!events || firstTime === undefined || lastTime === undefined) return [];
-    return events
-      .filter((event) => event.type === RuleEventType.StateSet)
-      .filter((event) => event.ts >= firstTime && event.ts <= lastTime)
-      .map((event) => {
-        const prefix = event.scope === StateScope.Global ? '🌐 ' : '';
-        return {
-          time: Math.floor(event.ts / 1000) as UTCTimestamp,
-          position: 'belowBar',
-          shape: 'circle',
-          color,
-          text: `${prefix}${event.key}: ${formatStateValue(event.value)}`,
-        };
+    if (!events || candles.length === 0) return [];
+    const markers: SeriesMarker<Time>[] = [];
+    for (const event of events) {
+      if (event.type !== RuleEventType.StateSet) continue;
+      const barIdx = findContainingBarIndex(candles, event.ts);
+      const bar = barIdx === -1 ? undefined : candles[barIdx];
+      if (!bar) continue;
+      const prefix = event.scope === StateScope.Global ? '🌐 ' : '';
+      markers.push({
+        time: (bar.time / 1000) as UTCTimestamp,
+        position: 'belowBar',
+        shape: 'circle',
+        color,
+        text: `${prefix}${event.key}: ${formatStateValue(event.value)}`,
       });
-  }, [events, color, firstTime, lastTime]);
+    }
+    markers.sort((a, b) => (a.time as number) - (b.time as number));
+    return markers;
+  }, [events, color, candles]);
 }

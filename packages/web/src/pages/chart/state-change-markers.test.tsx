@@ -34,7 +34,14 @@ function candle(time: number): Candle {
   };
 }
 
-const WINDOW: Candle[] = [candle(1_699_999_000_000), candle(1_700_000_200_000)];
+const ONE_MINUTE_MS = 60_000;
+
+/** Three contiguous 1m bars around `1_700_000_000_000`. */
+const BARS: Candle[] = [
+  candle(1_700_000_000_000),
+  candle(1_700_000_000_000 + ONE_MINUTE_MS),
+  candle(1_700_000_000_000 + 2 * ONE_MINUTE_MS),
+];
 
 function wrapper(): (props: { children: ReactNode }) => ReactNode {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -72,12 +79,9 @@ describe('useStateChangeMarkers', () => {
       },
       FIRED,
     ]);
-    const { result } = renderHook(
-      () => useStateChangeMarkers('crypto:BTCUSDT', '#60646c', WINDOW),
-      {
-        wrapper: wrapper(),
-      },
-    );
+    const { result } = renderHook(() => useStateChangeMarkers('crypto:BTCUSDT', '#60646c', BARS), {
+      wrapper: wrapper(),
+    });
     await waitFor(() => {
       expect(result.current).toEqual([
         {
@@ -103,12 +107,9 @@ describe('useStateChangeMarkers', () => {
         value: { type: StateValueType.Bool, value: true },
       },
     ]);
-    const { result } = renderHook(
-      () => useStateChangeMarkers('crypto:BTCUSDT', '#60646c', WINDOW),
-      {
-        wrapper: wrapper(),
-      },
-    );
+    const { result } = renderHook(() => useStateChangeMarkers('crypto:BTCUSDT', '#60646c', BARS), {
+      wrapper: wrapper(),
+    });
     await waitFor(() => {
       expect(result.current).toEqual([
         {
@@ -134,12 +135,9 @@ describe('useStateChangeMarkers', () => {
         value: { type: StateValueType.Bool, value: false },
       },
     ]);
-    const { result } = renderHook(
-      () => useStateChangeMarkers('crypto:BTCUSDT', '#60646c', WINDOW),
-      {
-        wrapper: wrapper(),
-      },
-    );
+    const { result } = renderHook(() => useStateChangeMarkers('crypto:BTCUSDT', '#60646c', BARS), {
+      wrapper: wrapper(),
+    });
     await waitFor(() => {
       expect(result.current).toEqual([
         {
@@ -165,12 +163,9 @@ describe('useStateChangeMarkers', () => {
         value: { type: StateValueType.Enum, value: 'bull' },
       },
     ]);
-    const { result } = renderHook(
-      () => useStateChangeMarkers('crypto:BTCUSDT', '#60646c', WINDOW),
-      {
-        wrapper: wrapper(),
-      },
-    );
+    const { result } = renderHook(() => useStateChangeMarkers('crypto:BTCUSDT', '#60646c', BARS), {
+      wrapper: wrapper(),
+    });
     await waitFor(() => {
       expect(result.current).toEqual([
         {
@@ -184,7 +179,35 @@ describe('useStateChangeMarkers', () => {
     });
   });
 
-  it('drops events whose timestamp falls outside the loaded candle window', async () => {
+  it('snaps an event firing mid-bar to that bar`s open time so the marker lands on an existing data point', async () => {
+    mockFetch([
+      {
+        type: RuleEventType.StateSet,
+        ts: 1_700_000_000_000 + ONE_MINUTE_MS + 23_456,
+        ruleId: 'r-1',
+        symbolId: 'crypto:BTCUSDT',
+        scope: StateScope.Symbol,
+        key: 'streak',
+        value: { type: StateValueType.Number, value: 2 },
+      },
+    ]);
+    const { result } = renderHook(() => useStateChangeMarkers('crypto:BTCUSDT', '#60646c', BARS), {
+      wrapper: wrapper(),
+    });
+    await waitFor(() => {
+      expect(result.current).toEqual([
+        {
+          time: (1_700_000_000_000 + ONE_MINUTE_MS) / 1000,
+          position: 'belowBar',
+          shape: 'circle',
+          color: '#60646c',
+          text: 'streak: 2',
+        },
+      ]);
+    });
+  });
+
+  it('drops events whose timestamp precedes the first loaded bar', async () => {
     mockFetch([
       {
         type: RuleEventType.StateSet,
@@ -204,22 +227,10 @@ describe('useStateChangeMarkers', () => {
         key: 'streak',
         value: { type: StateValueType.Number, value: 2 },
       },
-      {
-        type: RuleEventType.StateSet,
-        ts: 1_710_000_000_000,
-        ruleId: 'r-1',
-        symbolId: 'crypto:BTCUSDT',
-        scope: StateScope.Symbol,
-        key: 'streak',
-        value: { type: StateValueType.Number, value: 3 },
-      },
     ]);
-    const { result } = renderHook(
-      () => useStateChangeMarkers('crypto:BTCUSDT', '#60646c', WINDOW),
-      {
-        wrapper: wrapper(),
-      },
-    );
+    const { result } = renderHook(() => useStateChangeMarkers('crypto:BTCUSDT', '#60646c', BARS), {
+      wrapper: wrapper(),
+    });
     await waitFor(() => {
       expect(result.current).toEqual([
         {
@@ -228,6 +239,66 @@ describe('useStateChangeMarkers', () => {
           shape: 'circle',
           color: '#60646c',
           text: 'streak: 2',
+        },
+      ]);
+    });
+  });
+
+  it('returns markers sorted ascending by `time` even when the API returns events newest-first', async () => {
+    mockFetch([
+      {
+        type: RuleEventType.StateSet,
+        ts: 1_700_000_000_000 + 2 * ONE_MINUTE_MS,
+        ruleId: 'r-1',
+        symbolId: 'crypto:BTCUSDT',
+        scope: StateScope.Symbol,
+        key: 'streak',
+        value: { type: StateValueType.Number, value: 3 },
+      },
+      {
+        type: RuleEventType.StateSet,
+        ts: 1_700_000_000_000 + ONE_MINUTE_MS,
+        ruleId: 'r-1',
+        symbolId: 'crypto:BTCUSDT',
+        scope: StateScope.Symbol,
+        key: 'streak',
+        value: { type: StateValueType.Number, value: 2 },
+      },
+      {
+        type: RuleEventType.StateSet,
+        ts: 1_700_000_000_000,
+        ruleId: 'r-1',
+        symbolId: 'crypto:BTCUSDT',
+        scope: StateScope.Symbol,
+        key: 'streak',
+        value: { type: StateValueType.Number, value: 1 },
+      },
+    ]);
+    const { result } = renderHook(() => useStateChangeMarkers('crypto:BTCUSDT', '#60646c', BARS), {
+      wrapper: wrapper(),
+    });
+    await waitFor(() => {
+      expect(result.current).toEqual([
+        {
+          time: 1_700_000_000,
+          position: 'belowBar',
+          shape: 'circle',
+          color: '#60646c',
+          text: 'streak: 1',
+        },
+        {
+          time: (1_700_000_000_000 + ONE_MINUTE_MS) / 1000,
+          position: 'belowBar',
+          shape: 'circle',
+          color: '#60646c',
+          text: 'streak: 2',
+        },
+        {
+          time: (1_700_000_000_000 + 2 * ONE_MINUTE_MS) / 1000,
+          position: 'belowBar',
+          shape: 'circle',
+          color: '#60646c',
+          text: 'streak: 3',
         },
       ]);
     });
