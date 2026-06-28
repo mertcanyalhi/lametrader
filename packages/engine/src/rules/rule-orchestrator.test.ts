@@ -15,7 +15,7 @@ import {
 } from '@lametrader/core';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { _resetLogRoot } from '../log.js';
+import { _resetLogRoot, _setLogLevel } from '../log.js';
 import { InMemoryProfileRepository } from '../profiles/in-memory-profile-repository.js';
 import { InMemoryStateRepository } from '../state/in-memory-state-repository.js';
 import { InMemoryWatchlistRepository } from '../symbols/in-memory-watchlist-repository.js';
@@ -29,6 +29,7 @@ import { RuleOrchestrator } from './rule-orchestrator.js';
 
 afterEach(() => {
   _resetLogRoot();
+  _setLogLevel();
 });
 
 /** Baseline lookups that return null for everything. */
@@ -328,6 +329,71 @@ describe('RuleOrchestrator', () => {
 
     const stored = await rules.get('once');
     expect({ enabled: stored?.enabled }).toEqual({ enabled: false });
+  });
+
+  it('emits one leaf_decision trace per evaluated leaf carrying leftDescriptor/leftValue/leftPrev/leftSource and the right-operand mirror plus the boolean result (#381)', async () => {
+    const r = rule({ id: 'r', order: 1 });
+    const rules = new InMemoryRuleRepository([r]);
+    const records: Record<string, unknown>[] = [];
+    _setLogLevel('trace');
+    _resetLogRoot({
+      write: (line: string) => {
+        records.push(JSON.parse(line));
+      },
+    });
+    const orchestrator = new RuleOrchestrator(
+      rules,
+      new InMemoryWatchlistRepository(),
+      priceLookups(),
+      new InMemoryStateRepository(),
+      new InMemoryNotifier(['main']),
+      new InMemoryEventLog(),
+      new InMemoryFiringStateRepository(),
+    );
+
+    await orchestrator.process(priceEvent());
+
+    const traceEntries = records
+      .filter((entry) => entry.msg === 'leaf_decision')
+      .map((entry) => ({
+        level: entry.level,
+        app: entry.app,
+        scope: entry.scope,
+        ruleId: entry.ruleId,
+        leafIndex: entry.leafIndex,
+        operator: entry.operator,
+        leftDescriptor: entry.leftDescriptor,
+        leftValue: entry.leftValue,
+        leftPrev: entry.leftPrev,
+        leftSource: entry.leftSource,
+        rightDescriptor: entry.rightDescriptor,
+        rightValue: entry.rightValue,
+        rightPrev: entry.rightPrev,
+        rightSource: entry.rightSource,
+        result: entry.result,
+      }));
+    expect(traceEntries).toEqual([
+      {
+        level: 10,
+        app: 'engine',
+        scope: 'condition-evaluator',
+        ruleId: 'r',
+        leafIndex: 0,
+        operator: NumericOperator.Gt,
+        leftDescriptor: { kind: OperandKind.CurrentValue, valueType: StateValueType.Number },
+        leftValue: { type: StateValueType.Number, value: 100 },
+        leftPrev: null,
+        leftSource: 'lookup',
+        rightDescriptor: {
+          kind: OperandKind.Literal,
+          value: { type: StateValueType.Number, value: 0 },
+        },
+        rightValue: { type: StateValueType.Number, value: 0 },
+        rightPrev: { type: StateValueType.Number, value: 0 },
+        rightSource: 'literal',
+        result: true,
+      },
+    ]);
   });
 
   it('logs a warn entry when auto-disabling a Once rule after fire (#306)', async () => {

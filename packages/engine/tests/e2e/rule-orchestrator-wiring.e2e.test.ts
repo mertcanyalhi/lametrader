@@ -159,13 +159,17 @@ describe('rule orchestrator wiring (e2e)', () => {
           symbolId: SYMBOL_ID,
           firedAt: 999,
           context: {
-            // The candle bridge emits 5 OHLCV events synchronously into
-            // `enqueue`, which calls `lookups.record` **synchronously**
-            // before scheduling the orchestrator (#290 wire). So every
-            // OHLCV slot is already populated by the time the orchestrator
-            // processes the first emitted event (open).
+            // Per #381, `lookups.record` runs inside the per-symbol
+            // serializer rather than synchronously in `enqueue` — so each
+            // OHLCV event is recorded immediately before it is processed,
+            // not before the burst even starts. The condition `close > 0`
+            // can only evaluate true once the close slot is populated, so
+            // the rule fires on the Close event (not Open). Volume rotates
+            // *after* Close in the candle bridge's per-field order, so the
+            // snapshot here shows `volume: null` — what the rule actually
+            // saw at evaluation time.
             inboundEvent: {
-              kind: RuleEventKind.OpenValueChanged,
+              kind: RuleEventKind.CloseValueChanged,
               ts: 1_000_000,
               symbolId: SYMBOL_ID,
               prev: null,
@@ -180,7 +184,7 @@ describe('rule orchestrator wiring (e2e)', () => {
               high: 105,
               low: 105,
               close: 105,
-              volume: 1_000,
+              volume: null,
             },
           },
         },

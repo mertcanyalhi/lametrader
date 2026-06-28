@@ -77,6 +77,11 @@ export function wireRuleEngine(deps: RuleEngineDeps): WiredRuleEngine {
     deps.firingState,
   );
   const serializer = createPerSymbolSerializer(async (event) => {
+    // Rotate the lookups cache for THIS event right before processing it,
+    // so each `process(E_n)` sees the slot state at `E_n`'s turn in the
+    // per-symbol chain — not a state already rotated past by later
+    // arrivals in a burst (#381).
+    lookups.record(event);
     try {
       await orchestrator.process(event);
     } catch (err) {
@@ -84,7 +89,6 @@ export function wireRuleEngine(deps: RuleEngineDeps): WiredRuleEngine {
     }
   });
   const enqueue = (event: RuleEvent): void => {
-    lookups.record(event);
     serializer.enqueue(event);
   };
   const candleBridge = new CandleRuleEventBridge(enqueue);

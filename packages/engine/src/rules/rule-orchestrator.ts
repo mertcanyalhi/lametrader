@@ -1,11 +1,13 @@
 import {
   ActionKind,
   type ConditionNode,
+  type ConditionOperand,
   type EventLog,
   type FiredRuleEvent,
   type FiringStateRepository,
   type Notifier,
   NumericOperator,
+  OperandKind,
   type Rule,
   type RuleEvent,
   type RuleEventContext,
@@ -40,6 +42,14 @@ import { executeTelegramAction } from './telegram-action-executor.js';
 
 /** Scope-bound logger for the rule orchestrator (#306). */
 const log = getLogger('rule-orchestrator');
+
+/**
+ * Scope-bound logger for per-leaf evaluation tracing — emits one
+ * `leaf_decision` TRACE record per evaluated leaf, carrying both operands'
+ * descriptor / resolved / prev / source plus the boolean outcome (#381).
+ * Off by default; flip `LOG_LEVEL=trace` to surface it for diagnosis.
+ */
+const conditionLog = getLogger('condition-evaluator');
 
 /** Options for {@link RuleOrchestrator}. */
 export interface RuleOrchestratorOptions {
@@ -199,9 +209,12 @@ export class RuleOrchestrator {
     }
 
     const context = buildEvaluationContext(event, this.lookups, rule.profileId, firingSymbolId);
-    const conditionTrue = evaluateConditionTree(rule.condition, (leaf) =>
-      evaluateLeaf(leaf, context),
-    );
+    let leafIndex = 0;
+    const conditionTrue = evaluateConditionTree(rule.condition, (leaf) => {
+      const result = evaluateLeaf(leaf, context, rule.id, leafIndex);
+      leafIndex += 1;
+      return result;
+    });
 
     const events = await this.log.ruleEvents(rule.id);
     const prevActive = await this.firingState.getActive(rule.id, firingSymbolId);
@@ -385,12 +398,14 @@ function isStateAction(action: { kind: ActionKind }): action is StateMutationAct
 
 /**
  * Evaluate one condition-tree leaf against the context — dispatches on the
- * leaf operator's category (comparison / crossing / state).
+ * leaf operator's category (comparison / crossing / state) — and emit one
+ * `leaf_decision` TRACE log carrying the descriptor / resolved / prev /
+ * source for each operand plus the boolean outcome (#381).
  *
  * Crossing and `changes-*` operators read prev *and* current per operand
  * (each operand carries its own time axis — close history is independent of
  * MA history). Comparison operators only need the current value of each
- * side.
+ * side; prev is still resolved here for the trace, an O(1) Map lookup.
  */
 function evaluateLeaf(
   leaf:
@@ -401,26 +416,50 @@ function evaluateLeaf(
         right: Parameters<EvaluationContext['resolve']>[0];
       },
   context: EvaluationContext,
+  ruleId: string,
+  leafIndex: number,
 ): boolean {
   const op = leaf.operator;
+  const leftValue = context.resolve(leaf.left);
+  const leftPrev = context.resolvePrev(leaf.left);
+  const rightValue = context.resolve(leaf.right);
+  const rightPrev = context.resolvePrev(leaf.right);
+  let result: boolean;
   if (isComparisonOp(op)) {
-    return evaluateComparison(op, context.resolve(leaf.left), context.resolve(leaf.right));
+    result = evaluateComparison(op, leftValue, rightValue);
+  } else if (isCrossingOp(op)) {
+    result = evaluateCrossing(op, leftPrev, leftValue, rightPrev, rightValue);
+  } else {
+    result = evaluateState(op, leftPrev, leftValue, rightValue);
   }
-  if (isCrossingOp(op)) {
-    return evaluateCrossing(
-      op,
-      context.resolvePrev(leaf.left),
-      context.resolve(leaf.left),
-      context.resolvePrev(leaf.right),
-      context.resolve(leaf.right),
-    );
-  }
-  return evaluateState(
-    op,
-    context.resolvePrev(leaf.left),
-    context.resolve(leaf.left),
-    context.resolve(leaf.right),
+  conditionLog.trace(
+    {
+      ruleId,
+      leafIndex,
+      operator: op,
+      leftDescriptor: leaf.left,
+      leftValue,
+      leftPrev,
+      leftSource: operandSource(leaf.left),
+      rightDescriptor: leaf.right,
+      rightValue,
+      rightPrev,
+      rightSource: operandSource(leaf.right),
+      result,
+    },
+    'leaf_decision',
   );
+  return result;
+}
+
+/**
+ * Tag where a resolved operand came from for the `leaf_decision` trace —
+ * `'literal'` for compile-time constants, `'lookup'` for every other operand
+ * (OHLCV, indicator, symbol/global state — all resolved through
+ * {@link EvaluationLookups}).
+ */
+function operandSource(operand: ConditionOperand): 'literal' | 'lookup' {
+  return operand.kind === OperandKind.Literal ? 'literal' : 'lookup';
 }
 
 const COMPARISON_OPS = new Set<string>([

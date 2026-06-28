@@ -36,8 +36,11 @@ import type { EvaluationLookups } from './evaluation-context.types.js';
  * `CurrentValueChanged` has been observed — so rules conditioning on
  * `Current` still fire under the polling loop even before any
  * `QuoteStreamService` subscription is open. A subsequent live quote
- * always overrides the fallback. `getPrevCurrentValue` mirrors the same
- * fallback chain against the prev slots.
+ * always overrides the fallback. `getPrevCurrentValue` does **not** mirror
+ * the fallback (#381): mixing a quote-axis current with a close-axis prev
+ * silently broke `Current crossing X` decisions on the first live tick.
+ * The prev getter returns `null` until two `CurrentValueChanged` events
+ * have rotated through the quote-axis slot.
  */
 export class LiveEvaluationLookups implements EvaluationLookups {
   /** Latest current price per symbol. */
@@ -181,7 +184,7 @@ export class LiveEvaluationLookups implements EvaluationLookups {
   }
 
   getPrevCurrentValue(symbolId: string): number | null {
-    return this.prevCurrentValues.get(symbolId) ?? this.prevCloseValues.get(symbolId) ?? null;
+    return this.prevCurrentValues.get(symbolId) ?? null;
   }
 
   getPrevOpenValue(symbolId: string): number | null {

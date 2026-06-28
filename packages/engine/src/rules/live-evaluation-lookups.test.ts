@@ -230,4 +230,25 @@ describe('LiveEvaluationLookups', () => {
       globalState: null,
     });
   });
+
+  it('getPrevCurrentValue returns null when only CloseValueChanged events have populated the prev-close slot (no cross-axis fallback, #381)', () => {
+    const lookups = new LiveEvaluationLookups(new InMemoryStateRepository());
+    lookups.record({
+      kind: RuleEventKind.CloseValueChanged,
+      ts: 1000,
+      symbolId: 'AAPL',
+      prev: null,
+      current: 99,
+      final: false,
+    });
+    lookups.record({
+      kind: RuleEventKind.CloseValueChanged,
+      ts: 1001,
+      symbolId: 'AAPL',
+      prev: 99,
+      current: 100,
+      final: false,
+    });
+    expect(lookups.getPrevCurrentValue('AAPL')).toEqual(null);
+  });
 });

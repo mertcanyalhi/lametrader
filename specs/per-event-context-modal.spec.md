@@ -13,7 +13,7 @@ Closes #304.
 
 Each bullet maps to exactly one test.
 
-- [ ] `FiredRuleEvent` accepts an optional `context: RuleEventContext` field carrying `{ inboundEvent, lookupSnapshot }`, where `lookupSnapshot` lists the firing symbol's `current` / `open` / `high` / `low` / `close` / `volume` at fire time.
+- [ ] `FiredRuleEvent` accepts an optional `context: RuleEventContext` field carrying `{ inboundEvent, lookupSnapshot }`, where `lookupSnapshot` lists the firing symbol's `current` / `open` / `high` / `low` / `close` / `volume` as they were known at the moment the rule's condition evaluated true (i.e. populated up to and including the inbound event's slot — events that rotate later in the same per-symbol burst surface as `null` until they're processed).
 - [ ] `RuleOrchestrator.fire` populates `context` on the appended `Fired` rule and symbol entries — both mirror the same payload so either consumer renders the same modal.
 - [ ] The events dialog renders an info icon on every `Fired` row whose entry carries a `context` (no icon when context is absent, so historical entries don't get a dead button).
 - [ ] Clicking the icon opens a Radix `Dialog` whose body lists the inbound event's `kind` / `ts` / `symbolId` and the lookup snapshot's OHLCV values (one row per non-null field).

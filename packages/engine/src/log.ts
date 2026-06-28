@@ -1,6 +1,7 @@
 import pino, { type DestinationStream, type Logger } from 'pino';
 
 import { loadSettings } from './settings.js';
+import type { LogLevel } from './settings.types.js';
 
 /**
  * The active write sink for the engine's log records. `undefined` (the
@@ -53,4 +54,15 @@ export function getLogger(scope: string): Logger {
  */
 export function _resetLogRoot(stream?: DestinationStream): void {
   activeStream = stream;
+}
+
+/**
+ * Internal: switch the engine's root log level at runtime so tests can
+ * assert against records that wouldn't fire at the default `info` level
+ * (e.g. the per-leaf `leaf_decision` trace).
+ *
+ * Pass `undefined` to reset to the configured `loadSettings().logLevel`.
+ */
+export function _setLogLevel(level?: LogLevel): void {
+  root.level = level ?? loadSettings().logLevel;
 }
