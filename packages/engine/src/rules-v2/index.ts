@@ -1,13 +1,26 @@
 /**
  * Public surface of the rules-v2 engine module.
  *
- * Currently exposes the history surface (series store) + the
- * `EvaluationContext` interface — the read-side every v2 operator consumes.
- * Subsequent slices (#391-#395) add operators, bridges, orchestrator,
- * persistence, and the REST surface on top of this layer.
+ * Exposes the history surface (series store), the `EvaluationContext`
+ * interface, the operator implementations, and the dispatch layer
+ * (`TriggerDispatcher` + `IntervalScheduler`).
+ * Subsequent slices (#392-#395) add bridges, orchestrator, persistence, and
+ * the REST surface on top of this layer.
  */
 
 export { type BarAxis, BarSeriesView } from './bar-series-view.js';
+export {
+  type DispatchOptions,
+  evaluateCondition,
+  type FireRecord,
+  InMemoryRuleRepository,
+  type IntervalEmit,
+  IntervalScheduler,
+  referencesSlot,
+  routes,
+  TriggerDispatcher,
+  type TriggerDispatcherDeps,
+} from './dispatch/index.js';
 export {
   barSeriesKey,
   buildEvaluationContext,

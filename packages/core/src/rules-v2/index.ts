@@ -56,6 +56,7 @@ export {
   StateOperator,
 } from './operator.types.js';
 export type { Rule } from './rule.types.js';
+export type { RuleRepository } from './rule-repository.types.js';
 export {
   type AllSymbolsRuleScope,
   type RuleScope,
