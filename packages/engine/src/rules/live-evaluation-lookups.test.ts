@@ -1,7 +1,16 @@
-import { RuleEventKind, type StateValue, StateValueType } from '@lametrader/core';
+import {
+  Period,
+  ProfileScope,
+  RuleEventKind,
+  type StateValue,
+  StateValueType,
+  SymbolType,
+} from '@lametrader/core';
 import { describe, expect, it } from 'vitest';
 
+import { InMemoryProfileRepository } from '../profiles/in-memory-profile-repository.js';
 import { InMemoryStateRepository } from '../state/in-memory-state-repository.js';
+import { InMemoryWatchlistRepository } from '../symbols/in-memory-watchlist-repository.js';
 import { LiveEvaluationLookups } from './live-evaluation-lookups.js';
 
 /**
@@ -114,6 +123,77 @@ describe('LiveEvaluationLookups', () => {
       final: false,
     });
     expect(lookups.getCurrentValue('AAPL')).toEqual(106.5);
+  });
+
+  it('warm() surfaces a symbol-state value already persisted to the repository before construction', async () => {
+    const state = new InMemoryStateRepository();
+    await state.setSymbolState(
+      'profile-1',
+      'AAPL',
+      'signal',
+      { type: StateValueType.String, value: 'SELL' },
+      0,
+    );
+    const profiles = new InMemoryProfileRepository([
+      {
+        id: 'profile-1',
+        name: 'p1',
+        description: '',
+        enabled: true,
+        scope: { type: ProfileScope.All },
+        indicators: [],
+        createdAt: 0,
+        updatedAt: 0,
+      },
+    ]);
+    const watchlist = new InMemoryWatchlistRepository([
+      {
+        id: 'AAPL',
+        type: SymbolType.Stock,
+        description: 'Apple Inc.',
+        exchange: 'NMS',
+        periods: [Period.OneDay],
+      },
+    ]);
+
+    const lookups = new LiveEvaluationLookups(state);
+    await lookups.warm({ profiles, watchlist });
+
+    expect(lookups.getSymbolState('profile-1', 'AAPL', 'signal')).toEqual({
+      type: StateValueType.String,
+      value: 'SELL',
+    });
+  });
+
+  it('warm() surfaces a global-state value already persisted to the repository before construction', async () => {
+    const state = new InMemoryStateRepository();
+    await state.setGlobalState(
+      'profile-1',
+      'regime',
+      { type: StateValueType.Enum, value: 'bull' },
+      0,
+    );
+    const profiles = new InMemoryProfileRepository([
+      {
+        id: 'profile-1',
+        name: 'p1',
+        description: '',
+        enabled: true,
+        scope: { type: ProfileScope.All },
+        indicators: [],
+        createdAt: 0,
+        updatedAt: 0,
+      },
+    ]);
+    const watchlist = new InMemoryWatchlistRepository();
+
+    const lookups = new LiveEvaluationLookups(state);
+    await lookups.warm({ profiles, watchlist });
+
+    expect(lookups.getGlobalState('profile-1', 'regime')).toEqual({
+      type: StateValueType.Enum,
+      value: 'bull',
+    });
   });
 
   it('returns null for getters whose underlying slot has never been written', () => {

@@ -1,9 +1,11 @@
 import {
+  type ProfileRepository,
   type RuleEvent,
   RuleEventKind,
   type StateRepository,
   StateScope,
   type StateValue,
+  type WatchlistRepository,
 } from '@lametrader/core';
 
 import type { EvaluationLookups } from './evaluation-context.types.js';
@@ -13,12 +15,15 @@ import type { EvaluationLookups } from './evaluation-context.types.js';
  * {@link EvaluationLookups} port the {@link RuleOrchestrator}'s
  * {@link EvaluationContext} consumes.
  *
- * The caches are kept warm by two flows:
+ * The caches are kept warm by three flows:
  *
  *  - `record(event)` is called for every `RuleEvent` emitted by the three
  *    stream bridges before the orchestrator processes the event (#290);
  *  - a `StateRepository.onStateChanged` subscription set up at construction
- *    mirrors profile-scoped symbol-state and global-state writes.
+ *    mirrors profile-scoped symbol-state and global-state writes;
+ *  - `warm(...)` pre-loads every persisted `(profile, key)` and
+ *    `(profile, symbol, key)` slot from the store at startup, so a fresh
+ *    process sees state written by a prior run (#374).
  *
  * All getters return `null` for slots that have never been written.
  *
@@ -55,9 +60,10 @@ export class LiveEvaluationLookups implements EvaluationLookups {
 
   /**
    * @param state - the state repository whose `onStateChanged` stream
-   *   keeps the symbol/global state caches warm.
+   *   keeps the symbol/global state caches warm, and which `warm()`
+   *   reads from at startup.
    */
-  constructor(state: StateRepository) {
+  constructor(private readonly state: StateRepository) {
     state.onStateChanged((event) => {
       if (event.scope.kind === StateScope.Symbol) {
         const key = `${event.profileId} ${event.scope.symbolId} ${event.key}`;
@@ -145,5 +151,32 @@ export class LiveEvaluationLookups implements EvaluationLookups {
 
   getGlobalState(profileId: string, key: string): StateValue | null {
     return this.globalState.get(`${profileId} ${key}`) ?? null;
+  }
+
+  /**
+   * Pre-populate the symbol-state / global-state caches with every value the
+   * state repository already holds. Fixes #374: without this, a fresh engine
+   * process sees `null` for slots previously persisted by another run until
+   * something in-process mutates them.
+   *
+   * Iterates every profile × `(global key, value)` pair and every
+   * `(profileId × watched symbolId, key, value)` triple — `O(profiles × symbols)`
+   * extra reads at startup, done once.
+   */
+  async warm(opts: { profiles: ProfileRepository; watchlist: WatchlistRepository }): Promise<void> {
+    const profiles = await opts.profiles.list();
+    const symbols = await opts.watchlist.list();
+    for (const profile of profiles) {
+      const global = await this.state.listGlobalState(profile.id);
+      for (const [key, value] of Object.entries(global)) {
+        this.globalState.set(`${profile.id} ${key}`, value);
+      }
+      for (const symbol of symbols) {
+        const entries = await this.state.listSymbolState(profile.id, symbol.id);
+        for (const [key, value] of Object.entries(entries)) {
+          this.symbolState.set(`${profile.id} ${symbol.id} ${key}`, value);
+        }
+      }
+    }
   }
 }
