@@ -120,6 +120,7 @@ function evaluateLeaf(
         rightValue: right,
         rightSource: rightResolved.source,
         result,
+        eventTime: new Date(context.event.ts).toISOString(),
       },
       'leaf_decision',
     );

@@ -15,11 +15,13 @@ All records emit through `getLogger('rule-orchestrator')`; Pino auto-injects `ts
 
 | `msg` | Payload |
 | --- | --- |
-| `event_received` | `{ cascadeDepth, triggeredByRuleId?, eventKind, eventTs, symbolId, eventPayload }` |
-| `rule_starting` | `{ ruleId, ruleName, firingSymbolId }` |
-| `leaf_decision` | `{ ruleId, leafIndex, operator, leftDescriptor, leftValue, leftSource, rightDescriptor, rightValue, rightSource, result }` |
-| `gate_decision` | `{ ruleId, triggerKind, allowed, reason }` |
-| `rule_summary` | `{ ruleId, outcome }` |
+| `event_received` | `{ cascadeDepth, triggeredByRuleId?, eventKind, eventTs, eventTime, symbolId, eventPayload }` |
+| `rule_starting` | `{ ruleId, ruleName, firingSymbolId, eventTime }` |
+| `leaf_decision` | `{ ruleId, leafIndex, operator, leftDescriptor, leftValue, leftSource, rightDescriptor, rightValue, rightSource, result, eventTime }` |
+| `gate_decision` | `{ ruleId, triggerKind, allowed, reason, eventTime }` |
+| `rule_summary` | `{ ruleId, outcome, eventTime }` |
+
+`eventTime` is the inbound event's `ts` rendered as an ISO 8601 string (`new Date(ts).toISOString()`) so a human reader can correlate a trace line with the candle it came from without converting epoch ms by hand.
 
 `leftSource` / `rightSource` come from the `OperandValueSource` enum (`evaluation-context.types.ts`) with members `Event` / `Lookup` / `Literal` — distinguishes a value pulled from the inbound `RuleEvent` (the #312 fix path), from `EvaluationLookups`, or from the operand's own `Literal`.
 `outcome` comes from the `RuleOutcome` enum (`rule-orchestrator-trace.types.ts`) with members `Fired` / `ConditionFalse` / `GateBlocked` / `Expired`.
@@ -30,11 +32,11 @@ All records emit through `getLogger('rule-orchestrator')`; Pino auto-injects `ts
 Each bullet maps to one test.
 
 - [ ] `event_received` emits per dequeued event with `cascadeDepth: 0` and no `triggeredByRuleId` for the inbound, and `cascadeDepth ≥ 1` plus the originating `triggeredByRuleId` for cascade re-entries.
-- [ ] `rule_starting` emits with `{ ruleId, ruleName, firingSymbolId }` at the start of each `(rule, firingSymbol)` evaluation.
-- [ ] `leaf_decision` emits per condition-tree leaf with the resolved values and the `leftSource` / `rightSource` discriminator.
+- [ ] `rule_starting` emits with `{ ruleId, ruleName, firingSymbolId, eventTime }` at the start of each `(rule, firingSymbol)` evaluation.
+- [ ] `leaf_decision` emits per condition-tree leaf with the resolved values, the `leftSource` / `rightSource` discriminator, and the inbound event's `eventTime`.
 - [ ] `leaf_decision` on an `OpenValueChanged` event records `leftSource: 'event'` for an `OpenValue` operand on the same symbol, even when the live `EvaluationLookups` would have returned a different value (the #312 stale-Open scenario).
-- [ ] `gate_decision` emits with `triggerKind`, `allowed`, and a non-empty `reason` per dispatch.
-- [ ] `rule_summary` emits once per `(rule, firingSymbol)` with the matching outcome.
+- [ ] `gate_decision` emits with `triggerKind`, `allowed`, a non-empty `reason`, and the inbound event's `eventTime` per dispatch.
+- [ ] `rule_summary` emits once per `(rule, firingSymbol)` with the matching outcome and the inbound event's `eventTime`.
 - [ ] With `logLevel` ≠ `'trace'` (the default), no trace records reach the sink (Pino filters them out).
 
 ## Out of scope
