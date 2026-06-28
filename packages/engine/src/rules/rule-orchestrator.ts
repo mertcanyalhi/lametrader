@@ -124,6 +124,7 @@ export class RuleOrchestrator {
               : {}),
             eventKind: next.event.kind,
             eventTs: next.event.ts,
+            eventTime: new Date(next.event.ts).toISOString(),
             symbolId: next.event.symbolId,
             eventPayload: next.event,
           },
@@ -201,7 +202,12 @@ export class RuleOrchestrator {
         const fresh = await this.rules.get(rule.id);
         if (fresh !== null) await this.rules.save({ ...fresh, enabled: false });
         log.warn(
-          { ruleId: rule.id, symbolId: firingSymbolId, ts: event.ts },
+          {
+            ruleId: rule.id,
+            symbolId: firingSymbolId,
+            ts: event.ts,
+            eventTime: new Date(event.ts).toISOString(),
+          },
           'auto-disabled Once rule after fire',
         );
         return;
@@ -220,10 +226,11 @@ export class RuleOrchestrator {
     event: RuleEvent,
     firingSymbolId: string,
   ): Promise<boolean> {
-    log.trace({ ruleId: rule.id, ruleName: rule.name, firingSymbolId }, 'rule_starting');
+    const eventTime = new Date(event.ts).toISOString();
+    log.trace({ ruleId: rule.id, ruleName: rule.name, firingSymbolId, eventTime }, 'rule_starting');
     if (rule.expiration !== null && event.ts >= rule.expiration.at) {
       await this.maybeEmitExpired(rule, firingSymbolId, event.ts);
-      log.trace({ ruleId: rule.id, outcome: RuleOutcome.Expired }, 'rule_summary');
+      log.trace({ ruleId: rule.id, outcome: RuleOutcome.Expired, eventTime }, 'rule_summary');
       return false;
     }
 
@@ -233,16 +240,19 @@ export class RuleOrchestrator {
     const triggerAllows = await this.triggers.mayFire(rule, event, firingSymbolId, conditionTrue);
 
     if (!conditionTrue) {
-      log.trace({ ruleId: rule.id, outcome: RuleOutcome.ConditionFalse }, 'rule_summary');
+      log.trace(
+        { ruleId: rule.id, outcome: RuleOutcome.ConditionFalse, eventTime },
+        'rule_summary',
+      );
       return false;
     }
     if (!triggerAllows) {
-      log.trace({ ruleId: rule.id, outcome: RuleOutcome.GateBlocked }, 'rule_summary');
+      log.trace({ ruleId: rule.id, outcome: RuleOutcome.GateBlocked, eventTime }, 'rule_summary');
       return false;
     }
 
     await this.fire(rule, firingSymbolId, event.ts, context);
-    log.trace({ ruleId: rule.id, outcome: RuleOutcome.Fired }, 'rule_summary');
+    log.trace({ ruleId: rule.id, outcome: RuleOutcome.Fired, eventTime }, 'rule_summary');
     return true;
   }
 

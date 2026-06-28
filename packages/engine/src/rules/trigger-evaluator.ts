@@ -71,6 +71,7 @@ export class TriggerEvaluator {
         triggerKind: rule.trigger.kind,
         allowed,
         reason: gateReason(rule.trigger, allowed, final, prevActive, conditionTrue),
+        eventTime: new Date(event.ts).toISOString(),
       },
       'gate_decision',
     );

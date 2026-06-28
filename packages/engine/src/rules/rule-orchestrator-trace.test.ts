@@ -168,6 +168,7 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       cascadeDepth: 0,
       eventKind: RuleEventKind.CurrentValueChanged,
       eventTs: 1000,
+      eventTime: '1970-01-01T00:00:01.000Z',
       symbolId: 'AAPL',
       eventPayload: event,
     });
@@ -192,6 +193,7 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       ruleId: 'r-1',
       ruleName: 'BTC alert',
       firingSymbolId: 'AAPL',
+      eventTime: '1970-01-01T00:00:01.000Z',
     });
   });
 
@@ -224,6 +226,7 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       rightValue: { type: StateValueType.Number, value: 0 },
       rightSource: OperandValueSource.Literal,
       result: true,
+      eventTime: '1970-01-01T00:00:01.000Z',
     });
   });
 
@@ -297,6 +300,7 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       triggerKind: TriggerKind.OncePerMinute,
       allowed: true,
       reason: GateReason.Allowed,
+      eventTime: '1970-01-01T00:00:01.000Z',
     });
   });
 
@@ -318,6 +322,7 @@ describe('RuleOrchestrator trace logging (#354)', () => {
       msg: 'rule_summary',
       ruleId: 'r-1',
       outcome: RuleOutcome.Fired,
+      eventTime: '1970-01-01T00:00:01.000Z',
     });
   });
 
