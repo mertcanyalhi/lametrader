@@ -154,6 +154,7 @@ export {
 export { RuleOperatorError, validateOperatorOperands } from './rule-operator.js';
 export { NumericOperator, type RuleOperator, StateOperator } from './rule-operator.types.js';
 export type { RuleRepository } from './rule-repository.types.js';
+export * as RulesV2 from './rules-v2/index.js';
 export { isBool, isEnum, isNumber, isString } from './state.js';
 export { type StateValue, StateValueType } from './state.types.js';
 export {
