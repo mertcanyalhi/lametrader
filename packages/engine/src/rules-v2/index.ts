@@ -47,5 +47,16 @@ export {
   evaluateMoving,
   evaluateState,
 } from './operators/index.js';
+export {
+  ActionRunner,
+  CycleGuard,
+  CycleOverflowError,
+  createPerSymbolSerializer,
+  InMemoryEventLog,
+  RuleOrchestrator,
+  type RuleOrchestratorDeps,
+  type RuleOrchestratorOptions,
+  RuleOutcome,
+} from './orchestrator/index.js';
 export type { SeriesPoint, SeriesView } from './series.types.js';
 export { TICK_RING_CAPACITY, TickRing } from './tick-ring.js';
