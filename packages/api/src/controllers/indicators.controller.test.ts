@@ -1,8 +1,8 @@
 import { type Candle, Period, SymbolType, type WatchedSymbol } from '@lametrader/core';
 import {
   defaultIndicators,
-  IndicatorComputeService,
   type IndicatorRegistry,
+  IndicatorService,
   InMemoryCandleRepository,
   InMemoryWatchlistRepository,
 } from '@lametrader/engine';
@@ -59,7 +59,7 @@ async function buildAppWithCompute() {
     Period.OneHour,
     [10, 20, 30, 40, 50].map((c, i) => cryptoCandle(i, c)),
   );
-  const compute = new IndicatorComputeService(registry, watchlist, candles);
+  const compute = new IndicatorService(registry, watchlist, candles);
   return createApp(buildAppDeps({ indicators: { registry, compute } }));
 }
 

@@ -5,7 +5,7 @@ import {
   type Period,
   SymbolNotFoundError,
 } from '@lametrader/core';
-import type { IndicatorStreamService } from '@lametrader/engine';
+import type { IndicatorService } from '@lametrader/engine';
 
 import type { StreamHub } from '../stream-hub.js';
 import type { SubscriptionKind } from '../subscription-registry.types.js';
@@ -20,7 +20,7 @@ interface IndicatorSubscribeInput {
 
 /**
  * Indicator stream subscription kind — keyed by a server-generated
- * `subscriptionId` from {@link IndicatorStreamService.subscribe}.
+ * `subscriptionId` from {@link IndicatorService.subscribe}.
  *
  * Async acquire that calls out to the engine; race-checked via the registry
  * so a socket that closes mid-acquire releases the upstream handle instead of
@@ -28,9 +28,9 @@ interface IndicatorSubscribeInput {
  */
 export function indicatorSubscriptionKind(deps: {
   indicatorStream: StreamHub<IndicatorStateEvent>;
-  indicatorStreamService: IndicatorStreamService;
+  indicatorService: IndicatorService;
 }): SubscriptionKind<IndicatorSubscribeInput, string> {
-  const { indicatorStream, indicatorStreamService } = deps;
+  const { indicatorStream, indicatorService } = deps;
   return {
     subscribeAction: 'subscribe-indicator',
     unsubscribeAction: 'unsubscribe-indicator',
@@ -61,7 +61,7 @@ export function indicatorSubscriptionKind(deps: {
       return { key: message.subscriptionId };
     },
     acquire: async (input) => {
-      const subscriptionId = await indicatorStreamService.subscribe({
+      const subscriptionId = await indicatorService.subscribe({
         id: input.id,
         period: input.period,
         indicatorKey: input.indicatorKey,
@@ -80,7 +80,7 @@ export function indicatorSubscriptionKind(deps: {
     },
     subscribeHub: (key, send) =>
       indicatorStream.subscribe(key, (event) => send(JSON.stringify(event))),
-    release: (key) => indicatorStreamService.unsubscribe(key),
+    release: (key) => indicatorService.unsubscribe(key),
     errorToFrame: (error, generic) => {
       if (
         error instanceof SymbolNotFoundError ||

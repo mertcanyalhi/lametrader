@@ -3,9 +3,8 @@ import type {
   BackfillService,
   CandleEvent,
   ConfigService,
-  IndicatorComputeService,
   IndicatorRegistry,
-  IndicatorStreamService,
+  IndicatorService,
   ProfileService,
   QuoteStreamService,
   RuleService,
@@ -22,10 +21,10 @@ import type { StreamHub } from './stream-hub.js';
 export interface LiveStream {
   /** The live-candle pub/sub the polling loop publishes to. */
   candleStream: StreamHub<CandleEvent>;
-  /** The indicator-state pub/sub fed by the indicator stream service's `onState` callback. */
+  /** The indicator-state pub/sub fed by the indicator service's `onState` callback. */
   indicatorStream: StreamHub<IndicatorStateEvent>;
-  /** The engine-side indicator stream service; the route calls its `subscribe`/`unsubscribe`. */
-  indicatorStreamService: IndicatorStreamService;
+  /** The engine-side indicator use-case; the route calls its `subscribe`/`unsubscribe`. */
+  indicatorService: IndicatorService;
   /** The quote pub/sub fed by the quote stream service's `onQuote` callback. */
   quoteStream: StreamHub<SymbolQuoteEvent>;
   /** The engine-side quote stream service; the route calls its `subscribe`/`unsubscribe`. */
@@ -92,8 +91,8 @@ export interface AppDependencies {
   indicators: {
     /** The catalog registry (read at runtime for `/indicators[/:key]`). */
     registry: IndicatorRegistry;
-    /** The compute use-case (drives `GET /symbols/:id/indicators/:key`). */
-    compute: IndicatorComputeService;
+    /** The indicator use-case (drives `GET /symbols/:id/indicators/:key`). */
+    compute: IndicatorService;
   };
 }
 

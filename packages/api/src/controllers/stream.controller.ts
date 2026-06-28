@@ -26,11 +26,11 @@ import { SubscriptionRegistry } from '../subscription-registry.js';
  * @param liveStream - the bundle of streaming dependencies (see {@link LiveStream}).
  */
 export function streamController(liveStream: LiveStream) {
-  const { candleStream, indicatorStream, indicatorStreamService, quoteStream, quoteStreamService } =
+  const { candleStream, indicatorStream, indicatorService, quoteStream, quoteStreamService } =
     liveStream;
   const registry = new SubscriptionRegistry([
     candleSubscriptionKind({ candleStream }),
-    indicatorSubscriptionKind({ indicatorStream, indicatorStreamService }),
+    indicatorSubscriptionKind({ indicatorStream, indicatorService }),
     quoteSubscriptionKind({ quoteStream, quoteStreamService }),
   ]);
   return async (app: FastifyInstance): Promise<void> => {
