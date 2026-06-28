@@ -38,6 +38,22 @@ export interface EvaluationContextDeps {
   /** Read for `GlobalStateRef` operands; `null` when the key isn't set. */
   getGlobalState(profileId: string, key: string): StateValue | null;
   /**
+   * Optional one-step-back lookup for `SymbolStateRef` operands.
+   * Used by `State` operators (`ChangesTo` / `ChangesFrom`); when omitted, the
+   * context returns `null` for prev state — operators that need it short-circuit
+   * to `false`.
+   */
+  getPrevSymbolState?(profileId: string, symbolId: string, key: string): StateValue | null;
+  /** Optional one-step-back lookup for `GlobalStateRef` operands; see {@link getPrevSymbolState}. */
+  getPrevGlobalState?(profileId: string, key: string): StateValue | null;
+  /**
+   * Optional one-step-back lookup for non-numeric `IndicatorRef` operands
+   * (Bool / Enum state-keys aren't projected into the in-memory series store).
+   * When the key IS numeric, the context derives `prev` from the second-newest
+   * point on `indicatorStore.series` instead.
+   */
+  getPrevIndicator?(instanceId: string, stateKey: string): StateValue | null;
+  /**
    * OHLCV bar series the orchestrator pre-loaded for this evaluation, keyed
    * by axis (`barSeriesKey(axis)`).
    * The sync `resolveLatest` / `resolveSeries` paths read from this map —
@@ -83,6 +99,31 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
           return deps.getSymbolState(deps.profileId, deps.symbolId, operand.key);
         case RulesV2.OperandKind.GlobalStateRef:
           return deps.getGlobalState(deps.profileId, operand.key);
+        case RulesV2.OperandKind.Literal:
+          return operand.value;
+      }
+    },
+    resolvePrev(operand) {
+      switch (operand.kind) {
+        case RulesV2.OperandKind.Price:
+          return tickRing ? prevFromSeries(tickRing) : null;
+        case RulesV2.OperandKind.Open:
+        case RulesV2.OperandKind.High:
+        case RulesV2.OperandKind.Low:
+        case RulesV2.OperandKind.Close:
+        case RulesV2.OperandKind.Volume: {
+          const view = barSeries.get(barSeriesKey(operandToAxis(operand)));
+          return view ? prevFromSeries(view) : null;
+        }
+        case RulesV2.OperandKind.IndicatorRef: {
+          const series = deps.indicatorStore.series(operand.instanceId, operand.stateKey);
+          if (series.length >= 2) return prevFromSeries(series);
+          return deps.getPrevIndicator?.(operand.instanceId, operand.stateKey) ?? null;
+        }
+        case RulesV2.OperandKind.SymbolStateRef:
+          return deps.getPrevSymbolState?.(deps.profileId, deps.symbolId, operand.key) ?? null;
+        case RulesV2.OperandKind.GlobalStateRef:
+          return deps.getPrevGlobalState?.(deps.profileId, operand.key) ?? null;
         case RulesV2.OperandKind.Literal:
           return operand.value;
       }
@@ -181,6 +222,26 @@ function operandToAxis(
     case RulesV2.OperandKind.Volume:
       return 'volume';
   }
+}
+
+/**
+ * The second-newest point's value on a series, or `null` when the series
+ * has fewer than two points.
+ *
+ * Walks the (lazy) backward iterator just far enough — skips the newest
+ * point, returns the next.
+ */
+function prevFromSeries(series: SeriesView): StateValue | null {
+  if (series.length < 2) return null;
+  let skippedNewest = false;
+  for (const point of series.backwardWalk()) {
+    if (!skippedNewest) {
+      skippedNewest = true;
+      continue;
+    }
+    return point.value;
+  }
+  return null;
 }
 
 /**

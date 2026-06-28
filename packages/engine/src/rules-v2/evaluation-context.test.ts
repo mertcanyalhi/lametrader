@@ -180,6 +180,84 @@ describe('buildEvaluationContext', () => {
     });
   });
 
+  it('resolvePrev returns the second-newest sample for series-eligible operands and dispatches to the optional getPrev* hooks for state refs', async () => {
+    const repo = new InMemoryCandleRepository();
+    const bars = [10, 20, 30].map((c, i) => candle((i + 1) * 60_000, c));
+    await repo.save(SYMBOL, PERIOD, bars);
+
+    const watchlist = new InMemoryWatchlistRepository([
+      {
+        id: SYMBOL,
+        type: SymbolType.Crypto,
+        description: 'BTC',
+        exchange: 'Binance',
+        periods: [PERIOD],
+      },
+    ]);
+    const indicators = new IndicatorRegistry();
+    indicators.register(movingAverage);
+    const indicatorService = new IndicatorService(indicators, watchlist, repo);
+    const indicatorStore = new IndicatorSeriesStore(indicatorService);
+
+    const tickRing = new TickRing();
+    tickRing.push(100, 9);
+    tickRing.push(200, 11);
+
+    const prevSymbolStates: Record<string, StateValue> = {
+      mode: { type: StateValueType.String, value: 'disarmed' },
+    };
+    const prevGlobalStates: Record<string, StateValue> = {
+      regime: { type: StateValueType.Enum, value: 'bear' },
+    };
+
+    const barWindow = { from: 0, to: 4 * 60_000 };
+    const barSeries = await prewarmBarSeries(repo, SYMBOL, barWindow, [
+      { period: PERIOD, axis: 'close' },
+    ]);
+
+    const ctx = buildEvaluationContext({
+      symbolId: SYMBOL,
+      profileId: PROFILE,
+      candleRepository: repo,
+      tickRings: new Map([[SYMBOL, tickRing]]),
+      indicatorStore,
+      barWindow,
+      barSeries,
+      getSymbolState: () => null,
+      getGlobalState: () => null,
+      getPrevSymbolState: (_p, sym, key) =>
+        sym === SYMBOL ? (prevSymbolStates[key] ?? null) : null,
+      getPrevGlobalState: (_p, key) => prevGlobalStates[key] ?? null,
+    });
+
+    const prevPrice = ctx.resolvePrev({ kind: RulesV2.OperandKind.Price });
+    const prevClose = ctx.resolvePrev({ kind: RulesV2.OperandKind.Close });
+    const prevSymbol = ctx.resolvePrev({
+      kind: RulesV2.OperandKind.SymbolStateRef,
+      key: 'mode',
+      valueType: StateValueType.String,
+    });
+    const prevGlobal = ctx.resolvePrev({
+      kind: RulesV2.OperandKind.GlobalStateRef,
+      key: 'regime',
+      valueType: StateValueType.Enum,
+    });
+    const prevLiteral = ctx.resolvePrev({
+      kind: RulesV2.OperandKind.Literal,
+      value: { type: StateValueType.Number, value: 42 },
+    });
+
+    expect({ prevPrice, prevClose, prevSymbol, prevGlobal, prevLiteral }).toEqual({
+      // Tick ring has (100,9) and (200,11) — prev is the older one.
+      prevPrice: { type: StateValueType.Number, value: 9 },
+      // Bars are [10, 20, 30] — prev close is 20.
+      prevClose: { type: StateValueType.Number, value: 20 },
+      prevSymbol: { type: StateValueType.String, value: 'disarmed' },
+      prevGlobal: { type: StateValueType.Enum, value: 'bear' },
+      prevLiteral: { type: StateValueType.Number, value: 42 },
+    });
+  });
+
   it('resolveSeries returns a single stationary point for Literal operands', async () => {
     const { ctx } = await seed();
     const series = ctx.resolveSeries({
