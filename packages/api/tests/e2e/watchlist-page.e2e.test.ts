@@ -4,7 +4,7 @@ import {
   BackfillService,
   ConfigService,
   defaultIndicators,
-  IndicatorComputeService,
+  IndicatorService,
   InMemoryMarketDataSource,
   MongoCandleRepository,
   MongoConfigRepository,
@@ -48,7 +48,7 @@ describe('watchlist page HTTP contract (e2e)', () => {
     const symbols = new SymbolService(sources, watchlist, config, candles);
     const backfill = new BackfillService(sources, candles, watchlist);
     const registry = defaultIndicators();
-    const compute = new IndicatorComputeService(registry, watchlist, candles);
+    const compute = new IndicatorService(registry, watchlist, candles);
     return createApp({ config, symbols, backfill, indicators: { registry, compute } });
   }
 

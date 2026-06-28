@@ -3,7 +3,7 @@ import { Period, type Profile, SymbolType, type WatchedSymbol } from '@lametrade
 import {
   ConfigService,
   defaultIndicators,
-  IndicatorComputeService,
+  IndicatorService,
   InMemoryMarketDataSource,
   MongoCandleRepository,
   MongoConfigRepository,
@@ -52,7 +52,7 @@ describe('profiles API (e2e)', () => {
     const profiles = new ProfileService(new MongoProfileRepository(db), watchlist, registry);
     const sources = [new InMemoryMarketDataSource([BTC])];
     const symbols = new SymbolService(sources, watchlist, config, candles, profiles);
-    const compute = new IndicatorComputeService(registry, watchlist, candles);
+    const compute = new IndicatorService(registry, watchlist, candles);
     app = createApp({ config, symbols, profiles, indicators: { registry, compute } });
     await app.ready();
   });

@@ -4,7 +4,7 @@ import {
   BackfillService,
   ConfigService,
   defaultIndicators,
-  IndicatorComputeService,
+  IndicatorService,
   InMemoryMarketDataSource,
   MongoCandleRepository,
   MongoConfigRepository,
@@ -74,7 +74,7 @@ describe('chart page candle contract (e2e)', () => {
     const symbols = new SymbolService([stub], watchlist, config, candleRepo);
     const backfill = new BackfillService([stub], candleRepo, watchlist);
     const registry = defaultIndicators();
-    const compute = new IndicatorComputeService(registry, watchlist, candleRepo);
+    const compute = new IndicatorService(registry, watchlist, candleRepo);
 
     app = createApp({ config, symbols, backfill, indicators: { registry, compute } });
     await app.ready();
