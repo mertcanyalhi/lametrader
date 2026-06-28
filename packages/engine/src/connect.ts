@@ -1,4 +1,5 @@
 import type {
+  EventLogAppendListener,
   IndicatorStateListener,
   Period,
   StateRepository,
@@ -44,6 +45,12 @@ export interface ConnectOptions {
   onIndicatorState?: IndicatorStateListener;
   /** Where the quote stream service emits each derived quote event (defaults to a no-op). */
   onSymbolQuote?: SymbolQuoteListener;
+  /**
+   * Where the event log emits every successful append (one call per side: rule
+   * + symbol, with the same stamped entry). Defaults to a no-op; the api
+   * filters `target.kind === 'symbol'` and publishes to its `ruleEventStream`.
+   */
+  onRuleEvent?: EventLogAppendListener;
   /** Per-period poll cadence in ms (required to enable a useful polling loop). */
   pollIntervals: Record<Period, number>;
   /**
@@ -143,6 +150,9 @@ export async function connectServices(
   const symbols = new SymbolService(sources, watchlist, config, candleRepo, profiles, stateRepo);
   const backfill = new BackfillService(sources, candleRepo, watchlist);
   const eventLog = new MongoEventLog(db);
+  if (options.onRuleEvent) {
+    eventLog.onAppend(options.onRuleEvent);
+  }
   const firingState = new MongoFiringStateRepository(db);
   const notifier = new TelegramNotifier(telegramDestinations);
   const wiredRuleEngine = wireRuleEngine({

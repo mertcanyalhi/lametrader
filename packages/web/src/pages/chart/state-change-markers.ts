@@ -18,6 +18,9 @@ import { symbolRuleEventsKey } from '../../lib/hooks/rules.js';
  * for the recent slice; older slice markers land naturally as the user
  * scrolls back and the same hook re-fetches with the new window — out of
  * scope here, see future per-window scoping.
+ *
+ * Mirrors {@link MARKER_PAGE_SIZE} in `lib/hooks/rule-events.ts`, which caps
+ * the cache after a streamed prepend so memory stays bounded.
  */
 const MARKER_PAGE_SIZE = 200;
 
@@ -94,11 +97,6 @@ export function useStateChangeMarkers(
       apiFetch<RuleEventEntry[]>(
         `/symbols/${encodeURIComponent(symbolId)}/rule-events?limit=${MARKER_PAGE_SIZE}`,
       ),
-    // Lazy: 5s polling so new markers appear while the chart is focused —
-    // ceiling is up-to-5s staleness and a poll per chart mount whether or
-    // not anything fired. Upgrade path: rule-event WebSocket pipeline that
-    // mutates this cache via setQueryData (issue #375 recommended fix).
-    refetchInterval: 5_000,
   });
   const events = query.data;
   return useMemo<SeriesMarker<Time>[]>(() => {

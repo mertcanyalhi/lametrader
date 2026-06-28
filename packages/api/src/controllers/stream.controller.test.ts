@@ -2,6 +2,7 @@ import {
   ConfigKey,
   type IndicatorStateEvent,
   Period,
+  type RuleEventEntry,
   type SymbolQuoteEvent,
   SymbolType,
   type WatchedSymbol,
@@ -148,6 +149,7 @@ async function buildApp(
       quoteStream.publish(event.subscriptionId, event);
     },
   });
+  const ruleEventStream = new StreamHub<RuleEventEntry>();
   const app = createApp(
     buildAppDeps({
       indicators: { registry, compute: service },
@@ -161,6 +163,7 @@ async function buildApp(
         quoteStreamService: gates.quoteGate
           ? gateSubscribe(quoteService, gates.quoteGate)
           : quoteService,
+        ruleEventStream,
       },
     }),
   );

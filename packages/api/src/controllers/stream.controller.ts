@@ -4,6 +4,7 @@ import type { LiveStream } from '../app.types.js';
 import { candleSubscriptionKind } from '../subscription-kinds/candle.js';
 import { indicatorSubscriptionKind } from '../subscription-kinds/indicator.js';
 import { quoteSubscriptionKind } from '../subscription-kinds/quote.js';
+import { ruleEventSubscriptionKind } from '../subscription-kinds/rule-event.js';
 import { SubscriptionRegistry } from '../subscription-registry.js';
 
 /**
@@ -16,8 +17,9 @@ import { SubscriptionRegistry } from '../subscription-registry.js';
  *   Subsequent state events arrive as `IndicatorStateEvent` frames. The client unsubscribes via `{ action: 'unsubscribe-indicator', subscriptionId }`.
  * - quote subscriptions via `{ action: 'subscribe-quote', id }` — the server validates (watched, watches `defaultPeriod`, has ≥ 2 candles there), calls `QuoteStreamService.subscribe(...)`, and replies with `{ action: 'subscribed-quote', subscriptionId, id, period }`.
  *   Subsequent quote frames arrive as `SymbolQuoteEvent`s. The client unsubscribes via `{ action: 'unsubscribe-quote', subscriptionId }`.
+ * - rule-event subscriptions via `{ action: 'subscribe-rule-event', id }` — sync acquire, the server publishes each new `RuleEventEntry` appended to the symbol's events log as `{ symbolId, entry }`. The client unsubscribes via `{ action: 'unsubscribe-rule-event', id }`.
  *
- * Closing the socket releases every subscription on it (candle, indicator, and quote).
+ * Closing the socket releases every subscription on it (candle, indicator, quote, and rule-event).
  *
  * Malformed or invalid control messages are logged and answered with an `{ error }` frame rather than being silently dropped.
  *
@@ -26,12 +28,19 @@ import { SubscriptionRegistry } from '../subscription-registry.js';
  * @param liveStream - the bundle of streaming dependencies (see {@link LiveStream}).
  */
 export function streamController(liveStream: LiveStream) {
-  const { candleStream, indicatorStream, indicatorService, quoteStream, quoteStreamService } =
-    liveStream;
+  const {
+    candleStream,
+    indicatorStream,
+    indicatorService,
+    quoteStream,
+    quoteStreamService,
+    ruleEventStream,
+  } = liveStream;
   const registry = new SubscriptionRegistry([
     candleSubscriptionKind({ candleStream }),
     indicatorSubscriptionKind({ indicatorStream, indicatorService }),
     quoteSubscriptionKind({ quoteStream, quoteStreamService }),
+    ruleEventSubscriptionKind({ ruleEventStream }),
   ]);
   return async (app: FastifyInstance): Promise<void> => {
     app.get('/stream', { websocket: true }, (socket, request) => {
