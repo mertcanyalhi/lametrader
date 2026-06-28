@@ -2,7 +2,7 @@
  * Entry point: wire Mongo-backed config + symbol services, start the continuous
  * polling + live-candle stream, and serve the REST API.
  */
-import type { IndicatorStateEvent, SymbolQuoteEvent } from '@lametrader/core';
+import type { IndicatorStateEvent, RuleEventEntry, SymbolQuoteEvent } from '@lametrader/core';
 import { type CandleEvent, connectServices, loadSettings } from '@lametrader/engine';
 import { createApp } from './app.js';
 import { StreamHub } from './stream-hub.js';
@@ -23,6 +23,7 @@ const onSubscriberError = (scope: string) => (error: unknown, key: string) =>
 const candleStream = new StreamHub<CandleEvent>(onSubscriberError('candle'));
 const indicatorStream = new StreamHub<IndicatorStateEvent>(onSubscriberError('indicator'));
 const quoteStream = new StreamHub<SymbolQuoteEvent>(onSubscriberError('quote'));
+const ruleEventStream = new StreamHub<RuleEventEntry>(onSubscriberError('rule-event'));
 
 const {
   config,
@@ -41,6 +42,9 @@ const {
   onCandle: (event) => candleStream.publish(event.id, event),
   onIndicatorState: (event) => indicatorStream.publish(event.subscriptionId, event),
   onSymbolQuote: (event) => quoteStream.publish(event.subscriptionId, event),
+  onRuleEvent: (entry, target) => {
+    if (target.kind === 'symbol') ruleEventStream.publish(target.symbolId, entry);
+  },
   pollIntervals,
   seedTelegramDestinations: telegramDestinationsSeed,
 });
@@ -61,6 +65,7 @@ const app = createApp(
       indicatorService,
       quoteStream,
       quoteStreamService,
+      ruleEventStream,
     },
   },
   { logger: true },

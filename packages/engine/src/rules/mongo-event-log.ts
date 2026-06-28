@@ -1,4 +1,9 @@
-import type { EventLog, RuleEventEntry } from '@lametrader/core';
+import type {
+  EventLog,
+  EventLogAppendListener,
+  EventLogAppendTarget,
+  RuleEventEntry,
+} from '@lametrader/core';
 import type { Collection, Db } from 'mongodb';
 
 /**
@@ -30,6 +35,8 @@ export class MongoEventLog implements EventLog {
   private readonly db: Db;
   /** Wall-clock source for stamping `firedAt`; overridable for deterministic tests. */
   private readonly now: () => number;
+  /** Active append listeners (mirrors `MongoStateRepository.emit`'s fan-out). */
+  private readonly listeners = new Set<EventLogAppendListener>();
 
   /**
    * @param db - a connected MongoDB database handle.
@@ -51,11 +58,15 @@ export class MongoEventLog implements EventLog {
   }
 
   async appendRuleEvent(ruleId: string, entry: RuleEventEntry): Promise<void> {
-    await this.rules.updateOne({ _id: ruleId }, { $push: { events: this.stamp(entry) } });
+    const stamped = this.stamp(entry);
+    await this.rules.updateOne({ _id: ruleId }, { $push: { events: stamped } });
+    this.emit(stamped, { kind: 'rule', ruleId });
   }
 
   async appendSymbolEvent(symbolId: string, entry: RuleEventEntry): Promise<void> {
-    await this.watchlist.updateOne({ _id: symbolId }, { $push: { events: this.stamp(entry) } });
+    const stamped = this.stamp(entry);
+    await this.watchlist.updateOne({ _id: symbolId }, { $push: { events: stamped } });
+    this.emit(stamped, { kind: 'symbol', symbolId });
   }
 
   /**
@@ -75,5 +86,16 @@ export class MongoEventLog implements EventLog {
   async symbolEvents(symbolId: string): Promise<RuleEventEntry[]> {
     const doc = await this.watchlist.findOne({ _id: symbolId }, { projection: { events: 1 } });
     return doc?.events ?? [];
+  }
+
+  onAppend(listener: EventLogAppendListener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private emit(entry: RuleEventEntry, target: EventLogAppendTarget): void {
+    for (const listener of this.listeners) listener(entry, target);
   }
 }

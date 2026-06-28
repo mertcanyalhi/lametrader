@@ -7,6 +7,7 @@ import {
   type Instrument,
   type MarketDataSource,
   Period,
+  type RuleEventEntry,
   type SymbolQuoteEvent,
   SymbolType,
 } from '@lametrader/core';
@@ -196,6 +197,7 @@ describe('quote live streaming (e2e)', () => {
         indicatorService,
         quoteStream,
         quoteStreamService,
+        ruleEventStream: new StreamHub<RuleEventEntry>(),
       },
     });
     baseUrl = await app.listen({ port: 0, host: '127.0.0.1' });

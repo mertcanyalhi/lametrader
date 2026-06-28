@@ -1,4 +1,10 @@
-import type { Candle, IndicatorStateEvent, Period, SymbolQuoteEvent } from '@lametrader/core';
+import type {
+  Candle,
+  IndicatorStateEvent,
+  Period,
+  RuleEventEntry,
+  SymbolQuoteEvent,
+} from '@lametrader/core';
 
 /**
  * The kinds of subscription the multiplexed `/stream` socket carries that the
@@ -12,6 +18,8 @@ export enum StreamKind {
   Quote = 'quote',
   /** A symbol's derived indicator-state feed, keyed by `(id, period, indicator)` on the client and the server's `subscriptionId` on the wire. */
   Indicator = 'indicator',
+  /** A symbol's rule-event feed (every newly-appended `RuleEventEntry` on that symbol), keyed by the client `id`. */
+  RuleEvent = 'rule-event',
 }
 
 /**
@@ -67,6 +75,8 @@ export interface StreamEventMap {
   [StreamKind.Quote]: SymbolQuoteEvent;
   /** Indicator subscriptions deliver {@link IndicatorStateEvent} frames. */
   [StreamKind.Indicator]: IndicatorStateEvent;
+  /** Rule-event subscriptions deliver bare {@link RuleEventEntry} payloads (the symbol id stays on the wire frame for routing only). */
+  [StreamKind.RuleEvent]: RuleEventEntry;
 }
 
 /**

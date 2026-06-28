@@ -409,11 +409,11 @@ pushes new candles — any subscribed indicator's recomputed state, and any subs
 symbol's recomputed quote — to clients over one **multiplexed** WebSocket. A single
 socket can watch many symbols and hold many indicator/quote subscriptions in parallel.
 
-| Method | Path      | Description                                                                  |
-| ------ | --------- | ---------------------------------------------------------------------------- |
-| `WS`   | `/stream` | Subscribe/unsubscribe to candles, indicators, and quotes; receive live frames. |
+| Method | Path      | Description                                                                                |
+| ------ | --------- | ------------------------------------------------------------------------------------------ |
+| `WS`   | `/stream` | Subscribe/unsubscribe to candles, indicators, quotes, and rule events; receive live frames. |
 
-After connecting, send JSON control messages. The route multiplexes three surfaces:
+After connecting, send JSON control messages. The route multiplexes four surfaces:
 
 ### Candle subscriptions
 
@@ -505,7 +505,23 @@ delivered to the owning socket:
 frame the baseline rotates to the just-closed bar, so subsequent frames measure
 against it (matching the snapshot's "since last close" semantics).
 
-Closing the socket releases every subscription on it (candle, indicator, and quote),
+### Rule-event subscriptions
+
+Keyed by symbol id. Sync acquire (no ack frame); mirrors candle's shape.
+
+- `{ "action": "subscribe-rule-event", "id": "crypto:BTCUSDT" }` — start receiving rule events.
+- `{ "action": "unsubscribe-rule-event", "id": "crypto:BTCUSDT" }` — stop.
+
+For each newly-appended entry on the subscribed symbol's events log, the socket receives:
+
+```json
+{ "symbolId": "crypto:BTCUSDT", "entry": { "type": "stateSet", "ts": 1704153600000, … } }
+```
+
+The full `RuleEventEntry` variants are documented in the chart's "Events" dialog;
+the marker layer filters to `stateSet` entries client-side.
+
+Closing the socket releases every subscription on it (candle, indicator, quote, and rule event),
 and a malformed control message is answered with an `{ "error": "<reason>" }` frame
 instead of being silently dropped.
 

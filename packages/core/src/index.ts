@@ -40,7 +40,11 @@ export { RuleConditionError, validateConditionTree } from './condition-tree.js';
 export { type ConditionNode, ConditionNodeKind } from './condition-tree.types.js';
 export { ConfigError, defaultConfig, mergeConfig, parseConfig } from './config.js';
 export { type Config, ConfigKey, type ConfigRepository, Period } from './config.types.js';
-export type { EventLog } from './event-log.types.js';
+export type {
+  EventLog,
+  EventLogAppendListener,
+  EventLogAppendTarget,
+} from './event-log.types.js';
 export { ExpirationError, validateExpiration } from './expiration.js';
 export type { Expiration } from './expiration.types.js';
 export type { FiringStateRepository } from './firing-state-repository.types.js';

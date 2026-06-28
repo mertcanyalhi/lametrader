@@ -15,6 +15,7 @@ import { formatChangePct, formatPrice } from '../../lib/format.js';
 import { liveCandleForPeriod, useCandleStream, usePagedCandles } from '../../lib/hooks/candles.js';
 import { computeIndicatorQueryOptions, useIndicatorCatalog } from '../../lib/hooks/indicators.js';
 import { useProfiles } from '../../lib/hooks/profiles.js';
+import { useRuleEventStream } from '../../lib/hooks/rule-events.js';
 import { useWatchlist } from '../../lib/hooks/symbols.js';
 import { useConfig } from '../../lib/hooks/use-config.js';
 import { useSelectedProfile } from '../../lib/selected-profile-context.js';
@@ -146,6 +147,9 @@ function ChartLayout({
   useEffect(() => {
     setStoredSymbolId(id);
   }, [id]);
+  // Live rule events for this symbol: fold every new entry into the markers and
+  // events-dialog caches so the chart updates without a tab refocus (#375).
+  useRuleEventStream(id);
   return (
     <div className="grid h-full grid-rows-[minmax(0,1fr)_auto] gap-3">
       <div className="min-h-0">

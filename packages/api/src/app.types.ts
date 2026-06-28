@@ -1,4 +1,9 @@
-import type { IndicatorStateEvent, StateRepository, SymbolQuoteEvent } from '@lametrader/core';
+import type {
+  IndicatorStateEvent,
+  RuleEventEntry,
+  StateRepository,
+  SymbolQuoteEvent,
+} from '@lametrader/core';
 import type {
   BackfillService,
   CandleEvent,
@@ -29,6 +34,8 @@ export interface LiveStream {
   quoteStream: StreamHub<SymbolQuoteEvent>;
   /** The engine-side quote stream service; the route calls its `subscribe`/`unsubscribe`. */
   quoteStreamService: QuoteStreamService;
+  /** The rule-event pub/sub fed by the engine's `EventLog.onAppend` (symbol side only). */
+  ruleEventStream: StreamHub<RuleEventEntry>;
 }
 
 /**
