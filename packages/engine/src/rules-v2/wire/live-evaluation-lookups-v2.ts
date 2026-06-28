@@ -15,7 +15,7 @@ import { TickRingBuffer } from '../tick-ring.js';
  * Synchronous facade over the v2 engine's live caches, satisfying the
  * {@link EvaluationLookups} port the v2 {@link RuleOrchestrator} consumes.
  *
- * The cache surface is intentionally narrow for the first cut of #395:
+ * The cache surface:
  *
  * - Per-symbol {@link TickRingBuffer} for `latestPrice` + `priceSeries`,
  *   updated by {@link record} on every {@link RulesV2.TickEvent}.
@@ -23,12 +23,18 @@ import { TickRingBuffer } from '../tick-ring.js';
  *   (`latest*State` / `prev*State`), kept warm by a
  *   {@link StateRepository.onStateChanged} subscription set up at
  *   construction.
+ * - In-memory mirror of per-`(instanceId, stateKey)` indicator state values
+ *   (`latestIndicator` / `prevIndicator`), kept warm by {@link record} on
+ *   every {@link RulesV2.IndicatorChangedEvent} the wired
+ *   {@link IndicatorCascadeBridge} emits.
  *
- * OHLCV + indicator lookups return `null` for now — the bar series + indicator
- * series caches land with the rules-v2 UI / live wiring follow-up. The schema
- * validator (per ADR 0016 #11) does not block rules whose conditions touch
- * those operand kinds; they will silently never fire until that follow-up
- * lands. This is documented in `specs/rules-v2-rest-api.spec.md`.
+ * OHLCV + numeric series lookups (`latestOhlcv`, `barSeries`,
+ * `indicatorSeries`) still return `null` — those caches land with a follow-up
+ * (the bar-series window loader and the {@link IndicatorSeriesStore}
+ * rebuild). The schema validator (per ADR 0016 #11) does not block rules
+ * whose conditions touch those operand kinds; they will silently never fire
+ * until that follow-up lands. This is documented in
+ * `specs/rules-v2-rest-api.spec.md`.
  */
 export class LiveEvaluationLookupsV2 implements EvaluationLookups {
   /** symbolId → tick ring buffer (latest price + tick series). */
@@ -41,6 +47,10 @@ export class LiveEvaluationLookupsV2 implements EvaluationLookups {
   private readonly globalState = new Map<string, StateValue>();
   /** Same key shape → previous global-state value (shifted on each new write). */
   private readonly globalStatePrev = new Map<string, StateValue>();
+  /** `${instanceId} ${stateKey}` → latest indicator state value. */
+  private readonly indicatorState = new Map<string, StateValue>();
+  /** Same key shape → previous indicator state value (shifted on each new record). */
+  private readonly indicatorStatePrev = new Map<string, StateValue>();
 
   /**
    * @param state - the state repository whose `onStateChanged` stream keeps
@@ -60,13 +70,27 @@ export class LiveEvaluationLookupsV2 implements EvaluationLookups {
 
   /**
    * Apply one inbound evaluation-trigger event to the matching cache before
-   * the orchestrator processes it. Tick events push into the per-symbol ring;
-   * other events are a no-op (state cascades flow through the StateRepository
-   * subscription, OHLCV / indicator caches are deferred).
+   * the orchestrator processes it.
+   *
+   * - {@link RulesV2.TickEvent}: push the `(ts, price)` sample into the
+   *   per-symbol tick ring.
+   * - {@link RulesV2.IndicatorChangedEvent}: shift the previously latest
+   *   value for `(instanceId, stateKey)` into the `prev` mirror and store the
+   *   new `current` in `latest` — symmetric with how the state-repository
+   *   subscription handles `SymbolStateChanged` / `GlobalStateChanged`.
+   * - Other events are a no-op (symbol-state / global-state cascades flow
+   *   through the {@link StateRepository.onStateChanged} subscription; bar
+   *   lifecycle events do not by themselves move OHLCV values, which the
+   *   deferred bar-series cache will populate).
    */
   record(event: RulesV2.EvaluationTriggerEvent): void {
     if (event.kind === RulesV2.EvaluationTriggerKind.Tick) {
       this.ringFor(event.symbolId).push(event.ts, event.price);
+      return;
+    }
+    if (event.kind === RulesV2.EvaluationTriggerKind.IndicatorChanged) {
+      const key = indicatorStateKey(event.instanceId, event.stateKey);
+      shift(this.indicatorState, this.indicatorStatePrev, key, event.current);
     }
   }
 
@@ -78,8 +102,8 @@ export class LiveEvaluationLookupsV2 implements EvaluationLookups {
     return null;
   }
 
-  latestIndicator(_instanceId: string, _stateKey: string): StateValue | null {
-    return null;
+  latestIndicator(instanceId: string, stateKey: string): StateValue | null {
+    return this.indicatorState.get(indicatorStateKey(instanceId, stateKey)) ?? null;
   }
 
   latestSymbolState(profileId: string, symbolId: string, key: string): StateValue | null {
@@ -90,8 +114,8 @@ export class LiveEvaluationLookupsV2 implements EvaluationLookups {
     return this.globalState.get(globalStateKey(profileId, key)) ?? null;
   }
 
-  prevIndicator(_instanceId: string, _stateKey: string): StateValue | null {
-    return null;
+  prevIndicator(instanceId: string, stateKey: string): StateValue | null {
+    return this.indicatorStatePrev.get(indicatorStateKey(instanceId, stateKey)) ?? null;
   }
 
   prevSymbolState(profileId: string, symbolId: string, key: string): StateValue | null {
@@ -139,6 +163,11 @@ function symbolStateKey(profileId: string, symbolId: string, key: string): strin
 /** Compose the key for a global-state slot. */
 function globalStateKey(profileId: string, key: string): string {
   return `${profileId} ${key}`;
+}
+
+/** Compose the key for an indicator-state slot. */
+function indicatorStateKey(instanceId: string, stateKey: string): string {
+  return `${instanceId} ${stateKey}`;
 }
 
 /**
