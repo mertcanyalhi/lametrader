@@ -277,5 +277,8 @@ function paginate(
   const limit = Math.min(options.limit ?? DEFAULT_EVENT_PAGE_SIZE, MAX_EVENT_PAGE_SIZE);
   const before = options.before;
   const filtered = before === undefined ? events : events.filter((event) => event.ts < before);
-  return [...filtered].reverse().sort((a, b) => b.ts - a.ts).slice(0, limit);
+  return [...filtered]
+    .reverse()
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, limit);
 }
