@@ -1,7 +1,7 @@
 # Spec: crossing-evaluator prev resolution under live ticks
 
 - Status: draft
-- Touches: `packages/engine/src/rules/wire-rule-engine.ts`, `condition-evaluator.ts`
+- Touches: `packages/engine/src/rules/condition-evaluator.ts`
 
 ## Goal
 
@@ -21,8 +21,7 @@ A `Current crossing X` rule driven by `CurrentValueChanged` events therefore rea
 What's left for this fix:
 
 - (3) Add `leftPrev`/`rightPrev` to the existing `leaf_decision` trace so the diagnostic loop closes.
-- Defensive move of `lookups.record` into the per-symbol serializer in `wireRuleEngine` so the live cache stays in step with what the orchestrator has actually processed (preserves the more-correct snapshot semantics for the per-event context modal #304 even though it's no longer load-bearing for the operator decisions).
-- Regression-prevention e2e through the real `wireRuleEngine` covering both the happy path and the close-axis-bleed scenario.
+- Regression-prevention e2e through the real `wireRuleEngine` covering both the happy path and the close-axis-bleed scenario — proves that `resolvePrevCurrent` actually shields `Current crossing X` from the close-fallback on the first live tick.
 
 ## Acceptance criteria
 
@@ -45,14 +44,5 @@ The critical failure mode covered: prior `CloseValueChanged` events pre-populati
 - Changes to indicator / state crossing paths beyond what the trace addition touches.
 - Replacing the existing TRACE-level logging machinery; the `leaf_decision` emit already lives in `condition-evaluator.ts` via #354.
 - The chart live-event marker work (#375 — separate concern).
-
-## Knock-on: per-event context (#304) snapshot semantics
-
-The fix keeps the move of `lookups.record(event)` from `wireRuleEngine.enqueue` into the per-symbol serializer callback.
-Before this PR, the candle bridge synchronously fired 5 OHLCV events into `enqueue`, all 5 `record`s landed before any event was processed, and `ActionRunner.captureContext` then saw the full post-burst snapshot regardless of which OHLCV event the rule fired on.
-After this PR, each event in the burst processes against the slot state that existed at *its* turn in the serializer chain.
-So a rule firing on `CloseValueChanged` will see `volume: null` in `lookupSnapshot` (volume rotates after close).
-That's the more-correct semantics ("what the rule actually saw when its condition evaluated true") — accepted as the deliberate behavior change.
-The `per-event-context-modal.spec.md` is updated in lockstep, and the existing `rule-orchestrator-wiring.e2e.test.ts` assertion is revised to match.
 
 ## Surprises
