@@ -19,3 +19,16 @@ export {
 export { MongoEventLog } from './persistence/mongo-event-log.js';
 export { MongoRuleRepository } from './persistence/mongo-rule-repository.js';
 export type { RuleV2Document } from './persistence/mongo-rule-repository.types.js';
+export {
+  type EventListOptions,
+  RuleServiceV2,
+  type RuleServiceV2Options,
+  type RuleV2CreateInput,
+  type RuleV2ListFilters,
+} from './service/index.js';
+export {
+  LiveEvaluationLookupsV2,
+  type RuleEngineV2Deps,
+  type WiredRuleEngineV2,
+  wireRuleEngineV2,
+} from './wire/index.js';

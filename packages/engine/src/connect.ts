@@ -2,6 +2,7 @@ import type {
   EventLogAppendListener,
   IndicatorStateListener,
   Period,
+  RulesV2,
   StateRepository,
   SymbolQuoteListener,
 } from '@lametrader/core';
@@ -25,6 +26,10 @@ import { MongoRuleRepository } from './rules/mongo-rule-repository.js';
 import { RuleService } from './rules/rule-service.js';
 import { TelegramNotifier } from './rules/telegram-notifier.js';
 import { type WiredRuleEngine, wireRuleEngine } from './rules/wire-rule-engine.js';
+import { MongoEventLog as MongoEventLogV2 } from './rules-v2/persistence/mongo-event-log.js';
+import { MongoRuleRepository as MongoRuleRepositoryV2 } from './rules-v2/persistence/mongo-rule-repository.js';
+import { RuleServiceV2 } from './rules-v2/service/rule-service.js';
+import { type WiredRuleEngineV2, wireRuleEngineV2 } from './rules-v2/wire/wire-rule-engine-v2.js';
 import { MongoStateRepository } from './state/mongo-state-repository.js';
 import { defaultMarketDataSources } from './symbols/default-sources.js';
 import { MongoWatchlistRepository } from './symbols/mongo-watchlist-repository.js';
@@ -51,6 +56,11 @@ export interface ConnectOptions {
    * filters `target.kind === 'symbol'` and publishes to its `ruleEventStream`.
    */
   onRuleEvent?: EventLogAppendListener;
+  /**
+   * v2 analogue of {@link ConnectOptions.onRuleEvent}: every append on the v2
+   * event log fans out here. Defaults to a no-op.
+   */
+  onRuleEventV2?: RulesV2.EventLogAppendListener;
   /** Per-period poll cadence in ms (required to enable a useful polling loop). */
   pollIntervals: Record<Period, number>;
   /**
@@ -75,6 +85,8 @@ export interface ConnectedServices {
   profiles: ProfileService;
   /** The rules use-case (read-only for now; CRUD lands in later issues). */
   rules: RuleService;
+  /** The rules-v2 use-case (parallel to {@link ConnectedServices.rules} per ADR 0016). */
+  rulesV2: RuleServiceV2;
   /** The shared indicator catalog registry (read-only at runtime). */
   indicators: IndicatorRegistry;
   /**
@@ -93,6 +105,12 @@ export interface ConnectedServices {
    * need to await the chain.
    */
   wiredRuleEngine: WiredRuleEngine;
+  /**
+   * The composed v2 live rule engine — runs in parallel with
+   * {@link ConnectedServices.wiredRuleEngine} per ADR 0016 until v1 is retired.
+   * Tests await `wiredRuleEngineV2.drain()` to assert end-state.
+   */
+  wiredRuleEngineV2: WiredRuleEngineV2;
   /**
    * The Telegram destinations CRUD use-case
    * (drives `/config/notifications/telegram` and the `TelegramNotifier`).
@@ -167,16 +185,32 @@ export async function connectServices(
   // `SymbolStateRef` / `GlobalStateRef` see `null` for any slot persisted by
   // a previous engine process until that slot is mutated in this one.
   await wiredRuleEngine.lookups.warm({ profiles: profileRepo, watchlist });
+  const ruleRepoV2 = new MongoRuleRepositoryV2(db);
+  await ruleRepoV2.ensureIndexes();
+  const eventLogV2 = new MongoEventLogV2(db);
+  if (options.onRuleEventV2) {
+    eventLogV2.onAppend(options.onRuleEventV2);
+  }
+  const rulesV2 = new RuleServiceV2(ruleRepoV2, eventLogV2, watchlist);
+  const wiredRuleEngineV2 = wireRuleEngineV2({
+    rules: ruleRepoV2,
+    watchlist,
+    state: stateRepo,
+    notifier,
+    eventLog: eventLogV2,
+  });
   const indicatorService = new IndicatorService(indicators, watchlist, candleRepo, {
     onState: (event) => {
       (options.onIndicatorState ?? (() => {}))(event);
       wiredRuleEngine.indicatorBridge.handleState(event);
+      wiredRuleEngineV2.indicatorBridge.handleIndicatorState(event);
     },
   });
   const quoteStream = new QuoteStreamService(watchlist, config, candleRepo, {
     onQuote: (event) => {
       (options.onSymbolQuote ?? (() => {}))(event);
       wiredRuleEngine.quoteBridge.handleQuote(event);
+      wiredRuleEngineV2.tickBridge.handleQuote(event);
     },
   });
 
@@ -199,6 +233,7 @@ export async function connectServices(
         log.error({ err, event }, 'quote stream failed');
       }
       wiredRuleEngine.candleBridge.handleCandle(event);
+      wiredRuleEngineV2.barBridge.handleCandle(event);
     },
     intervals: options.pollIntervals,
   });
@@ -207,11 +242,13 @@ export async function connectServices(
     symbols,
     profiles,
     rules,
+    rulesV2,
     indicators,
     indicatorService,
     quoteStream,
     state: stateRepo,
     wiredRuleEngine,
+    wiredRuleEngineV2,
     telegramDestinations,
     backfill,
     polling,
