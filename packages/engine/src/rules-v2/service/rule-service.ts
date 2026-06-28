@@ -262,7 +262,14 @@ function scopeAdmitsSymbol(scope: RulesV2.RuleScope, symbolId: string): boolean 
   }
 }
 
-/** Reverse to newest-first, apply `before` cursor, slice to `limit`. */
+/**
+ * Reverse to newest-first, apply `before` cursor, slice to `limit`.
+ *
+ * Within one fire (every per-action entry plus the trailing `Fired` umbrella
+ * share the same source `ts`), reversing the append-ordered slice puts the
+ * last-appended entry first — so a fire reads as `Fired` then per-action
+ * entries, matching the user-facing "newest first" semantics.
+ */
 function paginate(
   events: readonly RulesV2.RuleEventEntry[],
   options: EventListOptions,
@@ -270,5 +277,5 @@ function paginate(
   const limit = Math.min(options.limit ?? DEFAULT_EVENT_PAGE_SIZE, MAX_EVENT_PAGE_SIZE);
   const before = options.before;
   const filtered = before === undefined ? events : events.filter((event) => event.ts < before);
-  return [...filtered].sort((a, b) => b.ts - a.ts).slice(0, limit);
+  return [...filtered].reverse().sort((a, b) => b.ts - a.ts).slice(0, limit);
 }
