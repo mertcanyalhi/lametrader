@@ -380,69 +380,6 @@ curl -X PATCH http://localhost:3000/rules/<id> \
 curl 'http://localhost:3000/rules/<id>/events?limit=50'
 ```
 
-## Rules-v2 resource (`/v2/rules*`)
-
-Per ADR 0016, rules-v2 is the greenfield rule engine + schema + REST surface that ships in parallel with v1 behind a feature flag. v2 expands triggers (six variants over three cadences — tick, bar, periodic), operators (Comparison, Crossing, Channel, Moving, State), and operand kinds (`Price`, `Open`/`High`/`Low`/`Close`/`Volume`, `IndicatorRef`, `SymbolStateRef`, `GlobalStateRef`, `Literal`), and folds the v1 `NotifyTelegram` action into a generic `Notification` with a `channel` discriminator.
-
-Validation is schema-only at the boundary; the engine trusts what passes. Multi-field violations are surfaced via a uniform `{ error, fields: [{ path, message }, …] }` envelope (the same envelope is now used for v1 validation 400s as well — additive, the existing `{ error }` keys are unchanged).
-
-Per-tick triggers (`everyTime` / `once` / `oncePerBar`) require every referenced symbol to be on the watchlist (`AllSymbols`-scoped rules are exempt; fan-out is dynamic at fire-time). Failing the check returns a 400 with a `fields[]` entry pointing at `scope.symbolId`.
-
-### Endpoints
-
-| Method   | Path                                            | Body            | Description                                                                                              |
-| -------- | ----------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/v2/rules?profileId=&symbolId=&enabled=`       | —               | List v2 rules; filters are independent and combinable.                                                   |
-| `POST`   | `/v2/rules`                                     | `RuleV2Input`   | Create a v2 rule. **201** / 400 (`{ error, fields }`).                                                   |
-| `GET`    | `/v2/rules/{id}`                                | —               | Fetch one v2 rule. 200 / 404.                                                                            |
-| `PATCH`  | `/v2/rules/{id}`                                | `RuleV2Patch`   | Partial merge; re-validates the merged result. 200 / 400 / 404.                                          |
-| `DELETE` | `/v2/rules/{id}`                                | —               | Delete a v2 rule. **204** / 404.                                                                         |
-| `GET`    | `/v2/rules/{id}/events?limit=&before=`          | —               | Mirrored rule events newest-first (default 50, max 500; `before` cursors on `ts`). 200 / 404.            |
-| `GET`    | `/v2/symbols/{id}/rule-events?limit=&before=`   | —               | Mirrored symbol events newest-first (same pagination). 200.                                              |
-
-### Examples
-
-```sh
-# Create a tick-cadence Price>100 rule on a watched symbol
-curl -X POST http://localhost:3000/v2/rules \
-  -H 'content-type: application/json' \
-  -d '{
-    "profileId": "p1",
-    "name": "BTC tick > 100",
-    "scope": { "kind": "symbol", "symbolId": "BTC" },
-    "condition": {
-      "kind": "leaf",
-      "leaf": {
-        "family": "comparison",
-        "operator": "gt",
-        "left":  { "kind": "price" },
-        "right": { "kind": "literal", "value": { "type": "number", "value": 100 } }
-      }
-    },
-    "trigger":   { "kind": "everyTime" },
-    "expiration": null,
-    "actions":   [{
-      "kind": "notification",
-      "channel": "telegram",
-      "destinationName": "main",
-      "template": "{symbolId} tick > 100"
-    }],
-    "enabled":   true,
-    "order":     1
-  }'
-
-# List by profile + symbol + enabled
-curl 'http://localhost:3000/v2/rules?profileId=p1&symbolId=BTC&enabled=true'
-
-# Patch enable flag
-curl -X PATCH http://localhost:3000/v2/rules/<id> \
-  -H 'content-type: application/json' -d '{ "enabled": false }'
-
-# Read per-rule + per-symbol event logs
-curl 'http://localhost:3000/v2/rules/<id>/events?limit=50'
-curl 'http://localhost:3000/v2/symbols/BTC/rule-events?limit=50'
-```
-
 ## State resource
 
 Read-side views of the rule-engine state — the per-profile global key/value store and (via the symbols resource) per-profile per-symbol state maps. Used by chart markers and debugging; the engine itself writes state through the orchestrator.

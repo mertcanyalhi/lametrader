@@ -83,7 +83,6 @@ export {
   type WiredRuleEngine,
   wireRuleEngine,
 } from './rules/wire-rule-engine.js';
-export * as RulesV2 from './rules-v2/index.js';
 export { loadSettings } from './settings.js';
 export type { LogLevel, Settings, TelegramDestination } from './settings.types.js';
 export { InMemoryStateRepository } from './state/in-memory-state-repository.js';

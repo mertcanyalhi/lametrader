@@ -21,10 +21,8 @@ import {
   SymbolNotFoundError,
   TelegramDestinationError,
   TelegramDestinationNotFoundError,
-  TickRuleNotEligibleError,
 } from '@lametrader/core';
 import { type BackfillJob, BackfillJobService } from '@lametrader/engine';
-import type { ErrorObject } from 'ajv';
 import Fastify, { type FastifyError } from 'fastify';
 import type { AppDependencies, AppOptions } from './app.types.js';
 import { candlesController } from './controllers/candles.controller.js';
@@ -33,7 +31,6 @@ import { indicatorsController } from './controllers/indicators.controller.js';
 import { notificationsController } from './controllers/notifications.controller.js';
 import { profilesController } from './controllers/profiles.controller.js';
 import { rulesController } from './controllers/rules.controller.js';
-import { rulesV2Controller } from './controllers/rules-v2.controller.js';
 import { stateController } from './controllers/state.controller.js';
 import { streamController } from './controllers/stream.controller.js';
 import { symbolsController } from './controllers/symbols.controller.js';
@@ -59,14 +56,7 @@ const { version: API_VERSION } = createRequire(import.meta.url)('../package.json
  * @param options - app options (see {@link AppOptions}).
  */
 export function createApp(deps: AppDependencies, options: AppOptions = {}) {
-  // `allErrors: true` so AJV reports every offending field on one request
-  // (per `specs/rules-v2-rest-api.spec.md` AC #2). The error handler maps
-  // the resulting `error.validation` array onto the `{ error, fields[] }`
-  // envelope.
-  const app = Fastify({
-    logger: options.logger ?? false,
-    ajv: { customOptions: { allErrors: true } },
-  }).withTypeProvider<TypeBoxTypeProvider>();
+  const app = Fastify({ logger: options.logger ?? false }).withTypeProvider<TypeBoxTypeProvider>();
 
   app.register(fastifySwagger, {
     openapi: {
@@ -76,7 +66,6 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
         { name: 'symbols', description: 'Symbol discovery and watchlist' },
         { name: 'profiles', description: 'Profiles (selectable templates)' },
         { name: 'rules', description: 'Rule definitions, events and state' },
-        { name: 'rules-v2', description: 'v2 rule definitions, events (per ADR 0016)' },
         { name: 'candles', description: 'Historical candle backfill and reads' },
         { name: 'indicators', description: 'Indicator catalog (descriptors only)' },
       ],
@@ -105,21 +94,8 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
       reply.code(409).send({ error: error.message });
       return;
     }
-    if (error.validation) {
-      reply.code(400).send({ error: error.message, fields: toFieldErrors(error.validation) });
-      return;
-    }
-    if (error instanceof TickRuleNotEligibleError) {
-      reply.code(400).send({
-        error: error.message,
-        fields: error.unwatchedSymbolIds.map((symbolId) => ({
-          path: 'scope.symbolId',
-          message: `Symbol "${symbolId}" is not watched.`,
-        })),
-      });
-      return;
-    }
     if (
+      error.validation ||
       error instanceof ConfigError ||
       error instanceof SymbolError ||
       error instanceof CandleError ||
@@ -156,9 +132,6 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
   if (deps.rules) {
     app.register(rulesController(deps.rules));
   }
-  if (deps.rulesV2) {
-    app.register(rulesV2Controller(deps.rulesV2), { prefix: '/v2' });
-  }
   if (deps.state) {
     app.register(stateController(deps.state));
   }
@@ -180,22 +153,4 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
   }
 
   return app;
-}
-
-/**
- * Map every AJV failure on a request body / query / params to one
- * `{ path, message }` entry. `path` is the JSON-pointer-style path with the
- * leading `/` stripped and `/` separators turned into dots so the wire format
- * reads like a dotted key (`scope.symbolId`, `actions.0.kind`).
- */
-function toFieldErrors(validation: ErrorObject[]): Array<{ path: string; message: string }> {
-  return validation.map((entry) => ({
-    path: toDottedPath(entry.instancePath),
-    message: entry.message ?? '',
-  }));
-}
-
-/** Strip the leading slash from a JSON pointer and translate `/` → `.`. */
-function toDottedPath(instancePath: string): string {
-  return instancePath.replace(/^\//, '').replace(/\//g, '.');
 }

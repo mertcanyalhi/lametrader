@@ -5,7 +5,7 @@ import { type Action, ActionKind, NotificationChannel } from './action.types.js'
 import { ConditionNodeKind, LeafConditionFamily } from './condition.types.js';
 import { OperandKind } from './operand.types.js';
 import { ComparisonOperator } from './operator.types.js';
-import type { Rule } from './rule.types.js';
+import { type Rule } from './rule.types.js';
 import { RuleScopeKind } from './scope.types.js';
 import { TriggerKind } from './trigger.types.js';
 
