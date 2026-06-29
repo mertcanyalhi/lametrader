@@ -1,5 +1,5 @@
 import type { Rule } from '@lametrader/core';
-import { Badge, Button, Callout, Card, Flex, Heading, Skeleton, Text } from '@radix-ui/themes';
+import { Button, Callout, Card, Flex, Heading, Skeleton, Text } from '@radix-ui/themes';
 import { Plus } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { makeDraftRule } from '../../lib/draft-rule.js';
@@ -7,17 +7,20 @@ import { useRules } from '../../lib/hooks/rules.js';
 import { useSelectedProfile } from '../../lib/selected-profile-context.js';
 import { ProfilePickerDialog } from '../chart/profile-picker-dialog.js';
 import { RuleEditorDialog } from './rule-editor-dialog.js';
+import { RuleEventsDialog } from './rule-events-dialog.js';
+import { RulesTable } from './rules-table.js';
 
 /**
  * The `/rules` route — the only rules editor surface post-cutover.
  *
- * Profile-scoped rule list with a `New rule` button that opens the editor
- * dialog. Coexistence with v1 is over: v1's modules and routes are gone (per
- * ADR 0016 cutover).
+ * Profile-scoped rule list rendered as a management table (play/pause, Name,
+ * Scope, Trigger, Last fired, Actions) per issue #426. The `New rule` button
+ * opens the editor dialog; each row's actions open edit / events / delete.
  */
 export function RulesPage(): ReactNode {
   const { profileId } = useSelectedProfile();
   const [editing, setEditing] = useState<Rule | null>(null);
+  const [eventsRule, setEventsRule] = useState<Rule | null>(null);
   const [creating, setCreating] = useState(false);
 
   return (
@@ -36,7 +39,7 @@ export function RulesPage(): ReactNode {
               Pick a profile from the bottom bar to see its rules.
             </Text>
           ) : (
-            <RulesContent profileId={profileId} onEdit={setEditing} />
+            <RulesContent profileId={profileId} onEdit={setEditing} onEvents={setEventsRule} />
           )}
         </div>
       </Card>
@@ -70,21 +73,32 @@ export function RulesPage(): ReactNode {
           initial={editing}
         />
       ) : null}
+      {eventsRule ? (
+        <RuleEventsDialog
+          rule={eventsRule}
+          open={true}
+          onOpenChange={(next) => {
+            if (!next) setEventsRule(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
 /**
- * Profile-scoped rules-list body for the v2 page. Mounted only when a profile
- * is selected, so {@link useRules} is fetched per-profile and re-runs
- * cleanly on a profile switch.
+ * Profile-scoped rules-list body. Mounted only when a profile is selected, so
+ * {@link useRules} is fetched per-profile and re-runs cleanly on a profile
+ * switch.
  */
 function RulesContent({
   profileId,
   onEdit,
+  onEvents,
 }: {
   profileId: string;
   onEdit: (rule: Rule) => void;
+  onEvents: (rule: Rule) => void;
 }): ReactNode {
   const query = useRules({ profileId });
   if (query.isPending) return <Skeleton height="1.25rem" width="10rem" />;
@@ -102,32 +116,5 @@ function RulesContent({
       </Text>
     );
   }
-  return (
-    <Flex direction="column" gap="2">
-      {query.data.map((rule) => (
-        <Card
-          key={rule.id}
-          variant="surface"
-          role="button"
-          tabIndex={0}
-          onClick={() => onEdit(rule)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') onEdit(rule);
-          }}
-        >
-          <Flex align="center" justify="between">
-            <Flex direction="column" gap="1">
-              <Text weight="bold">{rule.name}</Text>
-              <Text size="1" color="gray">
-                {rule.description ?? ''}
-              </Text>
-            </Flex>
-            <Badge color={rule.enabled ? 'green' : 'gray'}>
-              {rule.enabled ? 'enabled' : 'disabled'}
-            </Badge>
-          </Flex>
-        </Card>
-      ))}
-    </Flex>
-  );
+  return <RulesTable rules={query.data} onEdit={onEdit} onEvents={onEvents} />;
 }

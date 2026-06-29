@@ -213,6 +213,39 @@ describe('rules orchestrator + action runner (e2e)', () => {
     expect(await eventLog.ruleEvents('r1')).toEqual([expectedNotification, expectedFired]);
   });
 
+  it('stamps lastFiredAt on the persisted rule with the inbound event ts after a successful fire (issue #426)', async () => {
+    const rule: Rule = {
+      id: 'r1',
+      profileId: 'profile-A',
+      name: 'Stamp lastFiredAt',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: PRICE_GT_100,
+      trigger: { kind: TriggerKind.EveryTime },
+      expiration: null,
+      actions: [
+        {
+          kind: ActionKind.Notification,
+          channel: NotificationChannel.Telegram,
+          destinationName: 'main',
+          template: 'fired',
+        },
+      ],
+      enabled: true,
+      order: 0,
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    const { orchestrator, rules } = await wire({ rules: [rule], tickPrice: 120 });
+    const tick: TickEvent = {
+      kind: EvaluationTriggerKind.Tick,
+      ts: 1_000,
+      symbolId: 'AAPL',
+      price: 120,
+    };
+    await orchestrator.process(tick);
+    expect(await rules.get('r1')).toEqual({ ...rule, lastFiredAt: 1_000 });
+  });
+
   it('critical failure mode — a cascade of state writes that exceeds the cycle limit records exactly one CycleOverflow entry on the symbol log and halts further cascade', async () => {
     // A `kicker` fires on the Tick and sets a state key; a `flipper`'s
     // condition references the same key and its action writes alternating
