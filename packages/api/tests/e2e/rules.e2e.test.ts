@@ -225,5 +225,4 @@ describe('/rules (e2e)', () => {
     const afterDelete = await app.inject({ method: 'GET', url: `/rules/${rule.id}` });
     expect(afterDelete.statusCode).toEqual(404);
   });
-
 });
