@@ -1,7 +1,5 @@
 import {
   Period,
-  type RuleEventEntry,
-  RuleEventType,
   type StateValue,
   StateValueType,
   SymbolType,
@@ -209,99 +207,6 @@ describe('PATCH /symbols/:id', () => {
       method: 'PATCH',
       url: '/symbols/crypto:BTCUSDT',
       payload: { periods: ['1h'] },
-    });
-    expect(res.statusCode).toBe(404);
-  });
-});
-
-/**
- * Build an app whose watchlist pre-seeds `crypto:BTCUSDT` with `events`,
- * so the `/rule-events` route is driven over the full controller → service
- * → repo path against fake events.
- */
-function buildAppWithSeededEvents(events: RuleEventEntry[]) {
-  const items = new Map<string, WatchedSymbol>([
-    ['crypto:BTCUSDT', { ...BTC, periods: [Period.OneHour, Period.OneDay], events }],
-  ]);
-  const watchlist: WatchlistRepository = {
-    list: async () => [...items.values()],
-    get: async (id) => items.get(id) ?? null,
-    add: async (symbol) => void items.set(symbol.id, symbol),
-    remove: async (id) => void items.delete(id),
-  };
-  const config = new ConfigService(new InMemoryConfigRepository());
-  const symbols = new SymbolService(
-    [new InMemoryMarketDataSource([BTC])],
-    watchlist,
-    config,
-    new InMemoryCandleRepository(),
-  );
-  return createApp(buildAppDeps({ config, symbols }));
-}
-
-describe('GET /symbols/:id/rule-events', () => {
-  const eventA: RuleEventEntry = {
-    type: RuleEventType.Fired,
-    ts: 100,
-    ruleId: 'r1',
-    symbolId: 'crypto:BTCUSDT',
-  };
-  const eventB: RuleEventEntry = {
-    type: RuleEventType.Fired,
-    ts: 200,
-    ruleId: 'r2',
-    symbolId: 'crypto:BTCUSDT',
-  };
-  const eventC: RuleEventEntry = {
-    type: RuleEventType.Fired,
-    ts: 300,
-    ruleId: 'r3',
-    symbolId: 'crypto:BTCUSDT',
-  };
-
-  it('returns the symbol embedded events newest-first (200)', async () => {
-    const app = buildAppWithSeededEvents([eventA, eventB, eventC]);
-    const res = await app.inject({
-      method: 'GET',
-      url: '/symbols/crypto:BTCUSDT/rule-events',
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual([eventC, eventB, eventA]);
-  });
-
-  it('caps the page at `limit` (most recent first)', async () => {
-    const app = buildAppWithSeededEvents([eventA, eventB, eventC]);
-    const res = await app.inject({
-      method: 'GET',
-      url: '/symbols/crypto:BTCUSDT/rule-events?limit=2',
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual([eventC, eventB]);
-  });
-
-  it('filters to events strictly before `before`', async () => {
-    const app = buildAppWithSeededEvents([eventA, eventB, eventC]);
-    const res = await app.inject({
-      method: 'GET',
-      url: '/symbols/crypto:BTCUSDT/rule-events?before=300',
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual([eventB, eventA]);
-  });
-
-  it('rejects `limit` above the 500 max with 400', async () => {
-    const app = buildAppWithSeededEvents([]);
-    const res = await app.inject({
-      method: 'GET',
-      url: '/symbols/crypto:BTCUSDT/rule-events?limit=501',
-    });
-    expect(res.statusCode).toBe(400);
-  });
-
-  it('returns 404 when the symbol is not watched', async () => {
-    const res = await buildApp().inject({
-      method: 'GET',
-      url: '/symbols/crypto:BTCUSDT/rule-events',
     });
     expect(res.statusCode).toBe(404);
   });

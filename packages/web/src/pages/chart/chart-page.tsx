@@ -15,24 +15,19 @@ import { formatChangePct, formatPrice } from '../../lib/format.js';
 import { liveCandleForPeriod, useCandleStream, usePagedCandles } from '../../lib/hooks/candles.js';
 import { computeIndicatorQueryOptions, useIndicatorCatalog } from '../../lib/hooks/indicators.js';
 import { useProfiles } from '../../lib/hooks/profiles.js';
-import { useRuleEventStream } from '../../lib/hooks/rule-events.js';
 import { useWatchlist } from '../../lib/hooks/symbols.js';
 import { useConfig } from '../../lib/hooks/use-config.js';
 import { useSelectedProfile } from '../../lib/selected-profile-context.js';
 import { useTheme } from '../../lib/theme-context.js';
 import { CandleChart, type IndicatorOverlay } from './candle-chart.js';
-import { ChartEventsButton } from './chart-events-button.js';
 import { ChartLoading } from './chart-loading.js';
 import { CHART_RANGE_ORDER, type ChartRange } from './chart-range.js';
-import { ChartRulesButton } from './chart-rules-button.js';
-import { chartColors } from './chart-series.js';
 import { ChartEmptyState } from './empty-state.js';
 import type { LegendOverlay } from './indicators/indicator-legend.js';
 import { IndicatorPanelDialog } from './indicators/indicator-panel-dialog.js';
 import { paletteColor } from './indicators/overlay-palette.js';
 import { PeriodRangeDialog } from './period-range-dialog.js';
 import { ProfilePickerDialog } from './profile-picker-dialog.js';
-import { useStateChangeMarkers } from './state-change-markers.js';
 import { SymbolPickerDialog } from './symbol-picker-dialog.js';
 
 /**
@@ -147,9 +142,6 @@ function ChartLayout({
   useEffect(() => {
     setStoredSymbolId(id);
   }, [id]);
-  // Live rule events for this symbol: fold every new entry into the markers and
-  // events-dialog caches so the chart updates without a tab refocus (#375).
-  useRuleEventStream(id);
   return (
     <div className="grid h-full grid-rows-[minmax(0,1fr)_auto] gap-3">
       <div className="min-h-0">
@@ -189,8 +181,6 @@ function ChartLayout({
           hidden={hidden}
           onToggleVisible={toggleVisible}
         />
-        <ChartRulesButton symbolId={id} />
-        <ChartEventsButton symbolId={id} />
       </Flex>
     </div>
   );
@@ -293,8 +283,6 @@ function ChartView({
     from: computeFrom,
     to: computeTo,
   });
-  const { theme } = useTheme();
-  const ruleEventMarkers = useStateChangeMarkers(id, chartColors(theme).textColor, feed.candles);
   const body = feed.isPending ? (
     <ChartLoading />
   ) : feed.isError ? (
@@ -313,7 +301,6 @@ function ChartView({
       legendOverlays={legendOverlays}
       onToggleLegendVisible={toggleVisible}
       legendProfile={profile}
-      ruleEventMarkers={ruleEventMarkers}
     />
   );
   return (

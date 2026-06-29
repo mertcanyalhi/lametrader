@@ -1,23 +1,18 @@
-import { validateAction } from './action.js';
-import { validateConditionTree } from './condition-tree.js';
-import { validateExpiration } from './expiration.js';
-import { RULE_DESCRIPTION_MAX, RULE_NAME_MAX, SYMBOL_ID_MAX } from './limits.js';
-import { type Rule, RuleScopeKind } from './rule.types.js';
-import { validateTrigger } from './trigger.js';
+/**
+ * Errors that surface from the rules use-case (v2).
+ *
+ * Kept in `core` as plain exception classes (not v2-namespaced) so the API's
+ * error handler can `instanceof`-map them to HTTP status codes without
+ * importing the engine.
+ */
 
 /**
- * Thrown when a {@link Rule}'s rule-level fields (non-empty name, non-empty
- * actions, scope's symbol id) are invalid.
+ * Base error class for every rule-related domain failure.
  *
- * Per-piece validators (condition / trigger / expiration / action) throw their
- * own typed errors; `validateRule` lets those propagate.
- *
- * Caught at the API/CLI boundary so user-facing errors surface as 400s.
+ * Subclassed by the specific kinds below; the API error handler maps it to a
+ * generic 400 when none of the more specific subclasses matched first.
  */
 export class RuleError extends Error {
-  /**
-   * @param message - human-readable reason.
-   */
   constructor(message: string) {
     super(message);
     this.name = 'RuleError';
@@ -25,14 +20,11 @@ export class RuleError extends Error {
 }
 
 /**
- * Raised when a {@link Rule} does not exist (on get / replace / remove).
+ * Thrown when a rule id has no matching persisted document.
  *
- * Driving adapters map it to HTTP 404.
+ * The API error handler maps this to 404.
  */
-export class RuleNotFoundError extends Error {
-  /**
-   * @param message - human-readable not-found reason.
-   */
+export class RuleNotFoundError extends RuleError {
   constructor(message: string) {
     super(message);
     this.name = 'RuleNotFoundError';
@@ -40,89 +32,21 @@ export class RuleNotFoundError extends Error {
 }
 
 /**
- * Raised by the v2 rule service at create / patch time when a rule's trigger
- * is tick-cadence (`EveryTime` / `Once` / `OncePerBar`) and any symbol the
- * rule's scope references is not on the watchlist.
+ * Thrown at create / replace time when a rule's trigger granularity is
+ * tick-cadence (e.g. `EveryTime` over `Tick`) but one or more of the rule's
+ * scoped symbols is not eligible for live quote streaming — i.e. not on the
+ * watchlist or not subscribed (per ADR 0016, no synthesised ticks).
  *
- * Per ADR 0016 — "per-tick triggers require a live `QuoteStreamService`
- * subscription; rules on polled-only symbols fail validation."
- *
- * Driving adapters surface it as a 400 with one `fields[]` entry per
- * unwatched symbol, pointing at `scope.symbolId` (Symbol scope) or
- * `scope.symbolIds` (Symbols scope).
- * AllSymbols-scoped rules are exempt (fan-out is dynamic at fire-time).
+ * The API error handler maps this to 400 with one `fields[]` entry per
+ * unwatched symbol id.
  */
-export class TickRuleNotEligibleError extends Error {
-  /**
-   * The unwatched symbol ids that caused the rejection — surfaced verbatim
-   * in the field-level error response.
-   */
-  readonly unwatchedSymbolIds: readonly string[];
-
-  /**
-   * @param message - human-readable reason carrying the offending ids.
-   * @param unwatchedSymbolIds - the ids of symbols that aren't on the watchlist.
-   */
-  constructor(message: string, unwatchedSymbolIds: readonly string[]) {
+export class TickRuleNotEligibleError extends RuleError {
+  constructor(
+    message: string,
+    /** The symbol ids that failed the eligibility check. */
+    public readonly unwatchedSymbolIds: string[],
+  ) {
     super(message);
     this.name = 'TickRuleNotEligibleError';
-    this.unwatchedSymbolIds = unwatchedSymbolIds;
-  }
-}
-
-/**
- * Reject empty / whitespace-only strings.
- */
-function requireNonEmpty(value: string, field: string): void {
-  if (value.trim() === '') {
-    throw new RuleError(`Rule '${field}' must be a non-empty string.`);
-  }
-}
-
-/**
- * Reject strings longer than `max`.
- */
-function requireMaxLength(value: string, field: string, max: number): void {
-  if (value.length > max) {
-    throw new RuleError(`Rule '${field}' must be ${max} characters or fewer.`);
-  }
-}
-
-/**
- * Validate a full {@link Rule} — rule-level checks (non-empty `id`,
- * `profileId`, `name`; non-empty `actions`; scope's `symbolId`) plus every
- * per-piece validator on the embedded condition, trigger, expiration, and each
- * action.
- *
- * @param rule - the rule to check.
- * @param now - the reference instant (epoch ms) passed to
- *   {@link validateExpiration}.
- * @throws {RuleError} on rule-level violations.
- * @throws {RuleConditionError | RuleOperatorError | TriggerError |
- *   ExpirationError | ActionError} from the per-piece validators.
- */
-export function validateRule(rule: Rule, now: number): void {
-  requireNonEmpty(rule.id, 'id');
-  requireNonEmpty(rule.profileId, 'profileId');
-  requireNonEmpty(rule.name, 'name');
-  requireMaxLength(rule.name, 'name', RULE_NAME_MAX);
-  if (rule.description !== undefined) {
-    requireMaxLength(rule.description, 'description', RULE_DESCRIPTION_MAX);
-  }
-
-  if (rule.scope.kind === RuleScopeKind.Symbol) {
-    requireNonEmpty(rule.scope.symbolId, 'scope.symbolId');
-    requireMaxLength(rule.scope.symbolId, 'scope.symbolId', SYMBOL_ID_MAX);
-  }
-
-  validateConditionTree(rule.condition);
-  validateTrigger(rule.trigger);
-  validateExpiration(rule.expiration, now);
-
-  if (rule.actions.length === 0) {
-    throw new RuleError('Rule must have at least one action.');
-  }
-  for (const action of rule.actions) {
-    validateAction(action);
   }
 }

@@ -108,10 +108,6 @@ export function createStreamClient(options: StreamClientOptions = {}): StreamCli
       socket?.send(JSON.stringify({ action: 'subscribe-indicator', id, period, indicator }));
       return;
     }
-    if (subscription.kind === StreamKind.RuleEvent) {
-      socket?.send(JSON.stringify({ action: 'subscribe-rule-event', id: subscription.id }));
-      return;
-    }
     socket?.send(JSON.stringify({ action: 'subscribe', id: subscription.id }));
   }
 
@@ -140,10 +136,6 @@ export function createStreamClient(options: StreamClientOptions = {}): StreamCli
           }),
         );
       }
-      return;
-    }
-    if (subscription.kind === StreamKind.RuleEvent) {
-      socket.send(JSON.stringify({ action: 'unsubscribe-rule-event', id: subscription.id }));
       return;
     }
     socket.send(JSON.stringify({ action: 'unsubscribe', id: subscription.id }));
@@ -196,12 +188,6 @@ export function createStreamClient(options: StreamClientOptions = {}): StreamCli
     }
     if ('candle' in frame && typeof frame.id === 'string') {
       deliver(subscriptions.get(keyOf(StreamKind.Candle, frame.id)), frame);
-      return;
-    }
-    if ('entry' in frame && typeof frame.symbolId === 'string') {
-      // Rule-event frames are `{symbolId, entry}` — deliver the bare entry to the
-      // listener (the symbolId is only the routing key).
-      deliver(subscriptions.get(keyOf(StreamKind.RuleEvent, frame.symbolId)), frame.entry);
       return;
     }
     if ('error' in frame) {

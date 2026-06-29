@@ -47,8 +47,9 @@ describe('App shell', () => {
     expect({
       watchlist: within(nav).getByRole('link', { name: 'Watchlist' }).getAttribute('aria-current'),
       chart: within(nav).getByRole('link', { name: 'Chart' }).getAttribute('aria-current'),
+      rules: within(nav).getByRole('link', { name: 'Rules' }).getAttribute('aria-current'),
       settings: within(nav).getByRole('link', { name: 'Settings' }).getAttribute('aria-current'),
-    }).toEqual({ watchlist: null, chart: 'page', settings: null });
+    }).toEqual({ watchlist: null, chart: 'page', rules: null, settings: null });
   });
 
   it('exposes the topbar theme toggle via aria-label without a native title attribute', () => {
@@ -115,24 +116,13 @@ describe('App shell', () => {
     }).toEqual({ collapsed: 'true', stored: 'true' });
   });
 
-  it('does not surface the Rules v2 nav link by default (feature-flag default-off)', () => {
+  it('surfaces the Rules nav link unconditionally (v2 is the only editor post-cutover)', () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <AppRoutes />
       </MemoryRouter>,
     );
     const nav = screen.getByRole('navigation');
-    expect(within(nav).queryByRole('link', { name: 'Rules v2' })).toEqual(null);
-  });
-
-  it('surfaces the Rules v2 nav link when the rules-v2 feature flag is enabled', () => {
-    window.localStorage.setItem('rulesV2Enabled', 'true');
-    render(
-      <MemoryRouter initialEntries={['/']}>
-        <AppRoutes />
-      </MemoryRouter>,
-    );
-    const nav = screen.getByRole('navigation');
-    expect(within(nav).getByRole('link', { name: 'Rules v2' })).toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Rules' })).toBeInTheDocument();
   });
 });

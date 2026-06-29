@@ -1,6 +1,6 @@
 # Rules engine architecture: timestamp-per-event, cascading with cycle-limit, embedded runtime state
 
-- Status: accepted
+- Status: superseded by 0016
 
 ## Context
 

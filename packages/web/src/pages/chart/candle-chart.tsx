@@ -136,7 +136,6 @@ export function CandleChart({
   legendOverlays = [],
   onToggleLegendVisible,
   legendProfile = null,
-  ruleEventMarkers = [],
 }: {
   candles: Candle[];
   symbol: EnrichedSymbol;
@@ -151,12 +150,6 @@ export function CandleChart({
   onToggleLegendVisible?: (instanceId: string) => void;
   /** The selected profile — passed through to the legend so its remove `x` can detach. */
   legendProfile?: Profile | null;
-  /**
-   * Rule-event markers (one per `state_set`) overlaid on the candle series.
-   * The chart owns the lifecycle of the markers plugin; pass a fresh array
-   * to redraw.
-   */
-  ruleEventMarkers?: SeriesMarker<Time>[];
 }): ReactNode {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -176,8 +169,6 @@ export function CandleChart({
   const overlayLineRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
   /** Per-instance marker plugins for `RenderKind.Markers` descriptors. */
   const overlayMarkersRef = useRef<Map<string, ISeriesMarkersPluginApi<Time>>>(new Map());
-  /** Plugin handle for the rule-event markers — `null` until the candle series exists. */
-  const ruleEventMarkersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   /**
    * Last applied `visible` per series key, so the sync only calls `applyOptions`
    * on a change — never on initial create (the initial state ships with
@@ -312,28 +303,9 @@ export function CandleChart({
       overlayMarkersRef.current.clear();
       overlayVisibilityRef.current.clear();
       overlayLastResultRef.current.clear();
-      ruleEventMarkersPluginRef.current = null;
       nextPaneIndexRef.current = 1;
     };
   }, [colors, symbol.type]);
-
-  // Mirror the `ruleEventMarkers` prop onto the candle series via a single
-  // marker plugin. Created lazily on the first non-empty array (so charts
-  // with no events never call into the markers plugin); refreshed on every
-  // subsequent prop change. `chartVersion` re-runs the effect after a chart
-  // recreate (the plugin handle was nulled by the cleanup).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: chartVersion is a signal-only dep that drives re-sync after chart recreate.
-  useEffect(() => {
-    const candle = candleSeriesRef.current;
-    if (!candle) return;
-    const plugin = ruleEventMarkersPluginRef.current;
-    if (plugin) {
-      plugin.setMarkers(ruleEventMarkers);
-      return;
-    }
-    if (ruleEventMarkers.length === 0) return;
-    ruleEventMarkersPluginRef.current = createSeriesMarkers(candle, ruleEventMarkers);
-  }, [ruleEventMarkers, chartVersion]);
 
   // Mirror the `overlays[]` prop into per-state-descriptor series, diffing the
   // current set against the previous one. `chartVersion` bumps after each chart

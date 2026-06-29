@@ -1,6 +1,5 @@
 import type { BackfillRange, CandleBatch } from './candle.types.js';
 import type { Period } from './config.types.js';
-import type { RuleEventEntry } from './rule.types.js';
 
 /**
  * The asset classes the platform can track. The value is the prefix of a
@@ -44,12 +43,6 @@ export interface Instrument {
 export interface WatchedSymbol extends Instrument {
   /** Timeframes to backfill/poll for this symbol. */
   periods: Period[];
-  /**
-   * Rule-engine events fired against this symbol, in append order.
-   * Optional — older documents predate the field and read as `undefined`;
-   * the application layer treats both as an empty log (per ADR 0012).
-   */
-  events?: RuleEventEntry[];
 }
 
 /**

@@ -31,7 +31,6 @@ import { configController } from './controllers/config.controller.js';
 import { indicatorsController } from './controllers/indicators.controller.js';
 import { notificationsController } from './controllers/notifications.controller.js';
 import { profilesController } from './controllers/profiles.controller.js';
-import { rulesController } from './controllers/rules.controller.js';
 import { rulesV2Controller } from './controllers/rules-v2.controller.js';
 import { stateController } from './controllers/state.controller.js';
 import { streamController } from './controllers/stream.controller.js';
@@ -67,8 +66,7 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
         { name: 'config', description: 'Global configuration' },
         { name: 'symbols', description: 'Symbol discovery and watchlist' },
         { name: 'profiles', description: 'Profiles (selectable templates)' },
-        { name: 'rules', description: 'Rule definitions, events and state' },
-        { name: 'rules-v2', description: 'v2 rule definitions and events (per ADR 0016)' },
+        { name: 'rules-v2', description: 'Rule definitions and events (per ADR 0016)' },
         { name: 'candles', description: 'Historical candle backfill and reads' },
         { name: 'indicators', description: 'Indicator catalog (descriptors only)' },
       ],
@@ -165,12 +163,8 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
   if (deps.profiles) {
     app.register(profilesController(deps.profiles));
   }
-  if (deps.rules) {
-    app.register(rulesController(deps.rules));
-  }
   if (deps.rulesV2) {
-    // v2 surface is mounted under /v2 — v1's `/rules` keeps responding while
-    // both engines coexist per ADR 0016.
+    // v2 surface is mounted under /v2; v1 routes have been removed.
     app.register(rulesV2Controller(deps.rulesV2), { prefix: '/v2' });
   }
   if (deps.state) {

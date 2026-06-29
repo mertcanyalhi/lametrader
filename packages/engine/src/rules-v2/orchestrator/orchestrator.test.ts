@@ -9,8 +9,7 @@ import {
 } from '@lametrader/core';
 import { describe, expect, it } from 'vitest';
 
-import type { EvaluationLookups } from '../../rules/evaluation-context.types.js';
-import { InMemoryNotifier } from '../../rules/in-memory-notifier.js';
+import { InMemoryNotifier } from '../../notification/in-memory-notifier.js';
 import { InMemoryStateRepository } from '../../state/in-memory-state-repository.js';
 import { InMemoryWatchlistRepository } from '../../symbols/in-memory-watchlist-repository.js';
 import { TriggerDispatcher } from '../dispatch/dispatcher.js';
@@ -19,6 +18,7 @@ import { buildEvaluationContext } from '../evaluation-context.js';
 import type { EvaluationContext } from '../evaluation-context.types.js';
 import { IndicatorSeriesStore } from '../indicator-series-store.js';
 import { TickRing } from '../tick-ring.js';
+import type { EvaluationLookups } from '../wire/live-evaluation-lookups-v2.types.js';
 import { ActionRunner } from './action-runner.js';
 import { InMemoryEventLog } from './in-memory-event-log.js';
 import { RuleOrchestrator } from './orchestrator.js';

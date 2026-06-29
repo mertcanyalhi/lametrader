@@ -210,4 +210,19 @@ describe('/v2/rules (e2e)', () => {
     const afterDelete = await app.inject({ method: 'GET', url: `/v2/rules/${rule.id}` });
     expect(afterDelete.statusCode).toEqual(404);
   });
+
+  it('v1 cutover: legacy /rules and /symbols/:id/rule-events return 404 (routes are gone)', async () => {
+    // Per ADR 0016 cutover (#397) the v1 REST surface is removed. These routes
+    // must no longer be registered on the app — Fastify's notFoundHandler
+    // returns 404 with the standard `{ error: "Route ... not found" }` body.
+    const legacyList = await app.inject({ method: 'GET', url: '/rules' });
+    const legacySymbolEvents = await app.inject({
+      method: 'GET',
+      url: `/symbols/${SYMBOL_ID}/rule-events`,
+    });
+    expect({
+      list: legacyList.statusCode,
+      symbolEvents: legacySymbolEvents.statusCode,
+    }).toEqual({ list: 404, symbolEvents: 404 });
+  });
 });

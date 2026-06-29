@@ -6,10 +6,10 @@ import {
 } from '@lametrader/core';
 
 import type { CandleEvent } from '../../candles/polling-service.types.js';
-import type { EvaluationLookups } from '../../rules/evaluation-context.types.js';
 import type { BarAxis } from '../bar-series-view.js';
 import { ArraySeriesView } from '../indicator-series-store.js';
 import type { SeriesPoint, SeriesView } from '../series.types.js';
+import type { EvaluationLookups } from './live-evaluation-lookups-v2.types.js';
 
 /**
  * One per-symbol OHLCV snapshot derived from the latest observed bar.

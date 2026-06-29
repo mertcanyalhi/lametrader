@@ -2,7 +2,7 @@ import { Period, RulesV2, StateScope, StateValueType } from '@lametrader/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { InMemoryCandleRepository } from '../../candles/in-memory-candle-repository.js';
-import { InMemoryNotifier } from '../../rules/in-memory-notifier.js';
+import { InMemoryNotifier } from '../../notification/in-memory-notifier.js';
 import { InMemoryStateRepository } from '../../state/in-memory-state-repository.js';
 import { InMemoryWatchlistRepository } from '../../symbols/in-memory-watchlist-repository.js';
 import { InMemoryRuleRepository } from '../dispatch/in-memory-rule-repository.js';

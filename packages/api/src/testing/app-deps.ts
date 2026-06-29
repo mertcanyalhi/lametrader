@@ -1,4 +1,4 @@
-import type { IndicatorStateEvent, RuleEventEntry, SymbolQuoteEvent } from '@lametrader/core';
+import type { IndicatorStateEvent, SymbolQuoteEvent } from '@lametrader/core';
 import {
   BackfillService,
   type CandleEvent,
@@ -10,11 +10,9 @@ import {
   InMemoryConfigRepository,
   InMemoryMarketDataSource,
   InMemoryProfileRepository,
-  InMemoryRuleRepository,
   InMemoryWatchlistRepository,
   ProfileService,
   QuoteStreamService,
-  RuleService,
   RuleServiceV2,
   RulesV2,
   SymbolService,
@@ -53,7 +51,6 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
     new IndicatorService(registry, watchlist, candles);
   const profiles =
     overrides.profiles ?? new ProfileService(new InMemoryProfileRepository(), watchlist, registry);
-  const rules = overrides.rules ?? new RuleService(new InMemoryRuleRepository());
   const rulesV2 =
     overrides.rulesV2 ??
     new RuleServiceV2(
@@ -74,13 +71,11 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
     new QuoteStreamService(watchlist, config, candles, {
       onQuote: (event) => quoteStream.publish(event.subscriptionId, event),
     });
-  const ruleEventStream = overrides.liveStream?.ruleEventStream ?? new StreamHub<RuleEventEntry>();
 
   return {
     config,
     symbols: overrides.symbols ?? new SymbolService(sources, watchlist, config, candles, profiles),
     profiles,
-    rules,
     rulesV2,
     ...(overrides.state ? { state: overrides.state } : {}),
     ...(overrides.telegramDestinations
@@ -94,7 +89,6 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
       indicatorService,
       quoteStream,
       quoteStreamService,
-      ruleEventStream,
     },
   };
 }
