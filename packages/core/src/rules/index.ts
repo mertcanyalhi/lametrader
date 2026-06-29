@@ -26,6 +26,7 @@ export {
   type MovingLeafCondition,
   type StateLeafCondition,
 } from './condition.types.js';
+export { normalizeRule } from './condition-normalize.js';
 export {
   type BarClosedEvent,
   type BarOpenedEvent,

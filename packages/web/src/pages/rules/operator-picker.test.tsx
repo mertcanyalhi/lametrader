@@ -52,6 +52,99 @@ describe('legalFamiliesFor', () => {
   });
 });
 
+describe('OPERATOR_OPTIONS — collapsed Equals/NotEquals', () => {
+  it('lists a single Equals entry (no separate state-equals dialect)', () => {
+    const equalsLabels = OPERATOR_OPTIONS.filter((option) => option.label === 'equals').map(
+      (option) => option.value,
+    );
+    expect(equalsLabels).toEqual([ComparisonOperator.Eq]);
+  });
+
+  it('lists a single NotEquals entry (no separate state-not-equals dialect)', () => {
+    const neqLabels = OPERATOR_OPTIONS.filter((option) => option.label === 'not equals').map(
+      (option) => option.value,
+    );
+    expect(neqLabels).toEqual([ComparisonOperator.Neq]);
+  });
+
+  it('drops StateOperator.Equals / StateOperator.NotEquals from the picker options entirely', () => {
+    const stateOps = OPERATOR_OPTIONS.filter(
+      (option) => option.family === LeafConditionFamily.State,
+    ).map((option) => option.value);
+    expect(stateOps).toEqual([StateOperator.ChangesTo, StateOperator.ChangesFrom]);
+  });
+});
+
+describe('legalOperatorsFor — LHS-driven family dispatch for Equals/NotEquals', () => {
+  it('returns Equals with family Comparison for a Numeric LHS (Price)', () => {
+    const options = legalOperatorsFor({ kind: OperandKind.Price });
+    const equals = options.find((option) => option.value === ComparisonOperator.Eq);
+    expect(equals).toEqual({
+      family: LeafConditionFamily.Comparison,
+      value: ComparisonOperator.Eq,
+      label: 'equals',
+      icon: equals?.icon,
+    });
+  });
+
+  it('returns Equals with family State for a SymbolStateRef LHS (state-ref dispatch)', () => {
+    const options = legalOperatorsFor({
+      kind: OperandKind.SymbolStateRef,
+      key: 'trend',
+      valueType: StateValueType.String,
+    });
+    const equals = options.find(
+      (option) => option.value === StateOperator.Equals || option.value === ComparisonOperator.Eq,
+    );
+    expect(equals).toEqual({
+      family: LeafConditionFamily.State,
+      value: StateOperator.Equals,
+      label: 'equals',
+      icon: equals?.icon,
+    });
+  });
+
+  it('returns NotEquals with family State for a GlobalStateRef LHS', () => {
+    const options = legalOperatorsFor({
+      kind: OperandKind.GlobalStateRef,
+      key: 'regime',
+      valueType: StateValueType.String,
+    });
+    const notEquals = options.find(
+      (option) =>
+        option.value === StateOperator.NotEquals || option.value === ComparisonOperator.Neq,
+    );
+    expect(notEquals).toEqual({
+      family: LeafConditionFamily.State,
+      value: StateOperator.NotEquals,
+      label: 'not equals',
+      icon: notEquals?.icon,
+    });
+  });
+
+  it('exposes Equals/NotEquals + ChangesTo/ChangesFrom for a string-like indicator-ref LHS', () => {
+    const options = legalOperatorsFor({
+      kind: OperandKind.IndicatorRef,
+      instanceId: 'sup-1',
+      stateKey: 'phase',
+      valueType: StateValueType.String,
+    }).map((option) => option.value);
+    expect({
+      hasEquals: options.includes(StateOperator.Equals),
+      hasNotEquals: options.includes(StateOperator.NotEquals),
+      hasChangesTo: options.includes(StateOperator.ChangesTo),
+      hasChangesFrom: options.includes(StateOperator.ChangesFrom),
+      hasCompareEq: options.includes(ComparisonOperator.Eq),
+    }).toEqual({
+      hasEquals: true,
+      hasNotEquals: true,
+      hasChangesTo: true,
+      hasChangesFrom: true,
+      hasCompareEq: false,
+    });
+  });
+});
+
 describe('legalOperatorsFor', () => {
   it('exposes Crossing operators when the LHS is Price (numeric)', () => {
     const options = legalOperatorsFor({ kind: OperandKind.Price }).map((o) => o.value);

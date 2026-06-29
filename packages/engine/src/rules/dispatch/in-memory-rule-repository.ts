@@ -1,5 +1,11 @@
 import type { ProfileRepository } from '@lametrader/core';
-import { type Rule, type RuleRepository, type RuleScope, RuleScopeKind } from '@lametrader/core';
+import {
+  normalizeRule,
+  type Rule,
+  type RuleRepository,
+  type RuleScope,
+  RuleScopeKind,
+} from '@lametrader/core';
 
 /**
  * In-memory backing store for {@link RuleRepository}.
@@ -28,7 +34,7 @@ export class InMemoryRuleRepository implements RuleRepository {
   }
 
   async list(): Promise<Rule[]> {
-    return [...this.byId.values()];
+    return [...this.byId.values()].map(normalizeRule);
   }
 
   async listForSymbol(symbolId: string | null, profileId?: string): Promise<Rule[]> {
@@ -36,7 +42,7 @@ export class InMemoryRuleRepository implements RuleRepository {
     for (const rule of this.byId.values()) {
       if (profileId !== undefined && rule.profileId !== profileId) continue;
       if (!scopeMatches(rule.scope, symbolId)) continue;
-      out.push(rule);
+      out.push(normalizeRule(rule));
     }
     return out;
   }
@@ -50,7 +56,8 @@ export class InMemoryRuleRepository implements RuleRepository {
   }
 
   async get(id: string): Promise<Rule | null> {
-    return this.byId.get(id) ?? null;
+    const rule = this.byId.get(id);
+    return rule ? normalizeRule(rule) : null;
   }
 
   async save(rule: Rule): Promise<void> {

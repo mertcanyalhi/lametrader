@@ -5,6 +5,7 @@ import {
   CrossingOperator,
   LeafConditionFamily,
   MovingOperator,
+  OperandKind,
   type Operator,
   StateOperator,
 } from '@lametrader/core';
@@ -176,19 +177,10 @@ export const OPERATOR_OPTIONS: ReadonlyArray<OperatorOption> = [
     label: 'moving down %',
     icon: ArrowDownRight,
   },
-  // State
-  {
-    family: LeafConditionFamily.State,
-    value: StateOperator.Equals,
-    label: 'state equals',
-    icon: Equal,
-  },
-  {
-    family: LeafConditionFamily.State,
-    value: StateOperator.NotEquals,
-    label: 'state not equals',
-    icon: Slash,
-  },
+  // State — Equals / NotEquals are collapsed into the single Comparison
+  // entries above (#429); the picker grafts those back into the State group
+  // with the StateOperator dialect when the LHS dispatches through state
+  // semantics (see `legalOperatorsFor`).
   {
     family: LeafConditionFamily.State,
     value: StateOperator.ChangesTo,
@@ -243,14 +235,49 @@ export function legalFamiliesFor(kind: OperandValueKind): ReadonlySet<LeafCondit
 }
 
 /**
- * The set of operator options that are legal given the LHS value kind.
+ * The set of operator options that are legal given the LHS.
  *
  * Drives the dropdown so users can't pick an operator the family doesn't
  * support for the chosen LHS.
+ *
+ * The single Comparison `equals` / `not equals` entries in
+ * {@link OPERATOR_OPTIONS} get grafted into the State family with the State
+ * dialect (`StateOperator.Equals` / `NotEquals`) when the LHS dispatches
+ * through state semantics — i.e. a `SymbolStateRef` / `GlobalStateRef`, or any
+ * bool / string-like value (per issue #429's collapse decision: state-ref LHS
+ * → NULL-aware state semantics).
  */
 export function legalOperatorsFor(left: ConditionOperand): ReadonlyArray<OperatorOption> {
   const legalFamilies = legalFamiliesFor(operandValueKind(left));
-  return OPERATOR_OPTIONS.filter((option) => legalFamilies.has(option.family));
+  const stateDispatch = isStateDispatchLhs(left);
+  const out: OperatorOption[] = [];
+  for (const option of OPERATOR_OPTIONS) {
+    if (stateDispatch && option.value === ComparisonOperator.Eq) {
+      out.push({ ...option, family: LeafConditionFamily.State, value: StateOperator.Equals });
+      continue;
+    }
+    if (stateDispatch && option.value === ComparisonOperator.Neq) {
+      out.push({ ...option, family: LeafConditionFamily.State, value: StateOperator.NotEquals });
+      continue;
+    }
+    if (legalFamilies.has(option.family)) out.push(option);
+  }
+  return out;
+}
+
+/**
+ * Whether the LHS should dispatch the unified `equals` / `not equals` picker
+ * entry to State semantics — `SymbolStateRef` / `GlobalStateRef`, or any LHS
+ * whose value type is bool / string-like.
+ *
+ * Numeric non-state-ref LHSes (Price, OHLCV, numeric indicator-ref, numeric
+ * literal) keep Comparison's snapshot semantics.
+ */
+function isStateDispatchLhs(left: ConditionOperand): boolean {
+  if (left.kind === OperandKind.SymbolStateRef) return true;
+  if (left.kind === OperandKind.GlobalStateRef) return true;
+  const kind = operandValueKind(left);
+  return kind === OperandValueKind.Bool || kind === OperandValueKind.StringLike;
 }
 
 /**
