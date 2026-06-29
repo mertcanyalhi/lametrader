@@ -1,14 +1,17 @@
 import { createApp } from '@lametrader/api';
 import {
   type EventLog,
+  type Instrument,
   type RuleEventEntry,
   RuleEventType,
   StateScope,
   StateValueType,
+  SymbolType,
 } from '@lametrader/core';
-import { connectServices, loadSettings } from '@lametrader/engine';
+import { connectServices, loadSettings, MongoWatchlistRepository } from '@lametrader/engine';
 import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { FastifyInstance } from 'fastify';
+import { MongoClient } from 'mongodb';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const { pollIntervals } = loadSettings({});
@@ -27,9 +30,21 @@ const { pollIntervals } = loadSettings({});
 describe('chart state overlays API (e2e)', () => {
   let container: StartedMongoDBContainer;
   let close: () => Promise<void>;
+  let mongoClient: MongoClient;
   let app: FastifyInstance;
   let eventLog: EventLog;
   const symbolId = 'crypto:BTCUSDT';
+  /**
+   * Watchlist seed shape — mirrors the {@link Instrument} the other e2e suites
+   * use so the symbol resolves without a Binance round-trip.
+   */
+  const instrument: Instrument = {
+    id: symbolId,
+    type: SymbolType.Crypto,
+    description: 'BTC / USDT',
+    exchange: 'Binance',
+    currency: 'USDT',
+  };
 
   beforeAll(async () => {
     container = await new MongoDBContainer('mongo:8').start();
@@ -37,7 +52,12 @@ describe('chart state overlays API (e2e)', () => {
     const wired = await connectServices(uri, { pollIntervals });
     close = wired.close;
     eventLog = wired.eventLog;
-    await wired.symbols.add(symbolId);
+    // Seed the watchlist directly — `SymbolService.add` would otherwise need a
+    // live Binance round-trip (same pattern as `rules.e2e.test.ts`).
+    mongoClient = new MongoClient(uri);
+    await mongoClient.connect();
+    const watchlist = new MongoWatchlistRepository(mongoClient.db());
+    await watchlist.add(instrument);
     app = createApp({
       config: wired.config,
       symbols: wired.symbols,
@@ -50,6 +70,7 @@ describe('chart state overlays API (e2e)', () => {
 
   afterAll(async () => {
     await app?.close();
+    await mongoClient?.close();
     await close?.();
     await container?.stop();
   });
