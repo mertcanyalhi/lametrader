@@ -3,6 +3,8 @@ import {
   type ConditionOperand,
   type IndicatorInstance,
   OperandKind,
+  ProfileScope,
+  RuleScopeKind,
   StateValueType,
 } from '@lametrader/core';
 import { Theme } from '@radix-ui/themes';
@@ -10,7 +12,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { type ReactNode, useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { OPERAND_KIND_OPTIONS, OperandPicker } from './operand-picker';
+import { filterIndicatorsByScope, OPERAND_KIND_OPTIONS, OperandPicker } from './operand-picker';
 
 afterEach(() => {
   cleanup();
@@ -137,5 +139,78 @@ describe('OperandPicker', () => {
     expect(screen.getByText('lastFiredAt')).toBeDefined();
     expect(screen.getByText('cooldown')).toBeDefined();
     expect(screen.getByLabelText('Symbol state key (custom)')).toBeDefined();
+  });
+});
+
+const INDICATORS: IndicatorInstance[] = [
+  {
+    id: 'ind-a',
+    indicatorKey: 'supertrend',
+    version: 1,
+    inputs: {},
+    summary: 'Supertrend',
+  },
+  {
+    id: 'ind-b',
+    indicatorKey: 'sma',
+    version: 1,
+    inputs: {},
+    summary: 'SMA',
+  },
+];
+
+describe('filterIndicatorsByScope', () => {
+  it('passes every indicator through when the rule scope is a single Symbol', () => {
+    const result = filterIndicatorsByScope(
+      INDICATORS,
+      { kind: RuleScopeKind.Symbol, symbolId: 'crypto:BTCUSDT' },
+      { type: ProfileScope.Symbols, symbolIds: ['crypto:ETHUSDT'] },
+    );
+    expect(result).toEqual(INDICATORS);
+  });
+
+  it('passes every indicator through when the rule scope is AllSymbols', () => {
+    const result = filterIndicatorsByScope(
+      INDICATORS,
+      { kind: RuleScopeKind.AllSymbols },
+      { type: ProfileScope.Symbols, symbolIds: ['crypto:ETHUSDT'] },
+    );
+    expect(result).toEqual(INDICATORS);
+  });
+
+  it('passes every indicator through for Symbols(list) when the profile scope is All', () => {
+    const result = filterIndicatorsByScope(
+      INDICATORS,
+      { kind: RuleScopeKind.Symbols, symbolIds: ['crypto:BTCUSDT', 'crypto:ETHUSDT'] },
+      { type: ProfileScope.All },
+    );
+    expect(result).toEqual(INDICATORS);
+  });
+
+  it('passes every indicator through for Symbols(list) when every selected id is in the profile scope', () => {
+    const result = filterIndicatorsByScope(
+      INDICATORS,
+      { kind: RuleScopeKind.Symbols, symbolIds: ['crypto:BTCUSDT'] },
+      { type: ProfileScope.Symbols, symbolIds: ['crypto:BTCUSDT', 'crypto:ETHUSDT'] },
+    );
+    expect(result).toEqual(INDICATORS);
+  });
+
+  it('returns an empty list for Symbols(list) when any selected id is outside the profile scope', () => {
+    const result = filterIndicatorsByScope(
+      INDICATORS,
+      { kind: RuleScopeKind.Symbols, symbolIds: ['crypto:BTCUSDT', 'crypto:SOLUSDT'] },
+      { type: ProfileScope.Symbols, symbolIds: ['crypto:BTCUSDT', 'crypto:ETHUSDT'] },
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('passes every indicator through when the profile scope has not loaded yet', () => {
+    const result = filterIndicatorsByScope(
+      INDICATORS,
+      { kind: RuleScopeKind.Symbols, symbolIds: ['crypto:BTCUSDT'] },
+      undefined,
+    );
+    expect(result).toEqual(INDICATORS);
   });
 });

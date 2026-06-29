@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import {
+  type Action,
+  ActionKind,
   ChannelOperator,
   ComparisonOperator,
   CrossingOperator,
@@ -16,7 +18,7 @@ import { Theme } from '@radix-ui/themes';
 import { cleanup, render, screen } from '@testing-library/react';
 import { type ReactNode, useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { applyBoolShortcut, LeafEditor, needsInterval } from './leaf-editor';
+import { applyBoolShortcut, LeafEditor, needsInterval, resolveRhsLiteralType } from './leaf-editor';
 
 afterEach(() => {
   cleanup();
@@ -26,11 +28,13 @@ function Harness({
   initial,
   indicators = [],
   instancePeriods = {},
+  priorActions = [],
   onSnapshot,
 }: {
   initial: LeafCondition;
   indicators?: IndicatorInstance[];
   instancePeriods?: Record<string, Period | undefined>;
+  priorActions?: Action[];
   onSnapshot?: (leaf: LeafCondition) => void;
 }): ReactNode {
   const [value, setValue] = useState<LeafCondition>(initial);
@@ -45,6 +49,7 @@ function Harness({
         indicators={indicators}
         instancePeriods={instancePeriods}
         knownStateKeys={{ symbol: [], global: [] }}
+        priorActions={priorActions}
       />
     </Theme>
   );
@@ -235,6 +240,69 @@ describe('LeafEditor — reference shapes from #396', () => {
   });
 });
 
+describe('LeafEditor — state-typed RHS Equals input', () => {
+  it('renders a text RHS input when a same-rule SetSymbolState declares String for the key', () => {
+    render(
+      <Harness
+        initial={{
+          family: LeafConditionFamily.State,
+          operator: StateOperator.Equals,
+          left: {
+            kind: OperandKind.SymbolStateRef,
+            key: 'cycle',
+            valueType: StateValueType.Number,
+          },
+          right: {
+            kind: OperandKind.Literal,
+            value: { type: StateValueType.String, value: 'up' },
+          },
+        }}
+        priorActions={[
+          {
+            kind: ActionKind.SetSymbolState,
+            key: 'cycle',
+            value: { type: StateValueType.String, value: 'up' },
+          },
+        ]}
+      />,
+    );
+    const literal = screen.getByLabelText('Literal value') as HTMLInputElement;
+    expect({ type: literal.type, value: literal.value }).toEqual({ type: 'text', value: 'up' });
+  });
+
+  it('renders a switch RHS input when a same-rule SetGlobalState declares Bool for the key', () => {
+    render(
+      <Harness
+        initial={{
+          family: LeafConditionFamily.State,
+          operator: StateOperator.Equals,
+          left: {
+            kind: OperandKind.GlobalStateRef,
+            key: 'session',
+            valueType: StateValueType.Number,
+          },
+          right: {
+            kind: OperandKind.Literal,
+            value: { type: StateValueType.Bool, value: true },
+          },
+        }}
+        priorActions={[
+          {
+            kind: ActionKind.SetGlobalState,
+            key: 'session',
+            value: { type: StateValueType.Bool, value: true },
+          },
+        ]}
+      />,
+    );
+    const literal = screen.getByLabelText('Literal value');
+    expect({
+      role: literal.getAttribute('role'),
+      checked: literal.getAttribute('aria-checked'),
+    }).toEqual({ role: 'switch', checked: 'true' });
+  });
+});
+
 describe('LeafEditor — Channel layout', () => {
   it('renders Upper + Lower bound pickers labelled accordingly', () => {
     render(
@@ -256,6 +324,144 @@ describe('LeafEditor — Channel layout', () => {
     );
     expect(screen.getByLabelText('Upper bound operand kind')).toBeDefined();
     expect(screen.getByLabelText('Lower bound operand kind')).toBeDefined();
+  });
+});
+
+describe('resolveRhsLiteralType', () => {
+  it('returns the LHS operand value type when no SetState action matches (numeric SymbolStateRef)', () => {
+    const leaf: LeafCondition = {
+      family: LeafConditionFamily.State,
+      operator: StateOperator.Equals,
+      left: {
+        kind: OperandKind.SymbolStateRef,
+        key: 'cycle',
+        valueType: StateValueType.Number,
+      },
+      right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 0 } },
+    };
+    expect(resolveRhsLiteralType(leaf, leaf.left, [])).toEqual(StateValueType.Number);
+  });
+
+  it('honours a same-rule SetSymbolState action over the LHS operand valueType', () => {
+    const leaf: LeafCondition = {
+      family: LeafConditionFamily.State,
+      operator: StateOperator.Equals,
+      left: {
+        kind: OperandKind.SymbolStateRef,
+        key: 'cycle',
+        valueType: StateValueType.Number,
+      },
+      right: { kind: OperandKind.Literal, value: { type: StateValueType.String, value: '' } },
+    };
+    const priorActions: Action[] = [
+      {
+        kind: ActionKind.SetSymbolState,
+        key: 'cycle',
+        value: { type: StateValueType.String, value: 'up' },
+      },
+    ];
+    expect(resolveRhsLiteralType(leaf, leaf.left, priorActions)).toEqual(StateValueType.String);
+  });
+
+  it('honours a same-rule SetGlobalState action over the LHS operand valueType', () => {
+    const leaf: LeafCondition = {
+      family: LeafConditionFamily.State,
+      operator: StateOperator.Equals,
+      left: {
+        kind: OperandKind.GlobalStateRef,
+        key: 'session',
+        valueType: StateValueType.Number,
+      },
+      right: { kind: OperandKind.Literal, value: { type: StateValueType.Bool, value: false } },
+    };
+    const priorActions: Action[] = [
+      {
+        kind: ActionKind.SetGlobalState,
+        key: 'session',
+        value: { type: StateValueType.Bool, value: true },
+      },
+    ];
+    expect(resolveRhsLiteralType(leaf, leaf.left, priorActions)).toEqual(StateValueType.Bool);
+  });
+
+  it('only honours the override on the Equals operator (NotEquals falls back to LHS type)', () => {
+    const leaf: LeafCondition = {
+      family: LeafConditionFamily.State,
+      operator: StateOperator.NotEquals,
+      left: {
+        kind: OperandKind.SymbolStateRef,
+        key: 'cycle',
+        valueType: StateValueType.Number,
+      },
+      right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 0 } },
+    };
+    const priorActions: Action[] = [
+      {
+        kind: ActionKind.SetSymbolState,
+        key: 'cycle',
+        value: { type: StateValueType.String, value: 'up' },
+      },
+    ];
+    expect(resolveRhsLiteralType(leaf, leaf.left, priorActions)).toEqual(StateValueType.Number);
+  });
+
+  it('honours a same-rule SetSymbolState action on the Comparison.Eq operator', () => {
+    const leaf: LeafCondition = {
+      family: LeafConditionFamily.Comparison,
+      operator: ComparisonOperator.Eq,
+      left: {
+        kind: OperandKind.SymbolStateRef,
+        key: 'score',
+        valueType: StateValueType.Number,
+      },
+      right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 0 } },
+    };
+    const priorActions: Action[] = [
+      {
+        kind: ActionKind.SetSymbolState,
+        key: 'score',
+        value: { type: StateValueType.String, value: 'novel' },
+      },
+    ];
+    expect(resolveRhsLiteralType(leaf, leaf.left, priorActions)).toEqual(StateValueType.String);
+  });
+
+  it('does not override when the LHS is not a state ref', () => {
+    const leaf: LeafCondition = {
+      family: LeafConditionFamily.Comparison,
+      operator: ComparisonOperator.Eq,
+      left: { kind: OperandKind.Price },
+      right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 0 } },
+    };
+    const priorActions: Action[] = [
+      {
+        kind: ActionKind.SetSymbolState,
+        key: 'cycle',
+        value: { type: StateValueType.String, value: 'up' },
+      },
+    ];
+    expect(resolveRhsLiteralType(leaf, leaf.left, priorActions)).toEqual(StateValueType.Number);
+  });
+
+  it('does not match a SetGlobalState action when LHS is a SymbolStateRef of the same key', () => {
+    const leaf: LeafCondition = {
+      family: LeafConditionFamily.State,
+      operator: StateOperator.Equals,
+      left: {
+        kind: OperandKind.SymbolStateRef,
+        key: 'cycle',
+        valueType: StateValueType.Number,
+      },
+      right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 0 } },
+    };
+    const priorActions: Action[] = [
+      {
+        kind: ActionKind.SetGlobalState,
+        key: 'cycle',
+        value: { type: StateValueType.String, value: 'up' },
+      },
+    ];
+    expect(resolveRhsLiteralType(leaf, leaf.left, priorActions)).toEqual(StateValueType.Number);
   });
 });
 

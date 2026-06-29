@@ -1,4 +1,5 @@
 import {
+  type Action,
   ComparisonOperator,
   type ConditionNode,
   ConditionNodeKind,
@@ -43,12 +44,19 @@ export function ConditionTreeEditor({
   indicators,
   instancePeriods,
   knownStateKeys,
+  priorActions = [],
 }: {
   value: ConditionNode;
   onChange: (next: ConditionNode) => void;
   indicators: IndicatorInstance[];
   instancePeriods: InstancePeriods;
   knownStateKeys: KnownStateKeys;
+  /**
+   * Actions declared on the same rule — fed into each leaf so the RHS literal
+   * input can infer its type from a matching `SetState` action's `value.type`
+   * when the LHS is a state ref paired with `Equals` (issue #428 item 8).
+   */
+  priorActions?: Action[];
 }): ReactNode {
   return (
     <NodeView
@@ -59,6 +67,7 @@ export function ConditionTreeEditor({
       indicators={indicators}
       instancePeriods={instancePeriods}
       knownStateKeys={knownStateKeys}
+      priorActions={priorActions}
     />
   );
 }
@@ -88,6 +97,7 @@ function NodeView({
   indicators,
   instancePeriods,
   knownStateKeys,
+  priorActions,
 }: {
   path: number[];
   node: ConditionNode;
@@ -96,6 +106,7 @@ function NodeView({
   indicators: IndicatorInstance[];
   instancePeriods: InstancePeriods;
   knownStateKeys: KnownStateKeys;
+  priorActions: Action[];
 }): ReactNode {
   if (node.kind === ConditionNodeKind.Leaf) {
     return (
@@ -113,6 +124,7 @@ function NodeView({
           indicators={indicators}
           instancePeriods={instancePeriods}
           knownStateKeys={knownStateKeys}
+          priorActions={priorActions}
         />
       </Card>
     );
@@ -178,6 +190,7 @@ function NodeView({
                     indicators={indicators}
                     instancePeriods={instancePeriods}
                     knownStateKeys={knownStateKeys}
+                    priorActions={priorActions}
                   />
                 </Box>
                 {isRoot && node.children.length === 1 ? null : (

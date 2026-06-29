@@ -99,6 +99,13 @@ describe('RuleEditorDialog', () => {
     expect(screen.getByRole('button', { name: 'Create' })).toBeInTheDocument();
   });
 
+  it('exposes a trigger-kinds info icon next to the Trigger label', async () => {
+    render(<Harness initial={makeDraftRule({ profileId: 'p1' })} />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Trigger kinds info' })).toBeInTheDocument();
+    });
+  });
+
   it('POSTs to /api/rules with the assembled body on submit and surfaces the API field error inline', async () => {
     const user = userEvent.setup();
     fetchSpy.mockImplementationOnce(
