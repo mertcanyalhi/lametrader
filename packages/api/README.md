@@ -380,6 +380,56 @@ curl -X PATCH http://localhost:3000/rules/<id> \
 curl 'http://localhost:3000/rules/<id>/events?limit=50'
 ```
 
+## Rules-v2 resource (`/v2/rules`)
+
+The v2 rule engine's REST surface — coexists with v1 `/rules` under the same Fastify app per ADR 0016 until cutover.
+
+A v2 `Rule` couples a `profileId`, a `scope` (`symbol` / `symbols(list)` / `allSymbols`), a `condition` tree (recursive And/Or over `Comparison` / `Crossing` / `Channel` / `Moving` / `State` leaves), one of six `trigger`s (`everyTime`, `once`, `oncePerBar`, `oncePerBarOpen`, `oncePerBarClose`, `oncePerInterval`), an `expiration` (`{ at }` or `null`), and a non-empty `actions[]` (`notification` with `channel: 'telegram'`, or `setSymbolState` / `removeSymbolState` / `setGlobalState` / `removeGlobalState`).
+
+Tick-cadence triggers (`everyTime` / `once` / `oncePerBar`) require every referenced symbol on the watchlist at create/patch time — per ADR 0016 they ride a live quote stream, not the polling loop.
+`AllSymbols` scope is exempt (fan-out is dynamic).
+
+### Endpoints
+
+| Method   | Path                                       | Body            | Description                                                                                                |
+| -------- | ------------------------------------------ | --------------- | ---------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/v2/rules?profileId=&symbolId=&enabled=`  | —               | List v2 rules, filtered independently by `profileId`, `symbolId` (scope-aware), and / or `enabled`. 200.   |
+| `POST`   | `/v2/rules`                                | `RuleV2Input`   | Create a v2 rule. **201** / 400 (validation surfaces a `fields[]` array; per-field path + message).        |
+| `GET`    | `/v2/rules/{id}`                           | —               | Fetch one v2 rule. 200 / 404.                                                                              |
+| `PATCH`  | `/v2/rules/{id}`                           | `Partial<RuleV2Input>` | Partial merge over the existing rule; re-runs the tick-eligibility gate on the merged result. 200 / 400 / 404. |
+| `DELETE` | `/v2/rules/{id}`                           | —               | Delete a v2 rule. **204** / 404.                                                                           |
+| `GET`    | `/v2/rules/{id}/events?limit=&before=`     | —               | Paginated rule events (newest-first); default limit 50, max 500; `before` cursors on `ts` (epoch ms). 200 / 404. |
+| `GET`    | `/v2/symbols/{id}/rule-events?limit=&before=` | —            | Paginated symbol-mirrored rule events (newest-first); same pagination. 200.                                |
+
+`RuleV2Input` is the client-controllable subset of a `Rule` — every field except `id`, `createdAt`, `updatedAt`. Schema validation is the trust boundary (per ADR 0016 #11); the engine trusts the validator. Multi-field failures surface as `{ error, fields: [{ path, message }, ...] }` with one entry per AJV failure (or one per unwatched symbol id for the tick-eligibility error).
+
+### Example
+
+```sh
+# Create a "Price > 100" everyTime rule with a setSymbolState action
+curl -X POST http://localhost:3000/v2/rules \
+  -H 'content-type: application/json' \
+  -d '{
+    "profileId": "p1",
+    "name": "BTC > 100",
+    "scope":   { "kind": "symbol", "symbolId": "crypto:BTCUSDT" },
+    "condition": {
+      "kind": "leaf",
+      "leaf": {
+        "family":   "comparison",
+        "operator": "gt",
+        "left":     { "kind": "price" },
+        "right":    { "kind": "literal", "value": { "type": "number", "value": 100 } }
+      }
+    },
+    "trigger":    { "kind": "everyTime" },
+    "expiration": null,
+    "actions":    [{ "kind": "setSymbolState", "key": "fired", "value": { "type": "bool", "value": true } }],
+    "enabled":    true,
+    "order":      1
+  }'
+```
+
 ## State resource
 
 Read-side views of the rule-engine state — the per-profile global key/value store and (via the symbols resource) per-profile per-symbol state maps. Used by chart markers and debugging; the engine itself writes state through the orchestrator.

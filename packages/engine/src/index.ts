@@ -84,6 +84,23 @@ export {
   wireRuleEngine,
 } from './rules/wire-rule-engine.js';
 export * as RulesV2 from './rules-v2/index.js';
+// Flat re-exports of the v2 application + wire surface so the API layer can
+// import them without prefixing — keeps controllers' `import { ... }` flat
+// and matches v1's `RuleService` / `wireRuleEngine` precedent.
+export {
+  type EventListOptions as RuleV2EventListOptions,
+  RuleServiceV2,
+  type RuleServiceV2Options,
+  type RuleV2CreateInput,
+  type RuleV2ListFilters,
+} from './rules-v2/service/index.js';
+export {
+  feedCandleIntoEngineV2,
+  LiveEvaluationLookupsV2,
+  type RuleEngineV2Deps,
+  type WiredRuleEngineV2,
+  wireRuleEngineV2,
+} from './rules-v2/wire/index.js';
 export { loadSettings } from './settings.js';
 export type { LogLevel, Settings, TelegramDestination } from './settings.types.js';
 export { InMemoryStateRepository } from './state/in-memory-state-repository.js';

@@ -15,6 +15,8 @@ import {
   ProfileService,
   QuoteStreamService,
   RuleService,
+  RuleServiceV2,
+  RulesV2,
   SymbolService,
 } from '@lametrader/engine';
 import type { AppDependencies } from '../app.types.js';
@@ -52,6 +54,13 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
   const profiles =
     overrides.profiles ?? new ProfileService(new InMemoryProfileRepository(), watchlist, registry);
   const rules = overrides.rules ?? new RuleService(new InMemoryRuleRepository());
+  const rulesV2 =
+    overrides.rulesV2 ??
+    new RuleServiceV2(
+      new RulesV2.InMemoryRuleRepository(),
+      new RulesV2.InMemoryEventLog(() => 0),
+      watchlist,
+    );
 
   // Default live-stream wiring: the in-memory candle + indicator hubs and a stream
   // service the controller talks to. Tests that don't exercise streaming get the
@@ -72,6 +81,7 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
     symbols: overrides.symbols ?? new SymbolService(sources, watchlist, config, candles, profiles),
     profiles,
     rules,
+    rulesV2,
     ...(overrides.state ? { state: overrides.state } : {}),
     ...(overrides.telegramDestinations
       ? { telegramDestinations: overrides.telegramDestinations }

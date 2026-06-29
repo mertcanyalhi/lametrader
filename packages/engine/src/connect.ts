@@ -25,6 +25,11 @@ import { MongoRuleRepository } from './rules/mongo-rule-repository.js';
 import { RuleService } from './rules/rule-service.js';
 import { TelegramNotifier } from './rules/telegram-notifier.js';
 import { type WiredRuleEngine, wireRuleEngine } from './rules/wire-rule-engine.js';
+import { MongoRuleRepository as MongoRuleRepositoryV2 } from './rules-v2/dispatch/mongo-rule-repository.js';
+import { IndicatorSeriesStore } from './rules-v2/indicator-series-store.js';
+import { MongoEventLog as MongoEventLogV2 } from './rules-v2/orchestrator/mongo-event-log.js';
+import { RuleServiceV2 } from './rules-v2/service/rule-service.js';
+import { type WiredRuleEngineV2, wireRuleEngineV2 } from './rules-v2/wire/wire-rule-engine-v2.js';
 import { MongoStateRepository } from './state/mongo-state-repository.js';
 import { defaultMarketDataSources } from './symbols/default-sources.js';
 import { MongoWatchlistRepository } from './symbols/mongo-watchlist-repository.js';
@@ -75,6 +80,11 @@ export interface ConnectedServices {
   profiles: ProfileService;
   /** The rules use-case (read-only for now; CRUD lands in later issues). */
   rules: RuleService;
+  /**
+   * The v2 rules use-case (CRUD over the new ports + tick-cadence eligibility
+   * gate against the watchlist). Coexists with v1 per ADR 0016 until cutover.
+   */
+  rulesV2: RuleServiceV2;
   /** The shared indicator catalog registry (read-only at runtime). */
   indicators: IndicatorRegistry;
   /**
@@ -93,6 +103,12 @@ export interface ConnectedServices {
    * need to await the chain.
    */
   wiredRuleEngine: WiredRuleEngine;
+  /**
+   * The composed v2 rule engine — `RuleOrchestrator` (v2) + dispatcher +
+   * bridges + sync lookups mirror. Fanned the same `(candle, indicator,
+   * quote)` events as v1 below.
+   */
+  wiredRuleEngineV2: WiredRuleEngineV2;
   /**
    * The Telegram destinations CRUD use-case
    * (drives `/config/notifications/telegram` and the `TelegramNotifier`).
@@ -167,16 +183,44 @@ export async function connectServices(
   // `SymbolStateRef` / `GlobalStateRef` see `null` for any slot persisted by
   // a previous engine process until that slot is mutated in this one.
   await wiredRuleEngine.lookups.warm({ profiles: profileRepo, watchlist });
+  // v2 rule engine — coexists with v1 per ADR 0016 until cutover. Separate
+  // Mongo collections (`rules_v2`, `rule_events_v2`) so the two engines never
+  // share state; the same upstream events (candle / quote / indicator) fan to
+  // both bridge sets below.
+  const ruleRepoV2 = new MongoRuleRepositoryV2(db, profileRepo);
+  await ruleRepoV2.ensureIndexes();
+  const eventLogV2 = new MongoEventLogV2(db);
+  // Lazy: no `onAppend(options.onRuleEvent)` for v2 — the v1 listener shape
+  // carries v1's `RuleEventEntry`, not v2's. Live WS streaming of v2 events
+  // lands when the UI for #396 demands it.
+  // The v2 indicator store needs an `IndicatorService` for warm-ups; we
+  // construct that here (it predates both rule engines' fan-out) and reuse
+  // it in the live indicator path below.
+  // We hold the wire deps until the indicator service lands.
+  let wiredRuleEngineV2: WiredRuleEngineV2 | null = null;
   const indicatorService = new IndicatorService(indicators, watchlist, candleRepo, {
     onState: (event) => {
       (options.onIndicatorState ?? (() => {}))(event);
       wiredRuleEngine.indicatorBridge.handleState(event);
+      wiredRuleEngineV2?.indicatorBridge.handleIndicatorState(event);
     },
   });
+  const indicatorStoreV2 = new IndicatorSeriesStore(indicatorService);
+  wiredRuleEngineV2 = wireRuleEngineV2({
+    rules: ruleRepoV2,
+    state: stateRepo,
+    watchlist,
+    notifier,
+    eventLog: eventLogV2,
+    candleRepository: candleRepo,
+    indicatorStore: indicatorStoreV2,
+  });
+  const rulesV2 = new RuleServiceV2(ruleRepoV2, eventLogV2, watchlist);
   const quoteStream = new QuoteStreamService(watchlist, config, candleRepo, {
     onQuote: (event) => {
       (options.onSymbolQuote ?? (() => {}))(event);
       wiredRuleEngine.quoteBridge.handleQuote(event);
+      wiredRuleEngineV2?.tickBridge.handleQuote(event);
     },
   });
 
@@ -199,6 +243,7 @@ export async function connectServices(
         log.error({ err, event }, 'quote stream failed');
       }
       wiredRuleEngine.candleBridge.handleCandle(event);
+      wiredRuleEngineV2?.barBridge.handleCandle(event);
     },
     intervals: options.pollIntervals,
   });
@@ -207,11 +252,13 @@ export async function connectServices(
     symbols,
     profiles,
     rules,
+    rulesV2,
     indicators,
     indicatorService,
     quoteStream,
     state: stateRepo,
     wiredRuleEngine,
+    wiredRuleEngineV2,
     telegramDestinations,
     backfill,
     polling,
