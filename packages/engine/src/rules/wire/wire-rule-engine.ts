@@ -21,7 +21,7 @@ import { ActionRunner } from '../orchestrator/action-runner.js';
 import { RuleOrchestrator } from '../orchestrator/orchestrator.js';
 import { createPerSymbolSerializer } from '../orchestrator/per-symbol-serializer.js';
 import { TickRing } from '../tick-ring.js';
-import { LiveEvaluationLookups } from './live-evaluation-lookups.js';
+import { type InitialStateEntry, LiveEvaluationLookups } from './live-evaluation-lookups.js';
 
 /** Scope-bound logger for the v2 rule-engine wire-up. */
 const log = getLogger('rules-wire');
@@ -75,9 +75,15 @@ export interface WiredRuleEngine {
  * (`QuoteStreamService.onQuote`, `PollingService.onCandle`,
  * `IndicatorService.onState`), so the composition root only needs one
  * fan-out point.
+ *
+ * Async because the sync evaluation-lookups mirror is warmed from the
+ * persisted {@link StateRepository} before the wired engine is returned —
+ * without this, rules reading state slots set by a previous engine process
+ * see `null` until that slot is mutated again in this one (#432).
  */
-export function wireRuleEngine(deps: RuleEngineDeps): WiredRuleEngine {
+export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEngine> {
   const lookups = new LiveEvaluationLookups(deps.state);
+  await warmLookupsFromPersistedState(lookups, deps);
   const tickRings = new Map<string, TickRing>();
   const actions = new ActionRunner(deps.state, deps.notifier, lookups);
   const dispatcher = new TriggerDispatcher({
@@ -239,6 +245,51 @@ async function recordOrchestratorFailure(
       'orchestrator_failure_log_failed',
     );
   }
+}
+
+/**
+ * Build the warm snapshot from the persisted {@link StateRepository} and
+ * hand it to {@link LiveEvaluationLookups.warmInitialState} so the sync
+ * mirror is non-empty before the orchestrator processes its first event.
+ *
+ * Enumeration sources the set of profile ids from `rules.list()` (every
+ * persisted rule names its profile) and the set of symbols from
+ * `watchlist.list()` (the only symbols the engine ever evaluates against).
+ * For each `(profileId, symbolId)` pair we read the persisted per-symbol
+ * state; for each profile we read the persisted global state.
+ *
+ * Lazy: this is `O(profiles × watchedSymbols)` repo reads at startup, which
+ * matches real workloads (handful of profiles × tens of symbols). Upgrade
+ * path: add a single `listAll*` repo method when that loop dominates startup
+ * — at which point this helper collapses to two calls and the
+ * `(profileId, symbolId)` enumeration drops out of the engine entirely.
+ */
+async function warmLookupsFromPersistedState(
+  lookups: LiveEvaluationLookups,
+  deps: RuleEngineDeps,
+): Promise<void> {
+  const rules = await deps.rules.list();
+  const profileIds = [...new Set(rules.map((rule) => rule.profileId))];
+  if (profileIds.length === 0) return;
+
+  const watched = await deps.watchlist.list();
+  const symbolIds = watched.map((symbol) => symbol.id);
+  const snapshot: InitialStateEntry[] = [];
+
+  for (const profileId of profileIds) {
+    const globalEntries = await deps.state.listGlobalState(profileId);
+    for (const [key, value] of Object.entries(globalEntries)) {
+      snapshot.push({ scope: 'global', profileId, key, value });
+    }
+    for (const symbolId of symbolIds) {
+      const symbolEntries = await deps.state.listSymbolState(profileId, symbolId);
+      for (const [key, value] of Object.entries(symbolEntries)) {
+        snapshot.push({ scope: 'symbol', profileId, symbolId, key, value });
+      }
+    }
+  }
+
+  lookups.warmInitialState(snapshot);
 }
 
 /** Whether the event carries a symbol id, returning it (or `null`). */

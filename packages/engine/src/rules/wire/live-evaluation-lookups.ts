@@ -179,13 +179,11 @@ export class LiveEvaluationLookups implements EvaluationLookups {
   /**
    * Warm the sync state mirror from the persisted repository on startup —
    * without this, rules reading state slots set by a previous engine process
-   * see `null` until that slot is mutated again in this one (per #374 for
-   * v1's analogue).
+   * see `null` until that slot is mutated again in this one (#432).
    *
-   * Lazy: signature only requires `getSymbolState` / `getGlobalState` because
-   * the warm path is awareness-only (no enumeration). A full enumeration
-   * would need a `listAll*` repo method — added when a cold-start gap shows
-   * up in practice.
+   * Invoked by {@link wireRuleEngine} after construction with a snapshot
+   * built from `rules.list()` × `watchlist.list()` over `listSymbolState` /
+   * `listGlobalState`; that wire-up is the only call site today.
    */
   warmInitialState(snapshot: ReadonlyArray<InitialStateEntry>): void {
     for (const entry of snapshot) {

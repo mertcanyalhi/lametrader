@@ -161,7 +161,7 @@ export async function connectServices(
     },
   });
   const indicatorStore = new IndicatorSeriesStore(indicatorService);
-  wiredRuleEngine = wireRuleEngine({
+  wiredRuleEngine = await wireRuleEngine({
     rules: ruleRepo,
     state: stateRepo,
     watchlist,

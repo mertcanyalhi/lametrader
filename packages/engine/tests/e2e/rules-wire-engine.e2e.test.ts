@@ -4,6 +4,7 @@ import {
   LeafConditionFamily,
   NotificationChannel,
   OperandKind,
+  Period,
   type Rule,
   RuleEventType,
   RuleScopeKind,
@@ -71,7 +72,7 @@ describe('wireRuleEngine state-ref evaluation (e2e)', () => {
     };
     await rules.save(stateAwareRule);
 
-    const wired = wireRuleEngine({
+    const wired = await wireRuleEngine({
       rules,
       state,
       watchlist,
@@ -102,5 +103,93 @@ describe('wireRuleEngine state-ref evaluation (e2e)', () => {
       RuleEventType.Fired,
     ]);
     expect(notifier.sent).toEqual([{ destinationName: 'main', body: 'state hit' }]);
+  });
+
+  it('a tick fires a SymbolStateRef-reading rule after an engine restart where the state was set by a previous engine process (regression #432)', async () => {
+    // Shared persistent stores survive the "restart" — the only thing the
+    // simulated restart throws away is the wired engine itself (its sync
+    // lookups mirror).
+    const rules = new InMemoryRuleRepository();
+    const eventLog = new InMemoryEventLog(() => 0);
+    const state = new InMemoryStateRepository();
+    const watchlist = new InMemoryWatchlistRepository();
+    await watchlist.add({ id: 'AAPL', periods: [Period.M1] });
+    const candleRepository = new InMemoryCandleRepository();
+    const indicatorStore = new IndicatorSeriesStore();
+
+    const stateAwareRule: Rule = {
+      id: 'r-cold-state',
+      profileId: 'profile-cold',
+      name: 'cold-start state-aware',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.State,
+          operator: StateOperator.Equals,
+          left: {
+            kind: OperandKind.SymbolStateRef,
+            key: 'breached',
+            valueType: StateValueType.Bool,
+          },
+          right: {
+            kind: OperandKind.Literal,
+            value: { type: StateValueType.Bool, value: true },
+          },
+        },
+      },
+      trigger: { kind: TriggerKind.EveryTime },
+      expiration: null,
+      actions: [
+        {
+          kind: ActionKind.Notification,
+          channel: NotificationChannel.Telegram,
+          destinationName: 'main',
+          template: 'cold state hit',
+        },
+      ],
+      enabled: true,
+      order: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    await rules.save(stateAwareRule);
+    // First engine process: persist the state slot then "shut down" (the
+    // wired engine reference is dropped — we never construct it for this
+    // first phase because the bug only matters across process boundaries).
+    await state.setSymbolState(
+      'profile-cold',
+      'AAPL',
+      'breached',
+      { type: StateValueType.Bool, value: true },
+      0,
+    );
+
+    // Second engine process: wire fresh. Without the warm-up, the sync
+    // lookups mirror would be empty here and the tick below would see
+    // `null` for `breached`, failing to match Equals(true).
+    const notifier = new InMemoryNotifier(['main']);
+    const wired = await wireRuleEngine({
+      rules,
+      state,
+      watchlist,
+      eventLog,
+      notifier,
+      candleRepository,
+      indicatorStore,
+    });
+
+    wired.tickBridge.handleQuote({
+      id: 'AAPL',
+      quote: { time: 1_000, price: 101, final: false },
+    });
+    await wired.drain();
+
+    const ruleEvents = await eventLog.ruleEvents('r-cold-state');
+    expect(ruleEvents.map((e) => e.type)).toEqual([
+      RuleEventType.NotificationSent,
+      RuleEventType.Fired,
+    ]);
+    expect(notifier.sent).toEqual([{ destinationName: 'main', body: 'cold state hit' }]);
   });
 });

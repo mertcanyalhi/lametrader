@@ -79,7 +79,7 @@ describe('wireRuleEngine', () => {
       updatedAt: 0,
     });
 
-    const wired = wireRuleEngine({
+    const wired = await wireRuleEngine({
       rules,
       state,
       watchlist,
@@ -119,7 +119,7 @@ describe('wireRuleEngine', () => {
       corruptRules.listEnabledForSymbol = () => {
         throw new Error('repository timeout');
       };
-      const wired = wireRuleEngine({
+      const wired = await wireRuleEngine({
         rules: corruptRules,
         state,
         watchlist,
@@ -206,7 +206,7 @@ describe('wireRuleEngine', () => {
     await rules.save(stateAwareRule);
 
     const allowingNotifier = new InMemoryNotifier(['main']);
-    const wired = wireRuleEngine({
+    const wired = await wireRuleEngine({
       rules,
       state,
       watchlist,
@@ -280,7 +280,7 @@ describe('wireRuleEngine', () => {
       { time: 60_000, open: 99, high: 102, low: 99, close: 101, volume: 10 },
     ]);
 
-    const wired = wireRuleEngine({
+    const wired = await wireRuleEngine({
       rules,
       state,
       watchlist,
@@ -304,5 +304,179 @@ describe('wireRuleEngine', () => {
       type: StateValueType.Bool,
       value: true,
     });
+  });
+
+  it('warms the sync lookups mirror with persisted symbol-state on wire-up so the seeded value is visible before any StateChangedEvent fires (regression #432)', async () => {
+    await state.setSymbolState(
+      'profile-1',
+      'AAPL',
+      'breached',
+      { type: StateValueType.Bool, value: true },
+      0,
+    );
+    await rules.save({
+      id: 'r-warm',
+      profileId: 'profile-1',
+      name: 'warm-up',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.State,
+          operator: StateOperator.Equals,
+          left: {
+            kind: OperandKind.SymbolStateRef,
+            key: 'breached',
+            valueType: StateValueType.Bool,
+          },
+          right: {
+            kind: OperandKind.Literal,
+            value: { type: StateValueType.Bool, value: true },
+          },
+        },
+      },
+      trigger: { kind: TriggerKind.EveryTime },
+      expiration: null,
+      actions: [
+        {
+          kind: ActionKind.SetSymbolState,
+          key: 'noop',
+          value: { type: StateValueType.Bool, value: true },
+        },
+      ],
+      enabled: true,
+      order: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    });
+
+    const wired = await wireRuleEngine({
+      rules,
+      state,
+      watchlist,
+      eventLog,
+      notifier,
+      candleRepository: candles,
+      indicatorStore,
+    });
+
+    expect(wired.lookups.getSymbolState('profile-1', 'AAPL', 'breached')).toEqual({
+      type: StateValueType.Bool,
+      value: true,
+    });
+  });
+
+  it('warms persisted symbol-state for every (profileId, watchedSymbolId) pair so a seeded value on a symbol no rule directly references is still visible (regression #432)', async () => {
+    // Profile is discovered via the rule repository even though the rule's
+    // own scope is a different symbol; MSFT is on the watchlist (added in
+    // beforeEach via the helper extension below).
+    await watchlist.add({ id: 'MSFT', periods: [Period.M1] });
+    await state.setSymbolState(
+      'profile-1',
+      'MSFT',
+      'armed',
+      { type: StateValueType.Number, value: 7 },
+      0,
+    );
+    await rules.save({
+      id: 'r-other',
+      profileId: 'profile-1',
+      name: 'unrelated',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.Comparison,
+          operator: ComparisonOperator.Gt,
+          left: { kind: OperandKind.Price },
+          right: {
+            kind: OperandKind.Literal,
+            value: { type: StateValueType.Number, value: 0 },
+          },
+        },
+      },
+      trigger: { kind: TriggerKind.EveryTime },
+      expiration: null,
+      actions: [],
+      enabled: true,
+      order: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    });
+
+    const wired = await wireRuleEngine({
+      rules,
+      state,
+      watchlist,
+      eventLog,
+      notifier,
+      candleRepository: candles,
+      indicatorStore,
+    });
+
+    expect(wired.lookups.getSymbolState('profile-1', 'MSFT', 'armed')).toEqual({
+      type: StateValueType.Number,
+      value: 7,
+    });
+  });
+
+  it('warms persisted global-state for every profileId discovered from rules.list() (regression #432)', async () => {
+    await state.setGlobalState('profile-1', 'regime', { type: StateValueType.Number, value: 3 }, 0);
+    await rules.save({
+      id: 'r-any',
+      profileId: 'profile-1',
+      name: 'any',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.Comparison,
+          operator: ComparisonOperator.Gt,
+          left: { kind: OperandKind.Price },
+          right: {
+            kind: OperandKind.Literal,
+            value: { type: StateValueType.Number, value: 0 },
+          },
+        },
+      },
+      trigger: { kind: TriggerKind.EveryTime },
+      expiration: null,
+      actions: [],
+      enabled: true,
+      order: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    });
+
+    const wired = await wireRuleEngine({
+      rules,
+      state,
+      watchlist,
+      eventLog,
+      notifier,
+      candleRepository: candles,
+      indicatorStore,
+    });
+
+    expect(wired.lookups.getGlobalState('profile-1', 'regime')).toEqual({
+      type: StateValueType.Number,
+      value: 3,
+    });
+  });
+
+  it('resolves cleanly with no rules persisted (no profiles to warm)', async () => {
+    const wired = await wireRuleEngine({
+      rules,
+      state,
+      watchlist,
+      eventLog,
+      notifier,
+      candleRepository: candles,
+      indicatorStore,
+    });
+
+    // Sanity: the engine is usable and the mirror is empty.
+    expect(wired.lookups.getSymbolState('profile-1', 'AAPL', 'anything')).toBeNull();
+    expect(wired.lookups.getGlobalState('profile-1', 'anything')).toBeNull();
   });
 });
