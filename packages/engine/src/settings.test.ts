@@ -22,6 +22,7 @@ describe('loadSettings', () => {
       pollIntervals: DEFAULT_POLL_INTERVALS,
       telegramDestinations: [],
       logLevel: 'info',
+      logScopes: [],
     });
   });
 
@@ -32,6 +33,7 @@ describe('loadSettings', () => {
       pollIntervals: DEFAULT_POLL_INTERVALS,
       telegramDestinations: [],
       logLevel: 'info',
+      logScopes: [],
     });
   });
 
@@ -42,6 +44,7 @@ describe('loadSettings', () => {
       pollIntervals: { ...DEFAULT_POLL_INTERVALS, [Period.OneMinute]: 5000 },
       telegramDestinations: [],
       logLevel: 'info',
+      logScopes: [],
     });
   });
 
@@ -96,5 +99,24 @@ describe('loadSettings', () => {
 
   it('rejects an unrecognized LOG_LEVEL', () => {
     expect(() => loadSettings({ LOG_LEVEL: 'verbose' })).toThrowError(/LOG_LEVEL/);
+  });
+
+  it('defaults logScopes to [] when LOG_SCOPES is unset', () => {
+    expect(loadSettings({}).logScopes).toEqual([]);
+  });
+
+  it('parses LOG_SCOPES into ordered { pattern, level } entries', () => {
+    expect(loadSettings({ LOG_SCOPES: 'engine.rules.*:trace,engine.api:info' }).logScopes).toEqual([
+      { pattern: 'engine.rules.*', level: 'trace' },
+      { pattern: 'engine.api', level: 'info' },
+    ]);
+  });
+
+  it('rejects a LOG_SCOPES entry missing the colon separator', () => {
+    expect(() => loadSettings({ LOG_SCOPES: 'engine.rules.trace' })).toThrowError(/LOG_SCOPES/);
+  });
+
+  it('rejects a LOG_SCOPES entry with an unrecognized level', () => {
+    expect(() => loadSettings({ LOG_SCOPES: 'engine.rules.*:loud' })).toThrowError(/LOG_SCOPES/);
   });
 });

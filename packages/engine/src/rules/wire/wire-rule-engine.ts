@@ -23,8 +23,13 @@ import { createPerSymbolSerializer } from '../orchestrator/per-symbol-serializer
 import { TickRing } from '../tick-ring.js';
 import { type InitialStateEntry, LiveEvaluationLookups } from './live-evaluation-lookups.js';
 
-/** Scope-bound logger for the v2 rule-engine wire-up. */
-const log = getLogger('rules-wire');
+/**
+ * Scope-bound logger for the v2 rule-engine wire-up.
+ *
+ * Sits under `engine.rules.wire` so a single `engine.rules.*:trace` setting
+ * enables every rules-engine surface together (per #436).
+ */
+const log = getLogger('engine.rules.wire');
 
 /**
  * Inputs for {@link wireRuleEngine} — every collaborator passed by port so

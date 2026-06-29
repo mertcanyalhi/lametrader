@@ -1,6 +1,7 @@
 import pino, { type DestinationStream, type Logger } from 'pino';
 
 import { loadSettings } from './settings.js';
+import type { LogLevel, LogScopeOverride } from './settings.types.js';
 
 /**
  * The active write sink for the engine's log records. `undefined` (the
@@ -33,26 +34,80 @@ const proxyStream: DestinationStream = {
 const root: Logger = pino({ level: loadSettings().logLevel, base: { app: 'engine' } }, proxyStream);
 
 /**
+ * Active per-scope level overrides — populated at module load from
+ * `loadSettings().logScopes`; tests can swap it via {@link _resetLogScopes}.
+ * Reads happen at child-creation time inside {@link getLogger} and on every
+ * pass of {@link _resetLogScopes}.
+ */
+let activeScopes: readonly LogScopeOverride[] = loadSettings().logScopes;
+
+/**
  * Every child returned by {@link getLogger}, tracked so {@link _setLogLevel}
- * can propagate a level change into the captured module-top loggers (Pino
- * does not re-read parent level after the child is created).
+ * (and {@link _resetLogScopes}) can propagate a level change into the
+ * captured module-top loggers (Pino does not re-read parent level after the
+ * child is created).
  */
 const childRegistry: Logger[] = [];
+
+/**
+ * Per-`scope` Pino child cache.
+ *
+ * Two callers of `getLogger('engine.rules.dispatch')` get the same child so
+ * a `_resetLogScopes(...)` call applies consistently and the registry
+ * doesn't bloat over re-imports in long-running tests.
+ */
+const childCache = new Map<string, Logger>();
 
 /**
  * Return a Pino child logger with `{ scope }` baked into every entry — the
  * engine's equivalent of the web package's `getLogger`.
  *
  * Each engine subsystem builds its own at module top
- * (`const log = getLogger('rule-orchestrator')`) so logs from one part of
- * the engine can be filtered out of the stream by `scope`.
+ * (`const log = getLogger('engine.rules.dispatch')`) so logs from one part
+ * of the engine can be filtered out of the stream by `scope`.
  *
- * Closes #306.
+ * The child's level is the first matching pattern from `activeScopes` (set
+ * up from {@link Settings.logScopes}) when one matches; otherwise the
+ * inherited global level.
+ * Matching is performed at child-creation time; calling `getLogger` again
+ * with the same scope returns the cached child (so the cache and the
+ * registry stay aligned).
+ *
+ * Closes #306 / #436.
  */
 export function getLogger(scope: string): Logger {
+  const cached = childCache.get(scope);
+  if (cached !== undefined) return cached;
   const child = root.child({ scope });
+  const override = matchScopeOverride(scope, activeScopes);
+  if (override !== null) child.level = override;
   childRegistry.push(child);
+  childCache.set(scope, child);
   return child;
+}
+
+/**
+ * Find the first {@link LogScopeOverride} whose `pattern` matches `scope`,
+ * returning the associated level (or `null` if no entry matches).
+ *
+ * Two pattern shapes are supported (per the spec):
+ * - Literal — `pattern === scope`.
+ * - `prefix.*` — matches any scope whose name starts with `prefix.`; the
+ *   bare `*` matches every scope.
+ */
+function matchScopeOverride(
+  scope: string,
+  overrides: readonly LogScopeOverride[],
+): LogLevel | null {
+  for (const { pattern, level } of overrides) {
+    if (pattern === '*') return level;
+    if (pattern === scope) return level;
+    if (pattern.endsWith('.*')) {
+      const prefix = pattern.slice(0, -1); // keep the trailing '.'
+      if (scope.startsWith(prefix)) return level;
+    }
+  }
+  return null;
 }
 
 /**
@@ -73,4 +128,20 @@ export function _resetLogRoot(stream?: DestinationStream): void {
 export function _setLogLevel(level: string): void {
   root.level = level;
   for (const child of childRegistry) child.level = level;
+}
+
+/**
+ * Internal: install a new `logScopes` array and re-apply it to every
+ * already-created child — a matching child overrides the root's current
+ * level; a non-matching child falls back to the root's current level.
+ * Tests use this to assert per-scope gating without re-importing the
+ * module-under-test.
+ */
+export function _resetLogScopes(overrides: readonly LogScopeOverride[]): void {
+  activeScopes = overrides;
+  for (const child of childRegistry) {
+    const scope = (child.bindings() as { scope?: string }).scope ?? '';
+    const override = matchScopeOverride(scope, activeScopes);
+    child.level = override ?? root.level;
+  }
 }

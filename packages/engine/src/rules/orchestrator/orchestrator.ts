@@ -19,8 +19,13 @@ import type { ActionRunner } from './action-runner.js';
 import { CycleGuard, CycleOverflowError } from './cycle-guard.js';
 import { RuleOutcome } from './orchestrator-trace.types.js';
 
-/** Scope-bound logger for the v2 rule orchestrator. */
-const log = getLogger('rules-orchestrator');
+/**
+ * Scope-bound logger for the v2 rule orchestrator.
+ *
+ * Sits under `engine.rules.orchestrator` so a single `engine.rules.*:trace`
+ * setting enables every rules-engine surface together (per #436).
+ */
+const log = getLogger('engine.rules.orchestrator');
 
 /** Default cycle limit (cascading state-change re-entries per tick). */
 const DEFAULT_CYCLE_LIMIT = 4;

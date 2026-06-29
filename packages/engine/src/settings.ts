@@ -1,5 +1,10 @@
 import { Period } from '@lametrader/core';
-import type { LogLevel, Settings, TelegramDestination } from './settings.types.js';
+import type {
+  LogLevel,
+  LogScopeOverride,
+  Settings,
+  TelegramDestination,
+} from './settings.types.js';
 
 /**
  * Default MongoDB connection string (local dev infra in `infra/docker-compose.yml`).
@@ -40,6 +45,7 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     pollIntervals: resolvePollIntervals(env.POLL_INTERVALS),
     telegramDestinations: parseTelegramDestinations(env.TELEGRAM_DESTINATIONS),
     logLevel: parseLogLevel(env.LOG_LEVEL),
+    logScopes: parseLogScopes(env.LOG_SCOPES),
   };
 }
 
@@ -58,6 +64,41 @@ function parseLogLevel(value: string | undefined): LogLevel {
   if (value === undefined || value === '') return 'info';
   if ((VALID_LOG_LEVELS as readonly string[]).includes(value)) return value as LogLevel;
   throw new Error(`LOG_LEVEL must be one of ${VALID_LOG_LEVELS.join(', ')}: ${value}`);
+}
+
+/**
+ * Parse the `LOG_SCOPES` env value into the ordered
+ * {@link LogScopeOverride} list.
+ *
+ * Format: comma-separated `pattern:level` entries (whitespace around each
+ * entry tolerated).
+ * Example: `engine.rules.*:trace,engine.api:info`.
+ * Missing / empty → `[]`.
+ *
+ * Throws on a malformed entry (no `:`, unknown level, empty pattern) so a
+ * typo fails fast at startup rather than silently demoting the scope back to
+ * the global level.
+ */
+function parseLogScopes(value: string | undefined): LogScopeOverride[] {
+  if (value === undefined || value === '') return [];
+  const out: LogScopeOverride[] = [];
+  for (const raw of value.split(',')) {
+    const entry = raw.trim();
+    if (entry === '') continue;
+    const sepAt = entry.lastIndexOf(':');
+    if (sepAt <= 0 || sepAt === entry.length - 1) {
+      throw new Error(`LOG_SCOPES entry must be "pattern:level": ${entry}`);
+    }
+    const pattern = entry.slice(0, sepAt);
+    const level = entry.slice(sepAt + 1);
+    if (!(VALID_LOG_LEVELS as readonly string[]).includes(level)) {
+      throw new Error(
+        `LOG_SCOPES entry has unknown level (expected one of ${VALID_LOG_LEVELS.join(', ')}): ${entry}`,
+      );
+    }
+    out.push({ pattern, level: level as LogLevel });
+  }
+  return out;
 }
 
 /**

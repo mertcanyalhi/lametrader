@@ -150,7 +150,7 @@ describe('wireRuleEngine', () => {
       expect(
         logged.some(
           (entry) =>
-            entry.scope === 'rules-wire' &&
+            entry.scope === 'engine.rules.wire' &&
             entry.level === 50 &&
             entry.msg === 'orchestrator_process_failed' &&
             entry.symbolId === 'AAPL' &&
