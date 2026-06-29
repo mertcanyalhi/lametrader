@@ -511,6 +511,7 @@ describe('TriggerDispatcher — cascade slot routing', () => {
       kind: EvaluationTriggerKind.IndicatorChanged,
       ts: 1_000,
       symbolId: 'AAPL',
+      profileId: 'profile-1',
       instanceId: 'rsi-14',
       stateKey: 'value',
       prev: null,
@@ -518,6 +519,80 @@ describe('TriggerDispatcher — cascade slot routing', () => {
     };
     const fires = await dispatcher.dispatch(event);
     expect(fires.map((f) => f.ruleId)).toEqual(['reader']);
+  });
+
+  it('an IndicatorChanged event fires only rules whose profileId matches the event profileId — different-profile rules stay asleep even when their condition references the same instance + stateKey', async () => {
+    const sameProfile = rule({
+      id: 'same-profile',
+      profileId: 'profile-A',
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.Comparison,
+          operator: ComparisonOperator.Lt,
+          left: {
+            kind: OperandKind.IndicatorRef,
+            instanceId: 'rsi-14',
+            stateKey: 'value',
+            valueType: StateValueType.Number,
+          },
+          right: {
+            kind: OperandKind.Literal,
+            value: { type: StateValueType.Number, value: 50 },
+          },
+        },
+      },
+    });
+    const otherProfile = rule({
+      id: 'other-profile',
+      profileId: 'profile-B',
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.Comparison,
+          operator: ComparisonOperator.Lt,
+          left: {
+            kind: OperandKind.IndicatorRef,
+            instanceId: 'rsi-14',
+            stateKey: 'value',
+            valueType: StateValueType.Number,
+          },
+          right: {
+            kind: OperandKind.Literal,
+            value: { type: StateValueType.Number, value: 50 },
+          },
+        },
+      },
+    });
+    const { dispatcher } = await setup({
+      rules: [sameProfile, otherProfile],
+      buildContext: () => ({
+        symbolId: 'AAPL',
+        resolveLatest(operand) {
+          if (operand.kind === OperandKind.Literal) return operand.value;
+          if (operand.kind === OperandKind.IndicatorRef)
+            return { type: StateValueType.Number, value: 30 } as StateValue;
+          return null;
+        },
+        resolvePrev(operand) {
+          if (operand.kind === OperandKind.Literal) return operand.value;
+          return null;
+        },
+        resolveSeries: () => EMPTY_SERIES,
+      }),
+    });
+    const event: IndicatorChangedEvent = {
+      kind: EvaluationTriggerKind.IndicatorChanged,
+      ts: 1_000,
+      symbolId: 'AAPL',
+      profileId: 'profile-A',
+      instanceId: 'rsi-14',
+      stateKey: 'value',
+      prev: null,
+      current: { type: StateValueType.Number, value: 30 },
+    };
+    const fires = await dispatcher.dispatch(event);
+    expect(fires.map((f) => f.ruleId)).toEqual(['same-profile']);
   });
 });
 

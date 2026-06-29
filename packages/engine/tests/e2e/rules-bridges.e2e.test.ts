@@ -136,7 +136,7 @@ describe('rules bridges (e2e)', () => {
       indicatorKey: 'sma',
       inputs: { length: 2 },
     });
-    indicatorCascadeBridge.bindSubscription(indicatorSubId, 'instance-sma-2');
+    indicatorCascadeBridge.bindSubscription(indicatorSubId, 'instance-sma-2', 'profile-A');
 
     // ── Polling fans out to all bridges per candle ──
     const polling = new PollingService([source], candleRepo, watchlist, {
@@ -233,6 +233,7 @@ describe('rules bridges (e2e)', () => {
         kind: EvaluationTriggerKind.IndicatorChanged,
         ts: 1_000_000,
         symbolId: SYMBOL_QUOTED,
+        profileId: 'profile-A',
         instanceId: 'instance-sma-2',
         stateKey: 'value',
         prev: null,

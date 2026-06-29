@@ -41,7 +41,7 @@ describe('IndicatorCascadeBridge', () => {
   it('emits one IndicatorChanged per state key (excluding `time`) on the first observation of a bound subscription, with prev=null and current wrapped in the matching StateValue variant', () => {
     const events: EvaluationTriggerEvent[] = [];
     const bridge = new IndicatorCascadeBridge((event) => events.push(event));
-    bridge.bindSubscription('sub-1', 'instance-1');
+    bridge.bindSubscription('sub-1', 'instance-1', 'profile-A');
     bridge.handleIndicatorState(
       stateEvent({
         subscriptionId: 'sub-1',
@@ -54,6 +54,7 @@ describe('IndicatorCascadeBridge', () => {
         kind: EvaluationTriggerKind.IndicatorChanged,
         ts: 1_000,
         symbolId: 'AAPL',
+        profileId: 'profile-A',
         instanceId: 'instance-1',
         stateKey: 'value',
         prev: null,
@@ -63,6 +64,7 @@ describe('IndicatorCascadeBridge', () => {
         kind: EvaluationTriggerKind.IndicatorChanged,
         ts: 1_000,
         symbolId: 'AAPL',
+        profileId: 'profile-A',
         instanceId: 'instance-1',
         stateKey: 'signal',
         prev: null,
@@ -72,6 +74,7 @@ describe('IndicatorCascadeBridge', () => {
         kind: EvaluationTriggerKind.IndicatorChanged,
         ts: 1_000,
         symbolId: 'AAPL',
+        profileId: 'profile-A',
         instanceId: 'instance-1',
         stateKey: 'primed',
         prev: null,
@@ -83,7 +86,7 @@ describe('IndicatorCascadeBridge', () => {
   it('on subsequent observations emits an IndicatorChanged only for state keys whose value differs from the prior observation on the same (symbolId, period, instanceId, stateKey) slot', () => {
     const events: EvaluationTriggerEvent[] = [];
     const bridge = new IndicatorCascadeBridge((event) => events.push(event));
-    bridge.bindSubscription('sub-1', 'instance-1');
+    bridge.bindSubscription('sub-1', 'instance-1', 'profile-A');
     bridge.handleIndicatorState(
       stateEvent({
         subscriptionId: 'sub-1',
@@ -102,10 +105,54 @@ describe('IndicatorCascadeBridge', () => {
         kind: EvaluationTriggerKind.IndicatorChanged,
         ts: 2_000,
         symbolId: 'AAPL',
+        profileId: 'profile-A',
         instanceId: 'instance-1',
         stateKey: 'value',
         prev: { type: StateValueType.Number, value: 100 },
         current: { type: StateValueType.Number, value: 101 },
+      },
+    ]);
+  });
+
+  it('records the bound profileId on each emitted IndicatorChanged event so the dispatcher can partition cascade candidates by the originating profile', () => {
+    const events: EvaluationTriggerEvent[] = [];
+    const bridge = new IndicatorCascadeBridge((event) => events.push(event));
+    bridge.bindSubscription('sub-A', 'instance-shared', 'profile-A');
+    bridge.bindSubscription('sub-B', 'instance-shared', 'profile-B');
+    bridge.handleIndicatorState(
+      stateEvent({
+        subscriptionId: 'sub-A',
+        id: 'AAPL',
+        state: { time: 1_000, value: 100 },
+      }),
+    );
+    bridge.handleIndicatorState(
+      stateEvent({
+        subscriptionId: 'sub-B',
+        id: 'AAPL',
+        state: { time: 1_000, value: 200 },
+      }),
+    );
+    expect(events).toEqual([
+      {
+        kind: EvaluationTriggerKind.IndicatorChanged,
+        ts: 1_000,
+        symbolId: 'AAPL',
+        profileId: 'profile-A',
+        instanceId: 'instance-shared',
+        stateKey: 'value',
+        prev: null,
+        current: { type: StateValueType.Number, value: 100 },
+      },
+      {
+        kind: EvaluationTriggerKind.IndicatorChanged,
+        ts: 1_000,
+        symbolId: 'AAPL',
+        profileId: 'profile-B',
+        instanceId: 'instance-shared',
+        stateKey: 'value',
+        prev: { type: StateValueType.Number, value: 100 },
+        current: { type: StateValueType.Number, value: 200 },
       },
     ]);
   });
