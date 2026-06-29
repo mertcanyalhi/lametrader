@@ -63,6 +63,26 @@ Per row affordances:
 `<RuleEditorDialog>` is the shared editor for both `create` (used from the chart's Rules dialog) and `edit` (used here): a Radix `Dialog` with a `react-hook-form` / Yup-validated form covering name, description, scope (symbol picker scoped to the current profile or all-symbols), enabled, the recursive condition tree (AND/OR groups + leaves with operand + operator pickers wired to core's `validateOperatorOperands`), trigger (`Once` / `OncePerBar` / `OncePerBarClose` / `OncePerMinute` with per-variant inputs), expiration (`Never` or `On date` — future-dated only), and the actions list (`SetSymbolState` / `RemoveSymbolState` / `SetGlobalState` / `RemoveGlobalState` / `NotifyTelegram` with a destination dropdown sourced from `/notification/telegram/destinations`).
 Cancel closes without persisting; Save calls `useCreateRule` / `useReplaceRule`; a server-rejected save (400, including `TemplateError` on NotifyTelegram) surfaces inline as a red `Callout`.
 
+### `/rules-v2` — Rules v2 (preview, feature-flag-gated)
+
+The v2 rule editor, mounted behind the rules-v2 feature flag (default off — the route + sidebar entry are absent unless the flag is enabled). Coexists with the v1 `/rules` page during the rebuild per ADR 0016; the hard cutover lands when the engine work completes.
+
+Enable the flag for a session via the URL query `?rulesV2=1`, or persist it across sessions with `localStorage.setItem('rulesV2Enabled', 'true')`. The URL param wins over `localStorage`, so a shared link always opens the v2 surface even on a browser where the flag has never been flipped (handy for sharing a test link).
+
+The editor surface mirrors the v1 layout: a Radix `Dialog` with `react-hook-form` / Yup-validated sections for name + description, scope (`Symbol` / `Symbols(list)` / `AllSymbols`), trigger (the six `TriggerKind`s with per-kind `period` / `intervalMs` fields), the recursive condition tree, and the actions list (`Notification` Telegram + the four state-mutation actions).
+
+The condition-tree leaf editor walks the leaf `family` to pick the row layout:
+
+- **Comparison / Crossing / State** — LHS operand + operator + RHS operand. The `Interval` row appears when any operand needs a bar period (OHLCV / IndicatorRef).
+- **Channel** — LHS + Lower + Upper bound pickers (full operands).
+- **Moving** — LHS + numeric `threshold` + integer `bars`, no RHS picker (the scalar tuple is on the operator).
+
+The 10 operand kinds from CONTEXT.md render labelled `Price` (replaces v1's `Current`), `Open` / `High` / `Low` / `Close` / `Volume`, `Indicator` (instance + state-field picker), `Symbol state` / `Global state` (state-key dropdown seeded from `/state/global` and `/symbols/:id/state`, with a freetext fallback), and `Value` (Literal, typed by the resolved LHS `valueType` — numeric → numeric stepper, bool → switch, string / enum → text input).
+
+When the LHS resolves to a Bool-typed operand (a state-key or indicator state), the editor collapses to a single-operand row (operator + RHS hidden); the leaf persists as `State / Equals` against `Literal(true)`.
+
+API field-level validation errors (`{ error, fields[] }` from `/v2/rules` per #395) surface inline next to the offending section.
+
 ### `/settings` — Settings (this README's focus)
 
 Read/write the platform configuration (`GET` / `PUT /api/config`).
@@ -118,6 +138,8 @@ The mutations invalidate `['profiles']` so the profile's embedded `indicators[]`
 
 `src/lib/hooks/rules.ts` exposes the rules data layer — `useRules({ profileId?, symbolId? })` (`GET /rules`), `useRule(id)` (`GET /rules/:id`), `useCreateRule` (`POST /rules`), `useReplaceRule` (`PUT /rules/:id`), `usePatchRule` (`PATCH /rules/:id` — currently just `enabled`; performs an optimistic write across every cached rules query, rolls back on error), `useDeleteRule` (`DELETE /rules/:id`; same snapshot rollback pattern), `useReorderRules` (`PUT /rules/order`), `useRuleEvents(id, { limit?, before? })` (`GET /rules/:id/events`), and `useSymbolRuleEvents(symbolId, { limit?, before? })` (`GET /symbols/:id/rule-events`).
 The chart's Events panel and the per-rule / per-symbol `EventsDialog` build on top of these via `useInfiniteQuery` for "Load more" pagination keyed by the oldest event's `ts`.
+
+`src/lib/hooks/rules-v2.ts` is the v2-shaped equivalent behind the rules-v2 feature flag (mounted under `/api/v2/rules`) — `useRulesV2(filters?)` (`GET /v2/rules?profileId=&symbolId=&enabled=`), `useRuleV2(id)`, `useCreateRuleV2`, `usePatchRuleV2`, `useDeleteRuleV2`, and `useRuleV2Events(id, { limit?, before? })`. The v2 surface coexists with the v1 hooks during the rebuild per ADR 0016; the hard cutover lands when the engine work completes.
 
 `src/lib/hooks/telegram.ts` exposes the notification-destinations data layer behind the rule editor's destination dropdown and the settings page's destinations CRUD — `useTelegramDestinations` (`GET /config/notifications/telegram` → `{ name, chatId }[]`), `useUpsertTelegramDestination` (`POST` upsert; tokens are write-only), and `useDeleteTelegramDestination` (`DELETE /config/notifications/telegram/:name`).
 Token reads aren't possible: the API never returns `botToken` on a list, so there's no client-side bot-token handling beyond the Add form.

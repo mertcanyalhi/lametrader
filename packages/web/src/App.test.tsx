@@ -114,4 +114,25 @@ describe('App shell', () => {
       stored: window.localStorage.getItem('sidebar-collapsed'),
     }).toEqual({ collapsed: 'true', stored: 'true' });
   });
+
+  it('does not surface the Rules v2 nav link by default (feature-flag default-off)', () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <AppRoutes />
+      </MemoryRouter>,
+    );
+    const nav = screen.getByRole('navigation');
+    expect(within(nav).queryByRole('link', { name: 'Rules v2' })).toEqual(null);
+  });
+
+  it('surfaces the Rules v2 nav link when the rules-v2 feature flag is enabled', () => {
+    window.localStorage.setItem('rulesV2Enabled', 'true');
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <AppRoutes />
+      </MemoryRouter>,
+    );
+    const nav = screen.getByRole('navigation');
+    expect(within(nav).getByRole('link', { name: 'Rules v2' })).toBeInTheDocument();
+  });
 });
