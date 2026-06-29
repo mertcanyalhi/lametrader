@@ -219,6 +219,15 @@ export class RuleService {
   }
 
   /**
+   * Count entries in one symbol's mirrored events log. Backs the chart-page
+   * Events button badge (per issue #425); returns `0` for symbols with no
+   * recorded events, including ones not on the watchlist.
+   */
+  async countSymbolEvents(symbolId: string): Promise<number> {
+    return this.eventLog.countSymbolEvents(symbolId);
+  }
+
+  /**
    * Throw {@link TickRuleNotEligibleError} if `trigger` is tick-cadence and
    * any symbol referenced by `scope` is not on the watchlist.
    * `AllSymbols`-scoped rules are exempt: fan-out is dynamic at fire-time.

@@ -28,6 +28,19 @@ export function ruleEventsKey(id: string, options: { limit?: number; before?: nu
   return [...RULES_QUERY_KEY, 'events', id, options] as const;
 }
 
+/** Stable key for one symbol's mirrored events query. */
+export function symbolRuleEventsKey(
+  symbolId: string,
+  options: { limit?: number; before?: number } = {},
+) {
+  return [...RULES_QUERY_KEY, 'symbol-events', symbolId, options] as const;
+}
+
+/** Stable key for one symbol's mirrored events count query. */
+export function symbolRuleEventsCountKey(symbolId: string) {
+  return [...RULES_QUERY_KEY, 'symbol-events-count', symbolId] as const;
+}
+
 /**
  * The body the v2 `POST /rules` / `PATCH /rules/:id` accept.
  *
@@ -149,5 +162,45 @@ export function useRuleEvents(
   return useQuery({
     queryKey: ruleEventsKey(id, options),
     queryFn: () => apiFetch<RuleEventEntry[]>(path),
+  });
+}
+
+/**
+ * Paginated read of one symbol's mirrored events log
+ * (`GET /symbols/:id/rule-events?limit=&before=`), newest-first.
+ *
+ * Same pagination semantics as {@link useRuleEvents} — `limit` defaults to 50
+ * server-side, `before` is a strict `<` cursor on `ts`.
+ */
+export function useSymbolRuleEvents(
+  symbolId: string,
+  options: { limit?: number; before?: number } = {},
+): UseQueryResult<RuleEventEntry[], Error> {
+  const search = new URLSearchParams();
+  if (options.limit !== undefined) search.set('limit', String(options.limit));
+  if (options.before !== undefined) search.set('before', String(options.before));
+  const qs = search.toString();
+  const path = `/symbols/${encodeURIComponent(symbolId)}/rule-events${qs ? `?${qs}` : ''}`;
+  return useQuery({
+    queryKey: symbolRuleEventsKey(symbolId, options),
+    queryFn: () => apiFetch<RuleEventEntry[]>(path),
+  });
+}
+
+/**
+ * Count of one symbol's mirrored events
+ * (`GET /symbols/:id/rule-events/count`). Backs the chart-page Events button
+ * badge — caps rendered display at `99+` in the consumer, but the hook
+ * returns the raw integer.
+ */
+export function useSymbolRuleEventsCount(symbolId: string): UseQueryResult<number, Error> {
+  return useQuery({
+    queryKey: symbolRuleEventsCountKey(symbolId),
+    queryFn: async () => {
+      const body = await apiFetch<{ count: number }>(
+        `/symbols/${encodeURIComponent(symbolId)}/rule-events/count`,
+      );
+      return body.count;
+    },
   });
 }

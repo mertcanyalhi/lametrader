@@ -24,6 +24,8 @@ import {
   useRule,
   useRuleEvents,
   useRules,
+  useSymbolRuleEvents,
+  useSymbolRuleEventsCount,
 } from './rules';
 
 /** A minimal `RuleInput` shape — the server re-validates against the v2 schema. */
@@ -207,5 +209,36 @@ describe('rules hooks', () => {
       expect(fetchSpy).toHaveBeenCalled();
     });
     expect(fetchSpy.mock.calls[0]?.[0]).toEqual('/api/rules/r1/events?limit=25&before=1700000000');
+  });
+
+  it('useSymbolRuleEvents issues GET /api/symbols/:id/rule-events with limit + before', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+    const { wrapper } = makeWrapper();
+    renderHook(() => useSymbolRuleEvents('crypto:BTCUSDT', { limit: 15, before: 1_700_000_000 }), {
+      wrapper,
+    });
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalled();
+    });
+    expect(fetchSpy.mock.calls[0]?.[0]).toEqual(
+      '/api/symbols/crypto%3ABTCUSDT/rule-events?limit=15&before=1700000000',
+    );
+  });
+
+  it('useSymbolRuleEventsCount issues GET /api/symbols/:id/rule-events/count and returns the count integer', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({ count: 7 }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => useSymbolRuleEventsCount('crypto:BTCUSDT'), { wrapper });
+    await waitFor(() => {
+      expect(result.current.data).toEqual(7);
+    });
+    expect(fetchSpy.mock.calls[0]?.[0]).toEqual('/api/symbols/crypto%3ABTCUSDT/rule-events/count');
   });
 });

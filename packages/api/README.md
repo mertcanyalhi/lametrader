@@ -332,6 +332,7 @@ Tick-cadence triggers (`everyTime` / `once` / `oncePerBar`) require every refere
 | `DELETE` | `/rules/{id}`                           | —               | Delete a rule. **204** / 404.                                                                              |
 | `GET`    | `/rules/{id}/events?limit=&before=`     | —               | Paginated rule events (newest-first); default limit 50, max 500; `before` cursors on `ts` (epoch ms). 200 / 404. |
 | `GET`    | `/symbols/{id}/rule-events?limit=&before=` | —            | Paginated symbol-mirrored rule events (newest-first); same pagination. 200.                                |
+| `GET`    | `/symbols/{id}/rule-events/count`       | —               | Count of mirrored rule events for the symbol; response `{ "count": <integer> }`. 200.                      |
 
 `RuleInput` is the client-controllable subset of a `Rule` — every field except `id`, `createdAt`, `updatedAt`. Schema validation is the trust boundary (per ADR 0016 #11); the engine trusts the validator. Multi-field failures surface as `{ error, fields: [{ path, message }, ...] }` with one entry per AJV failure (or one per unwatched symbol id for the tick-eligibility error).
 

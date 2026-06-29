@@ -175,4 +175,13 @@ describe('rulesController', () => {
     expect(response.statusCode).toEqual(200);
     expect(response.json()).toEqual([]);
   });
+
+  it('GET /symbols/:id/rule-events/count returns 200 + { count: 0 } for a symbol with no events', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/symbols/AAPL/rule-events/count',
+    });
+    expect(response.statusCode).toEqual(200);
+    expect(response.json()).toEqual({ count: 0 });
+  });
 });

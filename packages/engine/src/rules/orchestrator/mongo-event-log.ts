@@ -112,6 +112,11 @@ export class MongoEventLog implements EventLog {
     return doc?.events_v2 ?? [];
   }
 
+  async countSymbolEvents(symbolId: string): Promise<number> {
+    const doc = await this.watchlist.findOne({ _id: symbolId }, { projection: { events_v2: 1 } });
+    return doc?.events_v2?.length ?? 0;
+  }
+
   onAppend(listener: EventLogAppendListener): () => void {
     this.listeners.add(listener);
     return () => {
