@@ -13,10 +13,30 @@ import {
   TriggerKind,
 } from '@lametrader/core';
 
+import { getLogger } from '../../log.js';
 import type { EvaluationContext } from '../evaluation-context.types.js';
 import { evaluateCondition } from './evaluate-condition.js';
 import { referencesSlot } from './references-slot.js';
 import { routes } from './routes.js';
+
+/**
+ * Scope-bound logger for the dispatcher surface — one
+ * `dispatcher_decision` trace per inbound event lands under
+ * `engine.rules.dispatch` (per #436 / spec rules-trace-scope-logging).
+ */
+const log = getLogger('engine.rules.dispatch');
+
+/**
+ * One dropped candidate's metadata captured for the
+ * `dispatcher_decision` trace under `engine.rules.dispatch` — surfaces
+ * the why of each non-fire to a live debug session.
+ */
+interface DroppedCandidate {
+  /** The candidate rule's id. */
+  ruleId: string;
+  /** Why the rule was dropped (`condition-false` or `gate-blocked`). */
+  reason: 'condition-false' | 'gate-blocked';
+}
 
 /**
  * Inputs for {@link TriggerDispatcher}.
@@ -150,18 +170,45 @@ export class TriggerDispatcher {
 
     const candidates = await this.candidates(event, options);
     const fires: FireRecord[] = [];
+    // Per-event trace bookkeeping — populated even when the dispatcher
+    // scope's level silences the emit, so the per-rule decisions remain
+    // contiguous in the source.
+    const candidateIds: string[] = [];
+    const eligibleIds: string[] = [];
+    const droppedCandidates: DroppedCandidate[] = [];
 
     for (const { rule, firingSymbolId } of candidates) {
+      candidateIds.push(rule.id);
       const ctx = this.deps.buildContext(event, firingSymbolId, rule.profileId);
-      if (!evaluateCondition(rule.condition, ctx)) continue;
-      if (!this.gateAllows(rule, event, firingSymbolId)) continue;
+      if (!evaluateCondition(rule.condition, ctx)) {
+        droppedCandidates.push({ ruleId: rule.id, reason: 'condition-false' });
+        continue;
+      }
+      if (!this.gateAllows(rule, event, firingSymbolId)) {
+        droppedCandidates.push({ ruleId: rule.id, reason: 'gate-blocked' });
+        continue;
+      }
       this.recordFire(rule, event, firingSymbolId);
+      eligibleIds.push(rule.id);
       fires.push({ ruleId: rule.id, firingSymbolId, event });
       // `Once` auto-disable persists via the existing save path.
       if (rule.trigger.kind === TriggerKind.Once) {
         const fresh = await this.deps.rules.get(rule.id);
         if (fresh !== null) await this.deps.rules.save({ ...fresh, enabled: false });
       }
+    }
+
+    if (log.isLevelEnabled('trace')) {
+      log.trace(
+        {
+          eventKind: event.kind,
+          eventTs: event.ts,
+          candidates: candidateIds,
+          eligible: eligibleIds,
+          dropped: droppedCandidates,
+        },
+        'dispatcher_decision',
+      );
     }
 
     return fires;

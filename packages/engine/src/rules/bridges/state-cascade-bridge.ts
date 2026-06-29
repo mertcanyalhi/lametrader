@@ -7,6 +7,15 @@ import {
   type SymbolStateChangedEvent,
 } from '@lametrader/core';
 
+import { getLogger } from '../../log.js';
+
+/**
+ * Scope-bound logger for every cascade bridge — emits a single
+ * `bridge_emit` trace per outbound `EvaluationTriggerEvent` (per #436 /
+ * spec rules-trace-scope-logging).
+ */
+const log = getLogger('engine.rules.bridges');
+
 /**
  * Bridges {@link StateRepository}'s {@link StateChangedEvent}s into rules
  * cascade triggers — {@link SymbolStateChangedEvent} or
@@ -28,25 +37,36 @@ export class StateCascadeBridge {
    * scope-tagged rules cascade trigger.
    */
   handleStateChange(event: StateChangedEvent): void {
-    if (event.scope.kind === StateScope.Symbol) {
-      this.emit({
-        kind: EvaluationTriggerKind.SymbolStateChanged,
-        ts: event.ts,
-        symbolId: event.scope.symbolId,
-        profileId: event.profileId,
-        key: event.key,
-        prev: event.prev,
-        current: event.current,
-      });
-      return;
+    const outbound: SymbolStateChangedEvent | GlobalStateChangedEvent =
+      event.scope.kind === StateScope.Symbol
+        ? {
+            kind: EvaluationTriggerKind.SymbolStateChanged,
+            ts: event.ts,
+            symbolId: event.scope.symbolId,
+            profileId: event.profileId,
+            key: event.key,
+            prev: event.prev,
+            current: event.current,
+          }
+        : {
+            kind: EvaluationTriggerKind.GlobalStateChanged,
+            ts: event.ts,
+            profileId: event.profileId,
+            key: event.key,
+            prev: event.prev,
+            current: event.current,
+          };
+    this.emit(outbound);
+    if (log.isLevelEnabled('trace')) {
+      log.trace(
+        {
+          bridge: 'state-cascade',
+          inboundEventKind: 'state-changed',
+          emittedEventKind: outbound.kind,
+          payload: outbound,
+        },
+        'bridge_emit',
+      );
     }
-    this.emit({
-      kind: EvaluationTriggerKind.GlobalStateChanged,
-      ts: event.ts,
-      profileId: event.profileId,
-      key: event.key,
-      prev: event.prev,
-      current: event.current,
-    });
   }
 }

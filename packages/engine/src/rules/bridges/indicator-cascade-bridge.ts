@@ -8,6 +8,15 @@ import {
   StateValueType,
 } from '@lametrader/core';
 
+import { getLogger } from '../../log.js';
+
+/**
+ * Scope-bound logger for every cascade bridge — emits a single
+ * `bridge_emit` trace per outbound `EvaluationTriggerEvent` (per #436 /
+ * spec rules-trace-scope-logging).
+ */
+const log = getLogger('engine.rules.bridges');
+
 /**
  * Bridges {@link IndicatorService}'s {@link IndicatorStateEvent}s into
  * {@link IndicatorChangedEvent}s.
@@ -99,7 +108,7 @@ export class IndicatorCascadeBridge {
       if (prev !== null && stateValueEquals(prev, current)) continue;
 
       this.cache.set(cacheKey, current);
-      this.emit({
+      const outbound: IndicatorChangedEvent = {
         kind: EvaluationTriggerKind.IndicatorChanged,
         ts: event.state.time,
         symbolId: event.id,
@@ -108,7 +117,19 @@ export class IndicatorCascadeBridge {
         stateKey,
         prev,
         current,
-      });
+      };
+      this.emit(outbound);
+      if (log.isLevelEnabled('trace')) {
+        log.trace(
+          {
+            bridge: 'indicator-cascade',
+            inboundEventKind: 'indicator-state',
+            emittedEventKind: outbound.kind,
+            payload: outbound,
+          },
+          'bridge_emit',
+        );
+      }
     }
   }
 }

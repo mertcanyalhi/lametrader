@@ -21,7 +21,15 @@ import {
   UnknownDestinationError,
 } from '@lametrader/core';
 
+import { getLogger } from '../../log.js';
 import type { EvaluationLookups } from '../wire/live-evaluation-lookups.types.js';
+
+/**
+ * Scope-bound logger for the action-runner surface — one
+ * `action_executed` trace per action lands under `engine.rules.actions`
+ * (per #436 / spec rules-trace-scope-logging).
+ */
+const log = getLogger('engine.rules.actions');
 
 /**
  * The subset of v2 {@link Action}s that mutate state — the input
@@ -71,11 +79,23 @@ export class ActionRunner {
   ): Promise<RuleEventEntry[]> {
     const entries: RuleEventEntry[] = [];
     for (const action of rule.actions) {
-      if (isStateAction(action)) {
-        entries.push(await this.runStateAction(action, rule, firingSymbolId, ts));
-        continue;
+      const startedAt = nowMs();
+      const entry = isStateAction(action)
+        ? await this.runStateAction(action, rule, firingSymbolId, ts)
+        : await this.runNotificationAction(action, rule.id, firingSymbolId, ts, event);
+      entries.push(entry);
+      if (log.isLevelEnabled('trace')) {
+        log.trace(
+          {
+            ruleId: rule.id,
+            actionKind: action.kind,
+            payload: action,
+            outcome: entry.type === RuleEventType.Error ? 'error' : 'ok',
+            durationMs: nowMs() - startedAt,
+          },
+          'action_executed',
+        );
       }
-      entries.push(await this.runNotificationAction(action, rule.id, firingSymbolId, ts, event));
     }
     const fired: FiredRuleEvent = {
       type: RuleEventType.Fired,
@@ -212,6 +232,15 @@ export class ActionRunner {
       volume: this.lookups.getVolumeValue(firingSymbolId),
     };
   }
+}
+
+/**
+ * High-resolution monotonic clock — wraps `performance.now()` so the
+ * `durationMs` field on the `action_executed` trace stays sub-millisecond
+ * even when an action runs in well under one wall-clock tick.
+ */
+function nowMs(): number {
+  return performance.now();
 }
 
 /** Outcome of `renderTemplate` — either the rendered body or the first unknown token. */

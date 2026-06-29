@@ -5,6 +5,15 @@ import {
   type TickEvent,
 } from '@lametrader/core';
 
+import { getLogger } from '../../log.js';
+
+/**
+ * Scope-bound logger for every cascade bridge — emits a single
+ * `bridge_emit` trace per outbound `EvaluationTriggerEvent` (per #436 /
+ * spec rules-trace-scope-logging).
+ */
+const log = getLogger('engine.rules.bridges');
+
 /**
  * Bridges {@link QuoteStreamService}'s {@link SymbolQuoteEvent}s into
  * {@link TickEvent}s.
@@ -27,11 +36,23 @@ export class TickBridge {
    * {@link TickEvent}.
    */
   handleQuote(event: SymbolQuoteEvent): void {
-    this.emit({
+    const outbound: TickEvent = {
       kind: EvaluationTriggerKind.Tick,
       ts: event.quote.time,
       symbolId: event.id,
       price: event.quote.price,
-    });
+    };
+    this.emit(outbound);
+    if (log.isLevelEnabled('trace')) {
+      log.trace(
+        {
+          bridge: 'tick',
+          inboundEventKind: 'quote',
+          emittedEventKind: outbound.kind,
+          payload: outbound,
+        },
+        'bridge_emit',
+      );
+    }
   }
 }

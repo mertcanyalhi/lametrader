@@ -15,6 +15,23 @@ export type { TelegramDestination };
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
 
 /**
+ * One per-scope log-level override.
+ *
+ * `pattern` is matched against the `scope` string passed to `getLogger`.
+ * The pattern grammar is intentionally minimal — a literal scope name
+ * (`engine.rules.dispatch`), or a `prefix.*` suffix that matches any scope
+ * whose name starts with `prefix.`.
+ * (A bare `*` matches every scope.)
+ * `level` is one of the Pino levels in {@link LogLevel}.
+ */
+export interface LogScopeOverride {
+  /** The scope-name pattern to match (literal or `prefix.*`). */
+  pattern: string;
+  /** The Pino level to apply to children whose scope matches `pattern`. */
+  level: LogLevel;
+}
+
+/**
  * Runtime settings resolved from the environment, with sane defaults. The
  * `loadSettings` function in `settings.ts` is the single place that reads
  * `process.env`; modules take values from the result.
@@ -43,4 +60,15 @@ export interface Settings {
    * Bump to `'debug'` / `'trace'` to crank rule-engine verbosity.
    */
   logLevel: LogLevel;
+  /**
+   * Per-scope log-level overrides applied by `getLogger` after the global
+   * level.
+   *
+   * Order matters: the first entry whose `pattern` matches a scope wins.
+   * List narrow patterns (e.g. `engine.rules.dispatch:error`) before broad
+   * ones (`engine.rules.*:trace`) when you want to carve a quieter scope out
+   * of a noisy prefix.
+   * Empty by default; populated from the `LOG_SCOPES` env var.
+   */
+  logScopes: LogScopeOverride[];
 }

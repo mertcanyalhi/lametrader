@@ -7,6 +7,14 @@ import {
 } from '@lametrader/core';
 
 import type { CandleEvent } from '../../candles/polling-service.types.js';
+import { getLogger } from '../../log.js';
+
+/**
+ * Scope-bound logger for every cascade bridge — emits a single
+ * `bridge_emit` trace per outbound `EvaluationTriggerEvent` (per #436 /
+ * spec rules-trace-scope-logging).
+ */
+const log = getLogger('engine.rules.bridges');
 
 /**
  * Per-`(symbolId, period)` lifecycle bookkeeping.
@@ -60,17 +68,37 @@ export class BarLifecycleBridge {
     const advanced = prior === undefined || ts > prior.lastTs;
 
     if (advanced) {
-      this.emit(this.openedEvent(event.id, event.period, ts));
+      this.emitAndTrace(this.openedEvent(event.id, event.period, ts));
     }
 
     if (event.final && (prior === undefined || prior.closedTs !== ts)) {
-      this.emit(this.closedEvent(event.id, event.period, ts));
+      this.emitAndTrace(this.closedEvent(event.id, event.period, ts));
       this.lifecycle.set(key, { lastTs: ts, closedTs: ts });
       return;
     }
 
     if (advanced) {
       this.lifecycle.set(key, { lastTs: ts, closedTs: prior?.closedTs });
+    }
+  }
+
+  /**
+   * Forward an outbound `BarOpenedEvent` / `BarClosedEvent` to `emit` and
+   * (when the bridges scope is at `trace`) emit a `bridge_emit` trace
+   * carrying the inbound-event kind, emitted kind, and outbound payload.
+   */
+  private emitAndTrace(outbound: BarOpenedEvent | BarClosedEvent): void {
+    this.emit(outbound);
+    if (log.isLevelEnabled('trace')) {
+      log.trace(
+        {
+          bridge: 'bar-lifecycle',
+          inboundEventKind: 'candle',
+          emittedEventKind: outbound.kind,
+          payload: outbound,
+        },
+        'bridge_emit',
+      );
     }
   }
 
