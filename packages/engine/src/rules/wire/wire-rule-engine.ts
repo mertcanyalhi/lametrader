@@ -3,11 +3,15 @@ import {
   type EvaluationTriggerEvent,
   EvaluationTriggerKind,
   type EventLog,
+  type GlobalStateChangedEvent,
   type Notifier,
+  type RuleEvent,
   type RuleEventEntry,
   RuleEventType,
   type RuleRepository,
   type StateRepository,
+  type StateValue,
+  type SymbolStateChangedEvent,
   type WatchlistRepository,
 } from '@lametrader/core';
 
@@ -88,12 +92,20 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
   const actions = new ActionRunner(deps.state, deps.notifier, lookups);
   const dispatcher = new TriggerDispatcher({
     rules: deps.rules,
-    buildContext: (_event, firingSymbolId, profileId) =>
+    buildContext: (event, firingSymbolId, profileId) => {
+      // Cascade events (`SymbolStateChanged` / `GlobalStateChanged`) already
+      // carry the slot's `prev` value on their payload — thread it through so
+      // `ChangesTo` / `ChangesFrom` see the real prior value instead of `null`
+      // (#433).
+      // The non-cascade paths (tick / bar / timer / indicator) still resolve
+      // prev to `null` for state slots — sourcing a meaningful prev there is
+      // larger scope and explicitly deferred by #433.
+      const cascadePrev = cascadePrevLookups(event);
       // Lazy: bar window is "everything stored so far" — operators that need
       // a real lookback window pull from the indicator store + tick ring,
       // which already encode their own bounds. Upgrade path: derive the
       // window from the firing rule's `lookbackBars` × interval.
-      buildEvaluationContext({
+      return buildEvaluationContext({
         symbolId: firingSymbolId,
         profileId,
         candleRepository: deps.candleRepository,
@@ -102,14 +114,12 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
         barWindow: { from: 0, to: Number.MAX_SAFE_INTEGER },
         getSymbolState: (pid, symbolId, key) => lookups.getSymbolState(pid, symbolId, key),
         getGlobalState: (pid, key) => lookups.getGlobalState(pid, key),
-        // The orchestrator's lookups already track prev via the sync mirror;
-        // pass the same getters through so `ChangesTo`/`ChangesFrom` see the
-        // same value the action runner saw.
-        getPrevSymbolState: () => null,
-        getPrevGlobalState: () => null,
+        getPrevSymbolState: cascadePrev.getPrevSymbolState,
+        getPrevGlobalState: cascadePrev.getPrevGlobalState,
         getPrevIndicator: () => null,
         barSeries: lookups.bookSeriesFor(firingSymbolId),
-      }),
+      });
+    },
   });
   const orchestrator = new RuleOrchestrator({
     rules: deps.rules,
@@ -177,6 +187,99 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
     drain: serializer.drain,
   };
 }
+
+/**
+ * The pair of one-step-back state lookups
+ * {@link buildEvaluationContext} consumes for `SymbolStateRef` /
+ * `GlobalStateRef` operands.
+ *
+ * Returned by {@link cascadePrevLookups} so the wire-up can hand the right
+ * `prev` value to `ChangesTo` / `ChangesFrom` on the cascade path (#433).
+ */
+export interface CascadePrevLookups {
+  /** Per-slot prev lookup for {@link OperandKind.SymbolStateRef}. */
+  getPrevSymbolState(profileId: string, symbolId: string, key: string): StateValue | null;
+  /** Per-slot prev lookup for {@link OperandKind.GlobalStateRef}. */
+  getPrevGlobalState(profileId: string, key: string): StateValue | null;
+}
+
+/**
+ * Build the `(getPrevSymbolState, getPrevGlobalState)` pair the
+ * dispatcher's `buildContext` hands to {@link buildEvaluationContext}.
+ *
+ * On a `SymbolStateChanged` event the symbol-state lookup returns
+ * `event.prev` for the matching `(profileId, symbolId, key)` triple and
+ * `null` for every other slot.
+ * On a `GlobalStateChanged` event the global-state lookup returns
+ * `event.prev` for the matching `(profileId, key)` pair and `null`
+ * elsewhere.
+ * On any other event kind (tick / bar / timer / indicator) both lookups
+ * return `null` — sourcing prev for state slots on the non-cascade paths
+ * is larger scope and explicitly deferred by #433.
+ *
+ * Pure — derives its return value entirely from the inbound event's
+ * payload. The dispatcher invokes `buildContext` once per fan-out target,
+ * so a fresh lookups pair lands per `(event, firingSymbolId, profileId)`
+ * triple with no shared mutable state.
+ */
+export function cascadePrevLookups(event: RuleEvent): CascadePrevLookups {
+  if (event.kind === EvaluationTriggerKind.SymbolStateChanged) {
+    return symbolCascadePrev(event);
+  }
+  if (event.kind === EvaluationTriggerKind.GlobalStateChanged) {
+    return globalCascadePrev(event);
+  }
+  return NULL_PREV_LOOKUPS;
+}
+
+/**
+ * Cascade-driven prev lookups for a {@link SymbolStateChangedEvent}.
+ *
+ * Returns `event.prev` only when the operand's
+ * `(profileId, symbolId, key)` triple matches the event's slot; every other
+ * slot reads `null` so unrelated `ChangesTo` / `ChangesFrom` evaluations
+ * stay correctly inert.
+ */
+function symbolCascadePrev(event: SymbolStateChangedEvent): CascadePrevLookups {
+  return {
+    getPrevSymbolState(profileId, symbolId, key) {
+      if (profileId !== event.profileId) return null;
+      if (symbolId !== event.symbolId) return null;
+      if (key !== event.key) return null;
+      return event.prev;
+    },
+    getPrevGlobalState: () => null,
+  };
+}
+
+/**
+ * Cascade-driven prev lookups for a {@link GlobalStateChangedEvent}.
+ *
+ * Returns `event.prev` only when the operand's `(profileId, key)` pair
+ * matches the event's slot; every other slot reads `null`.
+ */
+function globalCascadePrev(event: GlobalStateChangedEvent): CascadePrevLookups {
+  return {
+    getPrevSymbolState: () => null,
+    getPrevGlobalState(profileId, key) {
+      if (profileId !== event.profileId) return null;
+      if (key !== event.key) return null;
+      return event.prev;
+    },
+  };
+}
+
+/**
+ * Default lookups pair — both readers always return `null`.
+ *
+ * Used on the non-cascade paths (tick / bar / timer / indicator) so the
+ * dispatcher's `buildContext` always receives a stable shape. Same single
+ * instance for every event since neither reader closes over state.
+ */
+const NULL_PREV_LOOKUPS: CascadePrevLookups = {
+  getPrevSymbolState: () => null,
+  getPrevGlobalState: () => null,
+};
 
 /**
  * Side-effect of every event passing through the wire — update the sync
