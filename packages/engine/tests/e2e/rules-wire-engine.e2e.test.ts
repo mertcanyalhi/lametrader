@@ -1,0 +1,106 @@
+import {
+  ActionKind,
+  ConditionNodeKind,
+  LeafConditionFamily,
+  NotificationChannel,
+  OperandKind,
+  type Rule,
+  RuleEventType,
+  RuleScopeKind,
+  StateOperator,
+  StateValueType,
+  TriggerKind,
+} from '@lametrader/core';
+import {
+  IndicatorSeriesStore,
+  InMemoryCandleRepository,
+  InMemoryEventLog,
+  InMemoryNotifier,
+  InMemoryRuleRepository,
+  InMemoryStateRepository,
+  InMemoryWatchlistRepository,
+  wireRuleEngine,
+} from '@lametrader/engine';
+import { describe, expect, it } from 'vitest';
+
+describe('wireRuleEngine state-ref evaluation (e2e)', () => {
+  it('a tick on a Symbol-scoped rule whose condition references SymbolStateRef fires when the state was written under the rule profile (regression #431)', async () => {
+    const rules = new InMemoryRuleRepository();
+    const eventLog = new InMemoryEventLog(() => 0);
+    const state = new InMemoryStateRepository();
+    const watchlist = new InMemoryWatchlistRepository();
+    const notifier = new InMemoryNotifier(['main']);
+    const candleRepository = new InMemoryCandleRepository();
+    const indicatorStore = new IndicatorSeriesStore();
+
+    const stateAwareRule: Rule = {
+      id: 'r-state',
+      profileId: 'profile-7',
+      name: 'state-aware',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.State,
+          operator: StateOperator.Equals,
+          left: {
+            kind: OperandKind.SymbolStateRef,
+            key: 'breached',
+            valueType: StateValueType.Bool,
+          },
+          right: {
+            kind: OperandKind.Literal,
+            value: { type: StateValueType.Bool, value: true },
+          },
+        },
+      },
+      trigger: { kind: TriggerKind.EveryTime },
+      expiration: null,
+      actions: [
+        {
+          kind: ActionKind.Notification,
+          channel: NotificationChannel.Telegram,
+          destinationName: 'main',
+          template: 'state hit',
+        },
+      ],
+      enabled: true,
+      order: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    await rules.save(stateAwareRule);
+
+    const wired = wireRuleEngine({
+      rules,
+      state,
+      watchlist,
+      eventLog,
+      notifier,
+      candleRepository,
+      indicatorStore,
+    });
+    // State is set AFTER wiring so the sync lookups mirror (subscribed via
+    // `state.onStateChanged` in wireRuleEngine) observes the write.
+    await state.setSymbolState(
+      'profile-7',
+      'AAPL',
+      'breached',
+      { type: StateValueType.Bool, value: true },
+      0,
+    );
+
+    wired.tickBridge.handleQuote({
+      id: 'AAPL',
+      quote: { time: 1_000, price: 101, final: false },
+    });
+    await wired.drain();
+
+    const ruleEvents = await eventLog.ruleEvents('r-state');
+    expect(ruleEvents.map((e) => e.type)).toEqual([
+      RuleEventType.NotificationSent,
+      RuleEventType.Fired,
+    ]);
+    expect(notifier.sent).toEqual([{ destinationName: 'main', body: 'state hit' }]);
+  });
+});

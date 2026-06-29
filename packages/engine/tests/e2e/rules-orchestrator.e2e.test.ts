@@ -113,21 +113,16 @@ async function wire(opts: {
   }
   const dispatcher = new TriggerDispatcher({
     rules: repo,
-    buildContext: (event, firingSymbolId) =>
+    buildContext: (_event, firingSymbolId, profileId) =>
       buildEvaluationContext({
         symbolId: firingSymbolId,
-        profileId:
-          event.kind === EvaluationTriggerKind.SymbolStateChanged ||
-          event.kind === EvaluationTriggerKind.GlobalStateChanged
-            ? event.profileId
-            : 'profile-A',
+        profileId,
         candleRepository: null as unknown as never,
         tickRings,
         indicatorStore,
         barWindow: { from: 0, to: Number.MAX_SAFE_INTEGER },
-        getSymbolState: (profileId, symbolId, key) =>
-          lookups.getSymbolState(profileId, symbolId, key),
-        getGlobalState: (profileId, key) => lookups.getGlobalState(profileId, key),
+        getSymbolState: (pid, symbolId, key) => lookups.getSymbolState(pid, symbolId, key),
+        getGlobalState: (pid, key) => lookups.getGlobalState(pid, key),
       }),
   });
   const actions = new ActionRunner(state, notifier, lookups);

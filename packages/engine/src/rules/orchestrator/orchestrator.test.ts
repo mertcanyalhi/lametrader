@@ -146,17 +146,20 @@ async function buildOrchestrator(opts: {
   }
   const tickRings = opts.tickRings ?? defaultRings;
   const indicatorStore = new IndicatorSeriesStore();
-  const buildContext = (event: RuleEvent, firingSymbolId: string): EvaluationContext =>
+  const buildContext = (
+    _event: RuleEvent,
+    firingSymbolId: string,
+    profileId: string,
+  ): EvaluationContext =>
     buildEvaluationContext({
       symbolId: firingSymbolId,
-      profileId: lookupProfile(repo, event),
+      profileId,
       candleRepository: null as unknown as never,
       tickRings,
       indicatorStore,
       barWindow: { from: 0, to: Number.MAX_SAFE_INTEGER },
-      getSymbolState: (profileId, symbolId, key) =>
-        lookups.getSymbolState(profileId, symbolId, key),
-      getGlobalState: (profileId, key) => lookups.getGlobalState(profileId, key),
+      getSymbolState: (pid, symbolId, key) => lookups.getSymbolState(pid, symbolId, key),
+      getGlobalState: (pid, key) => lookups.getGlobalState(pid, key),
     });
   const dispatcher = new TriggerDispatcher({ rules: repo, buildContext });
   const actions = new ActionRunner(state, notifier, lookups);
@@ -169,26 +172,6 @@ async function buildOrchestrator(opts: {
     eventLog,
   });
   return { orchestrator, notifier, state, rules: repo, eventLog, watchlist };
-}
-
-/**
- * For cascade events the dispatcher passes `event.profileId` as the scope
- * filter, so the orchestrator's `buildContext` needs to inspect the rule for
- * the matching profile.
- * The orchestrator test fixture's `buildContext` is a `(event, symbolId) →
- * context`; we don't have the rule here, so use the cascade event's
- * profileId when present and otherwise default to profile-A. The tests that
- * read state from the context cover only the cascade path so this fixture is
- * sufficient.
- */
-function lookupProfile(_repo: RuleRepository, event: RuleEvent): string {
-  if (
-    event.kind === EvaluationTriggerKind.SymbolStateChanged ||
-    event.kind === EvaluationTriggerKind.GlobalStateChanged
-  ) {
-    return event.profileId;
-  }
-  return PROFILE_A;
 }
 
 const TICK_AT = (ts: number, symbolId = 'AAPL'): TickEvent => ({

@@ -3,16 +3,20 @@ import {
   ComparisonOperator,
   ConditionNodeKind,
   LeafConditionFamily,
+  NotificationChannel,
   OperandKind,
   Period,
+  type Rule,
   RuleEventType,
   RuleScopeKind,
+  StateOperator,
   StateValueType,
   TriggerKind,
 } from '@lametrader/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { InMemoryCandleRepository } from '../../candles/in-memory-candle-repository.js';
+import { _resetLogRoot, _setLogLevel } from '../../log.js';
 import { InMemoryNotifier } from '../../notification/in-memory-notifier.js';
 import { InMemoryStateRepository } from '../../state/in-memory-state-repository.js';
 import { InMemoryWatchlistRepository } from '../../symbols/in-memory-watchlist-repository.js';
@@ -99,6 +103,142 @@ describe('wireRuleEngine', () => {
       type: StateValueType.Bool,
       value: true,
     });
+  });
+
+  it('logs the error and appends an Error rule-event entry on the symbol log when the orchestrator throws (regression #431)', async () => {
+    const captured: string[] = [];
+    const sink = {
+      write(line: string): void {
+        captured.push(line);
+      },
+    };
+    _resetLogRoot(sink);
+    _setLogLevel('error');
+    try {
+      const corruptRules: typeof rules = Object.create(rules);
+      corruptRules.listEnabledForSymbol = () => {
+        throw new Error('repository timeout');
+      };
+      const wired = wireRuleEngine({
+        rules: corruptRules,
+        state,
+        watchlist,
+        eventLog,
+        notifier,
+        candleRepository: candles,
+        indicatorStore,
+      });
+
+      wired.tickBridge.handleQuote({
+        id: 'AAPL',
+        quote: { time: 1_000, price: 101, final: false },
+      });
+      await wired.drain();
+
+      const symbolEvents = await eventLog.symbolEvents('AAPL');
+      expect(symbolEvents).toEqual([
+        {
+          type: RuleEventType.Error,
+          ts: 1_000,
+          firedAt: 0,
+          ruleId: '',
+          symbolId: 'AAPL',
+          reason: 'orchestrator process failed: repository timeout',
+        },
+      ]);
+      const logged = captured.map((line) => JSON.parse(line) as Record<string, unknown>);
+      expect(
+        logged.some(
+          (entry) =>
+            entry.scope === 'rules-wire' &&
+            entry.level === 50 &&
+            entry.msg === 'orchestrator_process_failed' &&
+            entry.symbolId === 'AAPL' &&
+            typeof entry.err === 'object' &&
+            entry.err !== null &&
+            (entry.err as { message?: unknown }).message === 'repository timeout',
+        ),
+      ).toEqual(true);
+    } finally {
+      _resetLogRoot();
+      _setLogLevel('info');
+    }
+  });
+
+  it('fires a tick-cadence rule whose condition references SymbolStateRef when the state was set under the rule profile (regression #431)', async () => {
+    const ruleId = 'r-state';
+    const stateAwareRule: Rule = {
+      id: ruleId,
+      profileId: 'profile-1',
+      name: 'state-aware',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.State,
+          operator: StateOperator.Equals,
+          left: {
+            kind: OperandKind.SymbolStateRef,
+            key: 'breached',
+            valueType: StateValueType.Bool,
+          },
+          right: {
+            kind: OperandKind.Literal,
+            value: { type: StateValueType.Bool, value: true },
+          },
+        },
+      },
+      trigger: { kind: TriggerKind.EveryTime },
+      expiration: null,
+      actions: [
+        {
+          kind: ActionKind.Notification,
+          channel: NotificationChannel.Telegram,
+          destinationName: 'main',
+          template: 'state hit',
+        },
+      ],
+      enabled: true,
+      order: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    await rules.save(stateAwareRule);
+
+    const allowingNotifier = new InMemoryNotifier(['main']);
+    const wired = wireRuleEngine({
+      rules,
+      state,
+      watchlist,
+      eventLog,
+      notifier: allowingNotifier,
+      candleRepository: candles,
+      indicatorStore,
+    });
+    // Set state under the rule's profile AFTER wiring so the sync lookups
+    // mirror (subscribed in `wireRuleEngine`) sees the write — same
+    // ordering the production engine uses (`warmInitialState` covers the
+    // cold-start path, not exercised by this regression test).
+    await state.setSymbolState(
+      'profile-1',
+      'AAPL',
+      'breached',
+      { type: StateValueType.Bool, value: true },
+      0,
+    );
+
+    wired.tickBridge.handleQuote({
+      id: 'AAPL',
+      quote: { time: 1_000, price: 101, final: false },
+    });
+    await wired.drain();
+
+    const ruleEvents = await eventLog.ruleEvents(ruleId);
+    expect(ruleEvents.map((e) => e.type)).toEqual([
+      RuleEventType.NotificationSent,
+      RuleEventType.Fired,
+    ]);
+    expect(allowingNotifier.sent).toEqual([{ destinationName: 'main', body: 'state hit' }]);
   });
 
   it('exposes the bar bridge so a BarClosed event triggers OncePerBarClose rules', async () => {
