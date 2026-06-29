@@ -1,0 +1,285 @@
+import {
+  type EventLog,
+  type Rule,
+  type RuleEventEntry,
+  RuleNotFoundError,
+  type RuleRepository,
+  type RuleScope,
+  RuleScopeKind,
+  TickRuleNotEligibleError,
+  type Trigger,
+  TriggerKind,
+  type WatchlistRepository,
+} from '@lametrader/core';
+import { nanoid } from 'nanoid';
+
+/**
+ * Options for {@link RuleService}: injectable id generator and clock so
+ * tests are deterministic.
+ */
+export interface RuleServiceOptions {
+  /** Generate a new rule id; defaults to nanoid. */
+  newId?: () => string;
+  /** Current epoch ms; defaults to {@link Date.now}. */
+  now?: () => number;
+}
+
+/**
+ * Body accepted by {@link RuleService.create} — the client-controllable
+ * subset of a {@link Rule}.
+ *
+ * Rules have no embedded `events` / `history` array (those live behind the
+ * separate {@link EventLog} port per ADR 0016), so this omits only identity
+ * + lifecycle stamps.
+ */
+export type RuleCreateInput = Omit<Rule, 'id' | 'createdAt' | 'updatedAt'>;
+
+/**
+ * Filter accepted by {@link RuleService.list}. Each field is independent;
+ * setting all three ANDs them.
+ */
+export interface RuleListFilters {
+  /** Keep only rules with this `profileId`. */
+  profileId?: string;
+  /** Keep only rules whose scope admits this `symbolId` (Symbol / Symbols / AllSymbols match). */
+  symbolId?: string;
+  /** Keep only rules whose `enabled` flag matches. */
+  enabled?: boolean;
+}
+
+/**
+ * Pagination options for the event-log read endpoints.
+ *
+ * The repository returns events in append order; this service reverses to
+ * newest-first and applies `before` + `limit` in memory.
+ */
+export interface EventListOptions {
+  /** Max entries to return. Defaults to 50; capped at 500 to bound memory. */
+  limit?: number;
+  /** Return only entries with `ts < before` (epoch-ms cursor for "next page"). */
+  before?: number;
+}
+
+/** The set of trigger kinds that are tick-cadence (per ADR 0016). */
+const TICK_CADENCE_TRIGGERS: ReadonlySet<TriggerKind> = new Set([
+  TriggerKind.EveryTime,
+  TriggerKind.Once,
+  TriggerKind.OncePerBar,
+]);
+
+/** Default page size for the event-log read endpoints. */
+const DEFAULT_EVENT_PAGE_SIZE = 50;
+/** Hard cap on event-log page size to bound memory. */
+const MAX_EVENT_PAGE_SIZE = 500;
+
+/**
+ * Application use-case for managing {@link Rule}s through a single API the
+ * HTTP layer drives.
+ *
+ * Depends on the {@link RuleRepository}, {@link EventLog}, and the existing
+ * {@link WatchlistRepository} (consulted only for the tick-cadence
+ * eligibility check at create / patch time).
+ */
+export class RuleService {
+  /** Id generator (injectable; defaults to nanoid). */
+  private readonly newId: () => string;
+  /** Current clock (injectable; defaults to {@link Date.now}). */
+  private readonly now: () => number;
+
+  /**
+   * @param rules - the rule persistence port.
+   * @param eventLog - the event log port.
+   * @param watchlist - the watchlist consulted for tick-cadence eligibility.
+   * @param options - injectable id generator and clock.
+   */
+  constructor(
+    private readonly rules: RuleRepository,
+    private readonly eventLog: EventLog,
+    private readonly watchlist: WatchlistRepository,
+    options: RuleServiceOptions = {},
+  ) {
+    this.newId = options.newId ?? (() => nanoid());
+    this.now = options.now ?? Date.now;
+  }
+
+  /**
+   * List rules, optionally filtered by `profileId` / `symbolId` / `enabled`.
+   *
+   * Always sorted by `order` ascending so reorder mutations are visible on
+   * the next read.
+   */
+  async list(filters: RuleListFilters = {}): Promise<Rule[]> {
+    const all = await this.rules.list();
+    const filtered = all.filter((rule) => {
+      if (filters.profileId !== undefined && rule.profileId !== filters.profileId) return false;
+      if (filters.enabled !== undefined && rule.enabled !== filters.enabled) return false;
+      if (filters.symbolId !== undefined && !scopeAdmitsSymbol(rule.scope, filters.symbolId)) {
+        return false;
+      }
+      return true;
+    });
+    return filtered.sort((a, b) => a.order - b.order);
+  }
+
+  /**
+   * Get one rule by id.
+   *
+   * @throws {@link RuleNotFoundError} when no rule has that id.
+   */
+  async get(id: string): Promise<Rule> {
+    const rule = await this.rules.get(id);
+    if (rule === null) {
+      throw new RuleNotFoundError(`rule not found: ${id}`);
+    }
+    return rule;
+  }
+
+  /**
+   * Create a rule from `input`. Generates the id and timestamps; persists via
+   * the repository.
+   *
+   * Validates tick-cadence eligibility against the watchlist (per ADR 0016 —
+   * `EveryTime` / `Once` / `OncePerBar` triggers require every referenced
+   * symbol to be on the watchlist). `AllSymbols` scope is exempt: fan-out is
+   * dynamic at fire-time.
+   *
+   * Trusts schema validation at the boundary (per ADR 0016 #11) — domain-level
+   * field validation lives in the JSON schema.
+   *
+   * @throws {@link TickRuleNotEligibleError} when the tick gate rejects.
+   */
+  async create(input: RuleCreateInput): Promise<Rule> {
+    await this.assertTickEligible(input.trigger, input.scope);
+    const ts = this.now();
+    const rule: Rule = {
+      ...input,
+      id: this.newId(),
+      createdAt: ts,
+      updatedAt: ts,
+    };
+    await this.rules.save(rule);
+    return rule;
+  }
+
+  /**
+   * Merge `partial` into the rule with id `id`, re-run the tick-cadence
+   * eligibility check on the merged result, bump `updatedAt`, and persist.
+   *
+   * Identity (`id`, `createdAt`) is preserved; the partial cannot change them.
+   *
+   * @throws {@link RuleNotFoundError} when the id is unknown.
+   * @throws {@link TickRuleNotEligibleError} when the merged rule fails the tick gate.
+   */
+  async patch(id: string, partial: Partial<RuleCreateInput>): Promise<Rule> {
+    const existing = await this.get(id);
+    const merged: Rule = {
+      ...existing,
+      ...partial,
+      id: existing.id,
+      createdAt: existing.createdAt,
+      updatedAt: this.now(),
+    };
+    await this.assertTickEligible(merged.trigger, merged.scope);
+    await this.rules.save(merged);
+    return merged;
+  }
+
+  /**
+   * Delete a rule by id.
+   *
+   * @throws {@link RuleNotFoundError} when the id is unknown.
+   */
+  async remove(id: string): Promise<void> {
+    await this.get(id);
+    await this.rules.remove(id);
+  }
+
+  /**
+   * Read one rule's mirrored events log, newest-first, paginated.
+   *
+   * @throws {@link RuleNotFoundError} when the rule does not exist.
+   */
+  async listEvents(id: string, options: EventListOptions = {}): Promise<RuleEventEntry[]> {
+    await this.get(id);
+    const events = await this.eventLog.ruleEvents(id);
+    return paginate(events, options);
+  }
+
+  /**
+   * Read one symbol's mirrored events log, newest-first, paginated. The
+   * symbol does not need to be on the watchlist — fired rules from past
+   * sessions remain readable after the symbol is unwatched.
+   */
+  async listSymbolEvents(
+    symbolId: string,
+    options: EventListOptions = {},
+  ): Promise<RuleEventEntry[]> {
+    const events = await this.eventLog.symbolEvents(symbolId);
+    return paginate(events, options);
+  }
+
+  /**
+   * Throw {@link TickRuleNotEligibleError} if `trigger` is tick-cadence and
+   * any symbol referenced by `scope` is not on the watchlist.
+   * `AllSymbols`-scoped rules are exempt: fan-out is dynamic at fire-time.
+   */
+  private async assertTickEligible(trigger: Trigger, scope: RuleScope): Promise<void> {
+    if (!TICK_CADENCE_TRIGGERS.has(trigger.kind)) return;
+    const referenced = referencedSymbolIds(scope);
+    if (referenced === null) return;
+    const unwatched: string[] = [];
+    for (const symbolId of referenced) {
+      if ((await this.watchlist.get(symbolId)) === null) unwatched.push(symbolId);
+    }
+    if (unwatched.length === 0) return;
+    throw new TickRuleNotEligibleError(
+      `Tick-cadence triggers require watched symbols; not watched: ${unwatched.join(', ')}.`,
+      unwatched,
+    );
+  }
+}
+
+/**
+ * Symbol ids the scope explicitly references, or `null` when the scope is
+ * `AllSymbols` (and there's nothing to check at create time).
+ */
+function referencedSymbolIds(scope: RuleScope): string[] | null {
+  switch (scope.kind) {
+    case RuleScopeKind.Symbol:
+      return [scope.symbolId];
+    case RuleScopeKind.Symbols:
+      return scope.symbolIds;
+    case RuleScopeKind.AllSymbols:
+      return null;
+  }
+}
+
+/** Whether `scope` admits the given `symbolId` for the `list?symbolId=` filter. */
+function scopeAdmitsSymbol(scope: RuleScope, symbolId: string): boolean {
+  switch (scope.kind) {
+    case RuleScopeKind.Symbol:
+      return scope.symbolId === symbolId;
+    case RuleScopeKind.Symbols:
+      return scope.symbolIds.includes(symbolId);
+    case RuleScopeKind.AllSymbols:
+      return true;
+  }
+}
+
+/**
+ * Reverse to newest-first, apply `before` cursor, slice to `limit`.
+ *
+ * Within one fire (every per-action entry plus the trailing `Fired` umbrella
+ * share the same source `ts`), reversing the append-ordered slice puts the
+ * last-appended entry first — so a fire reads as `Fired` then per-action
+ * entries, matching the user-facing "newest first" semantics.
+ */
+function paginate(events: readonly RuleEventEntry[], options: EventListOptions): RuleEventEntry[] {
+  const limit = Math.min(options.limit ?? DEFAULT_EVENT_PAGE_SIZE, MAX_EVENT_PAGE_SIZE);
+  const before = options.before;
+  const filtered = before === undefined ? events : events.filter((event) => event.ts < before);
+  return [...filtered]
+    .reverse()
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, limit);
+}
