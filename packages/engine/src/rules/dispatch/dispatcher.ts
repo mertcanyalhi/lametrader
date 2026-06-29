@@ -30,10 +30,19 @@ export interface TriggerDispatcherDeps {
   /** Read enabled rules + write back the auto-disabled `Once` rule. */
   rules: RuleRepository;
   /**
-   * Build a fresh {@link EvaluationContext} for one `(event, firingSymbolId)`
-   * pair — the dispatcher needs one context per fan-out target.
+   * Build a fresh {@link EvaluationContext} for one
+   * `(event, firingSymbolId, profileId)` triple — the dispatcher needs one
+   * context per fan-out target.
+   *
+   * `profileId` is the firing rule's `profileId`, threaded so the context
+   * can scope `SymbolStateRef` / `GlobalStateRef` lookups to the rule's
+   * profile namespace.
+   * Cascade events (`SymbolStateChanged` / `GlobalStateChanged`) carry their
+   * own `profileId`; the dispatcher still passes the firing rule's value here
+   * — both are guaranteed to match because the candidate query filters rules
+   * by `event.profileId`.
    */
-  buildContext: (event: RuleEvent, firingSymbolId: string) => EvaluationContext;
+  buildContext: (event: RuleEvent, firingSymbolId: string, profileId: string) => EvaluationContext;
 }
 
 /**
@@ -143,7 +152,7 @@ export class TriggerDispatcher {
     const fires: FireRecord[] = [];
 
     for (const { rule, firingSymbolId } of candidates) {
-      const ctx = this.deps.buildContext(event, firingSymbolId);
+      const ctx = this.deps.buildContext(event, firingSymbolId, rule.profileId);
       if (!evaluateCondition(rule.condition, ctx)) continue;
       if (!this.gateAllows(rule, event, firingSymbolId)) continue;
       this.recordFire(rule, event, firingSymbolId);

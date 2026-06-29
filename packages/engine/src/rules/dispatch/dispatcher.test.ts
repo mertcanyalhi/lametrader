@@ -520,3 +520,41 @@ describe('TriggerDispatcher — cascade slot routing', () => {
     expect(fires.map((f) => f.ruleId)).toEqual(['reader']);
   });
 });
+
+describe('TriggerDispatcher — buildContext receives the firing rule profileId', () => {
+  it('passes rule.profileId as the third argument to buildContext for a symbol-bearing tick event', async () => {
+    const r = rule({ id: 'r1', profileId: 'profile-7' });
+    const seen: Array<{ symbolId: string; profileId: string }> = [];
+    const { dispatcher } = await setup({
+      rules: [r],
+      buildContext: (_event, firingSymbolId, profileId) => {
+        seen.push({ symbolId: firingSymbolId, profileId });
+        return priceContext(120, firingSymbolId);
+      },
+    });
+    await dispatcher.dispatch(TICK_EVENT_AT(1_000));
+    expect(seen).toEqual([{ symbolId: 'AAPL', profileId: 'profile-7' }]);
+  });
+
+  it('passes rule.profileId on the symbol-less Timer fan-out path so AllSymbols cascades see the rule profile', async () => {
+    const r = rule({
+      id: 'r1',
+      profileId: 'profile-9',
+      scope: { kind: RuleScopeKind.AllSymbols },
+      trigger: { kind: TriggerKind.OncePerInterval, intervalMs: 60_000 },
+    });
+    const seen: Array<{ symbolId: string; profileId: string }> = [];
+    const { dispatcher } = await setup({
+      rules: [r],
+      buildContext: (_event, firingSymbolId, profileId) => {
+        seen.push({ symbolId: firingSymbolId, profileId });
+        return priceContext(120, firingSymbolId);
+      },
+    });
+    await dispatcher.dispatch(TIMER_EVENT(60_000), { watchedSymbolIds: ['AAPL', 'MSFT'] });
+    expect(seen).toEqual([
+      { symbolId: 'AAPL', profileId: 'profile-9' },
+      { symbolId: 'MSFT', profileId: 'profile-9' },
+    ]);
+  });
+});

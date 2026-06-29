@@ -4,12 +4,15 @@ import {
   EvaluationTriggerKind,
   type EventLog,
   type Notifier,
+  type RuleEventEntry,
+  RuleEventType,
   type RuleRepository,
   type StateRepository,
   type WatchlistRepository,
 } from '@lametrader/core';
 
 import type { CandleEvent } from '../../candles/polling-service.types.js';
+import { getLogger } from '../../log.js';
 import { BarLifecycleBridge, IndicatorCascadeBridge, TickBridge } from '../bridges/index.js';
 import { TriggerDispatcher } from '../dispatch/dispatcher.js';
 import { buildEvaluationContext } from '../evaluation-context.js';
@@ -19,6 +22,9 @@ import { RuleOrchestrator } from '../orchestrator/orchestrator.js';
 import { createPerSymbolSerializer } from '../orchestrator/per-symbol-serializer.js';
 import { TickRing } from '../tick-ring.js';
 import { LiveEvaluationLookups } from './live-evaluation-lookups.js';
+
+/** Scope-bound logger for the v2 rule-engine wire-up. */
+const log = getLogger('rules-wire');
 
 /**
  * Inputs for {@link wireRuleEngine} — every collaborator passed by port so
@@ -76,26 +82,20 @@ export function wireRuleEngine(deps: RuleEngineDeps): WiredRuleEngine {
   const actions = new ActionRunner(deps.state, deps.notifier, lookups);
   const dispatcher = new TriggerDispatcher({
     rules: deps.rules,
-    buildContext: (_event, firingSymbolId) =>
+    buildContext: (_event, firingSymbolId, profileId) =>
       // Lazy: bar window is "everything stored so far" — operators that need
       // a real lookback window pull from the indicator store + tick ring,
       // which already encode their own bounds. Upgrade path: derive the
       // window from the firing rule's `lookbackBars` × interval.
       buildEvaluationContext({
         symbolId: firingSymbolId,
-        // Lazy: the dispatcher doesn't carry the rule's profileId. State
-        // refs without a profile in the context resolve to `null`, which
-        // current operators interpret as "no value". Upgrade path: thread
-        // the firing rule's `profileId` into the dispatch's per-rule
-        // context builder.
-        profileId: '',
+        profileId,
         candleRepository: deps.candleRepository,
         tickRings,
         indicatorStore: deps.indicatorStore,
         barWindow: { from: 0, to: Number.MAX_SAFE_INTEGER },
-        getSymbolState: (profileId, symbolId, key) =>
-          lookups.getSymbolState(profileId, symbolId, key),
-        getGlobalState: (profileId, key) => lookups.getGlobalState(profileId, key),
+        getSymbolState: (pid, symbolId, key) => lookups.getSymbolState(pid, symbolId, key),
+        getGlobalState: (pid, key) => lookups.getGlobalState(pid, key),
         // The orchestrator's lookups already track prev via the sync mirror;
         // pass the same getters through so `ChangesTo`/`ChangesFrom` see the
         // same value the action runner saw.
@@ -120,11 +120,14 @@ export function wireRuleEngine(deps: RuleEngineDeps): WiredRuleEngine {
   const serializer = createPerSymbolSerializer<KeyedTriggerEvent>(async (event) => {
     try {
       await orchestrator.process(event);
-    } catch {
+    } catch (error) {
       // Keep the per-symbol chain alive; the orchestrator already handles
       // CycleOverflow by recording an event and returning — bubbling here
-      // means an unexpected programmer error that we don't want to crash
-      // the whole engine over.
+      // means an unexpected programmer error (corrupt rule, repository
+      // timeout, etc.). Surface it through both the engine log and the
+      // event log so operators can see why a fire was dropped instead of
+      // observing silent inaction (#431).
+      await recordOrchestratorFailure(deps.eventLog, event, error);
     }
   });
 
@@ -191,4 +194,63 @@ function recordIntoLookups(lookups: LiveEvaluationLookups, event: EvaluationTrig
 export function feedCandleIntoEngine(wired: WiredRuleEngine, event: CandleEvent): void {
   wired.lookups.recordCandle(event);
   wired.barBridge.handleCandle(event);
+}
+
+/**
+ * Log an orchestrator-level failure and append an `Error` rule-event entry to
+ * the affected symbol's event log (and the global chain when the event has no
+ * symbol).
+ *
+ * The orchestrator handles cycle overflows itself; everything that reaches
+ * this handler is unexpected (e.g. a repository timeout, a corrupt rule).
+ *
+ * Lazy: the entry uses an empty `ruleId` because the dispatcher's per-rule
+ * fan-out hadn't returned by the time the throw escaped — same convention as
+ * `CycleOverflow`. Upgrade path: when the orchestrator can surface the
+ * partially-resolved rule via the error itself, pipe its id into the entry.
+ */
+async function recordOrchestratorFailure(
+  eventLog: EventLog,
+  event: EvaluationTriggerEvent,
+  error: unknown,
+): Promise<void> {
+  const symbolId = symbolIdOf(event) ?? '';
+  const reason = error instanceof Error ? error.message : String(error);
+  const stack = error instanceof Error ? error.stack : undefined;
+  log.error(
+    { err: { message: reason, stack }, eventKind: event.kind, eventTs: event.ts, symbolId },
+    'orchestrator_process_failed',
+  );
+  const entry: RuleEventEntry = {
+    type: RuleEventType.Error,
+    ts: event.ts,
+    ruleId: '',
+    symbolId,
+    reason: `orchestrator process failed: ${reason}`,
+  };
+  try {
+    await eventLog.appendSymbolEvent(symbolId, entry);
+  } catch (logError) {
+    // The event log itself failed — there's nowhere safe left to surface
+    // this beyond the engine log; do not re-throw or the serializer's
+    // per-symbol chain dies on the next event too.
+    log.error(
+      { err: { message: logError instanceof Error ? logError.message : String(logError) } },
+      'orchestrator_failure_log_failed',
+    );
+  }
+}
+
+/** Whether the event carries a symbol id, returning it (or `null`). */
+function symbolIdOf(event: EvaluationTriggerEvent): string | null {
+  if (
+    event.kind === EvaluationTriggerKind.Tick ||
+    event.kind === EvaluationTriggerKind.BarOpened ||
+    event.kind === EvaluationTriggerKind.BarClosed ||
+    event.kind === EvaluationTriggerKind.SymbolStateChanged ||
+    event.kind === EvaluationTriggerKind.IndicatorChanged
+  ) {
+    return event.symbolId;
+  }
+  return null;
 }
