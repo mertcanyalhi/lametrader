@@ -54,6 +54,10 @@ export class InMemoryEventLog implements EventLog {
     return [...(this.symbolStore.get(symbolId) ?? [])];
   }
 
+  async countSymbolEvents(symbolId: string): Promise<number> {
+    return this.symbolStore.get(symbolId)?.length ?? 0;
+  }
+
   onAppend(listener: EventLogAppendListener): () => void {
     this.listeners.add(listener);
     return () => {

@@ -178,7 +178,15 @@ describe('/rules (e2e)', () => {
     expect(got.statusCode).toEqual(200);
     expect(got.json().scope).toEqual(ruleInput.scope);
 
-    // 3) Drive a tick through the live v2 quote bridge.
+    // 3) Count starts at 0 before any fire.
+    const initialCount = await app.inject({
+      method: 'GET',
+      url: `/symbols/${SYMBOL_ID}/rule-events/count`,
+    });
+    expect(initialCount.statusCode).toEqual(200);
+    expect(initialCount.json()).toEqual({ count: 0 });
+
+    // 4) Drive a tick through the live v2 quote bridge.
     wired.tickBridge.handleQuote({
       id: SYMBOL_ID,
       subscriptionId: 'sub-1',
@@ -192,7 +200,7 @@ describe('/rules (e2e)', () => {
     });
     await wired.drain();
 
-    // 4) Event logs read.
+    // 5) Event logs read.
     const ruleEvents = await app.inject({
       method: 'GET',
       url: `/rules/${rule.id}/events`,
@@ -212,7 +220,15 @@ describe('/rules (e2e)', () => {
       RuleEventType.StateSet,
     ]);
 
-    // 5) PATCH + DELETE.
+    // 6) After the fire the count endpoint matches the mirrored row count.
+    const finalCount = await app.inject({
+      method: 'GET',
+      url: `/symbols/${SYMBOL_ID}/rule-events/count`,
+    });
+    expect(finalCount.statusCode).toEqual(200);
+    expect(finalCount.json()).toEqual({ count: 2 });
+
+    // 7) PATCH + DELETE.
     const patched = await app.inject({
       method: 'PATCH',
       url: `/rules/${rule.id}`,

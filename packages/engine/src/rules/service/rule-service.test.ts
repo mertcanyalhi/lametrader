@@ -298,6 +298,35 @@ describe('RuleService', () => {
     expect(events.map((e) => e.ts)).toEqual([200, 100]);
   });
 
+  it('countSymbolEvents delegates to the event log for any symbol id', async () => {
+    const fired: RuleEventEntry = {
+      type: RuleEventType.Fired,
+      ts: 100,
+      ruleId: 'r1',
+      symbolId: 'AAPL',
+      context: {
+        inboundEvent: {
+          kind: EvaluationTriggerKind.Tick,
+          ts: 100,
+          symbolId: 'AAPL',
+          price: 101,
+        },
+        lookupSnapshot: {
+          current: 101,
+          open: null,
+          high: null,
+          low: null,
+          close: null,
+          volume: null,
+        },
+      },
+    };
+    await eventLog.appendSymbolEvent('AAPL', fired);
+    await eventLog.appendSymbolEvent('AAPL', { ...fired, ts: 200 });
+    expect(await service.countSymbolEvents('AAPL')).toEqual(2);
+    expect(await service.countSymbolEvents('UNKNOWN')).toEqual(0);
+  });
+
   it('listSymbolEvents returns the symbols mirrored events newest-first', async () => {
     const fired: RuleEventEntry = {
       type: RuleEventType.Fired,

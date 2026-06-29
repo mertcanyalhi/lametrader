@@ -29,6 +29,7 @@ import { paletteColor } from './indicators/overlay-palette.js';
 import { PeriodRangeDialog } from './period-range-dialog.js';
 import { ProfilePickerDialog } from './profile-picker-dialog.js';
 import { SymbolPickerDialog } from './symbol-picker-dialog.js';
+import { SymbolRuleEventsDialog } from './symbol-rule-events-dialog.js';
 
 /**
  * The `/chart` page: a URL-driven candlestick chart of one watched symbol on one
@@ -181,6 +182,7 @@ function ChartLayout({
           hidden={hidden}
           onToggleVisible={toggleVisible}
         />
+        <SymbolRuleEventsDialog symbolId={id} />
       </Flex>
     </div>
   );

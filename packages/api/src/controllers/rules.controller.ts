@@ -148,5 +148,25 @@ export function rulesController(service: RuleService) {
       async (request): Promise<RuleEventEntry[]> =>
         service.listSymbolEvents(request.params.id, request.query),
     );
+
+    app.get(
+      '/symbols/:id/rule-events/count',
+      {
+        schema: {
+          tags: ['rules'],
+          summary: 'Count one symbol mirrored rule events',
+          params: SymbolIdParamSchema,
+          response: {
+            200: Type.Object(
+              { count: Type.Integer({ minimum: 0 }) },
+              { additionalProperties: false },
+            ),
+          },
+        },
+      },
+      async (request): Promise<{ count: number }> => ({
+        count: await service.countSymbolEvents(request.params.id),
+      }),
+    );
   };
 }

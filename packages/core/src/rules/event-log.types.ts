@@ -50,6 +50,15 @@ export interface EventLog {
   /** Read all events recorded against a symbol, in append order. */
   symbolEvents(symbolId: string): Promise<RuleEventEntry[]>;
   /**
+   * Count mirrored entries recorded against a symbol.
+   *
+   * Returns `0` when no entries have been appended for the id.
+   * Provided as a dedicated method so the chart-page count badge stays
+   * accurate without paging through the rows (per issue #425's settled
+   * design decision).
+   */
+  countSymbolEvents(symbolId: string): Promise<number>;
+  /**
    * Subscribe to every successful append; returns an unsubscribe.
    *
    * The listener is invoked AFTER the underlying write succeeds, with the

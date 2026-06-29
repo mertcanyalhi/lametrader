@@ -249,4 +249,17 @@ export function runEventLogContract(make: () => EventLogFactory | Promise<EventL
     await log.appendRuleEvent('rule-1', errorEntry());
     expect(observed).toEqual([{ ...notificationEntry(), firedAt: FIXED_FIRED_AT }]);
   });
+
+  it('countSymbolEvents returns 0 for an unknown symbolId', async () => {
+    const { log } = await make();
+    expect(await log.countSymbolEvents('UNKNOWN')).toEqual(0);
+  });
+
+  it('countSymbolEvents returns the number of mirrored entries appended for that symbol', async () => {
+    const { log } = await make();
+    await log.appendSymbolEvent('AAPL', notificationEntry());
+    await log.appendSymbolEvent('AAPL', errorEntry());
+    await log.appendSymbolEvent('MSFT', notificationEntry());
+    expect(await log.countSymbolEvents('AAPL')).toEqual(2);
+  });
 }

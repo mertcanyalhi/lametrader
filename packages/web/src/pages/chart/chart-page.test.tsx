@@ -150,6 +150,7 @@ describe('ChartPage', () => {
     onRequest('/config', () => CONFIG);
     onRequest('/profiles', () => []);
     onRequest('/indicators', () => []);
+    onRequest('/rule-events/count', () => ({ count: 0 }));
 
     renderAt('/chart?id=crypto:BTCUSDT&period=4h');
 
@@ -165,6 +166,7 @@ describe('ChartPage', () => {
     onRequest('/config', () => CONFIG);
     onRequest('/profiles', () => []);
     onRequest('/indicators', () => []);
+    onRequest('/rule-events/count', () => ({ count: 0 }));
     // Latest close 102 vs previous close 100 → +2.00 (+2.00%), on the charted 1h.
     onRequest('/candles', () => ({
       candles: [candle(1000, 100), candle(2000, 102)],
@@ -223,6 +225,7 @@ describe('ChartPage', () => {
     onRequest('/candles', () => ({ candles: [], nextCursor: null }));
     onRequest('/profiles', () => [SCALPER]);
     onRequest('/indicators', () => []);
+    onRequest('/rule-events/count', () => ({ count: 0 }));
 
     renderAt('/chart?id=crypto:BTCUSDT&period=1h');
 
@@ -238,6 +241,7 @@ describe('ChartPage', () => {
     onRequest('/candles', () => ({ candles: [], nextCursor: null }));
     onRequest('/profiles', () => [SCALPER]);
     onRequest('/indicators', () => []);
+    onRequest('/rule-events/count', () => ({ count: 0 }));
 
     renderAt('/chart?id=crypto:BTCUSDT&period=1h');
 
@@ -247,12 +251,45 @@ describe('ChartPage', () => {
     );
   });
 
+  it('hosts the Events trigger in the bottom-bar Chart actions group, labeled with the symbol-scoped rule-event count', async () => {
+    onRequest('/symbols?enrich=true', () => [BTC]);
+    onRequest('/config', () => CONFIG);
+    onRequest('/candles', () => ({ candles: [], nextCursor: null }));
+    onRequest('/profiles', () => [SCALPER]);
+    onRequest('/indicators', () => []);
+    onRequest('/rule-events/count', () => ({ count: 3 }));
+
+    renderAt('/chart?id=crypto:BTCUSDT&period=1h');
+
+    const actions = await screen.findByRole('group', { name: 'Chart actions' });
+    await waitFor(() =>
+      expect(within(actions).queryByRole('button', { name: 'Events (3)' })).not.toBeNull(),
+    );
+  });
+
+  it('caps the Events trigger badge at 99+ when the count exceeds 99', async () => {
+    onRequest('/symbols?enrich=true', () => [BTC]);
+    onRequest('/config', () => CONFIG);
+    onRequest('/candles', () => ({ candles: [], nextCursor: null }));
+    onRequest('/profiles', () => [SCALPER]);
+    onRequest('/indicators', () => []);
+    onRequest('/rule-events/count', () => ({ count: 250 }));
+
+    renderAt('/chart?id=crypto:BTCUSDT&period=1h');
+
+    const actions = await screen.findByRole('group', { name: 'Chart actions' });
+    await waitFor(() =>
+      expect(within(actions).queryByRole('button', { name: 'Events (99+)' })).not.toBeNull(),
+    );
+  });
+
   it('defaults the selection to the first enabled profile on first run and persists it', async () => {
     onRequest('/symbols?enrich=true', () => [BTC]);
     onRequest('/config', () => CONFIG);
     onRequest('/candles', () => ({ candles: [], nextCursor: null }));
     onRequest('/profiles', () => [DISABLED_PROFILE, SCALPER]);
     onRequest('/indicators', () => []);
+    onRequest('/rule-events/count', () => ({ count: 0 }));
 
     renderAt('/chart?id=crypto:BTCUSDT&period=1h');
 
@@ -270,6 +307,7 @@ describe('ChartPage', () => {
     onRequest('/candles', () => ({ candles: [], nextCursor: null }));
     onRequest('/profiles', () => [SCALPER]);
     onRequest('/indicators', () => []);
+    onRequest('/rule-events/count', () => ({ count: 0 }));
 
     renderAt('/chart?id=crypto:BTCUSDT&period=1h');
 
@@ -360,6 +398,7 @@ describe('ChartPage', () => {
         return json([{ ...SCALPER, indicators: [SMA_INSTANCE] }]);
       }
       if (u.endsWith('/api/indicators')) return json([SMA_DEFINITION]);
+      if (u.includes('/rule-events/count')) return json({ count: 0 });
       if (u.includes('/candles')) return json({ candles, nextCursor: null });
       if (u.includes('/symbols/crypto:BTCUSDT/indicators/sma')) {
         const result: IndicatorComputeResult = {
@@ -397,6 +436,7 @@ describe('ChartPage', () => {
         return json([{ ...SCALPER, indicators: [SMA_INSTANCE] }]);
       }
       if (u.endsWith('/api/indicators')) return json([SMA_DEFINITION]);
+      if (u.includes('/rule-events/count')) return json({ count: 0 });
       if (u.includes('/candles')) return json({ candles: [], nextCursor: null });
       throw new Error(`unexpected fetch: ${url}`);
     });
@@ -430,6 +470,7 @@ describe('ChartPage', () => {
         return json([{ ...SCALPER, indicators: [VWMA_INSTANCE] }]);
       }
       if (u.endsWith('/api/indicators')) return json([VWMA_DEFINITION]);
+      if (u.includes('/rule-events/count')) return json({ count: 0 });
       if (u.includes('/candles')) return json({ candles: [], nextCursor: null });
       throw new Error(`unexpected fetch: ${url}`);
     });
@@ -451,6 +492,7 @@ describe('ChartPage', () => {
     onRequest('/profiles', () => []);
     onRequest('/indicators', () => []);
     onRequest('/candles', () => ({ candles: [], nextCursor: null }));
+    onRequest('/rule-events/count', () => ({ count: 0 }));
     renderAt('/chart?id=crypto:BTCUSDT&period=1h');
     const user = userEvent.setup();
 
