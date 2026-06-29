@@ -3,11 +3,16 @@ import {
   type IndicatorInstance,
   OperandKind,
   type Period,
+  ProfileScope,
+  type ProfileScopeSpec,
+  type RuleScope,
+  RuleScopeKind,
   type StateValue,
   StateValueType,
 } from '@lametrader/core';
 import { Flex, Select, Switch, TextField } from '@radix-ui/themes';
 import type { ReactNode } from 'react';
+import { StateKeyPicker } from './state-key-picker.js';
 
 /**
  * Drop-down options for the operand-kind selector, in the order they render.
@@ -323,54 +328,6 @@ function LiteralValueInput({
 }
 
 /**
- * The state-key picker — a Radix `<Select>` seeded with known keys + a freetext
- * `<TextField>` fallback for keys that don't exist yet (per #396 AC).
- *
- * The control width is full-width so it lines up with the rest of the row.
- */
-function StateKeyPicker({
-  value,
-  knownKeys,
-  ariaLabel,
-  onChange,
-}: {
-  value: string;
-  knownKeys: string[];
-  ariaLabel: string;
-  onChange: (key: string) => void;
-}): ReactNode {
-  // De-duplicate while preserving order so a key the user just typed still
-  // appears in the dropdown for re-selection.
-  const seen = new Set<string>();
-  const options: string[] = [];
-  for (const key of knownKeys) {
-    if (key === '' || seen.has(key)) continue;
-    seen.add(key);
-    options.push(key);
-  }
-  return (
-    <Flex direction="column" gap="2">
-      <Select.Root value={value === '' ? undefined : value} onValueChange={onChange}>
-        <Select.Trigger placeholder="Pick a key" aria-label={ariaLabel} />
-        <Select.Content>
-          {options.map((key) => (
-            <Select.Item key={key} value={key}>
-              {key}
-            </Select.Item>
-          ))}
-        </Select.Content>
-      </Select.Root>
-      <TextField.Root
-        aria-label={`${ariaLabel} (custom)`}
-        placeholder="Or type a new key"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </Flex>
-  );
-}
-
-/**
  * Build a fresh operand for a kind change.
  *
  * Preserves the LHS `valueType` for `Literal` so the input control stays the
@@ -448,6 +405,52 @@ function defaultLiteralValue(type: StateValueType): StateValue {
       return { type, value: '' };
     case StateValueType.Enum:
       return { type, value: '' };
+  }
+}
+
+/**
+ * Filter a list of profile-attached indicator instances by the rule's scope.
+ *
+ * Profile-attached indicators apply to every symbol the profile covers.
+ * The rule's scope picks which symbols its leaves are evaluated against; when
+ * the rule scope is `Symbols(list)`, every selected symbol must be inside the
+ * profile's scope for the profile's indicators to be considered "common across
+ * the selection".
+ *
+ * Resolution (per ADR / issue #428 DQ2):
+ * - Rule scope `Symbol` (single) — pass every profile indicator through; the
+ *   row applies to one symbol, so commonality is trivial.
+ * - Rule scope `AllSymbols` — pass every profile indicator through; this is
+ *   the lazy fallback documented in the issue (computing the watchlist
+ *   intersection is costly and mutates as the watchlist grows).
+ * - Rule scope `Symbols(list)`:
+ *   - Profile scope `All` — every selected symbol is covered, pass everything.
+ *   - Profile scope `Symbols(profileIds)` — only pass indicators when every
+ *     rule-selected symbol id is in `profileIds`; otherwise return `[]`
+ *     (no common indicator exists for the selection).
+ *
+ * @param indicators   - The profile's attached indicator instances.
+ * @param ruleScope    - The rule's scope (Symbol / Symbols / AllSymbols).
+ * @param profileScope - The profile's scope (All / Symbols).
+ *                          Use `undefined` when the profile hasn't loaded yet —
+ *                          the function returns `indicators` unchanged so the
+ *                          user can still see options while the data settles.
+ */
+export function filterIndicatorsByScope(
+  indicators: IndicatorInstance[],
+  ruleScope: RuleScope,
+  profileScope: ProfileScopeSpec | undefined,
+): IndicatorInstance[] {
+  if (profileScope === undefined) return indicators;
+  switch (ruleScope.kind) {
+    case RuleScopeKind.Symbol:
+    case RuleScopeKind.AllSymbols:
+      return indicators;
+    case RuleScopeKind.Symbols: {
+      if (profileScope.type === ProfileScope.All) return indicators;
+      const allCovered = ruleScope.symbolIds.every((id) => profileScope.symbolIds.includes(id));
+      return allCovered ? indicators : [];
+    }
   }
 }
 

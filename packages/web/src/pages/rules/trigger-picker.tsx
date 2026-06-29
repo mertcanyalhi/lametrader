@@ -17,6 +17,23 @@ export const TRIGGER_KIND_LABELS: Readonly<Record<TriggerKind, string>> = {
 };
 
 /**
+ * One-sentence explanation per {@link TriggerKind} — surfaced in the trigger
+ * label's info tooltip so users can map a kind to its evaluation cadence
+ * without round-tripping to the docs.
+ *
+ * The wording matches ADR 0016's three cadences (tick / bar / periodic) and
+ * the six derived kinds.
+ */
+export const TRIGGER_KIND_EXPLANATIONS: Readonly<Record<TriggerKind, string>> = {
+  [TriggerKind.EveryTime]: 'Fires on every tick that satisfies the condition.',
+  [TriggerKind.Once]: 'Fires the first time the condition becomes true; never again.',
+  [TriggerKind.OncePerBar]: 'Fires at most once per bar of the chosen period.',
+  [TriggerKind.OncePerBarOpen]: 'Fires once per bar, on the bar open of the chosen period.',
+  [TriggerKind.OncePerBarClose]: 'Fires once per bar, on the bar close of the chosen period.',
+  [TriggerKind.OncePerInterval]: 'Fires at most once per wall-clock interval (in milliseconds).',
+};
+
+/**
  * Human-readable label for each {@link Period}.
  *
  * The persisted tag is the short form (`1m`, `1h`, …); the label adds the unit

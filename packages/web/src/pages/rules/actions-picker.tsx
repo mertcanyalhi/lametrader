@@ -25,6 +25,8 @@ import {
 import { Plus, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTelegramDestinations } from '../../lib/hooks/telegram.js';
+import type { KnownStateKeys } from './leaf-editor.js';
+import { StateKeyPicker } from './state-key-picker.js';
 
 /**
  * Human-readable label for each {@link ActionKind}.
@@ -45,13 +47,21 @@ export const ACTION_KIND_LABELS: Readonly<Record<ActionKind, string>> = {
  *
  * Append a fresh action via the `+ Add action` button; each row carries a
  * trash IconButton for removal.
+ *
+ * @param value           - The current action list.
+ * @param onChange        - Receives the next list on any edit.
+ * @param knownStateKeys  - Symbol-state + global-state keys to seed the
+ *                            `SetState` / `RemoveState` key combobox with;
+ *                            freetext entry is always allowed.
  */
 export function ActionsPicker({
   value,
   onChange,
+  knownStateKeys,
 }: {
   value: Action[];
   onChange: (next: Action[]) => void;
+  knownStateKeys: KnownStateKeys;
 }): ReactNode {
   return (
     <Flex direction="column" gap="2">
@@ -62,6 +72,7 @@ export function ActionsPicker({
           value={action}
           onChange={(next) => onChange(value.map((existing, i) => (i === index ? next : existing)))}
           onRemove={() => onChange(value.filter((_, i) => i !== index))}
+          knownStateKeys={knownStateKeys}
         />
       ))}
       <Flex>
@@ -84,10 +95,12 @@ function ActionRow({
   value,
   onChange,
   onRemove,
+  knownStateKeys,
 }: {
   value: Action;
   onChange: (next: Action) => void;
   onRemove: () => void;
+  knownStateKeys: KnownStateKeys;
 }): ReactNode {
   return (
     <Card variant="surface">
@@ -118,7 +131,7 @@ function ActionRow({
             </IconButton>
           </Tooltip>
         </Flex>
-        <ActionBody value={value} onChange={onChange} />
+        <ActionBody value={value} onChange={onChange} knownStateKeys={knownStateKeys} />
       </Flex>
     </Card>
   );
@@ -128,19 +141,21 @@ function ActionRow({
 function ActionBody({
   value,
   onChange,
+  knownStateKeys,
 }: {
   value: Action;
   onChange: (next: Action) => void;
+  knownStateKeys: KnownStateKeys;
 }): ReactNode {
   switch (value.kind) {
     case ActionKind.Notification:
       return <NotificationBody value={value} onChange={onChange} />;
     case ActionKind.SetSymbolState:
     case ActionKind.SetGlobalState:
-      return <SetStateBody value={value} onChange={onChange} />;
+      return <SetStateBody value={value} onChange={onChange} knownStateKeys={knownStateKeys} />;
     case ActionKind.RemoveSymbolState:
     case ActionKind.RemoveGlobalState:
-      return <RemoveStateBody value={value} onChange={onChange} />;
+      return <RemoveStateBody value={value} onChange={onChange} knownStateKeys={knownStateKeys} />;
   }
 }
 
@@ -190,21 +205,32 @@ function NotificationBody({
   );
 }
 
-/** Set-state body: key (text) + value (typed by `value.type` switch). */
+/**
+ * Set-state body: key (state-key combobox) + value (typed by `value.type` switch).
+ *
+ * Reuses the {@link StateKeyPicker} so users see suggestions from the same
+ * `knownStateKeys` catalog the operand picker reads, with freetext fallback.
+ */
 function SetStateBody({
   value,
   onChange,
+  knownStateKeys,
 }: {
   value: SetSymbolStateAction | SetGlobalStateAction;
   onChange: (next: Action) => void;
+  knownStateKeys: KnownStateKeys;
 }): ReactNode {
+  const knownKeys =
+    value.kind === ActionKind.SetSymbolState ? knownStateKeys.symbol : knownStateKeys.global;
+  const ariaLabel =
+    value.kind === ActionKind.SetSymbolState ? 'Symbol state key' : 'Global state key';
   return (
     <Flex direction="column" gap="2">
-      <TextField.Root
-        aria-label="State key"
-        placeholder="State key"
+      <StateKeyPicker
         value={value.key}
-        onChange={(event) => onChange({ ...value, key: event.target.value })}
+        knownKeys={knownKeys}
+        ariaLabel={ariaLabel}
+        onChange={(key) => onChange({ ...value, key })}
       />
       <Flex gap="2" align="center">
         <Text size="2" color="gray">
@@ -295,20 +321,28 @@ function StateValueInput({
   }
 }
 
-/** Remove-state body: just the key. */
+/**
+ * Remove-state body: just the key, via the shared {@link StateKeyPicker}.
+ */
 function RemoveStateBody({
   value,
   onChange,
+  knownStateKeys,
 }: {
   value: RemoveSymbolStateAction | RemoveGlobalStateAction;
   onChange: (next: Action) => void;
+  knownStateKeys: KnownStateKeys;
 }): ReactNode {
+  const knownKeys =
+    value.kind === ActionKind.RemoveSymbolState ? knownStateKeys.symbol : knownStateKeys.global;
+  const ariaLabel =
+    value.kind === ActionKind.RemoveSymbolState ? 'Symbol state key' : 'Global state key';
   return (
-    <TextField.Root
-      aria-label="State key"
-      placeholder="State key"
+    <StateKeyPicker
       value={value.key}
-      onChange={(event) => onChange({ ...value, key: event.target.value })}
+      knownKeys={knownKeys}
+      ariaLabel={ariaLabel}
+      onChange={(key) => onChange({ ...value, key })}
     />
   );
 }

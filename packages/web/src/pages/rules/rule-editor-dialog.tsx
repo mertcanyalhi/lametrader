@@ -15,7 +15,7 @@ import {
   TextField,
   Tooltip,
 } from '@radix-ui/themes';
-import { Trash2 } from 'lucide-react';
+import { Info, Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { type SubmitHandler, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -33,8 +33,9 @@ import { FIELD_LABELS, type RuleFormValues, ruleFormSchema } from '../../lib/rul
 import { ActionsPicker } from './actions-picker.js';
 import { ConditionTreeEditor } from './condition-tree-editor.js';
 import type { InstancePeriods, KnownStateKeys } from './leaf-editor.js';
+import { filterIndicatorsByScope } from './operand-picker.js';
 import { ScopePicker } from './scope-picker.js';
-import { TriggerPicker } from './trigger-picker.js';
+import { TRIGGER_KIND_EXPLANATIONS, TRIGGER_KIND_LABELS, TriggerPicker } from './trigger-picker.js';
 
 /**
  * The v2 rule editor `Dialog`.
@@ -107,6 +108,10 @@ export function RuleEditorDialog({
   const enabled = watch('enabled');
   const condition = watch('condition');
   const actions = watch('actions');
+  // Apply scope-aware filtering before the condition tree sees the indicator list —
+  // for `Symbols(list)` we restrict to instances common across the selection (per
+  // issue #428 item 7). `Symbol` and `AllSymbols` pass through unchanged.
+  const scopedIndicators = filterIndicatorsByScope(indicators, scope, profile?.scope);
   const nameError = formState.errors.name?.message ?? fieldErrors.name;
   const scopeError = formState.errors.scope?.message ?? fieldErrors.scope;
   const triggerError = formState.errors.trigger?.message ?? fieldErrors.trigger;
@@ -186,7 +191,12 @@ export function RuleEditorDialog({
               ) : null}
             </FieldRow>
             <Separator size="4" my="1" />
-            <FieldRow label={FIELD_LABELS.trigger} align="start">
+            <FieldRow
+              label={FIELD_LABELS.trigger}
+              align="start"
+              info={<TriggerKindsInfo />}
+              infoLabel="Trigger kinds info"
+            >
               <TriggerPicker
                 value={trigger}
                 onChange={(next) =>
@@ -206,9 +216,10 @@ export function RuleEditorDialog({
                 onChange={(next) =>
                   setValue('condition', next, { shouldDirty: true, shouldValidate: false })
                 }
-                indicators={indicators}
+                indicators={scopedIndicators}
                 instancePeriods={instancePeriods}
                 knownStateKeys={knownStateKeys}
+                priorActions={actions}
               />
               {conditionError ? (
                 <Text role="alert" color="red" size="1">
@@ -223,6 +234,7 @@ export function RuleEditorDialog({
                 onChange={(next) =>
                   setValue('actions', next, { shouldDirty: true, shouldValidate: false })
                 }
+                knownStateKeys={knownStateKeys}
               />
               {actionsError ? (
                 <Text role="alert" color="red" size="1">
@@ -277,32 +289,73 @@ export function RuleEditorDialog({
   );
 }
 
-/** Label/control row — mirrors the v1 dialog's layout for visual consistency. */
+/**
+ * Label/control row — mirrors the v1 dialog's layout for visual consistency.
+ *
+ * Optional `info` slot renders an `Info` icon next to the label that hovers a
+ * Radix `<Tooltip>`; supply a string `infoLabel` so the icon-only target has an
+ * accessible name (Radix's tooltip is a *description*, not a *name*).
+ */
 function FieldRow({
   label,
   htmlFor,
   align = 'center',
+  info,
+  infoLabel,
   children,
 }: {
   label: string;
   htmlFor?: string;
   align?: 'center' | 'start';
+  info?: ReactNode;
+  infoLabel?: string;
   children: ReactNode;
 }): ReactNode {
   return (
     <Flex gap="4" align={align}>
-      <Text
-        as="label"
-        htmlFor={htmlFor}
-        size="2"
-        color="gray"
+      <Flex
+        gap="1"
+        align="center"
         className={align === 'start' ? 'w-28 shrink-0 pt-[6px]' : 'w-28 shrink-0'}
       >
-        {label}
-      </Text>
+        <Text as="label" htmlFor={htmlFor} size="2" color="gray">
+          {label}
+        </Text>
+        {info !== undefined && infoLabel !== undefined ? (
+          <Tooltip content={info}>
+            <IconButton
+              type="button"
+              variant="ghost"
+              color="gray"
+              size="1"
+              aria-label={infoLabel}
+              className="cursor-help"
+            >
+              <Info size={14} aria-hidden="true" />
+            </IconButton>
+          </Tooltip>
+        ) : null}
+      </Flex>
       <Box flexGrow="1" minWidth="0">
         {children}
       </Box>
+    </Flex>
+  );
+}
+
+/**
+ * The trigger label's hover-tooltip content — lists every {@link TriggerKind}
+ * with a one-sentence explanation so the user can map the kind to its
+ * evaluation cadence without leaving the form.
+ */
+function TriggerKindsInfo(): ReactNode {
+  return (
+    <Flex direction="column" gap="1" style={{ maxWidth: '20rem' }}>
+      {(Object.keys(TRIGGER_KIND_LABELS) as Array<keyof typeof TRIGGER_KIND_LABELS>).map((kind) => (
+        <Text size="1" key={kind}>
+          <strong>{TRIGGER_KIND_LABELS[kind]}</strong> — {TRIGGER_KIND_EXPLANATIONS[kind]}
+        </Text>
+      ))}
     </Flex>
   );
 }

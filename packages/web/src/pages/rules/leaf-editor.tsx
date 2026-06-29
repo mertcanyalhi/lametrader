@@ -1,4 +1,6 @@
 import {
+  type Action,
+  ActionKind,
   type ChannelOperator,
   type ComparisonOperator,
   type ConditionOperand,
@@ -52,6 +54,11 @@ export type InstancePeriods = Record<string, Period | undefined>;
  * When the LHS resolves to a Bool-typed operand, hides the operator + RHS rows
  * (single-operand sugar) and persists the leaf as `State / Equals` against
  * `Literal(true)` on save.
+ *
+ * `priorActions` lets the RHS literal infer its type from a same-rule
+ * `SetState` action that writes the same state key (per issue #428 item 8). The
+ * editor doesn't know about action ordering across leaves; the full action list
+ * is passed in and any matching `SetState` wins over the LHS's own `valueType`.
  */
 export function LeafEditor({
   value,
@@ -59,12 +66,14 @@ export function LeafEditor({
   indicators,
   instancePeriods,
   knownStateKeys,
+  priorActions = [],
 }: {
   value: LeafCondition;
   onChange: (next: LeafCondition) => void;
   indicators: IndicatorInstance[];
   instancePeriods: InstancePeriods;
   knownStateKeys: KnownStateKeys;
+  priorActions?: Action[];
 }): ReactNode {
   const left = value.left;
   const boolShortcut = isBoolOperand(left);
@@ -80,7 +89,7 @@ export function LeafEditor({
           </Text>
           <OperandPicker
             value={left}
-            onChange={(next) => onChange(updateLeft(value, next))}
+            onChange={(next) => onChange(updateLeft(value, next, priorActions))}
             indicators={visibleIndicators}
             symbolStateKeys={knownStateKeys.symbol}
             globalStateKeys={knownStateKeys.global}
@@ -95,14 +104,23 @@ export function LeafEditor({
             <OperatorPicker
               value={value.operator}
               left={left}
-              onChange={({ operator, family }) => onChange(changeOperator(value, operator, family))}
+              onChange={({ operator, family }) =>
+                onChange(changeOperator(value, operator, family, priorActions))
+              }
               ariaLabel="Operator"
             />
           </Box>
         )}
         {boolShortcut
           ? null
-          : renderFamilyBody(value, onChange, visibleIndicators, knownStateKeys, left)}
+          : renderFamilyBody(
+              value,
+              onChange,
+              visibleIndicators,
+              knownStateKeys,
+              left,
+              priorActions,
+            )}
       </Flex>
       {intervalRequired ? (
         <Flex gap="2" align="center">
@@ -132,7 +150,9 @@ function renderFamilyBody(
   indicators: IndicatorInstance[],
   knownStateKeys: KnownStateKeys,
   left: ConditionOperand,
+  priorActions: Action[],
 ): ReactNode {
+  const rhsLiteralType = resolveRhsLiteralType(leaf, left, priorActions);
   switch (leaf.family) {
     case LeafConditionFamily.Comparison:
     case LeafConditionFamily.Crossing:
@@ -148,7 +168,7 @@ function renderFamilyBody(
             indicators={indicators}
             symbolStateKeys={knownStateKeys.symbol}
             globalStateKeys={knownStateKeys.global}
-            literalValueType={literalTypeForRhs(left)}
+            literalValueType={rhsLiteralType}
             ariaLabel="Right operand kind"
           />
         </Box>
@@ -166,7 +186,7 @@ function renderFamilyBody(
               indicators={indicators}
               symbolStateKeys={knownStateKeys.symbol}
               globalStateKeys={knownStateKeys.global}
-              literalValueType={literalTypeForRhs(left)}
+              literalValueType={rhsLiteralType}
               ariaLabel="Upper bound operand kind"
             />
           </Box>
@@ -180,7 +200,7 @@ function renderFamilyBody(
               indicators={indicators}
               symbolStateKeys={knownStateKeys.symbol}
               globalStateKeys={knownStateKeys.global}
-              literalValueType={literalTypeForRhs(left)}
+              literalValueType={rhsLiteralType}
               ariaLabel="Lower bound operand kind"
             />
           </Box>
@@ -237,27 +257,36 @@ function renderFamilyBody(
  * input control stays in sync and re-shapes the leaf if the new LHS would
  * make the current operator illegal.
  */
-function updateLeft(leaf: LeafCondition, next: ConditionOperand): LeafCondition {
+function updateLeft(
+  leaf: LeafCondition,
+  next: ConditionOperand,
+  priorActions: Action[],
+): LeafCondition {
   const legalOperators = legalOperatorsFor(next);
   const stillLegal = legalOperators.some((option) => option.value === leaf.operator);
   if (stillLegal) {
     const updated = { ...leaf, left: next };
-    return retypeLiterals(updated);
+    return retypeLiterals(updated, priorActions);
   }
   // Switch to a default operator for the new LHS so the leaf stays valid.
   const fallback = legalOperators[0] ?? OPERATOR_OPTIONS[0];
   if (!fallback) return { ...leaf, left: next };
-  return retypeLiterals(buildLeafForOperator(leaf, next, fallback.value, fallback.family));
+  return retypeLiterals(
+    buildLeafForOperator(leaf, next, fallback.value, fallback.family),
+    priorActions,
+  );
 }
 
 /**
- * Walk every literal slot on the leaf and re-type it to the LHS's value type.
+ * Walk every literal slot on the leaf and re-type it to the resolved RHS type.
  *
  * Keeps the RHS literal input control matching the LHS after the user flips
- * to a new operand kind (numeric → bool, etc.).
+ * to a new operand kind (numeric → bool, etc.). When the LHS is a state ref
+ * paired with `Equals`, the resolution honours a same-rule `SetState` action's
+ * type for the matching key (per issue #428 item 8).
  */
-function retypeLiterals(leaf: LeafCondition): LeafCondition {
-  const type = literalTypeForRhs(leaf.left);
+function retypeLiterals(leaf: LeafCondition, priorActions: Action[]): LeafCondition {
+  const type = resolveRhsLiteralType(leaf, leaf.left, priorActions);
   if (leaf.family === LeafConditionFamily.Channel) {
     return {
       ...leaf,
@@ -357,17 +386,18 @@ export function buildLeafForOperator(
 /**
  * Switch a leaf to a new operator. When the operator stays in the same family
  * the only change is `operator`; when the family changes the leaf is rebuilt
- * via {@link buildLeafForOperator}.
+ * via {@link buildLeafForOperator} and re-typed against `priorActions`.
  */
 function changeOperator(
   leaf: LeafCondition,
   operator: Operator,
   family: LeafConditionFamily,
+  priorActions: Action[],
 ): LeafCondition {
   if (leaf.family === family) {
     return { ...leaf, operator } as LeafCondition;
   }
-  return buildLeafForOperator(leaf, leaf.left, operator, family);
+  return retypeLiterals(buildLeafForOperator(leaf, leaf.left, operator, family), priorActions);
 }
 
 /**
@@ -404,6 +434,77 @@ function literalTypeForRhs(left: ConditionOperand): StateValueType {
     case OperandValueKind.Unknown:
       return StateValueType.Number;
   }
+}
+
+/**
+ * Resolve the RHS literal {@link StateValueType} for a leaf.
+ *
+ * The base resolution comes from the LHS operand's value type
+ * ({@link literalTypeForRhs}). Per issue #428 item 8, when the LHS is a
+ * `SymbolStateRef` / `GlobalStateRef` paired with an `Equals` operator (the
+ * Comparison or State family), a same-rule `SetState` action targeting the
+ * same key takes precedence — its `value.type` is what the user just declared
+ * for that key, so the RHS picker honours it over the LHS's own valueType.
+ *
+ * The override scope is intentionally narrow: only state-ref LHS + Equals
+ * (Comparison or State family). Other families don't take a Literal RHS in a
+ * way that benefits from cross-action typing.
+ */
+export function resolveRhsLiteralType(
+  leaf: LeafCondition,
+  left: ConditionOperand,
+  priorActions: Action[],
+): StateValueType {
+  const base = literalTypeForRhs(left);
+  const equalsOp = isEqualsOperator(leaf);
+  if (!equalsOp) return base;
+  if (left.kind === OperandKind.SymbolStateRef) {
+    const fromAction = findSetStateType(priorActions, ActionKind.SetSymbolState, left.key);
+    return fromAction ?? base;
+  }
+  if (left.kind === OperandKind.GlobalStateRef) {
+    const fromAction = findSetStateType(priorActions, ActionKind.SetGlobalState, left.key);
+    return fromAction ?? base;
+  }
+  return base;
+}
+
+/**
+ * Whether the leaf carries the cross-family `Equals` operator (Comparison's
+ * `Eq` or State's `Equals`).
+ *
+ * The state-typed-RHS override only fires for these two operator dialects
+ * (see {@link resolveRhsLiteralType}).
+ */
+function isEqualsOperator(leaf: LeafCondition): boolean {
+  if (leaf.family === LeafConditionFamily.State) {
+    return leaf.operator === StateOperator.Equals;
+  }
+  if (leaf.family === LeafConditionFamily.Comparison) {
+    // Cast through string to compare without re-importing ComparisonOperator.Eq
+    // (the type is already constrained to ComparisonOperator on Comparison leaves).
+    return (leaf.operator as string) === 'eq';
+  }
+  return false;
+}
+
+/**
+ * Find the {@link StateValueType} a same-rule {@link Action} writes to a state
+ * key, or `undefined` if no such action exists.
+ *
+ * Used by {@link resolveRhsLiteralType} so the RHS literal input adapts to the
+ * type the user just declared in a `SetState` action targeting the same key.
+ */
+function findSetStateType(
+  actions: Action[],
+  kind: ActionKind.SetSymbolState | ActionKind.SetGlobalState,
+  key: string,
+): StateValueType | undefined {
+  if (key === '') return undefined;
+  for (const action of actions) {
+    if (action.kind === kind && action.key === key) return action.value.type;
+  }
+  return undefined;
 }
 
 /** Whether a moving operator is a percent variant (vs absolute). */
