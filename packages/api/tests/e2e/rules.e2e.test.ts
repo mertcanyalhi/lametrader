@@ -120,7 +120,7 @@ describe('/rules (e2e)', () => {
     const ruleRepo = new MongoRuleRepository(db);
     await ruleRepo.ensureIndexes();
     const eventLog = new MongoEventLog(db);
-    wired = wireRuleEngine({
+    wired = await wireRuleEngine({
       rules: ruleRepo,
       state: stateRepo,
       watchlist,
