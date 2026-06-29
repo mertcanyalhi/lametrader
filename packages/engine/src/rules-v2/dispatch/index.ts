@@ -15,5 +15,7 @@ export {
 export { evaluateCondition } from './evaluate-condition.js';
 export { InMemoryRuleRepository } from './in-memory-rule-repository.js';
 export { type IntervalEmit, IntervalScheduler } from './interval-scheduler.js';
+export { MongoRuleRepository } from './mongo-rule-repository.js';
+export type { RuleDocumentV2 } from './mongo-rule-repository.types.js';
 export { referencesSlot } from './references-slot.js';
 export { routes } from './routes.js';

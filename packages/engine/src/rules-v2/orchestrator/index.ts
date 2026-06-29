@@ -10,6 +10,7 @@
 export { ActionRunner } from './action-runner.js';
 export { CycleGuard, CycleOverflowError } from './cycle-guard.js';
 export { InMemoryEventLog } from './in-memory-event-log.js';
+export { MongoEventLog } from './mongo-event-log.js';
 export {
   RuleOrchestrator,
   type RuleOrchestratorDeps,
