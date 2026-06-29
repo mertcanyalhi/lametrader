@@ -61,4 +61,12 @@ describe('rules web UI bundle (e2e)', () => {
     const bundles = readBundles();
     expect(bundles.includes('Price')).toEqual(true);
   });
+
+  it('emits a bundle carrying the chart-page symbol-scoped rules dialog title copy', () => {
+    // 'Rules for ' is the symbol-scoped rules modal's title prefix (the
+    // chart bottom-bar Rules button opens it). Presence in the bundle confirms
+    // the dialog ships with the deployable artifact (issue #427).
+    const bundles = readBundles();
+    expect(bundles.includes('Rules for ')).toEqual(true);
+  });
 });
