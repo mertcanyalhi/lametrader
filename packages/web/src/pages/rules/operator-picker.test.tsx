@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import {
+  ChannelOperator,
   ComparisonOperator,
   type ConditionOperand,
   CrossingOperator,
   LeafConditionFamily,
+  MovingOperator,
   OperandKind,
   type Operator,
   StateOperator,
@@ -14,7 +16,6 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { type ReactNode, useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { OperandValueKind } from '../../lib/rule-form-schema';
 import {
   legalFamiliesFor,
   legalOperatorsFor,
@@ -29,8 +30,8 @@ afterEach(() => {
 });
 
 describe('legalFamiliesFor', () => {
-  it('lists every family for a Numeric LHS', () => {
-    expect(Array.from(legalFamiliesFor(OperandValueKind.Numeric))).toEqual([
+  it('lists every family for a Price (numeric) LHS', () => {
+    expect(Array.from(legalFamiliesFor({ kind: OperandKind.Price }))).toEqual([
       LeafConditionFamily.Comparison,
       LeafConditionFamily.Crossing,
       LeafConditionFamily.Channel,
@@ -39,16 +40,102 @@ describe('legalFamiliesFor', () => {
     ]);
   });
 
-  it('narrows to the State family for a Bool LHS', () => {
-    expect(Array.from(legalFamiliesFor(OperandValueKind.Bool))).toEqual([
-      LeafConditionFamily.State,
-    ]);
+  it('narrows to the State family for a Bool-typed IndicatorRef LHS', () => {
+    expect(
+      Array.from(
+        legalFamiliesFor({
+          kind: OperandKind.IndicatorRef,
+          instanceId: 'sup-1',
+          stateKey: 'superTrendBuy',
+          valueType: StateValueType.Bool,
+        }),
+      ),
+    ).toEqual([LeafConditionFamily.State]);
   });
 
-  it('narrows to the State family for a string-like LHS', () => {
-    expect(Array.from(legalFamiliesFor(OperandValueKind.StringLike))).toEqual([
-      LeafConditionFamily.State,
-    ]);
+  it('narrows to the State family for a String-typed IndicatorRef LHS', () => {
+    expect(
+      Array.from(
+        legalFamiliesFor({
+          kind: OperandKind.IndicatorRef,
+          instanceId: 'sup-1',
+          stateKey: 'phase',
+          valueType: StateValueType.String,
+        }),
+      ),
+    ).toEqual([LeafConditionFamily.State]);
+  });
+
+  it('returns [Comparison, State] for a Number-typed SymbolStateRef LHS (state ref collapses to a singleton series)', () => {
+    expect(
+      Array.from(
+        legalFamiliesFor({
+          kind: OperandKind.SymbolStateRef,
+          key: 'count',
+          valueType: StateValueType.Number,
+        }),
+      ),
+    ).toEqual([LeafConditionFamily.Comparison, LeafConditionFamily.State]);
+  });
+
+  it('returns [Comparison, State] for a String-typed SymbolStateRef LHS', () => {
+    expect(
+      Array.from(
+        legalFamiliesFor({
+          kind: OperandKind.SymbolStateRef,
+          key: 'phase',
+          valueType: StateValueType.String,
+        }),
+      ),
+    ).toEqual([LeafConditionFamily.Comparison, LeafConditionFamily.State]);
+  });
+
+  it('returns [Comparison, State] for a Bool-typed SymbolStateRef LHS (operand-kind branch overrides value-kind narrowing)', () => {
+    expect(
+      Array.from(
+        legalFamiliesFor({
+          kind: OperandKind.SymbolStateRef,
+          key: 'isLong',
+          valueType: StateValueType.Bool,
+        }),
+      ),
+    ).toEqual([LeafConditionFamily.Comparison, LeafConditionFamily.State]);
+  });
+
+  it('returns [Comparison, State] for a Number-typed GlobalStateRef LHS', () => {
+    expect(
+      Array.from(
+        legalFamiliesFor({
+          kind: OperandKind.GlobalStateRef,
+          key: 'session',
+          valueType: StateValueType.Number,
+        }),
+      ),
+    ).toEqual([LeafConditionFamily.Comparison, LeafConditionFamily.State]);
+  });
+
+  it('returns [Comparison, State] for a String-typed GlobalStateRef LHS', () => {
+    expect(
+      Array.from(
+        legalFamiliesFor({
+          kind: OperandKind.GlobalStateRef,
+          key: 'regime',
+          valueType: StateValueType.String,
+        }),
+      ),
+    ).toEqual([LeafConditionFamily.Comparison, LeafConditionFamily.State]);
+  });
+
+  it('returns [Comparison, State] for a Bool-typed GlobalStateRef LHS (operand-kind branch overrides value-kind narrowing)', () => {
+    expect(
+      Array.from(
+        legalFamiliesFor({
+          kind: OperandKind.GlobalStateRef,
+          key: 'enabled',
+          valueType: StateValueType.Bool,
+        }),
+      ),
+    ).toEqual([LeafConditionFamily.Comparison, LeafConditionFamily.State]);
   });
 });
 
@@ -161,6 +248,48 @@ describe('legalOperatorsFor', () => {
     expect(options.includes(CrossingOperator.Crossing)).toEqual(false);
     expect(options.includes(StateOperator.Equals)).toEqual(true);
   });
+
+  it('surfaces every Comparison + State operator and hides Crossing/Channel/Moving when the LHS is a SymbolStateRef', () => {
+    const options = legalOperatorsFor({
+      kind: OperandKind.SymbolStateRef,
+      key: 'count',
+      valueType: StateValueType.Number,
+    }).map((o) => o.value);
+    expect(options).toEqual([
+      ComparisonOperator.Gt,
+      ComparisonOperator.Lt,
+      ComparisonOperator.Gte,
+      ComparisonOperator.Lte,
+      StateOperator.Equals,
+      StateOperator.NotEquals,
+      StateOperator.ChangesTo,
+      StateOperator.ChangesFrom,
+    ]);
+    expect(options.includes(CrossingOperator.Crossing)).toEqual(false);
+    expect(options.includes(ChannelOperator.EnteringChannel)).toEqual(false);
+    expect(options.includes(MovingOperator.MovingUp)).toEqual(false);
+  });
+
+  it('surfaces every Comparison + State operator and hides Crossing/Channel/Moving when the LHS is a GlobalStateRef', () => {
+    const options = legalOperatorsFor({
+      kind: OperandKind.GlobalStateRef,
+      key: 'session',
+      valueType: StateValueType.Number,
+    }).map((o) => o.value);
+    expect(options).toEqual([
+      ComparisonOperator.Gt,
+      ComparisonOperator.Lt,
+      ComparisonOperator.Gte,
+      ComparisonOperator.Lte,
+      StateOperator.Equals,
+      StateOperator.NotEquals,
+      StateOperator.ChangesTo,
+      StateOperator.ChangesFrom,
+    ]);
+    expect(options.includes(CrossingOperator.Crossing)).toEqual(false);
+    expect(options.includes(ChannelOperator.EnteringChannel)).toEqual(false);
+    expect(options.includes(MovingOperator.MovingUp)).toEqual(false);
+  });
 });
 
 describe('OPERATOR_OPTIONS metadata', () => {
@@ -242,5 +371,33 @@ describe('OperatorPicker — grouped + iconified rendering', () => {
     expect(allItems.length > 0).toEqual(true);
     const allHaveIcons = allItems.every((item) => item.querySelector('svg') !== null);
     expect(allHaveIcons).toEqual(true);
+  });
+
+  it('renders only the Comparison + State group headers when the LHS is a SymbolStateRef', async () => {
+    const user = userEvent.setup();
+    render(
+      <PickerHarness
+        left={{
+          kind: OperandKind.SymbolStateRef,
+          key: 'count',
+          valueType: StateValueType.Number,
+        }}
+        initial={StateOperator.Equals}
+      />,
+    );
+    await user.click(screen.getByLabelText('Operator'));
+    expect({
+      comparison: screen.queryByText('Comparison') !== null,
+      crossing: screen.queryByText('Crossing') !== null,
+      channel: screen.queryByText('Channel') !== null,
+      moving: screen.queryByText('Moving') !== null,
+      state: screen.queryByText('State') !== null,
+    }).toEqual({
+      comparison: true,
+      crossing: false,
+      channel: false,
+      moving: false,
+      state: true,
+    });
   });
 });

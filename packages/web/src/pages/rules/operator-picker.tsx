@@ -210,14 +210,28 @@ export const OPERATOR_FAMILY_ORDER: ReadonlyArray<LeafConditionFamily> = [
 ];
 
 /**
- * The operator families legal for each LHS {@link OperandValueKind}.
+ * The operator families legal for a given LHS {@link ConditionOperand}.
  *
- * Numeric LHS — everything is legal.
- * Bool / StringLike LHS — only the State family (the others are numeric-only).
- * Unknown LHS — keep every family available so the user can still pick.
+ * Branches on operand kind first, then falls back to value-kind logic:
+ * - `SymbolStateRef` / `GlobalStateRef` → `[Comparison, State]` only, regardless
+ *   of `valueType`.
+ *   State refs collapse to a singleton series in `resolveSeries`, so Crossing /
+ *   Channel / Moving silently no-op against them — hiding those families avoids
+ *   misleading the user (issue #430).
+ *   Numeric-typed state refs keep `>` / `<` / `>=` / `<=` for thresholding;
+ *   string-typed keep Equals / NotEquals; State adds `ChangesTo` / `ChangesFrom`.
+ *   Bool-typed state refs hit this branch too, but `isBoolOperand` upstream
+ *   short-circuits the picker entirely (single-operand sugar), so this list is
+ *   only seen if that shortcut is ever bypassed.
+ * - Numeric LHS — every family is legal.
+ * - Bool / StringLike LHS (non-state-ref) — only the State family.
+ * - Unknown LHS — keep every family available so the user can still pick.
  */
-export function legalFamiliesFor(kind: OperandValueKind): ReadonlySet<LeafConditionFamily> {
-  switch (kind) {
+export function legalFamiliesFor(left: ConditionOperand): ReadonlySet<LeafConditionFamily> {
+  if (left.kind === OperandKind.SymbolStateRef || left.kind === OperandKind.GlobalStateRef) {
+    return new Set([LeafConditionFamily.Comparison, LeafConditionFamily.State]);
+  }
+  switch (operandValueKind(left)) {
     case OperandValueKind.Numeric:
       return new Set([
         LeafConditionFamily.Comparison,
@@ -235,7 +249,7 @@ export function legalFamiliesFor(kind: OperandValueKind): ReadonlySet<LeafCondit
 }
 
 /**
- * The set of operator options that are legal given the LHS.
+ * The set of operator options that are legal given the LHS operand.
  *
  * Drives the dropdown so users can't pick an operator the family doesn't
  * support for the chosen LHS.
@@ -248,7 +262,7 @@ export function legalFamiliesFor(kind: OperandValueKind): ReadonlySet<LeafCondit
  * → NULL-aware state semantics).
  */
 export function legalOperatorsFor(left: ConditionOperand): ReadonlyArray<OperatorOption> {
-  const legalFamilies = legalFamiliesFor(operandValueKind(left));
+  const legalFamilies = legalFamiliesFor(left);
   const stateDispatch = isStateDispatchLhs(left);
   const out: OperatorOption[] = [];
   for (const option of OPERATOR_OPTIONS) {
