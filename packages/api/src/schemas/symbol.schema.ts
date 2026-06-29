@@ -1,6 +1,7 @@
 import { Type } from '@fastify/type-provider-typebox';
-import { SymbolType } from '@lametrader/core';
+import { StateValueType, SymbolType } from '@lametrader/core';
 import { PeriodSchema } from './config.schema.js';
+import { StateValueSchema } from './state.schema.js';
 
 /**
  * A supported asset type (enum-constrained).
@@ -102,3 +103,57 @@ export const PatchSymbolSchema = Type.Object(
  * Path params carrying a canonical symbol id.
  */
 export const SymbolIdParamSchema = Type.Object({ id: Type.String() });
+
+/**
+ * One known state-key for a symbol, used by `GET /symbols/:id/state-keys`.
+ *
+ * Sourced from the rule-event log (`StateSet` entries on `events_v2`); the
+ * `valueType` is the latest observed value's variant — chart-side rendering
+ * picks step-line vs marker based on it.
+ */
+export const StateKeyDescriptorSchema = Type.Object(
+  {
+    key: Type.String(),
+    valueType: Type.Enum(StateValueType),
+  },
+  { $id: 'StateKeyDescriptor', additionalProperties: false },
+);
+
+/**
+ * Path params for `GET /symbols/:id/state/:key/series`.
+ */
+export const StateHistorySeriesParamsSchema = Type.Object(
+  {
+    id: Type.String(),
+    key: Type.String(),
+  },
+  { additionalProperties: false },
+);
+
+/**
+ * Query params for `GET /symbols/:id/state/:key/series`.
+ *
+ * `from` is inclusive, `to` is exclusive (epoch ms); omitting either means
+ * "no bound on that side."
+ */
+export const StateHistorySeriesQuerySchema = Type.Object(
+  {
+    from: Type.Optional(Type.Integer({ minimum: 0 })),
+    to: Type.Optional(Type.Integer({ minimum: 0 })),
+  },
+  { additionalProperties: false },
+);
+
+/**
+ * One sample on a state key's time-series.
+ *
+ * `value === null` marks a removal (`StateRemoved` event); a present value
+ * is the new value at `ts` (`StateSet` event).
+ */
+export const StateHistoryEntrySchema = Type.Object(
+  {
+    ts: Type.Integer({ minimum: 0 }),
+    value: Type.Union([StateValueSchema, Type.Null()]),
+  },
+  { $id: 'StateHistoryEntry', additionalProperties: false },
+);

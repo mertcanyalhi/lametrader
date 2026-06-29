@@ -157,7 +157,7 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
 
   app.register(configController(deps.config));
   if (deps.symbols) {
-    app.register(symbolsController(deps.symbols));
+    app.register(symbolsController(deps.symbols, deps.stateHistory));
   }
   if (deps.profiles) {
     app.register(profilesController(deps.profiles));

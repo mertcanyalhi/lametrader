@@ -8,6 +8,7 @@ import type {
   ProfileService,
   QuoteStreamService,
   RuleService,
+  StateHistoryService,
   SymbolService,
   TelegramDestinationsService,
 } from '@lametrader/engine';
@@ -65,6 +66,15 @@ export interface AppDependencies {
    * wired through {@link SymbolService}.
    */
   state?: StateRepository;
+  /**
+   * The state-history use-case (chart state overlays per issue #434).
+   *
+   * When present, the symbols controller registers
+   * `GET /symbols/:id/state-keys` and `GET /symbols/:id/state/:key/series`;
+   * routes are omitted when the use-case isn't wired so a stripped-down app
+   * (without an event log) doesn't surface them.
+   */
+  stateHistory?: StateHistoryService;
   /**
    * The Telegram destinations CRUD use-case. When present, the
    * `/config/notifications/telegram` routes are registered (list, upsert,

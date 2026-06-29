@@ -16,6 +16,7 @@ import {
   ProfileService,
   QuoteStreamService,
   RuleService,
+  StateHistoryService,
   SymbolService,
 } from '@lametrader/engine';
 import type { AppDependencies } from '../app.types.js';
@@ -52,9 +53,14 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
     new IndicatorService(registry, watchlist, candles);
   const profiles =
     overrides.profiles ?? new ProfileService(new InMemoryProfileRepository(), watchlist, registry);
+  // Share one event log between the rules service and the state-history
+  // service so a test that drives one through `RuleService` reads back via
+  // `StateHistoryService`. Tests that override either service pass their own
+  // event log inside that service and don't share with the default here.
+  const defaultEventLog = new InMemoryEventLog(() => 0);
   const rules =
-    overrides.rules ??
-    new RuleService(new InMemoryRuleRepository(), new InMemoryEventLog(() => 0), watchlist);
+    overrides.rules ?? new RuleService(new InMemoryRuleRepository(), defaultEventLog, watchlist);
+  const stateHistory = overrides.stateHistory ?? new StateHistoryService(defaultEventLog);
 
   // Default live-stream wiring: the in-memory candle + indicator hubs and a stream
   // service the controller talks to. Tests that don't exercise streaming get the
@@ -75,6 +81,7 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
     profiles,
     rules,
     ...(overrides.state ? { state: overrides.state } : {}),
+    stateHistory,
     ...(overrides.telegramDestinations
       ? { telegramDestinations: overrides.telegramDestinations }
       : {}),

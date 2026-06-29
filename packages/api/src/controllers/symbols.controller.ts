@@ -1,5 +1,6 @@
 import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
-import type { SymbolService } from '@lametrader/engine';
+import { SymbolNotFoundError } from '@lametrader/core';
+import type { StateHistoryService, SymbolService } from '@lametrader/engine';
 import type { FastifyInstance } from 'fastify';
 import { ErrorSchema } from '../schemas/common.schema.js';
 import { StateValueSchema } from '../schemas/state.schema.js';
@@ -10,6 +11,10 @@ import {
   InstrumentSchema,
   ListSymbolsQuerySchema,
   PatchSymbolSchema,
+  StateHistoryEntrySchema,
+  StateHistorySeriesParamsSchema,
+  StateHistorySeriesQuerySchema,
+  StateKeyDescriptorSchema,
   SymbolIdParamSchema,
   WatchedSymbolSchema,
 } from '../schemas/symbol.schema.js';
@@ -26,15 +31,20 @@ const SymbolStateQuerySchema = Type.Object(
 );
 
 /**
- * Register the RESTful symbol routes against a {@link SymbolService}.
+ * Register the RESTful symbol routes against a {@link SymbolService} and the
+ * (optional) {@link StateHistoryService}.
  *
  * Schemas (TypeBox) validate input at the boundary and type the handlers;
  * domain failures (`SymbolError` → 400, `SymbolNotFoundError` → 404) are mapped by
  * the app's error handler. Response schemas pin the output and feed OpenAPI.
  *
+ * When `stateHistory` is omitted, the state-overlay routes (#434) are not
+ * registered — the rest of the symbol surface stays available.
+ *
  * @param service - the symbols use-case to drive.
+ * @param stateHistory - the state-history use-case (chart state overlays).
  */
-export function symbolsController(service: SymbolService) {
+export function symbolsController(service: SymbolService, stateHistory?: StateHistoryService) {
   return async (instance: FastifyInstance): Promise<void> => {
     const app = instance.withTypeProvider<TypeBoxTypeProvider>();
 
@@ -130,5 +140,57 @@ export function symbolsController(service: SymbolService) {
       },
       async (request) => service.listSymbolState(request.query.profileId, request.params.id),
     );
+
+    if (stateHistory) {
+      app.get(
+        '/symbols/:id/state-keys',
+        {
+          schema: {
+            tags: ['symbols'],
+            summary: 'List known state keys for a watched symbol',
+            params: SymbolIdParamSchema,
+            response: { 200: Type.Array(StateKeyDescriptorSchema), 404: ErrorSchema },
+          },
+        },
+        async (request) => {
+          await assertSymbolWatched(service, request.params.id);
+          return stateHistory.listKeys(request.params.id);
+        },
+      );
+
+      app.get(
+        '/symbols/:id/state/:key/series',
+        {
+          schema: {
+            tags: ['symbols'],
+            summary: "Read one state key's time-series for a watched symbol",
+            params: StateHistorySeriesParamsSchema,
+            querystring: StateHistorySeriesQuerySchema,
+            response: { 200: Type.Array(StateHistoryEntrySchema), 404: ErrorSchema },
+          },
+        },
+        async (request) => {
+          await assertSymbolWatched(service, request.params.id);
+          return stateHistory.series(request.params.id, request.params.key, {
+            from: request.query.from,
+            to: request.query.to,
+          });
+        },
+      );
+    }
   };
+}
+
+/**
+ * Throw {@link SymbolNotFoundError} when `id` is not on the watchlist.
+ *
+ * Reuses the existing app-level error mapping that turns this into a 404.
+ * Keeps the state-history routes in lockstep with the rest of the symbol
+ * surface (the same 404 envelope as `GET /symbols/:id/state`).
+ */
+async function assertSymbolWatched(service: SymbolService, id: string): Promise<void> {
+  const existing = await service.get(id);
+  if (existing === null) {
+    throw new SymbolNotFoundError(`symbol not watched: ${id}`);
+  }
 }

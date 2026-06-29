@@ -10,11 +10,17 @@ import { useQueries } from '@tanstack/react-query';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router';
 import { getStoredPeriod, setStoredPeriod } from '../../lib/chart-period.js';
+import { getStoredStateOverlays } from '../../lib/chart-state-overlays.js';
 import { getStoredSymbolId, setStoredSymbolId } from '../../lib/chart-symbol.js';
 import { formatChangePct, formatPrice } from '../../lib/format.js';
 import { liveCandleForPeriod, useCandleStream, usePagedCandles } from '../../lib/hooks/candles.js';
 import { computeIndicatorQueryOptions, useIndicatorCatalog } from '../../lib/hooks/indicators.js';
 import { useProfiles } from '../../lib/hooks/profiles.js';
+import {
+  type SymbolStateKey,
+  symbolStateTimeSeriesQueryOptions,
+  useSymbolStateKeys,
+} from '../../lib/hooks/state.js';
 import { useWatchlist } from '../../lib/hooks/symbols.js';
 import { useConfig } from '../../lib/hooks/use-config.js';
 import { useSelectedProfile } from '../../lib/selected-profile-context.js';
@@ -28,6 +34,8 @@ import { IndicatorPanelDialog } from './indicators/indicator-panel-dialog.js';
 import { paletteColor } from './indicators/overlay-palette.js';
 import { PeriodRangeDialog } from './period-range-dialog.js';
 import { ProfilePickerDialog } from './profile-picker-dialog.js';
+import type { StateOverlay } from './states/state-overlay.js';
+import { StatesPanelDialog } from './states/states-panel-dialog.js';
 import { SymbolPickerDialog } from './symbol-picker-dialog.js';
 import { SymbolRuleEventsDialog } from './symbol-rule-events-dialog.js';
 import { SymbolRulesDialog } from './symbol-rules-dialog.js';
@@ -139,6 +147,20 @@ function ChartLayout({
       return next;
     });
   }, []);
+  // State overlays' selected keys: hydrated from `localStorage` for the active
+  // `(profileId, symbolId)` and kept in React state so the chart canvas
+  // re-renders the moment the user toggles a checkbox in `StatesPanelDialog`.
+  // The dialog also writes through to `localStorage` (the source of truth for
+  // reloads); this state mirrors the latest value so reads stay synchronous.
+  const { profileId } = useSelectedProfile();
+  const [selectedStateKeys, setSelectedStateKeys] = useState<string[]>(() =>
+    profileId ? getStoredStateOverlays(profileId, id) : [],
+  );
+  // Re-hydrate when `(profileId, id)` changes so a symbol or profile switch
+  // picks up the right persisted set without remounting the layout.
+  useEffect(() => {
+    setSelectedStateKeys(profileId ? getStoredStateOverlays(profileId, id) : []);
+  }, [profileId, id]);
   // Remember the last-viewed symbol id so bare /chart (the sidebar Chart link)
   // reopens on it instead of falling back to the first watched symbol.
   useEffect(() => {
@@ -155,6 +177,7 @@ function ChartLayout({
             symbol={symbol}
             hidden={hidden}
             toggleVisible={toggleVisible}
+            selectedStateKeys={selectedStateKeys}
           />
         ) : (
           <>
@@ -183,6 +206,7 @@ function ChartLayout({
           hidden={hidden}
           onToggleVisible={toggleVisible}
         />
+        <StatesPanelDialog symbolId={id} symbolType={symbol.type} onChange={setSelectedStateKeys} />
         <SymbolRulesDialog symbolId={id} />
         <SymbolRuleEventsDialog symbolId={id} />
       </Flex>
@@ -253,6 +277,7 @@ function ChartView({
   symbol,
   hidden,
   toggleVisible,
+  selectedStateKeys,
 }: {
   id: string;
   period: Period;
@@ -260,6 +285,7 @@ function ChartView({
   symbol: EnrichedSymbol;
   hidden: Record<string, true>;
   toggleVisible: (instanceId: string) => void;
+  selectedStateKeys: string[];
 }): ReactNode {
   const feed = usePagedCandles({ id, period });
   // The chart applies live bars itself; here the live bar only drives the tab
@@ -287,6 +313,12 @@ function ChartView({
     from: computeFrom,
     to: computeTo,
   });
+  const stateOverlays = useChartStateOverlays({
+    symbolId: id,
+    selectedStateKeys,
+    from: computeFrom,
+    to: computeTo,
+  });
   const body = feed.isPending ? (
     <ChartLoading />
   ) : feed.isError ? (
@@ -302,6 +334,7 @@ function ChartView({
       loadOlder={feed.loadOlder}
       hasMore={feed.hasMore}
       overlays={canvasOverlays}
+      stateOverlays={stateOverlays}
       legendOverlays={legendOverlays}
       onToggleLegendVisible={toggleVisible}
       legendProfile={profile}
@@ -418,6 +451,61 @@ function useChartOverlays({
   );
 
   return { canvasOverlays, legendOverlays, profile };
+}
+
+/**
+ * Build the chart-canvas `StateOverlay[]` from the user's selected state keys
+ * for the symbol: look up the value type via the catalog (`useSymbolStateKeys`),
+ * fan out one `useQueries` call per key over the visible window, and fold the
+ * results into the overlay shape.
+ *
+ * Unknown keys (selected but not in the catalog yet) are dropped — the next
+ * catalog refresh (5 s polling) will surface them and an overlay will appear.
+ */
+function useChartStateOverlays({
+  symbolId,
+  selectedStateKeys,
+  from,
+  to,
+}: {
+  symbolId: string;
+  selectedStateKeys: string[];
+  from?: number;
+  to?: number;
+}): StateOverlay[] {
+  const { theme } = useTheme();
+  const keysQuery = useSymbolStateKeys(symbolId);
+  const catalog = keysQuery.data ?? [];
+  /** Keys that exist in the catalog AND are currently selected. */
+  const applicable = useMemo<SymbolStateKey[]>(() => {
+    const selected = new Set(selectedStateKeys);
+    return catalog.filter((row) => selected.has(row.key));
+  }, [catalog, selectedStateKeys]);
+
+  // Hold the series fan-out until the candle window has resolved so the
+  // initial query carries the same `(from, to)` as the indicator overlay
+  // path — the engine returns the bounded series in one round trip instead
+  // of a redundant unbounded one followed by a bounded refetch.
+  const scoped = from !== undefined && to !== undefined;
+  const seriesQueries = useQueries({
+    queries: scoped
+      ? applicable.map((row) =>
+          symbolStateTimeSeriesQueryOptions({ symbolId, key: row.key, from, to }),
+        )
+      : [],
+  });
+
+  return useMemo<StateOverlay[]>(
+    () =>
+      applicable.map((row, index) => ({
+        key: row.key,
+        valueType: row.valueType,
+        entries: seriesQueries[index]?.data ?? [],
+        color: paletteColor(index, theme),
+        visible: true,
+      })),
+    [applicable, seriesQueries, theme],
+  );
 }
 
 /**
