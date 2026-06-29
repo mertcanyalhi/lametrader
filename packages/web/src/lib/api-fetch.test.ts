@@ -122,4 +122,49 @@ describe('apiFetch', () => {
       message: 'An unexpected error occurred: could not reach the server',
     });
   });
+
+  it('surfaces the v2 { error, fields[] } envelope on a 400 with one entry per failed path', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: 'body must NOT have additional properties',
+          fields: [
+            { path: 'name', message: 'must NOT be shorter than 1 character' },
+            { path: 'scope.symbolId', message: 'must be string' },
+          ],
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const error = await captureApiError(apiFetch('/v2/rules', { method: 'POST', body: '{}' }));
+    expect({
+      name: error.name,
+      status: error.status,
+      message: error.message,
+      fields: error.fields,
+    }).toEqual({
+      name: 'ApiError',
+      status: 400,
+      message: 'body must NOT have additional properties',
+      fields: [
+        { path: 'name', message: 'must NOT be shorter than 1 character' },
+        { path: 'scope.symbolId', message: 'must be string' },
+      ],
+    });
+  });
+
+  it('leaves fields undefined when the response body lacks the v2 envelope', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'periods must not be empty' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const error = await captureApiError(apiFetch('/config', { method: 'PUT', body: '{}' }));
+    expect({ status: error.status, message: error.message, fields: error.fields }).toEqual({
+      status: 400,
+      message: 'periods must not be empty',
+      fields: undefined,
+    });
+  });
 });
