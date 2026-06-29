@@ -63,8 +63,12 @@ export interface EvaluationContextDeps {
    *
    * Defaults to empty when omitted; operators see length-0 series and treat
    * the operand as "no data yet" rather than crashing.
+   *
+   * Widened to {@link SeriesView} so lazy single-point projections (e.g.
+   * `LiveEvaluationLookupsV2.bookSeriesFor`) satisfy the slot without
+   * paying the `BarSeriesView.load` round-trip every evaluation.
    */
-  barSeries?: ReadonlyMap<string, BarSeriesView>;
+  barSeries?: ReadonlyMap<string, SeriesView>;
 }
 
 /**
@@ -77,7 +81,8 @@ export interface EvaluationContextDeps {
  */
 export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationContext {
   const tickRing = deps.tickRings.get(deps.symbolId) ?? null;
-  const barSeries = deps.barSeries ?? new Map<string, BarSeriesView>();
+  const barSeries: ReadonlyMap<string, SeriesView> =
+    deps.barSeries ?? new Map<string, SeriesView>();
 
   return {
     symbolId: deps.symbolId,

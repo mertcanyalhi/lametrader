@@ -40,6 +40,37 @@ export class RuleNotFoundError extends Error {
 }
 
 /**
+ * Raised by the v2 rule service at create / patch time when a rule's trigger
+ * is tick-cadence (`EveryTime` / `Once` / `OncePerBar`) and any symbol the
+ * rule's scope references is not on the watchlist.
+ *
+ * Per ADR 0016 — "per-tick triggers require a live `QuoteStreamService`
+ * subscription; rules on polled-only symbols fail validation."
+ *
+ * Driving adapters surface it as a 400 with one `fields[]` entry per
+ * unwatched symbol, pointing at `scope.symbolId` (Symbol scope) or
+ * `scope.symbolIds` (Symbols scope).
+ * AllSymbols-scoped rules are exempt (fan-out is dynamic at fire-time).
+ */
+export class TickRuleNotEligibleError extends Error {
+  /**
+   * The unwatched symbol ids that caused the rejection — surfaced verbatim
+   * in the field-level error response.
+   */
+  readonly unwatchedSymbolIds: readonly string[];
+
+  /**
+   * @param message - human-readable reason carrying the offending ids.
+   * @param unwatchedSymbolIds - the ids of symbols that aren't on the watchlist.
+   */
+  constructor(message: string, unwatchedSymbolIds: readonly string[]) {
+    super(message);
+    this.name = 'TickRuleNotEligibleError';
+    this.unwatchedSymbolIds = unwatchedSymbolIds;
+  }
+}
+
+/**
  * Reject empty / whitespace-only strings.
  */
 function requireNonEmpty(value: string, field: string): void {

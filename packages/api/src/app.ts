@@ -21,6 +21,7 @@ import {
   SymbolNotFoundError,
   TelegramDestinationError,
   TelegramDestinationNotFoundError,
+  TickRuleNotEligibleError,
 } from '@lametrader/core';
 import { type BackfillJob, BackfillJobService } from '@lametrader/engine';
 import Fastify, { type FastifyError } from 'fastify';
@@ -31,6 +32,7 @@ import { indicatorsController } from './controllers/indicators.controller.js';
 import { notificationsController } from './controllers/notifications.controller.js';
 import { profilesController } from './controllers/profiles.controller.js';
 import { rulesController } from './controllers/rules.controller.js';
+import { rulesV2Controller } from './controllers/rules-v2.controller.js';
 import { stateController } from './controllers/state.controller.js';
 import { streamController } from './controllers/stream.controller.js';
 import { symbolsController } from './controllers/symbols.controller.js';
@@ -66,6 +68,7 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
         { name: 'symbols', description: 'Symbol discovery and watchlist' },
         { name: 'profiles', description: 'Profiles (selectable templates)' },
         { name: 'rules', description: 'Rule definitions, events and state' },
+        { name: 'rules-v2', description: 'v2 rule definitions and events (per ADR 0016)' },
         { name: 'candles', description: 'Historical candle backfill and reads' },
         { name: 'indicators', description: 'Indicator catalog (descriptors only)' },
       ],
@@ -94,8 +97,30 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
       reply.code(409).send({ error: error.message });
       return;
     }
+    if (error.validation) {
+      // AJV validation failure — surface the full set of failing paths via
+      // an additive `fields[]` array (per ADR 0016 / rules-v2 spec).
+      // v1 consumers ignore `fields` and continue reading `error`.
+      reply.code(400).send({
+        error: error.message,
+        fields: error.validation.map((failure) => ({
+          path: ajvPathToDotted(failure.instancePath),
+          message: failure.message ?? 'invalid',
+        })),
+      });
+      return;
+    }
+    if (error instanceof TickRuleNotEligibleError) {
+      reply.code(400).send({
+        error: error.message,
+        fields: error.unwatchedSymbolIds.map((symbolId) => ({
+          path: 'scope.symbolId',
+          message: `symbol not on watchlist: ${symbolId}`,
+        })),
+      });
+      return;
+    }
     if (
-      error.validation ||
       error instanceof ConfigError ||
       error instanceof SymbolError ||
       error instanceof CandleError ||
@@ -118,6 +143,17 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
     reply.code(500).send({ error: 'Unexpected error' });
   });
 
+  /**
+   * Convert an AJV `instancePath` (`/scope/symbolId`) to the dotted body path
+   * the v2 controller surfaces (`scope.symbolId`).
+   * AJV uses an empty string for the body root; map it to a literal `''` so
+   * callers can still distinguish root-level errors.
+   */
+  function ajvPathToDotted(instancePath: string): string {
+    if (instancePath === '') return '';
+    return instancePath.replace(/^\//, '').replace(/\//g, '.');
+  }
+
   app.setNotFoundHandler((request, reply) => {
     reply.code(404).send({ error: `Route ${request.method}:${request.url} not found` });
   });
@@ -131,6 +167,11 @@ export function createApp(deps: AppDependencies, options: AppOptions = {}) {
   }
   if (deps.rules) {
     app.register(rulesController(deps.rules));
+  }
+  if (deps.rulesV2) {
+    // v2 surface is mounted under /v2 — v1's `/rules` keeps responding while
+    // both engines coexist per ADR 0016.
+    app.register(rulesV2Controller(deps.rulesV2), { prefix: '/v2' });
   }
   if (deps.state) {
     app.register(stateController(deps.state));

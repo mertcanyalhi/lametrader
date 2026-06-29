@@ -62,4 +62,19 @@ export {
   RuleOutcome,
 } from './orchestrator/index.js';
 export type { SeriesPoint, SeriesView } from './series.types.js';
+export {
+  type EventListOptions,
+  RuleServiceV2,
+  type RuleServiceV2Options,
+  type RuleV2CreateInput,
+  type RuleV2ListFilters,
+} from './service/index.js';
 export { TICK_RING_CAPACITY, TickRing } from './tick-ring.js';
+export {
+  feedCandleIntoEngineV2,
+  type InitialStateEntry,
+  LiveEvaluationLookupsV2,
+  type RuleEngineV2Deps,
+  type WiredRuleEngineV2,
+  wireRuleEngineV2,
+} from './wire/index.js';
