@@ -50,23 +50,76 @@ export { InMemoryProfileRepository } from './profiles/in-memory-profile-reposito
 export { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
 export { type IndicatorInstanceInput, ProfileService } from './profiles/profile-service.js';
 export type { ProfileServiceOptions } from './profiles/profile-service.types.js';
-export * as RulesV2 from './rules-v2/index.js';
-// Flat re-exports of the v2 application + wire surface so the API layer can
-// import them without prefixing — keeps controllers' `import { ... }` flat.
+export { type BarAxis, BarSeriesView } from './rules/bar-series-view.js';
 export {
-  type EventListOptions as RuleV2EventListOptions,
-  RuleServiceV2,
-  type RuleServiceV2Options,
-  type RuleV2CreateInput,
-  type RuleV2ListFilters,
-} from './rules-v2/service/index.js';
+  BarLifecycleBridge,
+  IndicatorCascadeBridge,
+  StateCascadeBridge,
+  TickBridge,
+} from './rules/bridges/index.js';
 export {
-  feedCandleIntoEngineV2,
-  LiveEvaluationLookupsV2,
-  type RuleEngineV2Deps,
-  type WiredRuleEngineV2,
-  wireRuleEngineV2,
-} from './rules-v2/wire/index.js';
+  type DispatchOptions,
+  evaluateCondition,
+  type FireRecord,
+  InMemoryRuleRepository,
+  type IntervalEmit,
+  IntervalScheduler,
+  MongoRuleRepository,
+  type RuleDocument,
+  referencesSlot,
+  routes,
+  TriggerDispatcher,
+  type TriggerDispatcherDeps,
+} from './rules/dispatch/index.js';
+export {
+  barSeriesKey,
+  buildEvaluationContext,
+  type EvaluationContextDeps,
+  prewarmBarSeries,
+} from './rules/evaluation-context.js';
+export type { EvaluationContext } from './rules/evaluation-context.types.js';
+export {
+  ArraySeriesView,
+  IndicatorSeriesStore,
+  type IndicatorWarmupRequest,
+} from './rules/indicator-series-store.js';
+export {
+  evaluateChannel,
+  evaluateComparison,
+  evaluateCrossing,
+  evaluateLeaf,
+  evaluateMoving,
+  evaluateState,
+} from './rules/operators/index.js';
+export {
+  ActionRunner,
+  CycleGuard,
+  CycleOverflowError,
+  createPerSymbolSerializer,
+  InMemoryEventLog,
+  MongoEventLog,
+  RuleOrchestrator,
+  type RuleOrchestratorDeps,
+  type RuleOrchestratorOptions,
+  RuleOutcome,
+} from './rules/orchestrator/index.js';
+export type { SeriesPoint, SeriesView } from './rules/series.types.js';
+export {
+  type EventListOptions as RuleEventListOptions,
+  type RuleCreateInput,
+  type RuleListFilters,
+  RuleService,
+  type RuleServiceOptions,
+} from './rules/service/index.js';
+export { TICK_RING_CAPACITY, TickRing } from './rules/tick-ring.js';
+export {
+  feedCandleIntoEngine,
+  type InitialStateEntry,
+  LiveEvaluationLookups,
+  type RuleEngineDeps,
+  type WiredRuleEngine,
+  wireRuleEngine,
+} from './rules/wire/index.js';
 export { loadSettings } from './settings.js';
 export type { LogLevel, Settings, TelegramDestination } from './settings.types.js';
 export { InMemoryStateRepository } from './state/in-memory-state-repository.js';

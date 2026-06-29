@@ -8,13 +8,14 @@ import {
   IndicatorService,
   InMemoryCandleRepository,
   InMemoryConfigRepository,
+  InMemoryEventLog,
   InMemoryMarketDataSource,
   InMemoryProfileRepository,
+  InMemoryRuleRepository,
   InMemoryWatchlistRepository,
   ProfileService,
   QuoteStreamService,
-  RuleServiceV2,
-  RulesV2,
+  RuleService,
   SymbolService,
 } from '@lametrader/engine';
 import type { AppDependencies } from '../app.types.js';
@@ -51,13 +52,9 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
     new IndicatorService(registry, watchlist, candles);
   const profiles =
     overrides.profiles ?? new ProfileService(new InMemoryProfileRepository(), watchlist, registry);
-  const rulesV2 =
-    overrides.rulesV2 ??
-    new RuleServiceV2(
-      new RulesV2.InMemoryRuleRepository(),
-      new RulesV2.InMemoryEventLog(() => 0),
-      watchlist,
-    );
+  const rules =
+    overrides.rules ??
+    new RuleService(new InMemoryRuleRepository(), new InMemoryEventLog(() => 0), watchlist);
 
   // Default live-stream wiring: the in-memory candle + indicator hubs and a stream
   // service the controller talks to. Tests that don't exercise streaming get the
@@ -76,7 +73,7 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
     config,
     symbols: overrides.symbols ?? new SymbolService(sources, watchlist, config, candles, profiles),
     profiles,
-    rulesV2,
+    rules,
     ...(overrides.state ? { state: overrides.state } : {}),
     ...(overrides.telegramDestinations
       ? { telegramDestinations: overrides.telegramDestinations }

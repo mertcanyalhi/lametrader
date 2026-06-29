@@ -7,7 +7,7 @@ import type {
   IndicatorService,
   ProfileService,
   QuoteStreamService,
-  RuleServiceV2,
+  RuleService,
   SymbolService,
   TelegramDestinationsService,
 } from '@lametrader/engine';
@@ -54,11 +54,11 @@ export interface AppDependencies {
    */
   profiles?: ProfileService;
   /**
-   * The v2 rules use-case (CRUD over the new ports per ADR 0016).
+   * The rules use-case (CRUD over the rules-engine ports per ADR 0016).
    *
-   * When present, the `/v2/rules*` routes are registered.
+   * When present, the `/rules*` routes are registered.
    */
-  rulesV2?: RuleServiceV2;
+  rules?: RuleService;
   /**
    * The rule-engine state store. When present, `GET /state/global` is
    * registered; the per-symbol state route lives under `/symbols` and is

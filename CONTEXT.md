@@ -13,15 +13,15 @@ _Avoid_: runtime type checks (the validator is the sole gate).
 **NULL operand semantics**:
 Distinct from type validation. NULL values are a legitimate "no data yet" state (indicator hasn't computed its first bar; state key never set). Operators handle NULL as part of their semantics — comparison returns `false`, crossing returns `false`, state operators apply their NULL rules per #362. NULL is not a schema bug and does not blow up the engine.
 
-**v1 → v2 cutover**:
-No migration script. v1 engine runs in production until v2 ships; the maintainer manually deletes v1 rules and re-creates them in the v2 editor. The cleanup issue retires v1 once no profile is using it. v2 ships behind a feature flag during build to keep its UI out of users' view.
+**v1 → present cutover** (historical):
+No migration script ran. v1's engine ran in production until the present rules engine shipped; the maintainer manually deleted v1 rules and re-created them in the new editor. The cutover issue (#397 / PR #421) retired v1 once no profile was using it. The greenfield engine shipped behind a feature flag during the build to keep its UI out of users' view; the flag was dropped at cutover.
 
 ### Rule engine — meta
 
-**Greenfield rules v2**:
-The new rule engine, schema, and UI built from scratch alongside the existing engine.
-The existing rule engine (`condition-evaluator`, `trigger-evaluator`, `action-runner`, `live-evaluation-lookups`, old `TriggerKind` enum, old rule-editor UI) stays in place during the build and is retired by a follow-up cleanup issue once v2 ships.
-_Avoid_: refactor (this is a rewrite, not a refactor — old + new coexist behind a switch).
+**Rule engine**:
+The rule engine, schema, and UI shipped as the greenfield rebuild in #387–#397 (per ADR 0016).
+The previous engine (`condition-evaluator`, `trigger-evaluator`, `action-runner`, `live-evaluation-lookups`, the old `TriggerKind` enum, the old rule-editor UI) was retired by the cutover in PR #421.
+The follow-up cleanup in issue #422 dropped the `-v2` suffix from every code identifier, file basename, and REST route — the live engine reads as "rules" everywhere.
 
 ### Rule engine — cadence
 
@@ -45,10 +45,10 @@ Conditions compose into a tree of `And` / `Or` group nodes and `Leaf` condition 
 A rule applies to one symbol, several explicit symbols, or every watched symbol on the parent profile. Three variants: `Symbol(symbolId)`, `Symbols(symbolIds[])`, `AllSymbols`. AllSymbols and Symbols fan the trigger out across each matching symbol independently — one fire decision per symbol per event. Operands always read from the firing symbol (no cross-symbol operand references in v2).
 
 **Action category**:
-Two top-level categories: `Notification` (channels: Telegram at v2 launch, schema extensible for email / slack / webhook / in-app) and `StateMutation` (`SetSymbolState`, `SetGlobalState`, `RemoveSymbolState`, `RemoveGlobalState`). Cascade re-entry preserved from today: state mutations emit cascaded state-change events that re-run the orchestrator within the same tick under the cycle guard.
+Two top-level categories: `Notification` (channels: Telegram today, schema extensible for email / slack / webhook / in-app) and `StateMutation` (`SetSymbolState`, `SetGlobalState`, `RemoveSymbolState`, `RemoveGlobalState`). Cascade re-entry: state mutations emit cascaded state-change events that re-run the orchestrator within the same tick under the cycle guard.
 
 **Notification action**:
-Single `ActionKind = 'notification'` with a `channel` discriminator (`'telegram'` at v2 launch). Telegram payload: `{ destinationName, template }` — same as today. New channels add new payload shapes under the same kind without touching the engine. The existing telegram-destinations port and `/config/notifications/telegram` API surface stay.
+Single `ActionKind = 'notification'` with a `channel` discriminator (`'telegram'` today). Telegram payload: `{ destinationName, template }`. New channels add new payload shapes under the same kind without touching the engine. The existing telegram-destinations port and `/config/notifications/telegram` API surface stay.
 
 ### Rule engine — operators
 
@@ -71,14 +71,14 @@ Unary + scalar tuple, series-aware. `MovingUp`, `MovingDown` (absolute), `Moving
 When a single operand resolves to `Bool` (e.g. an indicator state-key declared as boolean), the UI hides the operator + RHS rows; the engine still stores the condition as `Equals(operand, Literal(true))`. One operator union, no new operator kind.
 
 **Price**:
-The live tick price for a symbol. Sole source: `QuoteStreamService` (per Q1). Operand kind in rules-v2; replaces today's `CurrentValue`. Tick-axis; no `Interval` needed when referenced.
-_Avoid_: current, current-value, last-price (the v2 name is `Price` everywhere — engine, schema, logs, UI).
+The live tick price for a symbol. Sole source: `QuoteStreamService` (per Q1). Operand kind in the rule engine; replaces the legacy `CurrentValue`. Tick-axis; no `Interval` needed when referenced.
+_Avoid_: current, current-value, last-price (the name is `Price` everywhere — engine, schema, logs, UI).
 
-**Operand catalog (rules-v2)**:
+**Operand catalog**:
 Exactly 10 left-hand kinds: `Price`, `Open`, `High`, `Low`, `Close`, `Volume`, `IndicatorRef`, `SymbolStateRef`, `GlobalStateRef`, plus `Literal` (right-hand only). `Open` / `High` / `Low` / `Close` / `Volume` and `IndicatorRef` require the row's `Interval` to disambiguate the bar period. `Price` and the state-refs don't.
 
 **Indicator operand binding**:
-A rules-v2 indicator operand references a profile-attached indicator instance by `instanceId` (same shape as today's `IndicatorRef`). The condition row's `Interval` selector filters the instance picker to instances computed on that period — the user picks the period first, then the matching Supertrend instance.
+A rules indicator operand references a profile-attached indicator instance by `instanceId`. The condition row's `Interval` selector filters the instance picker to instances computed on that period — the user picks the period first, then the matching Supertrend instance.
 _Avoid_: inline-parameterized indicators on the condition row (rejected at design time; rules can only reference instances the profile has already attached).
 
 ### Rule engine — history

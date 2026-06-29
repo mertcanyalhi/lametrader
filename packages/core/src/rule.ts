@@ -1,9 +1,8 @@
 /**
- * Errors that surface from the rules use-case (v2).
+ * Errors that surface from the rules use-case.
  *
- * Kept in `core` as plain exception classes (not v2-namespaced) so the API's
- * error handler can `instanceof`-map them to HTTP status codes without
- * importing the engine.
+ * Kept in `core` as plain exception classes so the API's error handler can
+ * `instanceof`-map them to HTTP status codes without importing the engine.
  */
 
 /**

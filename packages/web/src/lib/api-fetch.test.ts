@@ -136,7 +136,7 @@ describe('apiFetch', () => {
         { status: 400, headers: { 'Content-Type': 'application/json' } },
       ),
     );
-    const error = await captureApiError(apiFetch('/v2/rules', { method: 'POST', body: '{}' }));
+    const error = await captureApiError(apiFetch('/rules', { method: 'POST', body: '{}' }));
     expect({
       name: error.name,
       status: error.status,

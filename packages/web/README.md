@@ -44,9 +44,9 @@ Live updates land in a follow-up issue.
 
 The v2 rule editor (sole rules surface post-cutover per ADR 0016): a profile-scoped list of rules with full CRUD.
 The bottom-bar profile picker is the same `ProfilePickerDialog` as the chart, so the active profile and its persistence are shared.
-The list body only mounts once a profile is selected, keeping `useRulesV2({ profileId })` cleanly conditional.
+The list body only mounts once a profile is selected, keeping `useRules({ profileId })` cleanly conditional.
 
-Clicking a rule card opens `<RuleEditorDialogV2>` in `edit` mode; the page's `+ New rule` button opens it in `create` mode with the profile pre-filled.
+Clicking a rule card opens `<RuleEditorDialog>` in `edit` mode; the page's `+ New rule` button opens it in `create` mode with the profile pre-filled.
 
 The editor is a Radix `Dialog` with `react-hook-form` / Yup-validated sections for name + description, scope (`Symbol` / `Symbols(list)` / `AllSymbols`), trigger (the six `TriggerKind`s with per-kind `period` / `intervalMs` fields), the recursive condition tree, and the actions list (`Notification` Telegram + the four state-mutation actions).
 
@@ -60,7 +60,7 @@ The 10 operand kinds from CONTEXT.md render labelled `Price` (replaces v1's `Cur
 
 When the LHS resolves to a Bool-typed operand (a state-key or indicator state), the editor collapses to a single-operand row (operator + RHS hidden); the leaf persists as `State / Equals` against `Literal(true)`.
 
-API field-level validation errors (`{ error, fields[] }` from `/v2/rules` per #395) surface inline next to the offending section.
+API field-level validation errors (`{ error, fields[] }` from `/rules` per #395) surface inline next to the offending section.
 
 ### `/settings` — Settings (this README's focus)
 
@@ -115,10 +115,8 @@ The mutations invalidate `['profiles']` so the profile's embedded `indicators[]`
 
 `src/lib/hooks/candles.ts` exposes `usePagedCandles` — the chart's historical candle feed, which loads a symbol/period's bars a time window at a time and walks the window backward through history as you scroll.
 
-`src/lib/hooks/rules.ts` exposes the rules data layer — `useRules({ profileId?, symbolId? })` (`GET /rules`), `useRule(id)` (`GET /rules/:id`), `useCreateRule` (`POST /rules`), `useReplaceRule` (`PUT /rules/:id`), `usePatchRule` (`PATCH /rules/:id` — currently just `enabled`; performs an optimistic write across every cached rules query, rolls back on error), `useDeleteRule` (`DELETE /rules/:id`; same snapshot rollback pattern), `useReorderRules` (`PUT /rules/order`), `useRuleEvents(id, { limit?, before? })` (`GET /rules/:id/events`), and `useSymbolRuleEvents(symbolId, { limit?, before? })` (`GET /symbols/:id/rule-events`).
+`src/lib/hooks/rules.ts` exposes the rules data layer (mounted under `/api/rules`) — `useRules(filters?)` (`GET /rules?profileId=&symbolId=&enabled=`), `useRule(id)`, `useCreateRule` (`POST /rules`), `usePatchRule` (`PATCH /rules/:id`), `useDeleteRule` (`DELETE /rules/:id`), and `useRuleEvents(id, { limit?, before? })` (`GET /rules/:id/events`).
 The chart's Events panel and the per-rule / per-symbol `EventsDialog` build on top of these via `useInfiniteQuery` for "Load more" pagination keyed by the oldest event's `ts`.
-
-`src/lib/hooks/rules-v2.ts` is the v2-shaped equivalent behind the rules-v2 feature flag (mounted under `/api/v2/rules`) — `useRulesV2(filters?)` (`GET /v2/rules?profileId=&symbolId=&enabled=`), `useRuleV2(id)`, `useCreateRuleV2`, `usePatchRuleV2`, `useDeleteRuleV2`, and `useRuleV2Events(id, { limit?, before? })`. The v2 surface coexists with the v1 hooks during the rebuild per ADR 0016; the hard cutover lands when the engine work completes.
 
 `src/lib/hooks/telegram.ts` exposes the notification-destinations data layer behind the rule editor's destination dropdown and the settings page's destinations CRUD — `useTelegramDestinations` (`GET /config/notifications/telegram` → `{ name, chatId }[]`), `useUpsertTelegramDestination` (`POST` upsert; tokens are write-only), and `useDeleteTelegramDestination` (`DELETE /config/notifications/telegram/:name`).
 Token reads aren't possible: the API never returns `botToken` on a list, so there's no client-side bot-token handling beyond the Add form.

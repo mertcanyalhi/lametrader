@@ -1,21 +1,29 @@
 import {
+  ActionKind,
+  ComparisonOperator,
+  ConditionNodeKind,
   IndicatorError,
   IndicatorInstanceNotFoundError,
+  LeafConditionFamily,
+  NotificationChannel,
+  OperandKind,
   Period,
   type Profile,
   ProfileConflictError,
   ProfileError,
   ProfileNotFoundError,
   ProfileScope,
-  RulesV2,
+  type Rule,
+  RuleScopeKind,
   StateValueType,
   SymbolType,
+  TriggerKind,
   type WatchedSymbol,
 } from '@lametrader/core';
 import { describe, expect, it } from 'vitest';
 import { defaultIndicators } from '../indicators/default-indicators.js';
 import type { IndicatorRegistry } from '../indicators/indicator-registry.js';
-import { InMemoryRuleRepository } from '../rules-v2/dispatch/in-memory-rule-repository.js';
+import { InMemoryRuleRepository } from '../rules/dispatch/in-memory-rule-repository.js';
 import { InMemoryWatchlistRepository } from '../symbols/in-memory-watchlist-repository.js';
 import { InMemoryProfileRepository } from './in-memory-profile-repository.js';
 import { ProfileService } from './profile-service.js';
@@ -159,23 +167,23 @@ describe('ProfileService.remove', () => {
     });
     await service.create({ name: 'Scalper' });
     await service.create({ name: 'Other' });
-    const p1Rule: RulesV2.Rule = {
+    const p1Rule: Rule = {
       id: 'p1-rule',
       profileId: 'p1',
       name: 'p1-rule',
-      scope: { kind: RulesV2.RuleScopeKind.Symbol, symbolId: 'crypto:BTCUSDT' },
-      trigger: { kind: RulesV2.TriggerKind.Once },
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'crypto:BTCUSDT' },
+      trigger: { kind: TriggerKind.Once },
       condition: {
-        kind: RulesV2.ConditionNodeKind.Leaf,
+        kind: ConditionNodeKind.Leaf,
         leaf: {
-          family: RulesV2.LeafConditionFamily.Comparison,
-          operator: RulesV2.ComparisonOperator.Gt,
+          family: LeafConditionFamily.Comparison,
+          operator: ComparisonOperator.Gt,
           left: {
-            kind: RulesV2.OperandKind.Price,
+            kind: OperandKind.Price,
             valueType: StateValueType.Number,
           },
           right: {
-            kind: RulesV2.OperandKind.Literal,
+            kind: OperandKind.Literal,
             value: { type: StateValueType.Number, value: 0 },
           },
         },
@@ -183,8 +191,8 @@ describe('ProfileService.remove', () => {
       expiration: null,
       actions: [
         {
-          kind: RulesV2.ActionKind.Notification,
-          channel: RulesV2.NotificationChannel.Telegram,
+          kind: ActionKind.Notification,
+          channel: NotificationChannel.Telegram,
           destinationName: 'main',
           template: 'hi',
         },
@@ -194,7 +202,7 @@ describe('ProfileService.remove', () => {
       createdAt: 0,
       updatedAt: 0,
     };
-    const p2Rule: RulesV2.Rule = { ...p1Rule, id: 'p2-rule', profileId: 'p2' };
+    const p2Rule: Rule = { ...p1Rule, id: 'p2-rule', profileId: 'p2' };
     await rules.save(p1Rule);
     await rules.save(p2Rule);
 

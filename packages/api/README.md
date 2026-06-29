@@ -104,7 +104,7 @@ results (so a discovery hit may omit it; a watched symbol always has it).
 | `DELETE` | `/symbols/{id}`       | —                       | Remove a symbol **and its stored candles**. **204**. |
 | `GET`    | `/symbols/{id}/state?profileId=` | —                | Current rule-engine state map for this symbol under `profileId` (state is partitioned per profile; `{ [key]: StateValue }`; `{}` when empty). 200 / 400 / 404. |
 
-Symbol-mirrored rule events live under the v2 surface at `GET /v2/symbols/{id}/rule-events` (see the [Rules resource](#rules-resource-v2rules) section).
+Symbol-mirrored rule events live at `GET /symbols/{id}/rule-events` (see the [Rules resource](#rules-resource) section).
 
 Errors use the uniform `{ "error": "<reason>" }` body — **400** for invalid input,
 **404** when the symbol doesn't exist at its source or isn't watched, **409** when
@@ -312,11 +312,11 @@ curl 'http://localhost:3000/symbols/crypto:BTCUSDT/indicators/sma?period=1h&leng
 curl 'http://localhost:3000/symbols/crypto:BTCUSDT/indicators/vwma?period=1h&length=14&multiplier=1&direction=both'
 ```
 
-## Rules resource (`/v2/rules`)
+## Rules resource (`/rules`)
 
 The rule engine's REST surface (per ADR 0016; v1's `/rules` was retired in the cutover — see #397).
 
-A v2 `Rule` couples a `profileId`, a `scope` (`symbol` / `symbols(list)` / `allSymbols`), a `condition` tree (recursive And/Or over `Comparison` / `Crossing` / `Channel` / `Moving` / `State` leaves), one of six `trigger`s (`everyTime`, `once`, `oncePerBar`, `oncePerBarOpen`, `oncePerBarClose`, `oncePerInterval`), an `expiration` (`{ at }` or `null`), and a non-empty `actions[]` (`notification` with `channel: 'telegram'`, or `setSymbolState` / `removeSymbolState` / `setGlobalState` / `removeGlobalState`).
+A `Rule` couples a `profileId`, a `scope` (`symbol` / `symbols(list)` / `allSymbols`), a `condition` tree (recursive And/Or over `Comparison` / `Crossing` / `Channel` / `Moving` / `State` leaves), one of six `trigger`s (`everyTime`, `once`, `oncePerBar`, `oncePerBarOpen`, `oncePerBarClose`, `oncePerInterval`), an `expiration` (`{ at }` or `null`), and a non-empty `actions[]` (`notification` with `channel: 'telegram'`, or `setSymbolState` / `removeSymbolState` / `setGlobalState` / `removeGlobalState`).
 
 Tick-cadence triggers (`everyTime` / `once` / `oncePerBar`) require every referenced symbol on the watchlist at create/patch time — per ADR 0016 they ride a live quote stream, not the polling loop.
 `AllSymbols` scope is exempt (fan-out is dynamic).
@@ -325,21 +325,21 @@ Tick-cadence triggers (`everyTime` / `once` / `oncePerBar`) require every refere
 
 | Method   | Path                                       | Body            | Description                                                                                                |
 | -------- | ------------------------------------------ | --------------- | ---------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/v2/rules?profileId=&symbolId=&enabled=`  | —               | List v2 rules, filtered independently by `profileId`, `symbolId` (scope-aware), and / or `enabled`. 200.   |
-| `POST`   | `/v2/rules`                                | `RuleV2Input`   | Create a v2 rule. **201** / 400 (validation surfaces a `fields[]` array; per-field path + message).        |
-| `GET`    | `/v2/rules/{id}`                           | —               | Fetch one v2 rule. 200 / 404.                                                                              |
-| `PATCH`  | `/v2/rules/{id}`                           | `Partial<RuleV2Input>` | Partial merge over the existing rule; re-runs the tick-eligibility gate on the merged result. 200 / 400 / 404. |
-| `DELETE` | `/v2/rules/{id}`                           | —               | Delete a v2 rule. **204** / 404.                                                                           |
-| `GET`    | `/v2/rules/{id}/events?limit=&before=`     | —               | Paginated rule events (newest-first); default limit 50, max 500; `before` cursors on `ts` (epoch ms). 200 / 404. |
-| `GET`    | `/v2/symbols/{id}/rule-events?limit=&before=` | —            | Paginated symbol-mirrored rule events (newest-first); same pagination. 200.                                |
+| `GET`    | `/rules?profileId=&symbolId=&enabled=`  | —               | List rules, filtered independently by `profileId`, `symbolId` (scope-aware), and / or `enabled`. 200.      |
+| `POST`   | `/rules`                                | `RuleInput`     | Create a rule. **201** / 400 (validation surfaces a `fields[]` array; per-field path + message).           |
+| `GET`    | `/rules/{id}`                           | —               | Fetch one rule. 200 / 404.                                                                                 |
+| `PATCH`  | `/rules/{id}`                           | `Partial<RuleInput>` | Partial merge over the existing rule; re-runs the tick-eligibility gate on the merged result. 200 / 400 / 404. |
+| `DELETE` | `/rules/{id}`                           | —               | Delete a rule. **204** / 404.                                                                              |
+| `GET`    | `/rules/{id}/events?limit=&before=`     | —               | Paginated rule events (newest-first); default limit 50, max 500; `before` cursors on `ts` (epoch ms). 200 / 404. |
+| `GET`    | `/symbols/{id}/rule-events?limit=&before=` | —            | Paginated symbol-mirrored rule events (newest-first); same pagination. 200.                                |
 
-`RuleV2Input` is the client-controllable subset of a `Rule` — every field except `id`, `createdAt`, `updatedAt`. Schema validation is the trust boundary (per ADR 0016 #11); the engine trusts the validator. Multi-field failures surface as `{ error, fields: [{ path, message }, ...] }` with one entry per AJV failure (or one per unwatched symbol id for the tick-eligibility error).
+`RuleInput` is the client-controllable subset of a `Rule` — every field except `id`, `createdAt`, `updatedAt`. Schema validation is the trust boundary (per ADR 0016 #11); the engine trusts the validator. Multi-field failures surface as `{ error, fields: [{ path, message }, ...] }` with one entry per AJV failure (or one per unwatched symbol id for the tick-eligibility error).
 
 ### Example
 
 ```sh
 # Create a "Price > 100" everyTime rule with a setSymbolState action
-curl -X POST http://localhost:3000/v2/rules \
+curl -X POST http://localhost:3000/rules \
   -H 'content-type: application/json' \
   -d '{
     "profileId": "p1",
