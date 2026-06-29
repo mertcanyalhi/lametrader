@@ -102,8 +102,9 @@ results (so a discovery hit may omit it; a watched symbol always has it).
 | `POST`   | `/symbols`            | `{ id, periods? }`      | Add (validates existence). **201** / 400 / 404 / 409. |
 | `PATCH`  | `/symbols/{id}`       | `{ periods }`           | Change a symbol's periods. 200 / 400 / 404.         |
 | `DELETE` | `/symbols/{id}`       | —                       | Remove a symbol **and its stored candles**. **204**. |
-| `GET`    | `/symbols/{id}/rule-events?limit=&before=` | —     | Paginated rule-engine events fired against this symbol, newest first. 200 / 404. |
 | `GET`    | `/symbols/{id}/state?profileId=` | —                | Current rule-engine state map for this symbol under `profileId` (state is partitioned per profile; `{ [key]: StateValue }`; `{}` when empty). 200 / 400 / 404. |
+
+Symbol-mirrored rule events live under the v2 surface at `GET /v2/symbols/{id}/rule-events` (see the [Rules resource](#rules-resource-v2rules) section).
 
 Errors use the uniform `{ "error": "<reason>" }` body — **400** for invalid input,
 **404** when the symbol doesn't exist at its source or isn't watched, **409** when
@@ -128,7 +129,6 @@ curl 'http://localhost:3000/symbols?enrich=true'
 curl -X PATCH http://localhost:3000/symbols/crypto:BTCUSDT \
   -H 'content-type: application/json' -d '{ "periods": ["1h"] }'
 curl -X DELETE http://localhost:3000/symbols/crypto:BTCUSDT
-curl 'http://localhost:3000/symbols/crypto:BTCUSDT/rule-events?limit=50'
 curl 'http://localhost:3000/symbols/crypto:BTCUSDT/state?profileId=p1'
 ```
 
@@ -312,77 +312,9 @@ curl 'http://localhost:3000/symbols/crypto:BTCUSDT/indicators/sma?period=1h&leng
 curl 'http://localhost:3000/symbols/crypto:BTCUSDT/indicators/vwma?period=1h&length=14&multiplier=1&direction=both'
 ```
 
-## Rules resource
+## Rules resource (`/v2/rules`)
 
-Profile-scoped trading-rule definitions: a `Rule` couples a `scope` (one symbol or all watched symbols), a `condition` tree (recursive AND/OR over comparison, crossing, or state operators), a `trigger` gate (`once` / `oncePerBar` / `oncePerBarClose` / `oncePerMinute`), an optional `expiration.at`, and an ordered list of `actions` (`setSymbolState`, `removeSymbolState`, `setGlobalState`, `removeGlobalState`, `notifyTelegram`).
-
-Each rule belongs to one profile (`profileId`) and carries an `order` integer used to break ties when several rules match the same event. The server preserves embedded `events[]` (rule firings) and `history[]` (`Created` / `Updated` / `Enabled` / `Disabled` entries) across mutations.
-
-### Endpoints
-
-| Method   | Path                                  | Body                | Description                                                              |
-| -------- | ------------------------------------- | ------------------- | ------------------------------------------------------------------------ |
-| `GET`    | `/rules?profileId=&symbolId=`         | —                       | List rules; optional filters narrow by profile and/or symbol scope.       |
-| `POST`   | `/rules`                              | `RuleInput`             | Create a rule (validated, seeded with one `Created` history entry). **201** / 400. |
-| `GET`    | `/rules/{id}`                         | —                       | Fetch one rule. 200 / 404.                                                |
-| `PUT`    | `/rules/{id}`                         | `RuleInput`             | Replace mutable fields (preserves `events`, `history` + appends `Updated`, `createdAt`). 200 / 400 / 404. |
-| `PATCH`  | `/rules/{id}`                         | `{ enabled?: boolean }` | Partial update; toggling `enabled` appends an `Enabled` / `Disabled` history entry. An empty body is a no-op. 200 / 400 / 404. |
-| `DELETE` | `/rules/{id}`                         | —                       | Delete a rule (cascades the rule's persisted firing-state). **204** / 404. |
-| `PUT`    | `/rules/order`                        | `{ ids: string[] }`     | Replace the rule ordering by bulk-renumbering `order` to the 1-based positions of `ids`. 200 / 400 / 404. |
-| `GET`    | `/rules/{id}/events?limit=&before=`   | —                       | Paginated rule-firing events newest-first (default limit 50, max 500; `before` cursors on `ts`). 200 / 404. |
-
-`RuleInput` is the client-controllable subset of a `Rule` — every field on `Rule` except `id`, `events`, `history`, `createdAt`, `updatedAt`. Domain validation (`validateRule`) runs on every write; cross-field violations (e.g. an empty AND/OR group, an unknown action kind, an `expiration.at` already in the past) surface as **400**.
-
-### Examples
-
-```sh
-# List rules (optionally filtered)
-curl http://localhost:3000/rules
-curl 'http://localhost:3000/rules?profileId=p1&symbolId=crypto:BTCUSDT'
-
-# Create a "BTC above 50k" notifyTelegram rule
-curl -X POST http://localhost:3000/rules \
-  -H 'content-type: application/json' \
-  -d '{
-    "profileId": "p1",
-    "name": "BTC > 50k",
-    "scope": { "kind": "symbol", "symbolId": "crypto:BTCUSDT" },
-    "condition": {
-      "kind": "leaf",
-      "left":  { "kind": "current", "valueType": "number" },
-      "operator": "gt",
-      "right": { "kind": "literal", "value": { "type": "number", "value": 50000 } }
-    },
-    "trigger":   { "kind": "once" },
-    "expiration": null,
-    "actions":   [{ "kind": "notifyTelegram", "destinationName": "main", "template": "{symbol} crossed 50k at {close}" }],
-    "enabled":   true,
-    "order":     1
-  }'
-
-# Fetch / replace / delete one rule
-curl http://localhost:3000/rules/<id>
-curl -X PUT http://localhost:3000/rules/<id> \
-  -H 'content-type: application/json' -d '<RuleInput>'
-curl -X DELETE http://localhost:3000/rules/<id>
-
-# Bulk renumber (rule ids must already exist) — replaces the ordering
-curl -X PUT http://localhost:3000/rules/order \
-  -H 'content-type: application/json' -d '{ "ids": ["r3", "r1", "r2"] }'
-
-# Toggle enablement
-curl -X PATCH http://localhost:3000/rules/<id> \
-  -H 'content-type: application/json' -d '{ "enabled": true }'
-curl -X PATCH http://localhost:3000/rules/<id> \
-  -H 'content-type: application/json' -d '{ "enabled": false }'
-
-# Paginated firing events (newest-first)
-curl 'http://localhost:3000/rules/<id>/events?limit=50'
-```
-
-## Rules-v2 resource (`/v2/rules`)
-
-The v2 rule engine's REST surface — coexists with v1 `/rules` under the same Fastify app per ADR 0016 until cutover.
+The rule engine's REST surface (per ADR 0016; v1's `/rules` was retired in the cutover — see #397).
 
 A v2 `Rule` couples a `profileId`, a `scope` (`symbol` / `symbols(list)` / `allSymbols`), a `condition` tree (recursive And/Or over `Comparison` / `Crossing` / `Channel` / `Moving` / `State` leaves), one of six `trigger`s (`everyTime`, `once`, `oncePerBar`, `oncePerBarOpen`, `oncePerBarClose`, `oncePerInterval`), an `expiration` (`{ at }` or `null`), and a non-empty `actions[]` (`notification` with `channel: 'telegram'`, or `setSymbolState` / `removeSymbolState` / `setGlobalState` / `removeGlobalState`).
 
@@ -555,23 +487,7 @@ delivered to the owning socket:
 frame the baseline rotates to the just-closed bar, so subsequent frames measure
 against it (matching the snapshot's "since last close" semantics).
 
-### Rule-event subscriptions
-
-Keyed by symbol id. Sync acquire (no ack frame); mirrors candle's shape.
-
-- `{ "action": "subscribe-rule-event", "id": "crypto:BTCUSDT" }` — start receiving rule events.
-- `{ "action": "unsubscribe-rule-event", "id": "crypto:BTCUSDT" }` — stop.
-
-For each newly-appended entry on the subscribed symbol's events log, the socket receives:
-
-```json
-{ "symbolId": "crypto:BTCUSDT", "entry": { "type": "stateSet", "ts": 1704153600000, … } }
-```
-
-The full `RuleEventEntry` variants are documented in the chart's "Events" dialog;
-the marker layer filters to `stateSet` entries client-side.
-
-Closing the socket releases every subscription on it (candle, indicator, quote, and rule event),
+Closing the socket releases every subscription on it (candle, indicator, quote),
 and a malformed control message is answered with an `{ "error": "<reason>" }` frame
 instead of being silently dropped.
 

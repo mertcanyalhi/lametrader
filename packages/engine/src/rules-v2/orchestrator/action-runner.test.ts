@@ -9,8 +9,8 @@ import {
 } from '@lametrader/core';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { EvaluationLookups } from '../../rules/evaluation-context.types.js';
 import { InMemoryStateRepository } from '../../state/in-memory-state-repository.js';
+import type { EvaluationLookups } from '../wire/live-evaluation-lookups-v2.types.js';
 import { ActionRunner } from './action-runner.js';
 
 /** Build a `Notifier` test double that records every send. */

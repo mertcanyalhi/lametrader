@@ -6,7 +6,6 @@ import {
   type Instrument,
   type Period,
   parseSymbolPeriods,
-  type RuleEventEntry,
   type StateRepository,
   type StateValue,
   SymbolConflictError,
@@ -100,14 +99,9 @@ export class SymbolService {
 
   /**
    * List the watched symbols.
-   *
-   * Strips the embedded `events[]` field — the list endpoint is for
-   * lightweight enumeration; events are exposed separately via
-   * `listEventsForSymbol` / `GET /symbols/:id/rule-events` (#290).
    */
   async list(): Promise<WatchedSymbol[]> {
-    const watched = await this.watchlist.list();
-    return watched.map(stripEvents);
+    return await this.watchlist.list();
   }
 
   /**
@@ -115,15 +109,13 @@ export class SymbolService {
    * from its latest two candles on the config's `defaultPeriod` (strictly — no
    * fallback). `quote` is `null` when the symbol does not watch `defaultPeriod`
    * or has fewer than two candles stored there.
-   *
-   * Strips the embedded `events[]` field (#290) — see {@link list}.
    */
   async listWithQuotes(): Promise<EnrichedSymbol[]> {
     const { defaultPeriod } = await this.config.get();
     const watched = await this.watchlist.list();
     return Promise.all(
       watched.map(async (symbol) => ({
-        ...stripEvents(symbol),
+        ...symbol,
         quote: symbol.periods.includes(defaultPeriod)
           ? await this.quoteFor(symbol.id, defaultPeriod)
           : null,
@@ -154,29 +146,6 @@ export class SymbolService {
     if (this.profiles) {
       await this.profiles.pruneSymbol(id);
     }
-  }
-
-  /**
-   * List a symbol's embedded rule-engine events newest-first, paginated.
-   *
-   * - `limit` caps the page size; defaults to 50.
-   * - `before` returns only entries with `ts < before` — cursor for "next page".
-   *
-   * @throws {@link SymbolNotFoundError} when the symbol is not on the watchlist.
-   */
-  async listEventsForSymbol(
-    id: string,
-    options: { limit?: number; before?: number } = {},
-  ): Promise<RuleEventEntry[]> {
-    const existing = await this.watchlist.get(id);
-    if (!existing) {
-      throw new SymbolNotFoundError(`symbol not watched: ${id}`);
-    }
-    const limit = options.limit ?? 50;
-    const before = options.before;
-    const events = existing.events ?? [];
-    const filtered = before === undefined ? events : events.filter((event) => event.ts < before);
-    return [...filtered].sort((a, b) => b.ts - a.ts).slice(0, limit);
   }
 
   /**
@@ -218,16 +187,6 @@ export class SymbolService {
     assertSourceSupportsPeriods(sourceForType(this.sources, symbolType(id)), resolved);
     const updated: WatchedSymbol = { ...existing, periods: resolved };
     await this.watchlist.add(updated);
-    return stripEvents(updated);
+    return updated;
   }
-}
-
-/**
- * Drop the embedded `events[]` field from a watched symbol for endpoints
- * that don't expose it (#290) — the events log is reachable via
- * `listEventsForSymbol` only.
- */
-function stripEvents(symbol: WatchedSymbol): WatchedSymbol {
-  const { events: _events, ...rest } = symbol;
-  return rest;
 }

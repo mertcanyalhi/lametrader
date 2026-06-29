@@ -1,27 +1,21 @@
 import {
-  ActionKind,
-  ConditionNodeKind,
   IndicatorError,
   IndicatorInstanceNotFoundError,
-  NumericOperator,
-  OperandKind,
   Period,
   type Profile,
   ProfileConflictError,
   ProfileError,
   ProfileNotFoundError,
   ProfileScope,
-  type Rule,
-  RuleScopeKind,
+  RulesV2,
   StateValueType,
   SymbolType,
-  TriggerKind,
   type WatchedSymbol,
 } from '@lametrader/core';
 import { describe, expect, it } from 'vitest';
 import { defaultIndicators } from '../indicators/default-indicators.js';
 import type { IndicatorRegistry } from '../indicators/indicator-registry.js';
-import { InMemoryRuleRepository } from '../rules/in-memory-rule-repository.js';
+import { InMemoryRuleRepository } from '../rules-v2/dispatch/in-memory-rule-repository.js';
 import { InMemoryWatchlistRepository } from '../symbols/in-memory-watchlist-repository.js';
 import { InMemoryProfileRepository } from './in-memory-profile-repository.js';
 import { ProfileService } from './profile-service.js';
@@ -165,28 +159,42 @@ describe('ProfileService.remove', () => {
     });
     await service.create({ name: 'Scalper' });
     await service.create({ name: 'Other' });
-    const p1Rule: Rule = {
+    const p1Rule: RulesV2.Rule = {
       id: 'p1-rule',
       profileId: 'p1',
       name: 'p1-rule',
-      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      scope: { kind: RulesV2.RuleScopeKind.Symbol, symbolId: 'crypto:BTCUSDT' },
+      trigger: { kind: RulesV2.TriggerKind.Once },
       condition: {
-        kind: ConditionNodeKind.Leaf,
-        left: { kind: OperandKind.CurrentValue, valueType: StateValueType.Number },
-        operator: NumericOperator.Gt,
-        right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 0 } },
+        kind: RulesV2.ConditionNodeKind.Leaf,
+        leaf: {
+          family: RulesV2.LeafConditionFamily.Comparison,
+          operator: RulesV2.ComparisonOperator.Gt,
+          left: {
+            kind: RulesV2.OperandKind.Price,
+            valueType: StateValueType.Number,
+          },
+          right: {
+            kind: RulesV2.OperandKind.Literal,
+            value: { type: StateValueType.Number, value: 0 },
+          },
+        },
       },
-      trigger: { kind: TriggerKind.Once },
       expiration: null,
-      actions: [{ kind: ActionKind.NotifyTelegram, destinationName: 'main', template: 'hi' }],
+      actions: [
+        {
+          kind: RulesV2.ActionKind.Notification,
+          channel: RulesV2.NotificationChannel.Telegram,
+          destinationName: 'main',
+          template: 'hi',
+        },
+      ],
       enabled: true,
-      events: [],
-      history: [],
       order: 1,
       createdAt: 0,
       updatedAt: 0,
     };
-    const p2Rule: Rule = { ...p1Rule, id: 'p2-rule', profileId: 'p2' };
+    const p2Rule: RulesV2.Rule = { ...p1Rule, id: 'p2-rule', profileId: 'p2' };
     await rules.save(p1Rule);
     await rules.save(p2Rule);
 

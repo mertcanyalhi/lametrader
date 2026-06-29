@@ -1,7 +1,7 @@
 import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { StateRepository } from '@lametrader/core';
 import type { FastifyInstance } from 'fastify';
-import { StateValueSchema } from '../schemas/rule.schema.js';
+import { StateValueSchema } from '../schemas/state.schema.js';
 
 /**
  * Path params for `/profiles/:profileId/state/global`.

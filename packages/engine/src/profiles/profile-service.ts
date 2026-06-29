@@ -11,13 +11,12 @@ import {
   ProfileScope,
   type ProfileScopeSpec,
   parseProfileFields,
-  type RuleRepository,
   validateIndicatorInputs,
   type WatchlistRepository,
 } from '@lametrader/core';
 import { nanoid } from 'nanoid';
 import type { IndicatorRegistry } from '../indicators/indicator-registry.js';
-import type { ProfileServiceOptions } from './profile-service.types.js';
+import type { ProfileCascadeRules, ProfileServiceOptions } from './profile-service.types.js';
 
 /**
  * Raw input for attaching or replacing an indicator instance on a profile.
@@ -48,7 +47,7 @@ export class ProfileService {
   /** Current clock (injectable; defaults to `Date.now`). */
   private readonly now: () => number;
   /** Rule store consulted by the profile-delete cascade (optional). */
-  private readonly rules?: RuleRepository;
+  private readonly rules?: ProfileCascadeRules;
 
   /**
    * @param profiles - the profile persistence port.
@@ -161,9 +160,7 @@ export class ProfileService {
    * Delete a profile by id.
    *
    * When the optional `rules` port is wired in, every rule belonging to the
-   * profile is removed. The deleted rules' embedded `firingState` maps die
-   * with the rule documents (see ADR 0012) — no separate firing-state
-   * cascade needed.
+   * profile is removed.
    *
    * @throws {@link ProfileNotFoundError} when the id is unknown.
    */

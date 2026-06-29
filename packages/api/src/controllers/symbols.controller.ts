@@ -2,7 +2,7 @@ import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { SymbolService } from '@lametrader/engine';
 import type { FastifyInstance } from 'fastify';
 import { ErrorSchema } from '../schemas/common.schema.js';
-import { RuleEventEntrySchema, StateValueSchema } from '../schemas/rule.schema.js';
+import { StateValueSchema } from '../schemas/state.schema.js';
 import {
   AddSymbolSchema,
   DiscoverQuerySchema,
@@ -13,18 +13,6 @@ import {
   SymbolIdParamSchema,
   WatchedSymbolSchema,
 } from '../schemas/symbol.schema.js';
-
-/**
- * Optional `?limit=&before=` query for `GET /symbols/:id/rule-events`.
- * `limit` is clamped to `[1, 500]`; `before` is an epoch-ms cursor.
- */
-const SymbolEventsQuerySchema = Type.Object(
-  {
-    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 500 })),
-    before: Type.Optional(Type.Integer({ minimum: 0 })),
-  },
-  { additionalProperties: false },
-);
 
 /**
  * Required `?profileId=...` query for `GET /symbols/:id/state` — state is
@@ -127,20 +115,6 @@ export function symbolsController(service: SymbolService) {
         await service.remove(request.params.id);
         return reply.code(204).send(null);
       },
-    );
-
-    app.get(
-      '/symbols/:id/rule-events',
-      {
-        schema: {
-          tags: ['symbols'],
-          summary: "List a symbol's embedded rule-engine events newest-first (paginated)",
-          params: SymbolIdParamSchema,
-          querystring: SymbolEventsQuerySchema,
-          response: { 200: Type.Array(RuleEventEntrySchema), 404: ErrorSchema },
-        },
-      },
-      async (request) => service.listEventsForSymbol(request.params.id, request.query),
     );
 
     app.get(

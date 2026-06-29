@@ -57,7 +57,7 @@ npm run cli -- config set --periods 1h,1d --default-period 1d
 
 #### Notification destinations (sub-group)
 
-Inspect, edit, and test-send to named Telegram destinations rules' `notifyTelegram` actions resolve by `name`.
+Inspect, edit, and test-send to named Telegram destinations that rules' `notification` actions resolve by `name`.
 Stored under `ConfigKey.TelegramDestinations` in the shared K/V config store (see `specs/config-layer.spec.md` for the storage trade-off).
 Bot tokens stay server-side: the `list` projection never includes them.
 
@@ -201,38 +201,6 @@ npm run cli -- indicators compute crypto:BTCUSDT sma --period 1h --inputs '{"len
 
 # VWMA with deviation threshold and both buy/sell signals
 npm run cli -- indicators compute crypto:BTCUSDT vwma --period 1h --inputs '{"length":14,"multiplier":1,"direction":"both"}'
-```
-
-### `rules`
-
-Manage rules persisted by the engine — full CRUD plus enable / disable, bulk reorder, and a paginated read of fired-rule events (by rule or by symbol).
-
-#### Subcommands
-
-- **`list [--profile <id>] [--symbol <id>] [--enabled]`** — print rules as JSON, sorted ascending by `order`. `--profile` narrows to one profile; `--symbol` returns rules whose scope is that symbol (plus any `AllSymbols` rule); `--enabled` drops disabled rules.
-- **`show <id>`** — print one rule by id; an unknown id errors with `RuleNotFoundError`.
-- **`create --profile <id> --file <path>`** — read a JSON `RuleCreateInput` from the file, set the profileId from `--profile` (overrides the file's value), validate via `validateRule`, persist, and print the created rule.
-- **`update <id> --file <path>`** — read a JSON `RuleCreateInput` from the file and replace the rule's mutable fields (preserves `id`, `events`, `history`, `createdAt`; bumps `updatedAt`; appends an `Updated` history entry).
-- **`delete <id>`** — remove the rule (cascades its persisted firing-state). Prints `deleted <id>` on success.
-- **`enable <id>`** / **`disable <id>`** — flip the rule's `enabled` flag and append an `Enabled` / `Disabled` history entry; echoes the updated rule.
-- **`reorder --order <csv>`** — bulk-renumber rule `order` to the 1-based positions of the comma-separated ids (e.g. `--order r2,r3,r1`); echoes the renumbered rules.
-- **`events <id> [--limit N]`** / **`events --symbol <id> [--limit N]`** — paginated rule-firing events newest-first (default 20, max 500), by rule id (positional) or by symbol (`--symbol`).
-
-#### Examples
-
-```sh
-npm run cli -- rules list
-npm run cli -- rules list --profile p1
-npm run cli -- rules list --profile p1 --symbol crypto:BTCUSDT --enabled
-npm run cli -- rules show <id>
-npm run cli -- rules create --profile p1 --file rule.json
-npm run cli -- rules update <id> --file rule.json
-npm run cli -- rules delete <id>
-npm run cli -- rules enable <id>
-npm run cli -- rules disable <id>
-npm run cli -- rules reorder --order r2,r3,r1
-npm run cli -- rules events <id>
-npm run cli -- rules events --symbol crypto:BTCUSDT --limit 50
 ```
 
 ### `state`

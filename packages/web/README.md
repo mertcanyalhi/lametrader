@@ -40,36 +40,15 @@ Each applicable instance gets a deterministic palette colour, fetched once per `
 A legend below the canvas lists every overlay with its display name + summary, the value at the crosshair (or the latest non-null when no crosshair), a show/hide eye (chart-local view state), and a remove `x` that opens the same `AlertDialog` detach confirm the panel uses.
 Live updates land in a follow-up issue.
 
-The bottom action bar also carries a **`Rules N`** button (label includes the live count of rules in the current profile scoped to the current symbol; refetched on either change).
-Clicking opens a dialog containing the same rules table the `/rules` page uses, filtered to the current symbol — Edit a row to open the editor in `edit` mode, or **`+ New rule`** to open it in `create` mode with the profile + symbol pre-filled.
-
-Symbol activity also lands on the chart itself: every `state_set` rule event renders a circle marker below the matching bar (via a single marker plugin attached to the candle series), and a collapsible **Events** panel under the canvas lists the symbol's events newest-first with **Load more** pagination (`GET /symbols/:id/rule-events`). The panel's open / closed state persists to `localStorage` so reloads remember it.
-
 ### `/rules` — Rules
 
-A profile-scoped list of rules with full CRUD.
+The v2 rule editor (sole rules surface post-cutover per ADR 0016): a profile-scoped list of rules with full CRUD.
 The bottom-bar profile picker is the same `ProfilePickerDialog` as the chart, so the active profile and its persistence are shared.
-The list body only mounts once a profile is selected, keeping `useRules({ profileId })` cleanly conditional.
+The list body only mounts once a profile is selected, keeping `useRulesV2({ profileId })` cleanly conditional.
 
-The table columns are `Order`, `Name`, `Scope`, `Trigger`, `Last fired`, `Actions`.
-Per row affordances:
+Clicking a rule card opens `<RuleEditorDialogV2>` in `edit` mode; the page's `+ New rule` button opens it in `create` mode with the profile pre-filled.
 
-- **Enable / disable** — an inline `Switch` on the name cell that calls `PATCH /rules/:id { enabled }` with an optimistic write across every cached rules query (rolls back on error; invalidates on settled).
-- **Move up / down** — Chevron `IconButton`s that emit a single `PUT /rules/order { ids }` per click via `useReorderRules`. Up on the top row and Down on the bottom row are `disabled`.
-- **Edit** — opens `<RuleEditorDialog>` in `edit` mode with the row's rule.
-- **Events** — opens `<EventsDialog>` in `rule` mode (`GET /rules/:id/events`, "Load more" via `useInfiniteQuery`).
-- **Delete** — opens a confirmation `AlertDialog`; on confirm fires `DELETE /rules/:id` with the same snapshot-rollback pattern (`useDeleteRule`).
-
-`<RuleEditorDialog>` is the shared editor for both `create` (used from the chart's Rules dialog) and `edit` (used here): a Radix `Dialog` with a `react-hook-form` / Yup-validated form covering name, description, scope (symbol picker scoped to the current profile or all-symbols), enabled, the recursive condition tree (AND/OR groups + leaves with operand + operator pickers wired to core's `validateOperatorOperands`), trigger (`Once` / `OncePerBar` / `OncePerBarClose` / `OncePerMinute` with per-variant inputs), expiration (`Never` or `On date` — future-dated only), and the actions list (`SetSymbolState` / `RemoveSymbolState` / `SetGlobalState` / `RemoveGlobalState` / `NotifyTelegram` with a destination dropdown sourced from `/notification/telegram/destinations`).
-Cancel closes without persisting; Save calls `useCreateRule` / `useReplaceRule`; a server-rejected save (400, including `TemplateError` on NotifyTelegram) surfaces inline as a red `Callout`.
-
-### `/rules-v2` — Rules v2 (preview, feature-flag-gated)
-
-The v2 rule editor, mounted behind the rules-v2 feature flag (default off — the route + sidebar entry are absent unless the flag is enabled). Coexists with the v1 `/rules` page during the rebuild per ADR 0016; the hard cutover lands when the engine work completes.
-
-Enable the flag for a session via the URL query `?rulesV2=1`, or persist it across sessions with `localStorage.setItem('rulesV2Enabled', 'true')`. The URL param wins over `localStorage`, so a shared link always opens the v2 surface even on a browser where the flag has never been flipped (handy for sharing a test link).
-
-The editor surface mirrors the v1 layout: a Radix `Dialog` with `react-hook-form` / Yup-validated sections for name + description, scope (`Symbol` / `Symbols(list)` / `AllSymbols`), trigger (the six `TriggerKind`s with per-kind `period` / `intervalMs` fields), the recursive condition tree, and the actions list (`Notification` Telegram + the four state-mutation actions).
+The editor is a Radix `Dialog` with `react-hook-form` / Yup-validated sections for name + description, scope (`Symbol` / `Symbols(list)` / `AllSymbols`), trigger (the six `TriggerKind`s with per-kind `period` / `intervalMs` fields), the recursive condition tree, and the actions list (`Notification` Telegram + the four state-mutation actions).
 
 The condition-tree leaf editor walks the leaf `family` to pick the row layout:
 

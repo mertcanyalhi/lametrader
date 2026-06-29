@@ -9,7 +9,6 @@ import { runCandles } from './candles.js';
 import { runConfig } from './config.js';
 import { runIndicators } from './indicators.js';
 import { runProfiles } from './profile.js';
-import { runRules } from './rules.js';
 import { runState } from './state.js';
 import { runSymbols } from './symbols.js';
 
@@ -22,7 +21,6 @@ if (
   command !== 'profile' &&
   command !== 'candles' &&
   command !== 'indicators' &&
-  command !== 'rules' &&
   command !== 'state'
 ) {
   console.error(`unknown command: ${command ?? '(none)'}`);
@@ -38,7 +36,6 @@ if (
       config,
       symbols,
       profiles,
-      rules,
       state,
       backfill,
       indicators,
@@ -71,9 +68,6 @@ if (
         break;
       case 'indicators':
         console.log(await runIndicators(args, indicators, indicatorService));
-        break;
-      case 'rules':
-        console.log(await runRules(args, rules, symbols));
         break;
       case 'state':
         console.log(await runState(args, symbols, state));

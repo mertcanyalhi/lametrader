@@ -39,54 +39,20 @@ export {
 export { movingAverage } from './indicators/sma.js';
 export { volumeWeightedMovingAverage } from './indicators/vwma.js';
 export { getLogger } from './log.js';
+export { InMemoryNotifier, type SentMessage } from './notification/in-memory-notifier.js';
 export { TelegramDestinationsService } from './notification/telegram-destinations-service.js';
-export { InMemoryProfileRepository } from './profiles/in-memory-profile-repository.js';
-export { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
-export { type IndicatorInstanceInput, ProfileService } from './profiles/profile-service.js';
-export type { ProfileServiceOptions } from './profiles/profile-service.types.js';
-export { ActionRunner } from './rules/action-runner.js';
-export { CandleRuleEventBridge } from './rules/candle-rule-event-bridge.js';
-export { handleCascadeError } from './rules/cascade-error-handler.js';
-export { evaluateCondition } from './rules/condition-evaluator.js';
-export { CycleGuard, CycleOverflowError } from './rules/cycle-guard.js';
-export { buildEvaluationContext } from './rules/evaluation-context.js';
-export type { EvaluationContext, EvaluationLookups } from './rules/evaluation-context.types.js';
-export { InMemoryEventLog } from './rules/in-memory-event-log.js';
-export { InMemoryFiringStateRepository } from './rules/in-memory-firing-state-repository.js';
-export { InMemoryNotifier, type SentMessage } from './rules/in-memory-notifier.js';
-export { InMemoryRuleRepository } from './rules/in-memory-rule-repository.js';
-export { IndicatorRuleEventBridge } from './rules/indicator-rule-event-bridge.js';
-export { LiveEvaluationLookups } from './rules/live-evaluation-lookups.js';
-export { MinuteTimerSource } from './rules/minute-timer-source.js';
-export { MongoEventLog } from './rules/mongo-event-log.js';
-export { MongoFiringStateRepository } from './rules/mongo-firing-state-repository.js';
-export { MongoRuleRepository } from './rules/mongo-rule-repository.js';
-export { type PrevCurrent, PrevCurrentCache } from './rules/prev-current-cache.js';
-export { QuoteRuleEventBridge } from './rules/quote-rule-event-bridge.js';
-export {
-  RuleOrchestrator,
-  type RuleOrchestratorOptions,
-} from './rules/rule-orchestrator.js';
-export {
-  type RuleCreateInput,
-  RuleService,
-  type RuleServiceOptions,
-} from './rules/rule-service.js';
 export {
   TelegramNotifier,
   type TelegramNotifierOptions,
   TelegramSendError,
-} from './rules/telegram-notifier.js';
-export { TriggerEvaluator } from './rules/trigger-evaluator.js';
-export {
-  type RuleEngineDeps,
-  type WiredRuleEngine,
-  wireRuleEngine,
-} from './rules/wire-rule-engine.js';
+} from './notification/telegram-notifier.js';
+export { InMemoryProfileRepository } from './profiles/in-memory-profile-repository.js';
+export { MongoProfileRepository } from './profiles/mongo-profile-repository.js';
+export { type IndicatorInstanceInput, ProfileService } from './profiles/profile-service.js';
+export type { ProfileServiceOptions } from './profiles/profile-service.types.js';
 export * as RulesV2 from './rules-v2/index.js';
 // Flat re-exports of the v2 application + wire surface so the API layer can
-// import them without prefixing — keeps controllers' `import { ... }` flat
-// and matches v1's `RuleService` / `wireRuleEngine` precedent.
+// import them without prefixing — keeps controllers' `import { ... }` flat.
 export {
   type EventListOptions as RuleV2EventListOptions,
   RuleServiceV2,

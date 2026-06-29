@@ -8,7 +8,7 @@ import {
   UnknownDestinationError,
 } from '@lametrader/core';
 
-import type { EvaluationLookups } from '../../rules/evaluation-context.types.js';
+import type { EvaluationLookups } from '../wire/live-evaluation-lookups-v2.types.js';
 
 /**
  * The subset of v2 {@link RulesV2.Action}s that mutate state — the input

@@ -1,9 +1,4 @@
-import type {
-  IndicatorStateEvent,
-  RuleEventEntry,
-  StateRepository,
-  SymbolQuoteEvent,
-} from '@lametrader/core';
+import type { IndicatorStateEvent, StateRepository, SymbolQuoteEvent } from '@lametrader/core';
 import type {
   BackfillService,
   CandleEvent,
@@ -12,7 +7,6 @@ import type {
   IndicatorService,
   ProfileService,
   QuoteStreamService,
-  RuleService,
   RuleServiceV2,
   SymbolService,
   TelegramDestinationsService,
@@ -35,8 +29,6 @@ export interface LiveStream {
   quoteStream: StreamHub<SymbolQuoteEvent>;
   /** The engine-side quote stream service; the route calls its `subscribe`/`unsubscribe`. */
   quoteStreamService: QuoteStreamService;
-  /** The rule-event pub/sub fed by the engine's `EventLog.onAppend` (symbol side only). */
-  ruleEventStream: StreamHub<RuleEventEntry>;
 }
 
 /**
@@ -62,16 +54,9 @@ export interface AppDependencies {
    */
   profiles?: ProfileService;
   /**
-   * The rules use-case (read-only for now; CRUD lands in later issues).
-   *
-   * When present, the `/rules` routes are registered.
-   */
-  rules?: RuleService;
-  /**
    * The v2 rules use-case (CRUD over the new ports per ADR 0016).
    *
-   * When present, the `/v2/rules*` routes are registered, coexisting with v1
-   * `/rules` until cutover.
+   * When present, the `/v2/rules*` routes are registered.
    */
   rulesV2?: RuleServiceV2;
   /**
