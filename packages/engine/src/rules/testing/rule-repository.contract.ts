@@ -505,4 +505,11 @@ export function runRuleRepositoryContract(
     await repo.save(r);
     expect(await repo.get('r')).toEqual(r);
   });
+
+  it('round-trips a rule with lastFiredAt set', async () => {
+    const { repo } = await make();
+    const r = rule({ id: 'r', order: 0, lastFiredAt: 123_456 });
+    await repo.save(r);
+    expect(await repo.get('r')).toEqual(r);
+  });
 }

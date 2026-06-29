@@ -203,7 +203,22 @@ export class RuleOrchestrator {
       await this.deps.eventLog.appendRuleEvent(rule.id, entry);
       await this.deps.eventLog.appendSymbolEvent(fire.firingSymbolId, entry);
     }
+    await this.stampLastFiredAt(rule, inboundEvent.ts);
     log.trace({ ruleId: rule.id, outcome: RuleOutcome.Fired, eventTime }, 'rule_summary');
+  }
+
+  /**
+   * Persist `lastFiredAt` on the rule after a successful fire.
+   *
+   * Re-reads the rule before saving so a concurrent writer (`Once`
+   * auto-disable in the dispatcher, a user edit landing mid-tick) doesn't
+   * lose its update. If the rule has been removed since the fire started,
+   * silently skip — the event log captures the firing lifecycle separately.
+   */
+  private async stampLastFiredAt(rule: { id: string }, ts: number): Promise<void> {
+    const fresh = await this.deps.rules.get(rule.id);
+    if (fresh === null) return;
+    await this.deps.rules.save({ ...fresh, lastFiredAt: ts });
   }
 
   /**

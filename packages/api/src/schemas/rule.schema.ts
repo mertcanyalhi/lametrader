@@ -278,6 +278,7 @@ export const RuleSchema = Type.Object(
     order: Type.Number(),
     createdAt: Type.Number(),
     updatedAt: Type.Number(),
+    lastFiredAt: Type.Optional(Type.Number()),
   },
   { additionalProperties: false },
 );

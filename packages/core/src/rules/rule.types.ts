@@ -42,4 +42,13 @@ export interface Rule {
   createdAt: number;
   /** Last-update time (epoch ms). */
   updatedAt: number;
+  /**
+   * Last time the orchestrator fired this rule, in epoch-ms — stamped by the
+   * orchestrator on every successful fire (see issue #426).
+   *
+   * Absent on a freshly-created rule and on rules that haven't fired since
+   * `lastFiredAt` was introduced.
+   * Surfaced in the rules table's "Last fired" column.
+   */
+  lastFiredAt?: number;
 }

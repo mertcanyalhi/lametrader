@@ -223,7 +223,7 @@ describe('RuleOrchestrator', () => {
     expect(ruleEvents).toEqual([expectedNotification, expectedFired]);
   });
 
-  it('Once trigger: after the first fire the rule is saved back to the repository with enabled: false', async () => {
+  it('Once trigger: after the first fire the rule is saved back to the repository with enabled: false and lastFiredAt set to the tick ts', async () => {
     const { orchestrator, rules } = await buildOrchestrator({
       rules: [ruleWith({ id: 'r1', trigger: { kind: TriggerKind.Once } })],
     });
@@ -232,6 +232,7 @@ describe('RuleOrchestrator', () => {
     expect(persisted).toEqual({
       ...ruleWith({ id: 'r1', trigger: { kind: TriggerKind.Once } }),
       enabled: false,
+      lastFiredAt: 1_000,
     });
   });
 
@@ -471,6 +472,34 @@ describe('RuleOrchestrator', () => {
     expect(aaplFires.length).toEqual(1);
     expect(msftFires.length).toEqual(1);
     expect(googFires.length).toEqual(0);
+  });
+
+  it('stamps lastFiredAt on the persisted rule with the inbound event ts after a fire', async () => {
+    const { orchestrator, rules } = await buildOrchestrator({
+      rules: [ruleWith({ id: 'r1' })],
+    });
+    await orchestrator.process(TICK_EVENT);
+    const persisted = await rules.get('r1');
+    expect(persisted).toEqual({
+      ...ruleWith({ id: 'r1' }),
+      lastFiredAt: 1_000,
+    });
+  });
+
+  it('leaves lastFiredAt untouched when no rule fires (condition unmet)', async () => {
+    // Seed the tick ring below the rule's `Price > 100` threshold so the
+    // condition evaluates false; the orchestrator must NOT stamp lastFiredAt.
+    const ringByName = new Map<string, TickRing>();
+    const ring = new TickRing();
+    ring.push(0, 50);
+    ringByName.set('AAPL', ring);
+    const { orchestrator, rules } = await buildOrchestrator({
+      rules: [ruleWith({ id: 'r1' })],
+      tickRings: ringByName,
+    });
+    await orchestrator.process(TICK_EVENT);
+    const persisted = await rules.get('r1');
+    expect(persisted).toEqual(ruleWith({ id: 'r1' }));
   });
 
   it('a cycle overflow during cascade emits exactly one CycleOverflow entry and halts further cascade', async () => {
