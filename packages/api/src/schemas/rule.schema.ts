@@ -198,7 +198,7 @@ export const EvaluationTriggerEventSchema = Type.Object(
     instanceId: Type.Optional(Type.String()),
     /** IndicatorChanged / SymbolStateChanged / GlobalStateChanged: the state-key. */
     stateKey: Type.Optional(Type.String()),
-    /** SymbolStateChanged / GlobalStateChanged. */
+    /** SymbolStateChanged / GlobalStateChanged / IndicatorChanged. */
     profileId: Type.Optional(Type.String()),
     /** SymbolStateChanged / GlobalStateChanged: the state-map key. */
     key: Type.Optional(Type.String()),

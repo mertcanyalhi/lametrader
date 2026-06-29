@@ -103,11 +103,12 @@ describe('EvaluationTriggerEvent', () => {
     });
   });
 
-  it('admits an IndicatorChanged cascade trigger', () => {
+  it('admits an IndicatorChanged cascade trigger carrying profileId', () => {
     const e: EvaluationTriggerEvent = {
       kind: EvaluationTriggerKind.IndicatorChanged,
       ts: 1,
       symbolId: 'BTC',
+      profileId: 'p1',
       instanceId: 'i1',
       stateKey: 'value',
       prev: null,
@@ -117,6 +118,7 @@ describe('EvaluationTriggerEvent', () => {
       kind: EvaluationTriggerKind.IndicatorChanged,
       ts: 1,
       symbolId: 'BTC',
+      profileId: 'p1',
       instanceId: 'i1',
       stateKey: 'value',
       prev: null,

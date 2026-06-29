@@ -38,6 +38,7 @@ const INDICATOR_CHANGED: IndicatorChangedEvent = {
   kind: EvaluationTriggerKind.IndicatorChanged,
   ts: 1_000,
   symbolId: 'AAPL',
+  profileId: 'profile-1',
   instanceId: 'rsi-14',
   stateKey: 'value',
   prev: null,

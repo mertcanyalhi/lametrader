@@ -185,7 +185,8 @@ export class TriggerDispatcher {
   ): Promise<Array<{ rule: Rule; firingSymbolId: string }>> {
     const profileId =
       event.kind === EvaluationTriggerKind.SymbolStateChanged ||
-      event.kind === EvaluationTriggerKind.GlobalStateChanged
+      event.kind === EvaluationTriggerKind.GlobalStateChanged ||
+      event.kind === EvaluationTriggerKind.IndicatorChanged
         ? event.profileId
         : undefined;
     const symbolId = symbolIdOf(event);

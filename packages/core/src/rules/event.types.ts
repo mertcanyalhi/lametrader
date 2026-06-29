@@ -93,11 +93,20 @@ export interface GlobalStateChangedEvent {
   current: StateValue | null;
 }
 
-/** One key in an indicator-instance's state mutated. */
+/**
+ * One key in an indicator-instance's state mutated.
+ *
+ * Carries `profileId` so the orchestrator can partition cascade candidates
+ * to the originating profile — preserving the same per-profile scoping
+ * invariant {@link SymbolStateChangedEvent} / {@link GlobalStateChangedEvent}
+ * uphold (introduced by #281).
+ */
 export interface IndicatorChangedEvent {
   kind: EvaluationTriggerKind.IndicatorChanged;
   ts: number;
   symbolId: string;
+  /** Which profile's indicator-instance the mutation belongs to. */
+  profileId: string;
   instanceId: string;
   stateKey: string;
   prev: StateValue | null;
