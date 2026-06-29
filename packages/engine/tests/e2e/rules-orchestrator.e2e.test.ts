@@ -246,6 +246,78 @@ describe('rules orchestrator + action runner (e2e)', () => {
     expect(await rules.get('r1')).toEqual({ ...rule, lastFiredAt: 1_000 });
   });
 
+  it('a legacy state/Equals(Price, Literal) rule (pre-#429) fires through the rewritten comparison/Eq path on a matching Tick', async () => {
+    // Pre-collapse the picker emitted `state/Equals` for any LHS; once #429
+    // landed the picker only emits `comparison/Eq` for non-state-ref LHSes
+    // and `normalizeRule` rewrites old documents at read time. This e2e
+    // confirms the rewrite makes the orchestrator's evaluation engine fire
+    // on a literal-equality match (Price == 120) — proving the legacy shape
+    // round-trips through dispatch with the post-collapse semantics intact.
+    const legacy: Rule = {
+      id: 'legacy-equals',
+      profileId: 'profile-A',
+      name: 'Legacy state/Equals(Price, 120)',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.State,
+          operator: StateOperator.Equals,
+          left: { kind: OperandKind.Price },
+          right: {
+            kind: OperandKind.Literal,
+            value: { type: StateValueType.Number, value: 120 },
+          },
+        },
+      },
+      trigger: { kind: TriggerKind.EveryTime },
+      expiration: null,
+      actions: [
+        {
+          kind: ActionKind.Notification,
+          channel: NotificationChannel.Telegram,
+          destinationName: 'main',
+          template: 'AAPL equal 120',
+        },
+      ],
+      enabled: true,
+      order: 0,
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    const { orchestrator, notifier, eventLog, rules } = await wire({
+      rules: [legacy],
+      tickPrice: 120,
+    });
+    const tick: TickEvent = {
+      kind: EvaluationTriggerKind.Tick,
+      ts: 1_000,
+      symbolId: 'AAPL',
+      price: 120,
+    };
+    await orchestrator.process(tick);
+    expect(notifier.sent).toEqual([{ destinationName: 'main', body: 'AAPL equal 120' }]);
+    // The repository's read path rewrites the stored leaf to the collapsed
+    // comparison shape — `get` returns the normalised rule.
+    const reloaded = await rules.get('legacy-equals');
+    expect(reloaded?.condition).toEqual({
+      kind: ConditionNodeKind.Leaf,
+      leaf: {
+        family: LeafConditionFamily.Comparison,
+        operator: ComparisonOperator.Eq,
+        left: { kind: OperandKind.Price },
+        right: {
+          kind: OperandKind.Literal,
+          value: { type: StateValueType.Number, value: 120 },
+        },
+      },
+    });
+    // And the umbrella Fired event reads through to the symbol's log.
+    const symbolEvents = await eventLog.symbolEvents('AAPL');
+    const firedTypes = symbolEvents.map((e) => e.type);
+    expect(firedTypes).toEqual([RuleEventType.NotificationSent, RuleEventType.Fired]);
+  });
+
   it('critical failure mode — a cascade of state writes that exceeds the cycle limit records exactly one CycleOverflow entry on the symbol log and halts further cascade', async () => {
     // A `kicker` fires on the Tick and sets a state key; a `flipper`'s
     // condition references the same key and its action writes alternating

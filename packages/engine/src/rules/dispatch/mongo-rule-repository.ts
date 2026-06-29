@@ -1,5 +1,5 @@
 import type { ProfileRepository } from '@lametrader/core';
-import { type Rule, type RuleRepository, RuleScopeKind } from '@lametrader/core';
+import { normalizeRule, type Rule, type RuleRepository, RuleScopeKind } from '@lametrader/core';
 import type { Collection, Db, Filter } from 'mongodb';
 
 import type { RuleDocument } from './mongo-rule-repository.types.js';
@@ -127,10 +127,16 @@ export class MongoRuleRepository implements RuleRepository {
   }
 }
 
-/** Map a stored document to a domain {@link Rule}. */
+/**
+ * Map a stored document to a domain {@link Rule}.
+ *
+ * Applies {@link normalizeRule} so legacy `state/Equals` / `state/NotEquals`
+ * leaves over non-state-ref LHSes read back as their collapsed
+ * `comparison/Eq` / `comparison/Neq` equivalents (issue #429).
+ */
 function toRule(doc: RuleDocument): Rule {
   const { _id, ...rest } = doc;
-  return { id: _id, ...rest };
+  return normalizeRule({ id: _id, ...rest });
 }
 
 /** Map a domain {@link Rule} to its stored document. */

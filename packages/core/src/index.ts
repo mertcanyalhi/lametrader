@@ -135,6 +135,7 @@ export {
   type NotificationAction,
   NotificationChannel,
   type NotificationSentRuleEvent,
+  normalizeRule,
   type OncePerBarCloseTrigger,
   type OncePerBarOpenTrigger,
   type OncePerBarTrigger,
