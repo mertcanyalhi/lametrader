@@ -72,7 +72,7 @@ export interface EvaluationContextDeps {
 }
 
 /**
- * Build a fresh {@link EvaluationContext} for one inbound v2 evaluation.
+ * Build a fresh {@link EvaluationContext} for one inbound evaluation.
  *
  * Pure: resolves operands by dispatching on `kind` and reading the
  * injected stores. OHLCV bars are read from `deps.barSeries`, which the

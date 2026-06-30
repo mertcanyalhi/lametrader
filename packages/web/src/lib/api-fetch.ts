@@ -65,8 +65,9 @@ function statusMessage(status: number): string {
  *
  * `path` is the dotted instance path (e.g. `scope.symbolId`); `message` is the
  * human-readable reason.
- * The v2 rules surface (per ADR 0016 / #395) is the first consumer; v1 routes
- * still return only `{ error }` and surface as a single message.
+ * The rules surface (per ADR 0016 / #395) is the first consumer; routes that
+ * don't validate per-field still return only `{ error }` and surface as a
+ * single message.
  */
 export interface FieldError {
   /** Dotted body path the failure points at (e.g. `'scope.symbolId'`). */
@@ -83,21 +84,20 @@ export interface FieldError {
  * The `message` is either the server's `{ error }` string (propagated verbatim)
  * or a clean, status-derived message — never a raw response body.
  *
- * When the server surfaces the v2 `{ error, fields[] }` validation envelope,
+ * When the server surfaces the `{ error, fields[] }` validation envelope,
  * `fields` carries the per-field failures so the editor can render inline
  * messages next to the offending control.
- * Absent for non-4xx responses and for legacy routes that don't return the
- * envelope.
+ * Absent for non-4xx responses and for routes that don't return the envelope.
  */
 export class ApiError extends Error {
   /** HTTP status code, or `0` for a network failure (no response). */
   readonly status: number;
-  /** Per-field validation failures (only on the v2 envelope; `undefined` otherwise). */
+  /** Per-field validation failures (only on the `{ error, fields[] }` envelope; `undefined` otherwise). */
   readonly fields: FieldError[] | undefined;
   /**
    * @param status - HTTP status from the response, or `0` for a network failure.
    * @param message - server-supplied `{ error }` message, or a clean fallback.
-   * @param fields - per-field failures from the v2 `{ error, fields[] }` envelope,
+   * @param fields - per-field failures from the `{ error, fields[] }` envelope,
    *                 or `undefined` for responses that don't carry it.
    */
   constructor(status: number, message: string, fields?: FieldError[]) {
@@ -165,7 +165,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
  * The non-JSON branch logs the parse failure (with the body, best-effort)
  * instead of swallowing it.
  *
- * When the body carries the v2 `{ error, fields[] }` envelope (per ADR 0016 /
+ * When the body carries the `{ error, fields[] }` envelope (per ADR 0016 /
  * #395), the per-field failures are surfaced on the returned `fields`.
  */
 async function readErrorEnvelope(
@@ -190,9 +190,10 @@ async function readErrorEnvelope(
 /**
  * Narrow the API's `fields[]` array into typed {@link FieldError}s.
  *
- * Returns `undefined` when the envelope didn't carry a `fields[]` (legacy v1
- * routes); returns an empty array when the envelope carried one but it had no
- * recognizable entries (so callers can still tell the v2 envelope was present).
+ * Returns `undefined` when the envelope didn't carry a `fields[]` (older
+ * routes that surface only `{ error }`); returns an empty array when the
+ * envelope carried one but it had no recognizable entries (so callers can
+ * still tell the envelope was present).
  */
 function parseFieldErrors(input: unknown): FieldError[] | undefined {
   if (!Array.isArray(input)) return undefined;

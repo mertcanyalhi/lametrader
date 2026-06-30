@@ -20,7 +20,7 @@ Each bullet maps to exactly one test.
 
 - [ ] `InMemoryEventLog.countSymbolEvents(symbolId)` returns `0` for an unknown symbol.
 - [ ] `InMemoryEventLog.countSymbolEvents(symbolId)` returns the number of mirrored entries appended for that symbol (and ignores other symbols).
-- [ ] `MongoEventLog.countSymbolEvents(symbolId)` returns the number of mirrored entries stored on the symbol's `events_v2` array (covered by the shared contract suite).
+- [ ] `MongoEventLog.countSymbolEvents(symbolId)` returns the number of mirrored entries stored on the symbol's `events` array (covered by the shared contract suite).
 
 ### RuleService (application)
 
@@ -59,7 +59,7 @@ The single happy path the e2e test asserts (against the API e2e harness):
 1. Spin Mongo via testcontainers; wire `connectServices()`-equivalent.
 2. Watch a symbol via the watchlist; POST a tick-cadence `EveryTime` `Price > 100` rule scoped to that symbol.
 3. `GET /symbols/:id/rule-events/count` returns `{ count: 0 }`.
-4. Drive a tick (price 101) through the live v2 quote bridge.
+4. Drive a tick (price 101) through the live quote bridge.
 5. `GET /symbols/:id/rule-events/count` returns `{ count: 2 }` (a `Fired` umbrella entry plus the `StateSet` action entry).
 
 ## Out of scope

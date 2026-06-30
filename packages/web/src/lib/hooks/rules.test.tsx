@@ -28,7 +28,7 @@ import {
   useSymbolRuleEventsCount,
 } from './rules';
 
-/** A minimal `RuleInput` shape — the server re-validates against the v2 schema. */
+/** A minimal `RuleInput` shape — the server re-validates against the domain schema. */
 function ruleInput(): RuleInput {
   return {
     profileId: 'p1',

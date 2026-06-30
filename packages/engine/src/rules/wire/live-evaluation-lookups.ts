@@ -141,8 +141,8 @@ export class LiveEvaluationLookups implements EvaluationLookups {
 
   /**
    * Update an indicator-instance state value — wired to the same upstream the
-   * v2 indicator cascade bridge listens on, so this mirror stays consistent
-   * with the cascade events the dispatcher observes.
+   * indicator cascade bridge listens on, so this mirror stays consistent with
+   * the cascade events the dispatcher observes.
    */
   recordIndicatorState(instanceId: string, stateKey: string, value: StateValue): void {
     this.indicatorState.set(indicatorKey(instanceId, stateKey), value);

@@ -7,13 +7,8 @@ import type { RuleDocument } from './mongo-rule-repository.types.js';
 /**
  * MongoDB-backed {@link RuleRepository}.
  *
- * Stores each rule as a document in the `rules_v2` collection keyed by id
+ * Stores each rule as a document in the `rules` collection keyed by id
  * (`_id`).
- *
- * The collection name retains its historical `rules_v2` literal even after
- * the engine-side rename in issue #422 (locked decision #2: the rename
- * requires an operator-controlled data migration, tracked separately and
- * scoped out of the code-only refactor).
  *
  * `listEnabledForSymbol` consults the optional injected
  * {@link ProfileRepository} to enforce the parent `profile.enabled` runtime
@@ -37,12 +32,9 @@ export class MongoRuleRepository implements RuleRepository {
 
   /**
    * The typed Mongo collection backing the rules engine.
-   *
-   * The literal name remains `rules_v2` for back-compat (see the class-level
-   * JSDoc and issue #422 locked decision #2).
    */
   private get collection(): Collection<RuleDocument> {
-    return this.db.collection<RuleDocument>('rules_v2');
+    return this.db.collection<RuleDocument>('rules');
   }
 
   /**

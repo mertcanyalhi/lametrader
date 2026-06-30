@@ -64,7 +64,7 @@ export function runRuleRepositoryContract(
     };
   }
 
-  /** Build a minimal-valid v2 rule with overrides. */
+  /** Build a minimal-valid rule with overrides. */
   function rule(overrides: Partial<Rule> & Pick<Rule, 'id' | 'order'>): Rule {
     return {
       profileId: 'profile-1',

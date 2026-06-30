@@ -1,5 +1,5 @@
 /**
- * How a v2 rule selects which symbol(s) it applies to.
+ * How a rule selects which symbol(s) it applies to.
  *
  * The string value is the persisted/serialized tag (stable across JSON
  * round-trips).
@@ -35,5 +35,5 @@ export interface AllSymbolsRuleScope {
   kind: RuleScopeKind.AllSymbols;
 }
 
-/** A v2 rule's scope, discriminated on `kind`. */
+/** A rule's scope, discriminated on `kind`. */
 export type RuleScope = SymbolRuleScope | SymbolsRuleScope | AllSymbolsRuleScope;

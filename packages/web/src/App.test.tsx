@@ -116,7 +116,7 @@ describe('App shell', () => {
     }).toEqual({ collapsed: 'true', stored: 'true' });
   });
 
-  it('surfaces the Rules nav link unconditionally (v2 is the only editor post-cutover)', () => {
+  it('surfaces the Rules nav link unconditionally', () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <AppRoutes />

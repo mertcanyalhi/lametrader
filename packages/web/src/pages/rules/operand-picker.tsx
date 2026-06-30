@@ -39,7 +39,7 @@ export const OPERAND_KIND_OPTIONS: ReadonlyArray<{
 ];
 
 /**
- * Whether a v2 operand requires the row's `interval` to resolve at evaluation
+ * Whether an operand requires the row's `interval` to resolve at evaluation
  * time.
  *
  * `Price` and the state-refs are interval-agnostic per ADR 0016; OHLCV +
@@ -64,7 +64,7 @@ export function operandNeedsInterval(operand: ConditionOperand): boolean {
 
 /**
  * The kinds a right-hand-side operand may NOT take when the LHS already
- * forces the family — e.g. `Literal` is the only RHS-only kind in v2, but the
+ * forces the family — e.g. `Literal` is the only RHS-only kind, but the
  * picker doesn't expose `Price`-as-RHS on a Crossing leaf (semantically odd).
  *
  * Keep this conservative: the schema accepts every operand on every side, so
@@ -73,7 +73,7 @@ export function operandNeedsInterval(operand: ConditionOperand): boolean {
 export const RHS_ALLOWED_KINDS = OPERAND_KIND_OPTIONS.map((option) => option.value);
 
 /**
- * A controlled picker for a single v2 condition operand. Renders the kind
+ * A controlled picker for a single condition operand. Renders the kind
  * dropdown plus the per-kind inner inputs (indicator-instance + state-field
  * dropdowns, state-key dropdown + freetext fallback, literal value typed by
  * the LHS `valueType`).
@@ -254,8 +254,8 @@ function OperandDetail({
  *
  * Numeric → numeric stepper (the `<TextField>` with `type="number"` so users
  * can clear and re-type); bool → switch; string / enum → text input.
- * Mismatches are caught by the v2 schema validator at the API boundary; this
- * UI control simply renders the right widget so the data stays in shape.
+ * Mismatches are caught by the domain schema validator at the API boundary;
+ * this UI control simply renders the right widget so the data stays in shape.
  */
 function LiteralValueInput({
   value,
@@ -457,7 +457,7 @@ export function filterIndicatorsByScope(
 /**
  * Filter a list of profile-attached indicator instances by the row's `interval`.
  *
- * v2 indicator operand binding is profile-attached only (per ADR 0016): the
+ * Indicator operand binding is profile-attached only (per ADR 0016): the
  * row's `Interval` selects which period's instances are eligible. When the
  * row has no interval yet, every instance is allowed (the user has more to
  * configure before submit).

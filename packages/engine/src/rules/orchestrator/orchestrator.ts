@@ -20,7 +20,7 @@ import { CycleGuard, CycleOverflowError } from './cycle-guard.js';
 import { RuleOutcome } from './orchestrator-trace.types.js';
 
 /**
- * Scope-bound logger for the v2 rule orchestrator.
+ * Scope-bound logger for the rule orchestrator.
  *
  * Sits under `engine.rules.orchestrator` so a single `engine.rules.*:trace`
  * setting enables every rules-engine surface together (per #436).
@@ -59,7 +59,7 @@ export interface RuleOrchestratorOptions {
 }
 
 /**
- * Top-level v2 rule engine entry point.
+ * Top-level rule engine entry point.
  *
  * Per inbound {@link EvaluationTriggerEvent}:
  *

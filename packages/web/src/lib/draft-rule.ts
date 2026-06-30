@@ -7,7 +7,7 @@ import {
 } from '@lametrader/core';
 
 /**
- * Build a placeholder v2 {@link Rule} the create-mode editor can use as
+ * Build a placeholder {@link Rule} the create-mode editor can use as
  * its `initial`. The form values overwrite every field except `profileId` and
  * `order` before the server round-trip — the placeholder exists so the
  * editor's `initial` slot stays populated and its Save button stays enabled.

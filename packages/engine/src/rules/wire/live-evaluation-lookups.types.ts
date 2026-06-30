@@ -1,15 +1,12 @@
 import type { StateValue } from '@lametrader/core';
 
 /**
- * Synchronous lookups consumed by the v2 {@link ActionRunner} when it snapshots
+ * Synchronous lookups consumed by the {@link ActionRunner} when it snapshots
  * the firing symbol's OHLCV / state row into `Fired.context.lookupSnapshot`.
  *
  * The action runner cannot await async repo reads inside its hot fire path —
  * this interface is the contract it depends on, and {@link LiveEvaluationLookups}
  * is the live implementation backed by the same upstream the bridges read.
- *
- * v1 historically housed this interface; in v2 the rule engine is the only
- * consumer so it co-locates here (per ADR 0016 cutover).
  */
 export interface EvaluationLookups {
   /** Latest current ("last") price for the symbol, or `null` if unknown. */

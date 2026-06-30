@@ -159,7 +159,7 @@ function ActionBody({
   }
 }
 
-/** Notification (Telegram-only at v2 launch) body: destination + template. */
+/** Notification (Telegram-only today) body: destination + template. */
 function NotificationBody({
   value,
   onChange,

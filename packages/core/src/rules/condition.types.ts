@@ -118,7 +118,7 @@ export type LeafCondition =
   | StateLeafCondition;
 
 /**
- * The kind of a v2 {@link ConditionNode} — its role in the condition tree.
+ * The kind of a {@link ConditionNode} — its role in the condition tree.
  *
  * The string value is the persisted/serialized tag.
  */
@@ -132,7 +132,7 @@ export enum ConditionNodeKind {
 }
 
 /**
- * One node of a v2 rule's condition tree — a leaf wrapping a
+ * One node of a rule's condition tree — a leaf wrapping a
  * {@link LeafCondition}, or a nested AND/OR group of further nodes.
  */
 export type ConditionNode =

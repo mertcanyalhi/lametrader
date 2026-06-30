@@ -35,7 +35,7 @@ export const FIELD_LABELS = {
 } as const;
 
 /**
- * The subset of a v2 {@link Rule}'s mutable fields the editor's
+ * The subset of a {@link Rule}'s mutable fields the editor's
  * top-level form binds to.
  *
  * Condition tree, trigger, scope, and actions are managed by dedicated picker
@@ -60,7 +60,7 @@ export interface RuleFormValues {
 }
 
 /**
- * Walk a v2 condition tree and return `true` when every `And` / `Or` group has
+ * Walk a condition tree and return `true` when every `And` / `Or` group has
  * at least one child (the editor lets users build an empty group, which the
  * domain rejects).
  *
@@ -92,7 +92,7 @@ export enum OperandValueKind {
 }
 
 /**
- * Resolve a v2 {@link ConditionOperand} to its {@link OperandValueKind}
+ * Resolve a {@link ConditionOperand} to its {@link OperandValueKind}
  * — the category the operator picker filters by.
  *
  * `Price` / `Open` / `High` / `Low` / `Close` / `Volume` are always numeric.
@@ -148,9 +148,9 @@ export function isBoolOperand(operand: ConditionOperand): boolean {
 
 /**
  * Yup schema for the rule editor's basic-fields form — the **user-facing**
- * validation layer. The server re-validates every write via the v2 schema
- * validator (per ADR 0016 / ADR 0011), so this is the UX layer, not the source
- * of truth.
+ * validation layer. The server re-validates every write via the domain schema
+ * validator (per ADR 0016 / ADR 0011), so this is the UX layer, not the
+ * source of truth.
  *
  * The richer per-picker concerns (operand kinds, operator families, interval
  * presence) are validated structurally by their pickers; this schema only

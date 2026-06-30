@@ -1,17 +1,16 @@
 import type { StateValue, StateValueType } from '../state.types.js';
 
 /**
- * The kind of a v2 {@link ConditionOperand} — what the operand reads from when
+ * The kind of a {@link ConditionOperand} — what the operand reads from when
  * a rule's condition is evaluated.
  *
  * The string value is the persisted/serialized tag (stable across JSON
  * round-trips).
  *
- * Ten kinds total; `Price` (the live tick price) replaces v1's `CurrentValue`
- * per the Current→Price rename (ADR 0016).
+ * Ten kinds total; `Price` is the live tick price for the firing symbol.
  */
 export enum OperandKind {
-  /** The live tick price for the firing symbol (replaces v1 `CurrentValue`). */
+  /** The live tick price for the firing symbol. */
   Price = 'price',
   /** The current bar's open value (requires the row's `interval`). */
   Open = 'open',

@@ -115,8 +115,8 @@ describe('RuleEditorDialog', () => {
           headers: { 'Content-Type': 'application/json' },
         }),
     );
-    // We want the create POST to fail with the v2 envelope so we can assert
-    // that the editor surfaces it inline.
+    // We want the create POST to fail with the `{ error, fields[] }` envelope
+    // so we can assert that the editor surfaces it inline.
     const seed = makeDraftRule({ profileId: 'p1', symbolId: 'crypto:BTCUSDT' });
     // Use a leaf to satisfy `condition-non-empty` and an action for `actions-min-one`.
     seed.condition = {

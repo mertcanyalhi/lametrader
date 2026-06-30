@@ -161,10 +161,6 @@ export async function connectServices(
   const symbols = new SymbolService(sources, watchlist, config, candleRepo, profiles, stateRepo);
   const backfill = new BackfillService(sources, candleRepo, watchlist);
   const notifier = new TelegramNotifier(telegramDestinations);
-  // The rules engine still persists to the `rules_v2` Mongo collection — see
-  // the comment on {@link MongoRuleRepository} and locked decision #2 in
-  // issue #422. The collection rename is a separate operator-controlled
-  // migration.
   const ruleRepo = new MongoRuleRepository(db, profileRepo);
   await ruleRepo.ensureIndexes();
   const eventLog = new MongoEventLog(db);

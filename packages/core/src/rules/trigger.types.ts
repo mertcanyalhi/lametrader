@@ -72,7 +72,7 @@ export interface OncePerIntervalTrigger {
 }
 
 /**
- * The trigger of a v2 {@link Rule} — a tagged union over {@link TriggerKind}.
+ * The trigger of a {@link Rule} — a tagged union over {@link TriggerKind}.
  *
  * The trigger explicitly declares its evaluation cadence (tick / bar /
  * periodic); operand axes are independent (per ADR 0016).

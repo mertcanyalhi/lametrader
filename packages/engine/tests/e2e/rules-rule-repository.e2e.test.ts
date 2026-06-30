@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe } from 'vitest';
 import { runRuleRepositoryContract } from '../../src/rules/testing/rule-repository.contract.js';
 
 /**
- * E2e: the v2 rule persistence adapter against an ephemeral Mongo
+ * E2e: the rule persistence adapter against an ephemeral Mongo
  * (Testcontainers), run through the shared
  * {@link runRuleRepositoryContract} suite (same suite the in-memory adapter
  * runs in the unit tier — one contract, both sides, per ADR 0001).
@@ -29,7 +29,7 @@ describe('rule persistence (e2e)', () => {
   });
 
   runRuleRepositoryContract(async () => {
-    await db.collection('rules_v2').deleteMany({});
+    await db.collection('rules').deleteMany({});
     await db.collection('profiles').deleteMany({});
     const profiles = new MongoProfileRepository(db);
     const repo = new MongoRuleRepository(db, profiles);

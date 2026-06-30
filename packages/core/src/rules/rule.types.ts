@@ -5,14 +5,13 @@ import type { RuleScope } from './scope.types.js';
 import type { Trigger } from './trigger.types.js';
 
 /**
- * A persisted v2 rule.
+ * A persisted rule.
  *
  * Greenfield document shape per ADR 0016: scope / trigger / condition / actions
  * plus identity (`id`, `profileId`) and lifecycle (`enabled`, `order`,
  * `expiration`, `createdAt`, `updatedAt`).
  *
- * v1's embedded `events` / `history` / `firingState` arrays are NOT carried
- * forward; the v2 event log lives behind the new `EventLog` port and trigger
+ * The event log lives behind the separate {@link EventLog} port; trigger
  * latches are owned by the trigger evaluator.
  */
 export interface Rule {

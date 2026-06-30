@@ -107,9 +107,9 @@ export const SymbolIdParamSchema = Type.Object({ id: Type.String() });
 /**
  * One known state-key for a symbol, used by `GET /symbols/:id/state-keys`.
  *
- * Sourced from the rule-event log (`StateSet` entries on `events_v2`); the
- * `valueType` is the latest observed value's variant — chart-side rendering
- * picks step-line vs marker based on it.
+ * Sourced from the rule-event log (`StateSet` entries on the watchlist
+ * document's `events` array); the `valueType` is the latest observed value's
+ * variant — chart-side rendering picks step-line vs marker based on it.
  */
 export const StateKeyDescriptorSchema = Type.Object(
   {

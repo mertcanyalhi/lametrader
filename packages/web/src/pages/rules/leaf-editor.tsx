@@ -37,8 +37,8 @@ export interface KnownStateKeys {
  * `interval` (per #396 / ADR 0016: indicator operand binding is profile-attached,
  * filtered by the row's `Interval`).
  *
- * Most v1 profile attachments have one period per instance; v2 keeps the same
- * shape but reads it explicitly through this lookup.
+ * Profile attachments have one period per instance; this lookup reads it
+ * explicitly so the row can filter the dropdown by the selected `interval`.
  */
 export type InstancePeriods = Record<string, Period | undefined>;
 

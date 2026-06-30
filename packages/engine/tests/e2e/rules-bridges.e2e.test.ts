@@ -78,7 +78,7 @@ function buildSource(candlesById: Record<string, EquityCandle[]>): InMemoryMarke
 }
 
 describe('rules bridges (e2e)', () => {
-  it('drives real PollingService + QuoteStreamService + IndicatorService + StateRepository through the v2 bridges and emits the expected EvaluationTriggerEvent stream', async () => {
+  it('drives real PollingService + QuoteStreamService + IndicatorService + StateRepository through the rules bridges and emits the expected EvaluationTriggerEvent stream', async () => {
     const emitted: EvaluationTriggerEvent[] = [];
     const sink = (event: EvaluationTriggerEvent): void => {
       emitted.push(event);

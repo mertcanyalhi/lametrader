@@ -5,7 +5,7 @@ import type { SeriesPoint, SeriesView } from './series.types.js';
 /**
  * Max number of ticks held per symbol in the in-memory ring buffer.
  *
- * Sized for the deepest lookback a v2 Crossing / Channel / Moving operator
+ * Sized for the deepest lookback a Crossing / Channel / Moving operator
  * realistically needs while still being a hard wall against runaway memory.
  * Hard-coded by design — ticks are ephemeral (lost on restart) per ADR 0016
  * pillar 4, so the cap is engine-wide not per-rule.
