@@ -209,11 +209,14 @@ describe('chart rule-event markers (e2e)', () => {
     // Let the live frames flush through the socket before assertion.
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // 5) The live socket received frames for the fire (umbrella + per-action),
+    // 5) The live socket received frames for the fire (per-action + umbrella),
     //    in append order, each tagged with the symbol id.
+    //    `ActionRunner` records each action's outcome (StateSet) before the
+    //    orchestrator appends the umbrella `Fired` entry, so the live stream
+    //    sees StateSet first, then Fired.
     expect(frames.map((frame) => ({ symbolId: frame.symbolId, type: frame.entry.type }))).toEqual([
-      { symbolId: SYMBOL_ID, type: RuleEventType.Fired },
       { symbolId: SYMBOL_ID, type: RuleEventType.StateSet },
+      { symbolId: SYMBOL_ID, type: RuleEventType.Fired },
     ]);
 
     // 6) The windowed range now reads back those entries (newest-first).
