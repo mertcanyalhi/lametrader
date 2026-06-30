@@ -19,7 +19,7 @@ import { evaluateLeaf } from '../operators/index.js';
 const log = getLogger('engine.rules.operators');
 
 /**
- * Evaluate a v2 condition tree against `context`, reducing to a boolean.
+ * Evaluate a condition tree against `context`, reducing to a boolean.
  *
  * `And` short-circuits on the first false child; `Or` short-circuits on the
  * first true child. Leaf nodes delegate to {@link evaluateLeaf} from #390.

@@ -16,7 +16,7 @@ export interface SeriesPoint {
 }
 
 /**
- * Read-only view of a series — the shape every v2 series-aware operator
+ * Read-only view of a series — the shape every series-aware operator
  * (Crossing, Channel, Moving) walks.
  *
  * Walks happen on the operand's native timeline, newest-first

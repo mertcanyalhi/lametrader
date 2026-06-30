@@ -9,7 +9,7 @@
 ## Goal
 
 Let users overlay symbol-state values onto the chart for the current `(symbolId, profileId)` — the same affordance as **Indicators**, but for state mutated by rules.
-History comes from the already-persisted rule-event log (`StateSet`/`StateRemoved` on `events_v2`); no schema change.
+History comes from the already-persisted rule-event log (`StateSet`/`StateRemoved` on the watchlist document's `events` array); no schema change.
 Live updates ride a 5 s `refetchInterval` on the events-log poll so a fresh `StateSet` in the visible window appears without a manual action.
 
 ## Domain model

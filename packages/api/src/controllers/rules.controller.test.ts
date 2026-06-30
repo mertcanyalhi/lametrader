@@ -22,7 +22,7 @@ import { createApp } from '../app.js';
 import { buildAppDeps } from '../testing/app-deps.js';
 
 /**
- * Build a v2 rule input wired to AAPL with a `Price > 100` condition + a
+ * Build a rule input wired to AAPL with a `Price > 100` condition + a
  * `SetSymbolState` action.
  */
 function buildRuleInput(

@@ -42,7 +42,7 @@ export function symbolRuleEventsCountKey(symbolId: string) {
 }
 
 /**
- * The body the v2 `POST /rules` / `PATCH /rules/:id` accept.
+ * The body `POST /rules` / `PATCH /rules/:id` accept.
  *
  * Same shape as the persisted {@link Rule} minus server-generated
  * identity / timestamps; the controller (#395) re-validates this against the
@@ -65,7 +65,7 @@ export interface RulesListFilters {
 }
 
 /**
- * List v2 rules (`GET /rules?profileId=&symbolId=&enabled=`).
+ * List rules (`GET /rules?profileId=&symbolId=&enabled=`).
  *
  * Every filter is optional and independent; the server combines them with AND.
  */
@@ -81,7 +81,7 @@ export function useRules(filters: RulesListFilters = {}): UseQueryResult<Rule[],
   });
 }
 
-/** Fetch one v2 rule by id (`GET /rules/:id`). */
+/** Fetch one rule by id (`GET /rules/:id`). */
 export function useRule(id: string): UseQueryResult<Rule, Error> {
   return useQuery({
     queryKey: ruleKey(id),
@@ -90,9 +90,9 @@ export function useRule(id: string): UseQueryResult<Rule, Error> {
 }
 
 /**
- * Create a v2 rule (`POST /rules`).
+ * Create a rule (`POST /rules`).
  *
- * Invalidates every v2-rules query on success so the list refetches.
+ * Invalidates every rules query on success so the list refetches.
  */
 export function useCreateRule(): UseMutationResult<Rule, Error, RuleInput> {
   const queryClient = useQueryClient();
@@ -112,10 +112,10 @@ export interface PatchRuleInput {
 }
 
 /**
- * Patch a v2 rule (`PATCH /rules/:id`).
+ * Patch a rule (`PATCH /rules/:id`).
  *
  * Same validation envelope as create — the controller re-validates the merged
- * result. Invalidates every v2-rules query on success.
+ * result. Invalidates every rules query on success.
  */
 export function usePatchRule(): UseMutationResult<Rule, Error, PatchRuleInput> {
   const queryClient = useQueryClient();
@@ -130,9 +130,9 @@ export function usePatchRule(): UseMutationResult<Rule, Error, PatchRuleInput> {
 }
 
 /**
- * Delete a v2 rule (`DELETE /rules/:id`).
+ * Delete a rule (`DELETE /rules/:id`).
  *
- * Invalidates every v2-rules query on success.
+ * Invalidates every rules query on success.
  */
 export function useDeleteRule(): UseMutationResult<void, Error, string> {
   const queryClient = useQueryClient();

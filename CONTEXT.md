@@ -14,14 +14,14 @@ _Avoid_: runtime type checks (the validator is the sole gate).
 Distinct from type validation. NULL values are a legitimate "no data yet" state (indicator hasn't computed its first bar; state key never set). Operators handle NULL as part of their semantics — comparison returns `false`, crossing returns `false`, state operators apply their NULL rules per #362. NULL is not a schema bug and does not blow up the engine.
 
 **v1 → present cutover** (historical):
-No migration script ran. v1's engine ran in production until the present rules engine shipped; the maintainer manually deleted v1 rules and re-created them in the new editor. The cutover issue (#397 / PR #421) retired v1 once no profile was using it. The greenfield engine shipped behind a feature flag during the build to keep its UI out of users' view; the flag was dropped at cutover.
+No migration script ran for rule documents. The previous engine ran in production until the present rules engine shipped; the maintainer manually deleted the old rules and re-created them in the new editor. The cutover issue (#397 / PR #421) retired the old engine once no profile was using it. The greenfield engine shipped behind a feature flag during the build to keep its UI out of users' view; the flag was dropped at cutover.
 
 ### Rule engine — meta
 
 **Rule engine**:
 The rule engine, schema, and UI shipped as the greenfield rebuild in #387–#397 (per ADR 0016).
 The previous engine (`condition-evaluator`, `trigger-evaluator`, `action-runner`, `live-evaluation-lookups`, the old `TriggerKind` enum, the old rule-editor UI) was retired by the cutover in PR #421.
-The follow-up cleanup in issue #422 dropped the `-v2` suffix from every code identifier, file basename, and REST route — the live engine reads as "rules" everywhere.
+Issue #422 dropped the `-v2` suffix from every code identifier, file basename, and REST route — the live engine reads as "rules" everywhere — and issue #437 removed the last persistent literals (`rules_v2` collection → `rules`, watchlist `events_v2` field → `events`) and the residual JSDoc references via an operator-controlled one-shot Mongo migration.
 
 ### Rule engine — cadence
 
@@ -42,7 +42,7 @@ Independent of which operands the rule reads.
 Conditions compose into a tree of `And` / `Or` group nodes and `Leaf` condition rows. Preserved from today. UI's "+ Add condition" appends a sibling under the current group; default root is `And`. Each leaf is one `(left, operator, right?, interval?)` row.
 
 **Rule scope**:
-A rule applies to one symbol, several explicit symbols, or every watched symbol on the parent profile. Three variants: `Symbol(symbolId)`, `Symbols(symbolIds[])`, `AllSymbols`. AllSymbols and Symbols fan the trigger out across each matching symbol independently — one fire decision per symbol per event. Operands always read from the firing symbol (no cross-symbol operand references in v2).
+A rule applies to one symbol, several explicit symbols, or every watched symbol on the parent profile. Three variants: `Symbol(symbolId)`, `Symbols(symbolIds[])`, `AllSymbols`. AllSymbols and Symbols fan the trigger out across each matching symbol independently — one fire decision per symbol per event. Operands always read from the firing symbol (cross-symbol operand references are not supported).
 
 **Action category**:
 Two top-level categories: `Notification` (channels: Telegram today, schema extensible for email / slack / webhook / in-app) and `StateMutation` (`SetSymbolState`, `SetGlobalState`, `RemoveSymbolState`, `RemoveGlobalState`). Cascade re-entry: state mutations emit cascaded state-change events that re-run the orchestrator within the same tick under the cycle guard.

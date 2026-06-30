@@ -46,9 +46,10 @@ export class MongoWatchlistRepository implements WatchlistRepository {
 }
 
 /**
- * Map a stored document to a domain {@link WatchedSymbol}. Legacy `events`
- * fields on older documents are dropped at the boundary — v2 stores rule
- * events in the `rule_events_v2` collection, not on the watchlist.
+ * Map a stored document to a domain {@link WatchedSymbol}. The watchlist
+ * document also carries an `events` array written by the rule engine's event
+ * log (see {@link MongoEventLog}); it is read by the rule-events endpoints,
+ * not by the watchlist surface, so this mapper drops it at the boundary.
  */
 function toWatchedSymbol(doc: WatchlistDocument): WatchedSymbol {
   return {

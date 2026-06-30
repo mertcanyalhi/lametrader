@@ -1,6 +1,6 @@
 /**
- * Thrown when the v2 rule engine's cascading cycle limit is exceeded within
- * one evaluation tick — preserves ADR 0012's semantics in the v2 namespace.
+ * Thrown when the rule engine's cascading cycle limit is exceeded within
+ * one evaluation tick — preserves ADR 0012's semantics.
  *
  * Caught by the orchestrator, which records a `CycleOverflow` rule event on
  * the affected symbol and halts further cascading on that tick.
@@ -17,8 +17,7 @@ export class CycleOverflowError extends Error {
 }
 
 /**
- * A per-tick counter that bounds cascading state-change re-entries — port
- * of v1's `CycleGuard` into the v2 orchestrator (ADR 0012).
+ * A per-tick counter that bounds cascading state-change re-entries (ADR 0012).
  *
  * The orchestrator calls {@link enter} once before processing each cascaded
  * event; `enter` throws once the count exceeds `limit`. Between external

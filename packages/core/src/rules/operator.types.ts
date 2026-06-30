@@ -83,7 +83,7 @@ export enum StateOperator {
 }
 
 /**
- * The union of every v2 rule-condition operator.
+ * The union of every rule-condition operator.
  *
  * Five families; the {@link LeafCondition} variant carrying the operator also
  * disambiguates the operand layout.

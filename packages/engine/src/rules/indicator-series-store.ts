@@ -37,7 +37,7 @@ export interface IndicatorWarmupRequest {
  * design.
  *
  * Holds the **full** computed series per `(instanceId, stateKey)` in append
- * order so v2 series-aware operators (Crossing, Channel, Moving) can walk
+ * order so series-aware operators (Crossing, Channel, Moving) can walk
  * backward through the indicator's timeline.
  */
 export class IndicatorSeriesStore {
@@ -200,7 +200,7 @@ function appendRow(seriesByKey: Map<string, SeriesPoint[]>, row: IndicatorStateP
 /**
  * Wrap an indicator state-field value as a {@link StateValue}.
  *
- * v2 indicator state-fields the rules engine reads are numeric today (SMA,
+ * Indicator state-fields the rules engine reads are numeric today (SMA,
  * VWMA, …); a future bool/enum field would extend this match.
  * Returns `null` for `null` (warm-up) and for shapes we don't yet project.
  */

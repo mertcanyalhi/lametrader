@@ -1,16 +1,14 @@
 import type { StateValue } from '../state.types.js';
 
 /**
- * The kind of a v2 {@link Action} — what side-effect a rule's `then` clause
+ * The kind of an {@link Action} — what side-effect a rule's `then` clause
  * performs when the rule fires.
  *
  * The string value is the persisted/serialized tag (stable across JSON
  * round-trips).
  *
- * Per ADR 0016, the v1 `NotifyTelegram` kind is folded into a single
- * `Notification` kind discriminated by `channel`; only `'telegram'` ships at
- * v2 launch.
- * State mutations carry forward from v1 with the same shapes.
+ * Per ADR 0016, every notification action shares a single `Notification` kind
+ * discriminated by `channel`; only `'telegram'` ships today.
  */
 export enum ActionKind {
   /** Send a message over a notification channel (channel discriminator). */
@@ -28,7 +26,7 @@ export enum ActionKind {
 /**
  * The channel a {@link NotificationAction} delivers through.
  *
- * Only `Telegram` ships at v2 launch.
+ * Only `Telegram` ships today.
  * Email / Slack / webhook / in-app land as new variants under the same kind.
  */
 export enum NotificationChannel {
@@ -84,7 +82,7 @@ export interface RemoveGlobalStateAction {
 }
 
 /**
- * One side-effect performed by a v2 rule's `then` clause.
+ * One side-effect performed by a rule's `then` clause.
  *
  * Tagged union over {@link ActionKind}.
  */

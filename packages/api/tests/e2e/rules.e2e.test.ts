@@ -34,7 +34,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const SYMBOL_ID = 'crypto:BTCUSDT';
 
 /**
- * Build the v2 rule input used by the happy path test.
+ * Build the rule input used by the happy path test.
  *
  * Tick-cadence `EveryTime`, Price > 100, SetSymbolState — the minimal config
  * that exercises the full chain (POST → dispatcher → ActionRunner → event log).
@@ -74,7 +74,7 @@ function buildRuleInput(
 
 /**
  * E2E for the rules REST surface — real Fastify over real Mongo via
- * testcontainers, with the v2 engine wired to a per-test composition root.
+ * testcontainers, with the rules engine wired to a per-test composition root.
  *
  * The composition root mirrors `connectServices` but skips the Binance-backed
  * default sources (`SymbolService.add` would otherwise need a real network
@@ -162,7 +162,7 @@ describe('/rules (e2e)', () => {
     expect(list.json().filter((r: { name: string }) => r.name === 'price > 100')).toEqual([]);
   });
 
-  it('round-trips a v2 rule through CRUD via REST and mirrors a tick-driven fire into both event logs', async () => {
+  it('round-trips a rule through CRUD via REST and mirrors a tick-driven fire into both event logs', async () => {
     // 1) Create.
     const ruleInput = buildRuleInput();
     const created = await app.inject({ method: 'POST', url: '/rules', payload: ruleInput });
@@ -186,7 +186,7 @@ describe('/rules (e2e)', () => {
     expect(initialCount.statusCode).toEqual(200);
     expect(initialCount.json()).toEqual({ count: 0 });
 
-    // 4) Drive a tick through the live v2 quote bridge.
+    // 4) Drive a tick through the live quote bridge.
     wired.tickBridge.handleQuote({
       id: SYMBOL_ID,
       subscriptionId: 'sub-1',

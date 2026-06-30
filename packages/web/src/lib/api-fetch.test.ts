@@ -123,7 +123,7 @@ describe('apiFetch', () => {
     });
   });
 
-  it('surfaces the v2 { error, fields[] } envelope on a 400 with one entry per failed path', async () => {
+  it('surfaces the { error, fields[] } envelope on a 400 with one entry per failed path', async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
@@ -153,7 +153,7 @@ describe('apiFetch', () => {
     });
   });
 
-  it('leaves fields undefined when the response body lacks the v2 envelope', async () => {
+  it('leaves fields undefined when the response body lacks the { error, fields[] } envelope', async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response(JSON.stringify({ error: 'periods must not be empty' }), {
         status: 400,

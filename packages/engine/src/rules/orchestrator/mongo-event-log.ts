@@ -20,17 +20,12 @@ interface RuleDocWithEvents {
 /**
  * Stored shape of a `watchlist` document with its embedded rule-events
  * array.
- *
- * The field is named `events_v2` for historical reasons (the rules engine
- * landed in PR #421 alongside the legacy v1 events array on the same
- * document). The literal stays to avoid a data migration — see issue #422
- * locked decision #2.
  */
 interface SymbolDocWithEvents {
   /** Canonical symbol id. */
   _id: string;
   /** Embedded rule-engine events in append order. */
-  events_v2?: RuleEventEntry[];
+  events?: RuleEventEntry[];
 }
 
 /**
@@ -38,15 +33,9 @@ interface SymbolDocWithEvents {
  *
  * Stores rule-engine events as `$push`-appended entries on:
  *
- * - The matching `rules_v2.{ruleId}` document's `events` array (rule events).
- * - The matching `watchlist.{symbolId}` document's `events_v2` array (symbol
+ * - The matching `rules.{ruleId}` document's `events` array (rule events).
+ * - The matching `watchlist.{symbolId}` document's `events` array (symbol
  *   events).
- *
- * The Mongo collection name (`rules_v2`) and the watchlist field
- * (`events_v2`) both retain their historical `_v2` suffix; renaming would
- * need an operator-controlled data migration (issue #422 locked decision
- * #2). All API/CLI/web call-sites surface the engine as "rules" without
- * the suffix.
  *
  * The two-write fan-out (rule + symbol) is not atomic — an interleaved
  * failure may leave one side missing an entry. Acceptable for an events log
@@ -71,16 +60,15 @@ export class MongoEventLog implements EventLog {
   }
 
   /**
-   * The typed rules collection. Literal name remains `rules_v2` per issue
-   * #422 locked decision #2.
+   * The typed rules collection.
    */
   private get rules(): Collection<RuleDocWithEvents> {
-    return this.db.collection<RuleDocWithEvents>('rules_v2');
+    return this.db.collection<RuleDocWithEvents>('rules');
   }
 
   /**
    * The typed `watchlist` collection. Symbol-side rule events live on the
-   * `events_v2` field for back-compat (see class JSDoc).
+   * `events` field.
    */
   private get watchlist(): Collection<SymbolDocWithEvents> {
     return this.db.collection<SymbolDocWithEvents>('watchlist');
@@ -96,7 +84,7 @@ export class MongoEventLog implements EventLog {
     const stamped = this.stamp(entry);
     await this.watchlist.updateOne(
       { _id: symbolId },
-      { $push: { events_v2: stamped } },
+      { $push: { events: stamped } },
       { upsert: true },
     );
     this.emit(stamped, { kind: 'symbol', symbolId });
@@ -108,13 +96,13 @@ export class MongoEventLog implements EventLog {
   }
 
   async symbolEvents(symbolId: string): Promise<RuleEventEntry[]> {
-    const doc = await this.watchlist.findOne({ _id: symbolId }, { projection: { events_v2: 1 } });
-    return doc?.events_v2 ?? [];
+    const doc = await this.watchlist.findOne({ _id: symbolId }, { projection: { events: 1 } });
+    return doc?.events ?? [];
   }
 
   async countSymbolEvents(symbolId: string): Promise<number> {
-    const doc = await this.watchlist.findOne({ _id: symbolId }, { projection: { events_v2: 1 } });
-    return doc?.events_v2?.length ?? 0;
+    const doc = await this.watchlist.findOne({ _id: symbolId }, { projection: { events: 1 } });
+    return doc?.events?.length ?? 0;
   }
 
   onAppend(listener: EventLogAppendListener): () => void {

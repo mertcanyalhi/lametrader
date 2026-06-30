@@ -21,18 +21,18 @@ export type EventLogAppendTarget =
 export type EventLogAppendListener = (entry: RuleEventEntry, target: EventLogAppendTarget) => void;
 
 /**
- * Driven port for the v2 rule-engine's events log — appends each entry to
- * BOTH the rule's array and the affected symbol's array.
+ * Driven port for the rule-engine's events log — appends each entry to BOTH
+ * the rule's array and the affected symbol's array.
  *
- * Mirrors v1's `EventLog` port but lives in the `types` re-exported at the @lametrader/core package root and
- * carries the v2 {@link RuleEventEntry} tagged union (per ADR 0016).
+ * Re-exported at the `@lametrader/core` package root; carries the
+ * {@link RuleEventEntry} tagged union (per ADR 0016).
  *
  * The two-write fan-out is not atomic — an interleaved failure may leave one
  * side missing an entry. Acceptable for an events log (occasional gaps don't
  * change correctness).
  *
- * Implemented by driven adapters (MongoDB in #394 and an in-memory adapter
- * that backs the unit tier).
+ * Implemented by driven adapters (MongoDB in `MongoEventLog` and an
+ * in-memory adapter that backs the unit tier).
  */
 export interface EventLog {
   /**

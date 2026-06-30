@@ -1,7 +1,7 @@
 /**
  * Cascade-port subset {@link ProfileService.remove} needs from any rule
  * repository — just the bulk-remove-by-profile call. Co-located here so
- * `ProfileService` doesn't depend on either v1 or v2's full repository surface.
+ * `ProfileService` doesn't depend on the full repository surface.
  */
 export interface ProfileCascadeRules {
   /**
@@ -18,8 +18,7 @@ export interface ProfileCascadeRules {
  *
  * `newId` and `now` default for production (nanoid / `Date.now`) and are
  * overridable in tests. `rules` is optional — when present, deleting a profile
- * also removes every rule belonging to it. (Per ADR 0016, the cascade now
- * targets the v2 rule repository.)
+ * also removes every rule belonging to it (per ADR 0016).
  */
 export interface ProfileServiceOptions {
   /** Generate a new profile id; defaults to nanoid. */

@@ -24,8 +24,8 @@ function readBundles(): string {
 }
 
 /**
- * E2E for the rules UI bundle post-cutover: running `vite build` produces a
- * deployable artifact whose bundles carry the rule editor's marker copy.
+ * E2E for the rules UI bundle: running `vite build` produces a deployable
+ * artifact whose bundles carry the rule editor's marker copy.
  *
  * The four reference shapes (Ex.1–Ex.4 from #396) are exercised via JSDOM
  * unit tests; this e2e only asserts the bundle actually ships.
@@ -56,8 +56,8 @@ describe('rules web UI bundle (e2e)', () => {
   });
 
   it("emits a bundle carrying the operand-kind label 'Price' (the rename target)", () => {
-    // 'Price' replaces v1's 'Current' end-to-end per ADR 0016. The label is
-    // the operand-picker dropdown copy.
+    // 'Price' is the operand-picker dropdown label for the live tick price
+    // per ADR 0016.
     const bundles = readBundles();
     expect(bundles.includes('Price')).toEqual(true);
   });

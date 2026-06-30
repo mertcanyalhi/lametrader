@@ -6,14 +6,13 @@ import { afterAll, afterEach, beforeAll, describe } from 'vitest';
 import { FIXED_FIRED_AT, runEventLogContract } from '../../src/rules/testing/event-log.contract.js';
 
 /**
- * E2e: the v2 event log adapter against an ephemeral Mongo (Testcontainers),
+ * E2e: the rule event-log adapter against an ephemeral Mongo (Testcontainers),
  * run through the shared {@link runEventLogContract} suite (same suite the
  * in-memory adapter runs in the unit tier).
  *
- * The Mongo adapter writes rule events to `rules_v2.{ruleId}.events` and
- * symbol events to `watchlist.{symbolId}.events_v2` — both append-on-upsert
- * so the contract's "unknown id returns []" tests pass without pre-seeding
- * documents.
+ * The Mongo adapter writes rule events to `rules.{ruleId}.events` and symbol
+ * events to `watchlist.{symbolId}.events` — both append-on-upsert so the
+ * contract's "unknown id returns []" tests pass without pre-seeding documents.
  */
 describe('rules event log (e2e)', () => {
   let container: StartedMongoDBContainer;
@@ -33,12 +32,12 @@ describe('rules event log (e2e)', () => {
   });
 
   afterEach(async () => {
-    await db.collection('rules_v2').deleteMany({});
+    await db.collection('rules').deleteMany({});
     await db.collection('watchlist').deleteMany({});
   });
 
   runEventLogContract(async () => {
-    await db.collection('rules_v2').deleteMany({});
+    await db.collection('rules').deleteMany({});
     await db.collection('watchlist').deleteMany({});
     const log = new MongoEventLog(db, () => FIXED_FIRED_AT);
     return { log };

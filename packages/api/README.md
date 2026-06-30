@@ -387,7 +387,7 @@ curl http://localhost:3000/profiles/p1/state/global
 
 ### State history (chart overlays — issue #434)
 
-Chart-side "States" overlays consume two read-only routes that reconstruct a per-symbol state-key catalog and a per-key time-series from the already-persisted rule-event log (`StateSet` / `StateRemoved` entries on `events_v2`).
+Chart-side "States" overlays consume two read-only routes that reconstruct a per-symbol state-key catalog and a per-key time-series from the already-persisted rule-event log (`StateSet` / `StateRemoved` entries on the watchlist document's `events` array).
 Both routes are watchlist-scoped (404 on an unknown symbol id).
 Neither is partitioned by profile today — `RuleEventEntry` carries no `profileId`, so every key persisted against the symbol is returned regardless of which profile's rule wrote it.
 

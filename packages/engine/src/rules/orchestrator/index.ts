@@ -3,8 +3,8 @@
  *
  * Composes the dispatcher (#391) + bridges (#392) + condition operators
  * (#390) + series store (#389) + core types (#388) into an end-to-end engine
- * on top of the standalone {@link EventLog} port (the v2 rule doc
- * no longer carries an embedded `events[]` array).
+ * on top of the standalone {@link EventLog} port (rule documents do not
+ * carry an embedded `events[]` array).
  */
 
 export { ActionRunner } from './action-runner.js';

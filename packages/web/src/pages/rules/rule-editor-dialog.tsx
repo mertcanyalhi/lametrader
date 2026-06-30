@@ -38,12 +38,12 @@ import { ScopePicker } from './scope-picker.js';
 import { TRIGGER_KIND_EXPLANATIONS, TRIGGER_KIND_LABELS, TriggerPicker } from './trigger-picker.js';
 
 /**
- * The v2 rule editor `Dialog`.
+ * The rule editor `Dialog`.
  *
  * Owns the modal frame, the create/edit mode toggle, the save/cancel wiring,
  * and the per-section forms (basic fields, scope, trigger, condition tree,
  * actions). Validated via Yup per `packages/web/CLAUDE.md` (the API re-validates
- * on save via the v2 schema validator).
+ * on save via the domain schema validator).
  *
  * @param open         - Controlled open state.
  * @param onOpenChange - Controlled-open callback; closes on Cancel / save success.
@@ -86,8 +86,8 @@ export function RuleEditorDialog({
   };
 
   // Lazy: assume each instance is computed at the symbol's first watched
-  // period; the v1 IndicatorInstance shape doesn't carry the explicit period,
-  // and the v2 indicator-binding contract narrows by `Interval` on the row.
+  // period; the IndicatorInstance shape doesn't carry the explicit period,
+  // and the indicator-binding contract narrows by `Interval` on the row.
   const instancePeriods: InstancePeriods = computeInstancePeriods(
     indicators,
     watchedSymbols.flatMap((symbol) => symbol.periods),
@@ -154,9 +154,9 @@ export function RuleEditorDialog({
         <Dialog.Title>{title}</Dialog.Title>
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
           <Flex direction="column" gap="3" mt="3">
-            <FieldRow label={FIELD_LABELS.name} htmlFor="rule-v2-name">
+            <FieldRow label={FIELD_LABELS.name} htmlFor="rule-name">
               <TextField.Root
-                id="rule-v2-name"
+                id="rule-name"
                 aria-label={FIELD_LABELS.name}
                 aria-invalid={nameError ? true : undefined}
                 autoFocus
@@ -168,9 +168,9 @@ export function RuleEditorDialog({
                 </Text>
               ) : null}
             </FieldRow>
-            <FieldRow label={FIELD_LABELS.description} htmlFor="rule-v2-description" align="start">
+            <FieldRow label={FIELD_LABELS.description} htmlFor="rule-description" align="start">
               <TextArea
-                id="rule-v2-description"
+                id="rule-description"
                 aria-label={FIELD_LABELS.description}
                 {...register('description')}
               />
@@ -243,9 +243,9 @@ export function RuleEditorDialog({
               ) : null}
             </FieldRow>
             <Separator size="4" my="1" />
-            <FieldRow label={FIELD_LABELS.enabled} htmlFor="rule-v2-enabled">
+            <FieldRow label={FIELD_LABELS.enabled} htmlFor="rule-enabled">
               <Switch
-                id="rule-v2-enabled"
+                id="rule-enabled"
                 checked={enabled}
                 onCheckedChange={(next) =>
                   setValue('enabled', next === true, { shouldDirty: true, shouldValidate: false })
@@ -447,7 +447,7 @@ function defaultValuesFor(initial: Rule): RuleFormValues {
 /**
  * Patch the form's basic-field changes onto the initial rule (preserving
  * `order` + `expiration` which the editor doesn't bind), strip the
- * persistence-only fields, and return a {@link RuleInput} body the v2 API
+ * persistence-only fields, and return a {@link RuleInput} body the API
  * accepts for both create + patch.
  */
 function mergeInput(initial: Rule, values: RuleFormValues): RuleInput {
@@ -468,7 +468,7 @@ function mergeInput(initial: Rule, values: RuleFormValues): RuleInput {
  * Map a dotted body path (e.g. `'scope.symbolId'`) to its top-level form key.
  *
  * The editor surfaces field errors by the section they belong to (scope,
- * trigger, condition, actions) rather than at every leaf path; the v2 fields
+ * trigger, condition, actions) rather than at every leaf path; the fields
  * envelope reports the full path, so we collapse to the section root here.
  */
 function topLevelKey(path: string): string {
@@ -481,9 +481,9 @@ function topLevelKey(path: string): string {
  * Best-effort lookup of which {@link Period} each indicator instance is
  * computed at — used to filter the row's indicator dropdown by `Interval`.
  *
- * The v1 `IndicatorInstance` shape doesn't carry the period; we default to the
- * first watched period across all symbols as a sensible heuristic. When the
- * future v2 attach API stamps the period on the instance directly, swap this
+ * The `IndicatorInstance` shape doesn't carry the period; we default to the
+ * first watched period across all symbols as a sensible heuristic. When a
+ * future attach API stamps the period on the instance directly, swap this
  * for a direct read.
  */
 function computeInstancePeriods(

@@ -62,7 +62,7 @@ function isVisible(
 }
 
 /**
- * The shared management table for v2 rules.
+ * The shared management table for rules.
  *
  * Renders one row per rule with six columns:
  *

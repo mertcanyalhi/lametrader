@@ -28,7 +28,7 @@ import {
 } from './leaf-editor.js';
 
 /**
- * The recursive v2 condition-tree editor — walks a {@link ConditionNode}
+ * The recursive condition-tree editor — walks a {@link ConditionNode}
  * and renders the group / leaf affordances:
  *
  * - Every `And` / `Or` group shows an AND ↔ OR toggle, a `+ Leaf` / `+ Group`

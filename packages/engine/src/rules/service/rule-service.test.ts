@@ -25,7 +25,7 @@ import { RuleService } from './rule-service.js';
 /**
  * Build a tick-cadence `EveryTime` `Price > 100` rule with a single
  * `SetSymbolState` action, fully populated. Tests override only what they
- * exercise so the rest of the payload mirrors a realistic v2 rule.
+ * exercise so the rest of the payload mirrors a realistic rule.
  */
 function buildRule(overrides: Partial<Rule> = {}): Omit<Rule, 'id' | 'createdAt' | 'updatedAt'> {
   return {

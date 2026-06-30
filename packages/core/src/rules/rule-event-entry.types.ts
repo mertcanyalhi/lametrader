@@ -2,20 +2,18 @@ import type { StateScope, StateValue } from '../index.js';
 import type { EvaluationTriggerEvent } from './event.types.js';
 
 /**
- * The kind of a v2 {@link RuleEventEntry} — what happened on the engine that
+ * The kind of a {@link RuleEventEntry} — what happened on the engine that
  * was recorded against a rule + symbol.
  *
  * The string value is the persisted/serialized tag (stable across JSON
  * round-trips).
  *
- * v1's `RuleEventType` carries identical-looking variants but lives on the
- * embedded `Rule.events[]` array; v2 routes through a standalone
- * {@link EventLog} port so the union sits in the `types` re-exported at the @lametrader/core package root
- * (per ADR 0016).
+ * The union is routed through the standalone {@link EventLog} port (per
+ * ADR 0016) and re-exported at the `@lametrader/core` package root.
  *
- * `Expired` is not part of the v2 vocabulary: the dispatcher's
- * `listEnabledForSymbol` already drops expired rules at the lookup boundary,
- * so the orchestrator never needs to emit one.
+ * There is no `Expired` variant: the dispatcher's `listEnabledForSymbol`
+ * already drops expired rules at the lookup boundary, so the orchestrator
+ * never needs to emit one.
  */
 export enum RuleEventType {
   /** The rule fired its actions on a given symbol at a given timestamp. */
@@ -156,7 +154,7 @@ export interface CycleOverflowRuleEvent extends BaseRuleEventEntry {
 }
 
 /**
- * One entry on the v2 events log — emitted by the orchestrator + action
+ * One entry on the events log — emitted by the orchestrator + action
  * runner and appended to both the rule's and the affected symbol's log.
  *
  * Tagged union over {@link RuleEventType}.

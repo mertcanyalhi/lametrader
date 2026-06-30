@@ -32,8 +32,8 @@ import type { EvaluationLookups } from '../wire/live-evaluation-lookups.types.js
 const log = getLogger('engine.rules.actions');
 
 /**
- * The subset of v2 {@link Action}s that mutate state — the input
- * shape {@link ActionRunner.runStateAction} consumes.
+ * The subset of {@link Action}s that mutate state — the input shape
+ * {@link ActionRunner.runStateAction} consumes.
  */
 type StateMutationAction =
   | SetSymbolStateAction
@@ -42,7 +42,7 @@ type StateMutationAction =
   | RemoveGlobalStateAction;
 
 /**
- * Application use-case that executes every action on one firing v2 rule and
+ * Application use-case that executes every action on one firing rule and
  * returns the rule-event entries to commit.
  *
  * Per-action mutations (state writes, notifier sends) happen as side effects
@@ -50,7 +50,7 @@ type StateMutationAction =
  * the returned list as one batch so "events emitted by one fire" have one
  * source of truth.
  *
- * Each per-action entry mirrors v1's vocabulary:
+ * Each per-action entry maps as:
  *   - `SetSymbolState` / `SetGlobalState`         → `StateSet` entry
  *   - `RemoveSymbolState` / `RemoveGlobalState`   → `StateRemoved` entry
  *   - `Notification` (telegram, success)          → `NotificationSent` entry
@@ -178,8 +178,8 @@ export class ActionRunner {
    * `NotificationSent` entry on success or an `Error` entry on template /
    * destination / transport failure.
    *
-   * Only the telegram channel ships at v2 launch (per ADR 0016 / #393); new
-   * channels add new payload shapes under the same `Notification` kind.
+   * Only the telegram channel ships today (per ADR 0016 / #393); new channels
+   * add new payload shapes under the same `Notification` kind.
    */
   private async runNotificationAction(
     action: NotificationAction,

@@ -1,14 +1,12 @@
 import type { Rule } from './rule.types.js';
 
 /**
- * Driven port for persisting v2 {@link Rule}s, keyed by id.
+ * Driven port for persisting {@link Rule}s, keyed by id.
  *
- * Mirrors v1's `RuleRepository` CRUD + `listEnabledForSymbol` surface but
- * lives in the `types` re-exported at the @lametrader/core package root so the two engines coexist behind the
- * feature flag without symbol collisions (per ADR 0016).
+ * Re-exported at the `@lametrader/core` package root.
  *
- * Implemented by driven adapters (MongoDB in #394) and a fake in-memory
- * adapter that backs the unit tier.
+ * Implemented by driven adapters (`MongoRuleRepository`) and a fake
+ * in-memory adapter that backs the unit tier (per ADR 0016).
  */
 export interface RuleRepository {
   /** Every persisted rule, in arbitrary order. */
@@ -16,10 +14,10 @@ export interface RuleRepository {
   /**
    * Rules whose scope admits `symbolId`.
    *
-   * `null` is reserved for symbol-less events (a `Timer` in v1's vocabulary);
-   * v2 dispatcher only reads per-symbol candidates and the orchestrator
-   * (#393) owns the AllSymbols fan-out, so a `null` symbol returns only
-   * `AllSymbols`-scoped rules.
+   * `null` is reserved for symbol-less events (a wall-clock `Timer`); the
+   * dispatcher only reads per-symbol candidates and the orchestrator owns
+   * the AllSymbols fan-out, so a `null` symbol returns only `AllSymbols`-
+   * scoped rules.
    *
    * `Symbol(s)` is matched if `s === symbolId`; `Symbols([..])` is matched
    * if the list includes `symbolId`; `AllSymbols` always matches.

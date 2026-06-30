@@ -3,7 +3,7 @@ import type { ConditionOperand, StateValue } from '@lametrader/core';
 import type { SeriesView } from './series.types.js';
 
 /**
- * The per-evaluation context every v2 operator consumes.
+ * The per-evaluation context every operator consumes.
  *
  * Built fresh for each inbound `EvaluationTriggerEvent` by the
  * orchestrator (later slice — #392); operators only see this interface.
@@ -16,7 +16,7 @@ import type { SeriesView } from './series.types.js';
  *   Moving for backward walks + right-operand resampling per ADR 0016).
  */
 export interface EvaluationContext {
-  /** The firing symbol for this evaluation (always present in v2). */
+  /** The firing symbol for this evaluation (always present). */
   readonly symbolId: string;
   /**
    * Current value for the operand, or `null` when the backing store has no
@@ -46,7 +46,7 @@ export interface EvaluationContext {
    *   over the configured window.
    * - `IndicatorRef` → the indicator-instance series for the bound state-key.
    * - `SymbolStateRef` / `GlobalStateRef` → a single-point series at the
-   *   current value (state stores aren't time-indexed in v2; per ADR 0016
+   *   current value (state stores aren't time-indexed; per ADR 0016
    *   series-aware operators target tick / bar / indicator axes).
    * - `Literal` → a single stationary point (Literals are time-invariant).
    *

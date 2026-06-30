@@ -69,7 +69,7 @@ export interface TimerEvent {
 /**
  * One key in a specific symbol's state mutated.
  * Cascade trigger: a state mutation re-runs the orchestrator within the same
- * tick under the cycle guard (per ADR 0012, preserved in v2).
+ * tick under the cycle guard (per ADR 0012).
  */
 export interface SymbolStateChangedEvent {
   kind: EvaluationTriggerKind.SymbolStateChanged;

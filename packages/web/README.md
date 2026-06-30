@@ -42,7 +42,7 @@ Live updates land in a follow-up issue.
 
 ### `/rules` — Rules
 
-The v2 rule editor (sole rules surface post-cutover per ADR 0016): a profile-scoped list of rules with full CRUD.
+The rule editor (sole rules surface per ADR 0016): a profile-scoped list of rules with full CRUD.
 The bottom-bar profile picker is the same `ProfilePickerDialog` as the chart, so the active profile and its persistence are shared.
 The list body only mounts once a profile is selected, keeping `useRules({ profileId })` cleanly conditional.
 
