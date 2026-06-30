@@ -1,5 +1,8 @@
 import {
   Period,
+  type RuleEventEntry,
+  RuleEventType,
+  StateScope,
   type StateValue,
   StateValueType,
   SymbolType,
@@ -10,8 +13,10 @@ import {
   ConfigService,
   InMemoryCandleRepository,
   InMemoryConfigRepository,
+  InMemoryEventLog,
   InMemoryMarketDataSource,
   InMemoryStateRepository,
+  StateHistoryService,
   SymbolService,
 } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
@@ -294,5 +299,191 @@ describe('GET /symbols/:id/state', () => {
       url: '/symbols/crypto:BTCUSDT/state',
     });
     expect(res.statusCode).toBe(400);
+  });
+});
+
+/**
+ * Build a `StateSet` rule event with sensible defaults so each state-history
+ * seed reads declaratively.
+ */
+function stateSetEntry(args: {
+  ruleId: string;
+  symbolId: string;
+  ts: number;
+  key: string;
+  value: StateValue;
+}): RuleEventEntry {
+  return {
+    type: RuleEventType.StateSet,
+    ruleId: args.ruleId,
+    symbolId: args.symbolId,
+    ts: args.ts,
+    scope: StateScope.Symbol,
+    key: args.key,
+    value: args.value,
+  };
+}
+
+/**
+ * Build a `StateRemoved` rule event, same convenience as `stateSetEntry`.
+ */
+function stateRemovedEntry(args: {
+  ruleId: string;
+  symbolId: string;
+  ts: number;
+  key: string;
+}): RuleEventEntry {
+  return {
+    type: RuleEventType.StateRemoved,
+    ruleId: args.ruleId,
+    symbolId: args.symbolId,
+    ts: args.ts,
+    scope: StateScope.Symbol,
+    key: args.key,
+  };
+}
+
+/**
+ * Build an app wired with a `StateHistoryService` over an `InMemoryEventLog`
+ * pre-seeded with the supplied entries.
+ *
+ * BTC is added to the watchlist so 200 vs 404 paths are exercised; other ids
+ * surface as 404 via {@link SymbolService.assertWatched}.
+ */
+function buildAppWithStateHistory(entries: ReadonlyArray<RuleEventEntry> = []) {
+  const items = new Map<string, WatchedSymbol>([
+    ['crypto:BTCUSDT', { ...BTC, periods: [Period.OneHour, Period.OneDay] }],
+  ]);
+  const watchlist: WatchlistRepository = {
+    list: async () => [...items.values()],
+    get: async (id) => items.get(id) ?? null,
+    add: async (symbol) => void items.set(symbol.id, symbol),
+    remove: async (id) => void items.delete(id),
+  };
+  const config = new ConfigService(new InMemoryConfigRepository());
+  const symbols = new SymbolService(
+    [new InMemoryMarketDataSource([BTC])],
+    watchlist,
+    config,
+    new InMemoryCandleRepository(),
+  );
+  const eventLog = new InMemoryEventLog(() => 1_000);
+  for (const entry of entries) {
+    void eventLog.appendSymbolEvent(entry.symbolId, entry);
+  }
+  const stateHistory = new StateHistoryService(eventLog);
+  return createApp(buildAppDeps({ config, symbols, stateHistory }));
+}
+
+describe('GET /symbols/:id/state-keys', () => {
+  it('returns the alphabetical (key, valueType) catalog for a watched symbol (200)', async () => {
+    const symbolId = 'crypto:BTCUSDT';
+    const app = buildAppWithStateHistory([
+      stateSetEntry({
+        ruleId: 'rule-a',
+        symbolId,
+        ts: 1,
+        key: 'last_signal',
+        value: { type: StateValueType.String, value: 'buy' },
+      }),
+      stateSetEntry({
+        ruleId: 'rule-b',
+        symbolId,
+        ts: 2,
+        key: 'cooldown',
+        value: { type: StateValueType.Number, value: 5 },
+      }),
+    ]);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/symbols/crypto:BTCUSDT/state-keys',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([
+      { key: 'cooldown', valueType: 'number' },
+      { key: 'last_signal', valueType: 'string' },
+    ]);
+  });
+
+  it('returns 404 when the symbol is not on the watchlist', async () => {
+    const res = await buildAppWithStateHistory().inject({
+      method: 'GET',
+      url: '/symbols/crypto:NOPEUSDT/state-keys',
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('GET /symbols/:id/state/:key/series', () => {
+  it('returns the StateSet/StateRemoved series ascending by ts for a watched symbol (200)', async () => {
+    const symbolId = 'crypto:BTCUSDT';
+    const app = buildAppWithStateHistory([
+      stateSetEntry({
+        ruleId: 'rule-a',
+        symbolId,
+        ts: 1,
+        key: 'last_signal',
+        value: { type: StateValueType.String, value: 'buy' },
+      }),
+      stateSetEntry({
+        ruleId: 'rule-a',
+        symbolId,
+        ts: 2,
+        key: 'last_signal',
+        value: { type: StateValueType.String, value: 'sell' },
+      }),
+      stateRemovedEntry({ ruleId: 'rule-a', symbolId, ts: 3, key: 'last_signal' }),
+    ]);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/symbols/crypto:BTCUSDT/state/last_signal/series',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([
+      { ts: 1, value: { type: 'string', value: 'buy' } },
+      { ts: 2, value: { type: 'string', value: 'sell' } },
+      { ts: 3, value: null },
+    ]);
+  });
+
+  it('honors `from` / `to` query params (epoch ms)', async () => {
+    const symbolId = 'crypto:BTCUSDT';
+    const app = buildAppWithStateHistory([
+      stateSetEntry({
+        ruleId: 'rule-a',
+        symbolId,
+        ts: 1,
+        key: 'count',
+        value: { type: StateValueType.Number, value: 1 },
+      }),
+      stateSetEntry({
+        ruleId: 'rule-a',
+        symbolId,
+        ts: 5,
+        key: 'count',
+        value: { type: StateValueType.Number, value: 2 },
+      }),
+      stateSetEntry({
+        ruleId: 'rule-a',
+        symbolId,
+        ts: 9,
+        key: 'count',
+        value: { type: StateValueType.Number, value: 3 },
+      }),
+    ]);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/symbols/crypto:BTCUSDT/state/count/series?from=5&to=9',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([{ ts: 5, value: { type: 'number', value: 2 } }]);
+  });
+
+  it('returns 404 when the symbol is not on the watchlist', async () => {
+    const res = await buildAppWithStateHistory().inject({
+      method: 'GET',
+      url: '/symbols/crypto:NOPEUSDT/state/any/series',
+    });
+    expect(res.statusCode).toBe(404);
   });
 });

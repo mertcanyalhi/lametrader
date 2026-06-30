@@ -105,6 +105,18 @@ export class SymbolService {
   }
 
   /**
+   * Get one watched symbol by id, or `null` when it's not on the watchlist.
+   *
+   * Thin pass-through over {@link WatchlistRepository.get}, exposed so the
+   * API layer can do a watchlist-membership check without reaching for the
+   * (heavier) full state-map read or having to know about the repository
+   * port directly.
+   */
+  async get(id: string): Promise<WatchedSymbol | null> {
+    return await this.watchlist.get(id);
+  }
+
+  /**
    * List the watched symbols, each enriched with a {@link SymbolQuote} computed
    * from its latest two candles on the config's `defaultPeriod` (strictly — no
    * fallback). `quote` is `null` when the symbol does not watch `defaultPeriod`

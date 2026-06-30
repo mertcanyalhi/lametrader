@@ -1,4 +1,5 @@
 import type {
+  EventLog,
   IndicatorStateListener,
   Period,
   StateRepository,
@@ -25,6 +26,7 @@ import { MongoEventLog } from './rules/orchestrator/mongo-event-log.js';
 import { RuleService } from './rules/service/rule-service.js';
 import { type WiredRuleEngine, wireRuleEngine } from './rules/wire/wire-rule-engine.js';
 import { MongoStateRepository } from './state/mongo-state-repository.js';
+import { StateHistoryService } from './state/state-history-service.js';
 import { defaultMarketDataSources } from './symbols/default-sources.js';
 import { MongoWatchlistRepository } from './symbols/mongo-watchlist-repository.js';
 import { QuoteStreamService } from './symbols/quote-stream-service.js';
@@ -82,6 +84,22 @@ export interface ConnectedServices {
   quoteStream: QuoteStreamService;
   /** The rule-engine state store (read-side; the engine's writes flow through the orchestrator). */
   state: StateRepository;
+  /**
+   * The shared mirrored rule-event log.
+   *
+   * Exposed so end-to-end tests can append events through the same surface
+   * the engine writes to; routine code should read via {@link rules}'
+   * paginated `listEvents` / `listSymbolEvents` instead.
+   */
+  eventLog: EventLog;
+  /**
+   * The state-history use-case (chart state overlays per issue #434).
+   *
+   * Reads `StateSet` / `StateRemoved` entries off the shared {@link MongoEventLog}
+   * — no separate persistence — and exposes them as a per-symbol catalog
+   * plus a time-series per key.
+   */
+  stateHistory: StateHistoryService;
   /**
    * The composed rule engine — orchestrator + dispatcher + bridges + sync
    * lookups mirror. The polling loop and stream services dispatch into the
@@ -171,6 +189,7 @@ export async function connectServices(
     indicatorStore,
   });
   const rules = new RuleService(ruleRepo, eventLog, watchlist);
+  const stateHistory = new StateHistoryService(eventLog);
   const quoteStream = new QuoteStreamService(watchlist, config, candleRepo, {
     onQuote: (event) => {
       (options.onSymbolQuote ?? (() => {}))(event);
@@ -209,6 +228,8 @@ export async function connectServices(
     indicatorService,
     quoteStream,
     state: stateRepo,
+    eventLog,
+    stateHistory,
     wiredRuleEngine,
     telegramDestinations,
     backfill,

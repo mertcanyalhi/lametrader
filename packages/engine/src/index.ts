@@ -124,6 +124,12 @@ export { loadSettings } from './settings.js';
 export type { LogLevel, Settings, TelegramDestination } from './settings.types.js';
 export { InMemoryStateRepository } from './state/in-memory-state-repository.js';
 export { MongoStateRepository } from './state/mongo-state-repository.js';
+export { StateHistoryService } from './state/state-history-service.js';
+export type {
+  StateHistoryEntry,
+  StateHistoryWindow,
+  StateKeyDescriptor,
+} from './state/state-history-service.types.js';
 export { BinanceMarketDataSource } from './symbols/binance-market-data-source.js';
 export { defaultMarketDataSources } from './symbols/default-sources.js';
 export {

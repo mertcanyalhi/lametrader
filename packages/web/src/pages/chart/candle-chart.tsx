@@ -10,6 +10,7 @@ import {
   type Period,
   type Profile,
   RenderKind,
+  StateValueType,
 } from '@lametrader/core';
 import {
   type CandlestickData,
@@ -24,6 +25,7 @@ import {
   type ISeriesMarkersPluginApi,
   type LineData,
   LineSeries,
+  LineType,
   type LogicalRange,
   type MouseEventParams,
   type SeriesMarker,
@@ -51,6 +53,11 @@ import type { ChartRange } from './chart-range.js';
 import { rangeMillis } from './chart-range.js';
 import { type ChartColors, chartColors, showsVolume } from './chart-series.js';
 import type { LegendOverlay } from './indicators/indicator-legend.js';
+import {
+  type StateOverlay,
+  stateOverlayToLineData,
+  stateOverlayToMarkers,
+} from './states/state-overlay.js';
 
 /** No-op callback used when no `onToggleLegendVisible` is passed (read-only legend). */
 const noop = (): void => {};
@@ -133,6 +140,7 @@ export function CandleChart({
   loadOlder,
   hasMore,
   overlays = [],
+  stateOverlays = [],
   legendOverlays = [],
   onToggleLegendVisible,
   legendProfile = null,
@@ -144,6 +152,12 @@ export function CandleChart({
   loadOlder: () => void;
   hasMore: boolean;
   overlays?: ReadonlyArray<IndicatorOverlay>;
+  /**
+   * One row per state key currently selected on the chart's States panel —
+   * rendered as a step-line (numeric) or markers (bool/string/enum) on the
+   * candle pane.
+   */
+  stateOverlays?: ReadonlyArray<StateOverlay>;
   /** One row per applicable indicator instance, rendered in the top-left overlay column. */
   legendOverlays?: LegendOverlay[];
   /** Dispatched when an indicator row's eye toggle is clicked. */
@@ -169,6 +183,16 @@ export function CandleChart({
   const overlayLineRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
   /** Per-instance marker plugins for `RenderKind.Markers` descriptors. */
   const overlayMarkersRef = useRef<Map<string, ISeriesMarkersPluginApi<Time>>>(new Map());
+  /**
+   * Per-state-key line series for numeric {@link StateOverlay}s, keyed by
+   * the state key (unique within a `(profile, symbol)` selection).
+   */
+  const stateLineRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
+  /**
+   * Per-state-key marker plugin for non-numeric {@link StateOverlay}s,
+   * keyed by the state key.
+   */
+  const stateMarkersRef = useRef<Map<string, ISeriesMarkersPluginApi<Time>>>(new Map());
   /**
    * Last applied `visible` per series key, so the sync only calls `applyOptions`
    * on a change — never on initial create (the initial state ships with
@@ -303,9 +327,30 @@ export function CandleChart({
       overlayMarkersRef.current.clear();
       overlayVisibilityRef.current.clear();
       overlayLastResultRef.current.clear();
+      stateLineRef.current.clear();
+      stateMarkersRef.current.clear();
       nextPaneIndexRef.current = 1;
     };
   }, [colors, symbol.type]);
+
+  // Mirror the `stateOverlays[]` prop into per-state-key series. Numeric
+  // overlays add a step-line on the price pane (`LineSeries`); non-numeric
+  // ones attach markers on the candle series. Removals on numeric overlays
+  // come through as whitespace gaps (see `stateOverlayToLineData`).
+  //
+  // biome-ignore lint/correctness/useExhaustiveDependencies: chartVersion is a signal-only dep that drives re-sync after chart recreate.
+  useEffect(() => {
+    const chart = chartRef.current;
+    const candle = candleSeriesRef.current;
+    if (!chart || !candle) return;
+    syncStateOverlays({
+      chart,
+      candle,
+      overlays: stateOverlays,
+      lineMap: stateLineRef.current,
+      markersMap: stateMarkersRef.current,
+    });
+  }, [stateOverlays, chartVersion]);
 
   // Mirror the `overlays[]` prop into per-state-descriptor series, diffing the
   // current set against the previous one. `chartVersion` bumps after each chart
@@ -768,6 +813,69 @@ const MARKER_PLACEMENTS: ReadonlyArray<{
   { position: 'belowBar', shape: 'arrowUp' },
   { position: 'aboveBar', shape: 'arrowDown' },
 ];
+
+/**
+ * Diff the latest `stateOverlays[]` against the chart's current state-series:
+ *
+ *   1. Remove series / marker plugins for keys no longer in the list.
+ *   2. For each remaining overlay, create the missing series (numeric →
+ *      step-line via `LineSeries`) or marker plugin (non-numeric → markers
+ *      on the candle series), then push the latest data.
+ *
+ * Visibility is enforced by setting the data to `[]` for invisible numeric
+ * overlays (the line series hides) and an empty marker list for invisible
+ * non-numeric overlays (no plugin `visible` flag exists). Step-line breaks
+ * are encoded as whitespace points in `stateOverlayToLineData`.
+ *
+ * Lazy: no incremental diff of data points — `setData` / `setMarkers` is
+ * idempotent and cheap for the per-symbol cardinalities the chart expects.
+ */
+function syncStateOverlays(args: {
+  chart: IChartApi;
+  candle: ISeriesApi<'Candlestick'>;
+  overlays: ReadonlyArray<StateOverlay>;
+  lineMap: Map<string, ISeriesApi<'Line'>>;
+  markersMap: Map<string, ISeriesMarkersPluginApi<Time>>;
+}): void {
+  const { chart, candle, overlays, lineMap, markersMap } = args;
+  const liveKeys = new Set(overlays.map((overlay) => overlay.key));
+  for (const [key, series] of [...lineMap.entries()]) {
+    if (!liveKeys.has(key)) {
+      chart.removeSeries(series);
+      lineMap.delete(key);
+    }
+  }
+  for (const [key, plugin] of [...markersMap.entries()]) {
+    if (!liveKeys.has(key)) {
+      plugin.detach();
+      markersMap.delete(key);
+    }
+  }
+  for (const overlay of overlays) {
+    if (overlay.valueType === StateValueType.Number) {
+      let series = lineMap.get(overlay.key);
+      if (!series) {
+        series = chart.addSeries(LineSeries, {
+          color: overlay.color,
+          lineType: LineType.WithSteps,
+          visible: overlay.visible,
+        });
+        lineMap.set(overlay.key, series);
+      } else {
+        series.applyOptions({ visible: overlay.visible });
+      }
+      series.setData(overlay.visible ? stateOverlayToLineData(overlay.entries) : []);
+    } else {
+      const markers = overlay.visible ? stateOverlayToMarkers(overlay.entries, overlay.color) : [];
+      const plugin = markersMap.get(overlay.key);
+      if (!plugin) {
+        markersMap.set(overlay.key, createSeriesMarkers(candle, markers));
+      } else {
+        plugin.setMarkers(markers);
+      }
+    }
+  }
+}
 
 /** Fallback for any option beyond the first two — a neutral in-bar circle. */
 const NEUTRAL_PLACEMENT: { position: SeriesMarkerBarPosition; shape: SeriesMarkerShape } = {

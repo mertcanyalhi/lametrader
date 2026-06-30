@@ -35,6 +35,7 @@ const {
   indicatorService,
   quoteStream: quoteStreamService,
   state,
+  stateHistory,
   telegramDestinations,
   close,
 } = await connectServices(mongoUri, {
@@ -52,6 +53,7 @@ const app = createApp(
     profiles,
     rules,
     state,
+    stateHistory,
     telegramDestinations,
     backfill,
     indicators: { registry: indicators, compute: indicatorService },

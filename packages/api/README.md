@@ -385,6 +385,22 @@ The per-symbol state map lives at `GET /symbols/{id}/state?profileId=...` (see t
 curl http://localhost:3000/profiles/p1/state/global
 ```
 
+### State history (chart overlays — issue #434)
+
+Chart-side "States" overlays consume two read-only routes that reconstruct a per-symbol state-key catalog and a per-key time-series from the already-persisted rule-event log (`StateSet` / `StateRemoved` entries on `events_v2`).
+Both routes are watchlist-scoped (404 on an unknown symbol id).
+Neither is partitioned by profile today — `RuleEventEntry` carries no `profileId`, so every key persisted against the symbol is returned regardless of which profile's rule wrote it.
+
+| Method | Path                                                | Body | Description                                                                                                  |
+| ------ | --------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------ |
+| `GET`  | `/symbols/{id}/state-keys`                          | —    | Alphabetical `[{ key, valueType }]` of every state key the symbol has been written under. **200** / 404.     |
+| `GET`  | `/symbols/{id}/state/{key}/series?from=&to=`        | —    | Time-series for one key — one `{ ts, value }` per `StateSet`, one `{ ts, value: null }` per `StateRemoved`, ascending by `ts`. `from` is inclusive, `to` is exclusive (both epoch ms; omit either side for an open bound). **200** / 404. |
+
+```sh
+curl 'http://localhost:3000/symbols/crypto:BTCUSDT/state-keys'
+curl 'http://localhost:3000/symbols/crypto:BTCUSDT/state/last_signal/series?from=1704000000000&to=1704600000000'
+```
+
 ## Live stream
 
 Once the service is running it continuously polls each watched symbol+period and
