@@ -74,6 +74,22 @@ export class MongoEventLog implements EventLog {
     return this.db.collection<SymbolDocWithEvents>('watchlist');
   }
 
+  /**
+   * Create the indexes the event-log relies on for windowed reads.
+   *
+   * `watchlist.events.ts` is a multikey index on the embedded symbol-side
+   * events array's `ts`; `rules.events.ts` is its rule-side companion.
+   *
+   * The service today fetches the whole embedded array and filters in memory,
+   * so the indexes don't pay off until a future `$elemMatch` push-down — but
+   * having them declared up front means the migration isn't a schema-time
+   * change. Idempotent: safe to call on every startup.
+   */
+  async ensureIndexes(): Promise<void> {
+    await this.watchlist.createIndex({ 'events.ts': 1 });
+    await this.rules.createIndex({ 'events.ts': 1 });
+  }
+
   async appendRuleEvent(ruleId: string, entry: RuleEventEntry): Promise<void> {
     const stamped = this.stamp(entry);
     await this.rules.updateOne({ _id: ruleId }, { $push: { events: stamped } }, { upsert: true });

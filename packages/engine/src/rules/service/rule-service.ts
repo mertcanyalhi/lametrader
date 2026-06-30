@@ -48,16 +48,26 @@ export interface RuleListFilters {
 }
 
 /**
- * Pagination options for the event-log read endpoints.
+ * Pagination + windowing options for the event-log read endpoints.
  *
  * The repository returns events in append order; this service reverses to
- * newest-first and applies `before` + `limit` in memory.
+ * newest-first and applies `from` / `to` / `before` + `limit` in memory.
+ *
+ * `from` and `to` define an inclusive-exclusive window on the entry's source
+ * `ts` (the candle / tick timestamp that drove evaluation) — the chart's
+ * visible window maps directly onto them.
+ * `before` is the older "next page" cursor and ANDs with the window when both
+ * are supplied.
  */
 export interface EventListOptions {
   /** Max entries to return. Defaults to 50; capped at 500 to bound memory. */
   limit?: number;
   /** Return only entries with `ts < before` (epoch-ms cursor for "next page"). */
   before?: number;
+  /** Inclusive lower bound on the entry's source `ts` (epoch ms). */
+  from?: number;
+  /** Exclusive upper bound on the entry's source `ts` (epoch ms). */
+  to?: number;
 }
 
 /** The set of trigger kinds that are tick-cadence (per ADR 0016). */
@@ -276,17 +286,27 @@ function scopeAdmitsSymbol(scope: RuleScope, symbolId: string): boolean {
 }
 
 /**
- * Reverse to newest-first, apply `before` cursor, slice to `limit`.
+ * Reverse to newest-first, apply the `from` / `to` window + `before` cursor,
+ * slice to `limit`.
  *
  * Within one fire (every per-action entry plus the trailing `Fired` umbrella
  * share the same source `ts`), reversing the append-ordered slice puts the
  * last-appended entry first — so a fire reads as `Fired` then per-action
  * entries, matching the user-facing "newest first" semantics.
+ *
+ * `from` is inclusive (`ts >= from`); `to` and `before` are exclusive
+ * (`ts < to`, `ts < before`).
+ * All bounds AND together when supplied.
  */
 function paginate(events: readonly RuleEventEntry[], options: EventListOptions): RuleEventEntry[] {
   const limit = Math.min(options.limit ?? DEFAULT_EVENT_PAGE_SIZE, MAX_EVENT_PAGE_SIZE);
-  const before = options.before;
-  const filtered = before === undefined ? events : events.filter((event) => event.ts < before);
+  const { before, from, to } = options;
+  const filtered = events.filter((event) => {
+    if (before !== undefined && !(event.ts < before)) return false;
+    if (from !== undefined && !(event.ts >= from)) return false;
+    if (to !== undefined && !(event.ts < to)) return false;
+    return true;
+  });
   return [...filtered]
     .reverse()
     .sort((a, b) => b.ts - a.ts)

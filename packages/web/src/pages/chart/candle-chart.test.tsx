@@ -14,15 +14,19 @@ import { CandleChart } from './candle-chart.js';
  * chart's forming-bar mutator. The shared stream client is mocked so the test
  * captures the candle listener and emits frames directly (jsdom has no socket).
  */
-const { createdSeries, listeners, crosshairCallbacks } = vi.hoisted(() => ({
-  createdSeries: [] as Array<{
-    setData: ReturnType<typeof vi.fn>;
-    applyOptions: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
-  }>,
-  listeners: [] as Array<(event: unknown) => void>,
-  crosshairCallbacks: [] as Array<(param: { time?: number }) => void>,
-}));
+const { createdSeries, listeners, crosshairCallbacks, eventMarkerPlugins, createMarkersCalls } =
+  vi.hoisted(() => ({
+    createdSeries: [] as Array<{
+      setData: ReturnType<typeof vi.fn>;
+      applyOptions: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    }>,
+    listeners: [] as Array<(event: unknown) => void>,
+    crosshairCallbacks: [] as Array<(param: { time?: number }) => void>,
+    eventMarkerPlugins: [] as Array<{ setMarkers: ReturnType<typeof vi.fn> }>,
+    /** Each `createSeriesMarkers(...)` call's initial markers list, in order. */
+    createMarkersCalls: [] as unknown[][],
+  }));
 
 vi.mock('lightweight-charts', () => ({
   createChart: () => ({
@@ -46,6 +50,13 @@ vi.mock('lightweight-charts', () => ({
   }),
   CandlestickSeries: 'Candlestick',
   HistogramSeries: 'Histogram',
+  LineSeries: 'Line',
+  createSeriesMarkers: (_series: unknown, initial: unknown[]) => {
+    createMarkersCalls.push(initial);
+    const plugin = { setMarkers: vi.fn() };
+    eventMarkerPlugins.push(plugin);
+    return plugin;
+  },
 }));
 
 vi.mock('../../lib/stream/stream-client.js', () => ({
@@ -201,5 +212,75 @@ describe('CandleChart live ticks', () => {
       [point(live2)],
       [point(live3)],
     ]);
+  });
+});
+
+/** Build a `chartElement` that also accepts `eventMarkers`. */
+function chartWithMarkers(
+  candles: Candle[],
+  eventMarkers: ReadonlyArray<{ time: number; shape: string; color: string; position: string }>,
+) {
+  return (
+    <ThemeProvider>
+      <Theme>
+        <CandleChart
+          candles={candles}
+          symbol={SYMBOL}
+          period={Period.OneHour}
+          range={null}
+          loadOlder={() => {}}
+          hasMore={false}
+          eventMarkers={eventMarkers as never}
+        />
+      </Theme>
+    </ThemeProvider>
+  );
+}
+
+describe('CandleChart event markers', () => {
+  beforeEach(() => {
+    createdSeries.length = 0;
+    listeners.length = 0;
+    crosshairCallbacks.length = 0;
+    eventMarkerPlugins.length = 0;
+    createMarkersCalls.length = 0;
+  });
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('attaches no marker plugin when eventMarkers is empty', () => {
+    render(chartWithMarkers([bar(1000, 100, 100, 100, 100)], []));
+
+    expect({ creates: createMarkersCalls.length, plugins: eventMarkerPlugins.length }).toEqual({
+      creates: 0,
+      plugins: 0,
+    });
+  });
+
+  it('attaches one marker plugin via createSeriesMarkers when eventMarkers is non-empty', () => {
+    const markers = [
+      { time: 1, shape: 'circle', color: 'red', position: 'inBar' },
+      { time: 2, shape: 'arrowUp', color: 'green', position: 'belowBar' },
+    ];
+    render(chartWithMarkers([bar(1000, 100, 100, 100, 100)], markers));
+
+    expect(createMarkersCalls).toEqual([markers]);
+  });
+
+  it('calls setMarkers on the existing plugin when the eventMarkers prop changes', () => {
+    const initial = [{ time: 1, shape: 'circle', color: 'red', position: 'inBar' }];
+    const { rerender } = render(chartWithMarkers([bar(1000, 100, 100, 100, 100)], initial));
+    const next = [{ time: 2, shape: 'square', color: 'blue', position: 'aboveBar' }];
+    rerender(chartWithMarkers([bar(1000, 100, 100, 100, 100)], next));
+
+    expect({
+      creates: createMarkersCalls.length,
+      setCalls: eventMarkerPlugins[0]?.setMarkers.mock.calls,
+    }).toEqual({
+      creates: 1,
+      setCalls: [[next]],
+    });
   });
 });

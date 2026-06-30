@@ -144,6 +144,7 @@ export function CandleChart({
   legendOverlays = [],
   onToggleLegendVisible,
   legendProfile = null,
+  eventMarkers = [],
 }: {
   candles: Candle[];
   symbol: EnrichedSymbol;
@@ -164,6 +165,15 @@ export function CandleChart({
   onToggleLegendVisible?: (instanceId: string) => void;
   /** The selected profile — passed through to the legend so its remove `x` can detach. */
   legendProfile?: Profile | null;
+  /**
+   * Rule-event markers to render on the candle series via a single shared
+   * `createSeriesMarkers` plugin.
+   *
+   * The chart attaches the plugin lazily (no work when the list is empty)
+   * and calls `setMarkers` on each prop change so a live event simply re-runs
+   * the descriptor mapping.
+   */
+  eventMarkers?: ReadonlyArray<SeriesMarker<Time>>;
 }): ReactNode {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -193,6 +203,19 @@ export function CandleChart({
    * keyed by the state key.
    */
   const stateMarkersRef = useRef<Map<string, ISeriesMarkersPluginApi<Time>>>(new Map());
+  /**
+   * The shared rule-event marker plugin — one per chart instance. Lazily
+   * attached the first time a non-empty `eventMarkers` arrives so an unused
+   * descriptor costs nothing.
+   */
+  const eventMarkersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  /**
+   * Last `eventMarkers` array reference applied to the plugin. The sync
+   * effect re-runs on `chartVersion` bumps as well as prop changes; this ref
+   * lets it skip the redundant `setMarkers` call when the reference hasn't
+   * actually moved (mirrors the `lastResultMap` deduping in `syncMarkers`).
+   */
+  const lastEventMarkersRef = useRef<ReadonlyArray<SeriesMarker<Time>> | null>(null);
   /**
    * Last applied `visible` per series key, so the sync only calls `applyOptions`
    * on a change — never on initial create (the initial state ships with
@@ -329,6 +352,8 @@ export function CandleChart({
       overlayLastResultRef.current.clear();
       stateLineRef.current.clear();
       stateMarkersRef.current.clear();
+      eventMarkersPluginRef.current = null;
+      lastEventMarkersRef.current = null;
       nextPaneIndexRef.current = 1;
     };
   }, [colors, symbol.type]);
@@ -374,6 +399,25 @@ export function CandleChart({
       paneCursor: nextPaneIndexRef,
     });
   }, [overlays, chartVersion]);
+
+  // Mirror the `eventMarkers` prop into one shared marker plugin on the candle
+  // series, attached lazily so an unused descriptor costs nothing.
+  // The `chartVersion` bump after a chart recreate clears the plugin ref above,
+  // so the first non-empty list after recreate re-attaches; otherwise this
+  // skips when the prop reference hasn't moved (chartVersion-only re-runs).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: chartVersion drives re-attach after chart recreate.
+  useEffect(() => {
+    const candle = candleSeriesRef.current;
+    if (!candle) return;
+    if (eventMarkers.length === 0 && eventMarkersPluginRef.current === null) return;
+    if (lastEventMarkersRef.current === eventMarkers) return;
+    if (eventMarkersPluginRef.current === null) {
+      eventMarkersPluginRef.current = createSeriesMarkers(candle, [...eventMarkers]);
+    } else {
+      eventMarkersPluginRef.current.setMarkers([...eventMarkers]);
+    }
+    lastEventMarkersRef.current = eventMarkers;
+  }, [eventMarkers, chartVersion]);
 
   // Push data whenever the candles (or theme-derived volume colors) change.
   useEffect(() => {

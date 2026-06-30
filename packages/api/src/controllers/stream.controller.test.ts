@@ -1,8 +1,10 @@
 import {
   ConfigKey,
+  EvaluationTriggerKind,
   type IndicatorStateEvent,
   Period,
   type RuleEventEntry,
+  RuleEventType,
   type SymbolQuoteEvent,
   SymbolType,
   type WatchedSymbol,
@@ -66,6 +68,8 @@ interface TestApp {
   quoteService: QuoteStreamService;
   /** Every quote event the engine has emitted via `onQuote`, in order. */
   capturedQuotes: SymbolQuoteEvent[];
+  /** The rule-event pub/sub; tests publish into it to drive fan-out. */
+  ruleEventStream: StreamHub<RuleEventEntry>;
 }
 
 /**
@@ -168,7 +172,7 @@ async function buildApp(
     }),
   );
   const baseUrl = await app.listen({ port: 0, host: '127.0.0.1' });
-  return { app, baseUrl, service, captured, quoteService, capturedQuotes };
+  return { app, baseUrl, service, captured, quoteService, capturedQuotes, ruleEventStream };
 }
 
 /** Open a WebSocket against `/stream` and resolve once open. */
@@ -612,6 +616,94 @@ describe('/stream quote delivery', () => {
       });
 
       expect(capturedQuotes).toEqual([]);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+/** A `Fired` umbrella rule-event entry for BTC at `ts`, stamped with `firedAt`. */
+function firedEntry(ts: number): RuleEventEntry {
+  return {
+    type: RuleEventType.Fired,
+    ts,
+    firedAt: ts + 1,
+    ruleId: 'rule-1',
+    symbolId: BTC.id,
+    context: {
+      inboundEvent: {
+        kind: EvaluationTriggerKind.Tick,
+        ts,
+        symbolId: BTC.id,
+        price: 100,
+      },
+      lookupSnapshot: {
+        current: 100,
+        open: null,
+        high: null,
+        low: null,
+        close: null,
+        volume: null,
+      },
+    },
+  };
+}
+
+describe('/stream subscribe-rule-event', () => {
+  it('delivers each published rule-event entry to the subscribing socket as a symbolId-tagged frame', async () => {
+    const { app, baseUrl, ruleEventStream } = await buildApp();
+    try {
+      const socket = await openSocket(baseUrl);
+      const rec = recordFrames(socket);
+      socket.send(JSON.stringify({ action: 'subscribe-rule-event', id: BTC.id }));
+      await settle();
+
+      const entry = firedEntry(1_000);
+      ruleEventStream.publish(BTC.id, entry);
+      await settle();
+
+      expect(rec.frames).toEqual([{ symbolId: BTC.id, entry }]);
+
+      rec.stop();
+      socket.close();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('answers a missing-id subscribe-rule-event with an error frame', async () => {
+    const { app, baseUrl } = await buildApp();
+    try {
+      const socket = await openSocket(baseUrl);
+      const framePromise = nextFrame(socket);
+      socket.send(JSON.stringify({ action: 'subscribe-rule-event' }));
+      const frame = await framePromise;
+
+      expect(frame).toEqual({ error: 'subscribe-rule-event requires id: string' });
+
+      socket.close();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('stops delivering frames after an unsubscribe-rule-event for the same id', async () => {
+    const { app, baseUrl, ruleEventStream } = await buildApp();
+    try {
+      const socket = await openSocket(baseUrl);
+      socket.send(JSON.stringify({ action: 'subscribe-rule-event', id: BTC.id }));
+      await settle();
+      socket.send(JSON.stringify({ action: 'unsubscribe-rule-event', id: BTC.id }));
+      await settle();
+
+      const rec = recordFrames(socket);
+      ruleEventStream.publish(BTC.id, firedEntry(1_000));
+      await settle();
+
+      expect(rec.frames).toEqual([]);
+
+      rec.stop();
+      socket.close();
     } finally {
       await app.close();
     }

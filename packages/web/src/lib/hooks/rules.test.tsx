@@ -23,6 +23,7 @@ import {
   usePatchRule,
   useRule,
   useRuleEvents,
+  useRuleEventsForRange,
   useRules,
   useSymbolRuleEvents,
   useSymbolRuleEventsCount,
@@ -240,5 +241,26 @@ describe('rules hooks', () => {
       expect(result.current.data).toEqual(7);
     });
     expect(fetchSpy.mock.calls[0]?.[0]).toEqual('/api/symbols/crypto%3ABTCUSDT/rule-events/count');
+  });
+
+  it('useRuleEventsForRange issues GET /api/symbols/:id/rule-events with from + to + limit=500', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+    const { wrapper } = makeWrapper();
+    renderHook(() => useRuleEventsForRange('crypto:BTCUSDT', 1000, 2000), { wrapper });
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalled();
+    });
+    expect(fetchSpy.mock.calls[0]?.[0]).toEqual(
+      '/api/symbols/crypto%3ABTCUSDT/rule-events?from=1000&to=2000&limit=500',
+    );
+  });
+
+  it('useRuleEventsForRange does not fire a request when either bound is undefined', async () => {
+    const { wrapper } = makeWrapper();
+    renderHook(() => useRuleEventsForRange('crypto:BTCUSDT', undefined, 2000), { wrapper });
+    // No await — `enabled: false` means the query never runs.
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

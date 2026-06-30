@@ -1,4 +1,4 @@
-import type { IndicatorStateEvent, SymbolQuoteEvent } from '@lametrader/core';
+import type { IndicatorStateEvent, RuleEventEntry, SymbolQuoteEvent } from '@lametrader/core';
 import {
   BackfillService,
   type CandleEvent,
@@ -74,6 +74,7 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
     new QuoteStreamService(watchlist, config, candles, {
       onQuote: (event) => quoteStream.publish(event.subscriptionId, event),
     });
+  const ruleEventStream = overrides.liveStream?.ruleEventStream ?? new StreamHub<RuleEventEntry>();
 
   return {
     config,
@@ -93,6 +94,7 @@ export function buildAppDeps(overrides: BuildAppDepsOverrides = {}): AppDependen
       indicatorService,
       quoteStream,
       quoteStreamService,
+      ruleEventStream,
     },
   };
 }

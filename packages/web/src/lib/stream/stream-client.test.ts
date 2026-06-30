@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 import {
   type Candle,
+  EvaluationTriggerKind,
   type IndicatorStateEvent,
   Period,
   PriceSource,
+  type RuleEventEntry,
+  RuleEventType,
   type SymbolQuoteEvent,
   SymbolType,
 } from '@lametrader/core';
@@ -355,6 +358,48 @@ describe('createStreamClient', () => {
         },
       ],
       received: [event],
+    });
+  });
+
+  it('subscribes to a rule-event feed by id, routes a {symbolId, entry} frame to the listener, and unsubscribes by id', () => {
+    const client = createStreamClient();
+    const received: RuleEventEntry[] = [];
+
+    const unsubscribe = client.subscribe(StreamKind.RuleEvent, ID, (entry) => received.push(entry));
+    const socket = FakeWebSocket.instances[0];
+    socket?.open();
+    const entry: RuleEventEntry = {
+      type: RuleEventType.Fired,
+      ts: 1_000,
+      firedAt: 1_001,
+      ruleId: 'rule-1',
+      symbolId: ID,
+      context: {
+        inboundEvent: {
+          kind: EvaluationTriggerKind.Tick,
+          ts: 1_000,
+          symbolId: ID,
+          price: 101,
+        },
+        lookupSnapshot: {
+          current: 101,
+          open: null,
+          high: null,
+          low: null,
+          close: null,
+          volume: null,
+        },
+      },
+    };
+    socket?.emit({ symbolId: ID, entry });
+    unsubscribe();
+
+    expect({ received, sent: socket?.sent }).toEqual({
+      received: [entry],
+      sent: [
+        { action: 'subscribe-rule-event', id: ID },
+        { action: 'unsubscribe-rule-event', id: ID },
+      ],
     });
   });
 

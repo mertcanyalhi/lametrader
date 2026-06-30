@@ -330,8 +330,8 @@ Tick-cadence triggers (`everyTime` / `once` / `oncePerBar`) require every refere
 | `GET`    | `/rules/{id}`                           | —               | Fetch one rule. 200 / 404.                                                                                 |
 | `PATCH`  | `/rules/{id}`                           | `Partial<RuleInput>` | Partial merge over the existing rule; re-runs the tick-eligibility gate on the merged result. 200 / 400 / 404. |
 | `DELETE` | `/rules/{id}`                           | —               | Delete a rule. **204** / 404.                                                                              |
-| `GET`    | `/rules/{id}/events?limit=&before=`     | —               | Paginated rule events (newest-first); default limit 50, max 500; `before` cursors on `ts` (epoch ms). 200 / 404. |
-| `GET`    | `/symbols/{id}/rule-events?limit=&before=` | —            | Paginated symbol-mirrored rule events (newest-first); same pagination. 200.                                |
+| `GET`    | `/rules/{id}/events?limit=&before=&from=&to=`     | —     | Paginated rule events (newest-first); default limit 50, max 500; `before` cursors on `ts` (epoch ms); `from` / `to` apply an inclusive-exclusive window on `ts` (ANDs with `before`). 200 / 404. |
+| `GET`    | `/symbols/{id}/rule-events?limit=&before=&from=&to=` | —  | Paginated symbol-mirrored rule events (newest-first); same pagination + windowing. 200.                  |
 | `GET`    | `/symbols/{id}/rule-events/count`       | —               | Count of mirrored rule events for the symbol; response `{ "count": <integer> }`. 200.                      |
 
 `RuleInput` is the client-controllable subset of a `Rule` — every field except `id`, `createdAt`, `updatedAt`. Schema validation is the trust boundary (per ADR 0016 #11); the engine trusts the validator. Multi-field failures surface as `{ error, fields: [{ path, message }, ...] }` with one entry per AJV failure (or one per unwatched symbol id for the tick-eligibility error).
@@ -412,7 +412,7 @@ socket can watch many symbols and hold many indicator/quote subscriptions in par
 | ------ | --------- | ------------------------------------------------------------------------------------------ |
 | `WS`   | `/stream` | Subscribe/unsubscribe to candles, indicators, quotes, and rule events; receive live frames. |
 
-After connecting, send JSON control messages. The route multiplexes four surfaces:
+After connecting, send JSON control messages. The route multiplexes four surfaces: candle, indicator, quote, and rule-event.
 
 ### Candle subscriptions
 
@@ -504,7 +504,35 @@ delivered to the owning socket:
 frame the baseline rotates to the just-closed bar, so subsequent frames measure
 against it (matching the snapshot's "since last close" semantics).
 
-Closing the socket releases every subscription on it (candle, indicator, quote),
+### Rule-event subscriptions
+
+Keyed by symbol id — the mirrored side of the `EventLog`'s append fan-out.
+
+- `{ "action": "subscribe-rule-event", "id": "crypto:BTCUSDT" }` — start receiving each `RuleEventEntry` appended to that symbol's events log.
+- `{ "action": "unsubscribe-rule-event", "id": "crypto:BTCUSDT" }` — stop.
+
+For each successful symbol-side append, the socket receives:
+
+```json
+{
+  "symbolId": "crypto:BTCUSDT",
+  "entry": {
+    "type": "fired",
+    "ts": 1704153600000,
+    "firedAt": 1704153600123,
+    "ruleId": "rule-1",
+    "symbolId": "crypto:BTCUSDT",
+    "context": { … }
+  }
+}
+```
+
+`entry` is the same `RuleEventEntry` tagged union the REST event-log endpoints
+return (one of `fired` / `notificationSent` / `stateSet` / `stateRemoved` /
+`error` / `cycleOverflow`). The stream is live-only — windowed history is on
+`GET /symbols/{id}/rule-events?from=&to=`.
+
+Closing the socket releases every subscription on it (candle, indicator, quote, rule-event),
 and a malformed control message is answered with an `{ "error": "<reason>" }` frame
 instead of being silently dropped.
 

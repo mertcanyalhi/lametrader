@@ -1,4 +1,9 @@
-import type { IndicatorStateEvent, StateRepository, SymbolQuoteEvent } from '@lametrader/core';
+import type {
+  IndicatorStateEvent,
+  RuleEventEntry,
+  StateRepository,
+  SymbolQuoteEvent,
+} from '@lametrader/core';
 import type {
   BackfillService,
   CandleEvent,
@@ -15,9 +20,13 @@ import type {
 import type { StreamHub } from './stream-hub.js';
 
 /**
- * The live-stream surface — the candle hub the polling loop publishes to, plus the indicator- and quote-stream services + their WS-side hubs.
+ * The live-stream surface — the candle hub the polling loop publishes to,
+ * plus the indicator- and quote-stream services + their WS-side hubs and the
+ * symbol-keyed rule-event hub.
  *
- * Paired so the `/stream` route registers all-or-nothing: when streaming is wired, it handles candle, indicator, and quote subscriptions; when absent, the route doesn't register.
+ * Paired so the `/stream` route registers all-or-nothing: when streaming is
+ * wired, it handles candle, indicator, quote, and rule-event subscriptions;
+ * when absent, the route doesn't register.
  */
 export interface LiveStream {
   /** The live-candle pub/sub the polling loop publishes to. */
@@ -30,6 +39,14 @@ export interface LiveStream {
   quoteStream: StreamHub<SymbolQuoteEvent>;
   /** The engine-side quote stream service; the route calls its `subscribe`/`unsubscribe`. */
   quoteStreamService: QuoteStreamService;
+  /**
+   * The rule-event pub/sub fed by the event-log adapter's `onAppend` callback.
+   *
+   * Keyed by symbol id — the composition root publishes only the
+   * `target.kind === 'symbol'` mirror, so each subscribed key sees every
+   * fire that touched that symbol.
+   */
+  ruleEventStream: StreamHub<RuleEventEntry>;
 }
 
 /**
