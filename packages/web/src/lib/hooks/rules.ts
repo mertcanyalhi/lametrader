@@ -7,6 +7,8 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { apiFetch } from '../api-fetch.js';
+import { StreamKind } from '../stream/stream-client.types.js';
+import { useStreamSubscription } from '../stream/use-stream-subscription.js';
 
 /** Stable root for every rules-related query key. */
 export const RULES_QUERY_KEY = ['rules'] as const;
@@ -39,6 +41,18 @@ export function symbolRuleEventsKey(
 /** Stable key for one symbol's mirrored events count query. */
 export function symbolRuleEventsCountKey(symbolId: string) {
   return [...RULES_QUERY_KEY, 'symbol-events-count', symbolId] as const;
+}
+
+/**
+ * Stable key for one symbol's mirrored events query windowed by `[from, to)`.
+ * Parameterized by both bounds so a window pan / zoom invalidates and refetches.
+ */
+export function symbolRuleEventsRangeKey(
+  symbolId: string,
+  from: number | undefined,
+  to: number | undefined,
+) {
+  return [...RULES_QUERY_KEY, 'symbol-events-range', symbolId, from, to] as const;
 }
 
 /**
@@ -202,5 +216,56 @@ export function useSymbolRuleEventsCount(symbolId: string): UseQueryResult<numbe
       );
       return body.count;
     },
+  });
+}
+
+/** Hard cap on rows fetched per windowed range read (matches the API ceiling). */
+export const RULE_EVENTS_RANGE_LIMIT = 500;
+
+/**
+ * Read one symbol's mirrored events log windowed by `[from, to)`
+ * (`GET /symbols/:id/rule-events?from=&to=&limit=500`).
+ *
+ * Backs the chart's rule-event markers — the chart's visible window maps
+ * directly onto `from` / `to`. Disabled when either bound is `undefined`
+ * (the chart hasn't loaded enough candles to know its visible range yet),
+ * so no stray request fires.
+ */
+export function useRuleEventsForRange(
+  symbolId: string,
+  from: number | undefined,
+  to: number | undefined,
+): UseQueryResult<RuleEventEntry[], Error> {
+  return useQuery({
+    queryKey: symbolRuleEventsRangeKey(symbolId, from, to),
+    queryFn: () => {
+      const search = new URLSearchParams();
+      search.set('from', String(from));
+      search.set('to', String(to));
+      search.set('limit', String(RULE_EVENTS_RANGE_LIMIT));
+      return apiFetch<RuleEventEntry[]>(
+        `/symbols/${encodeURIComponent(symbolId)}/rule-events?${search}`,
+      );
+    },
+    enabled: from !== undefined && to !== undefined,
+  });
+}
+
+/**
+ * Subscribe to one symbol's live rule-event feed
+ * (`subscribe-rule-event` over the shared stream client).
+ *
+ * Each inbound frame invalidates every windowed-range query under the same
+ * symbol so the chart's marker query refetches and the new entry lands in the
+ * window if it falls inside it.
+ * Renders nothing — sit it as a child of the chart layout for one-symbol-per-page.
+ */
+export function useRuleEventStream(symbolId: string): void {
+  const queryClient = useQueryClient();
+  useStreamSubscription(StreamKind.RuleEvent, symbolId, () => {
+    queryClient.invalidateQueries({
+      queryKey: [...RULES_QUERY_KEY, 'symbol-events-range', symbolId],
+    });
+    queryClient.invalidateQueries({ queryKey: symbolRuleEventsCountKey(symbolId) });
   });
 }

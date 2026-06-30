@@ -355,4 +355,129 @@ describe('RuleService', () => {
     const events = await service.listSymbolEvents('AAPL');
     expect(events.map((e) => e.ts)).toEqual([200, 100]);
   });
+
+  it('listEvents with from returns only entries whose ts is at or after the bound', async () => {
+    const created = await service.create(buildRule());
+    const fired: RuleEventEntry = {
+      type: RuleEventType.Fired,
+      ts: 100,
+      ruleId: created.id,
+      symbolId: 'AAPL',
+      context: {
+        inboundEvent: {
+          kind: EvaluationTriggerKind.Tick,
+          ts: 100,
+          symbolId: 'AAPL',
+          price: 101,
+        },
+        lookupSnapshot: {
+          current: 101,
+          open: null,
+          high: null,
+          low: null,
+          close: null,
+          volume: null,
+        },
+      },
+    };
+    await eventLog.appendRuleEvent(created.id, fired);
+    await eventLog.appendRuleEvent(created.id, { ...fired, ts: 200 });
+    await eventLog.appendRuleEvent(created.id, { ...fired, ts: 300 });
+    const events = await service.listEvents(created.id, { from: 200 });
+    expect(events.map((e) => e.ts)).toEqual([300, 200]);
+  });
+
+  it('listEvents with to returns only entries whose ts is strictly before the bound', async () => {
+    const created = await service.create(buildRule());
+    const fired: RuleEventEntry = {
+      type: RuleEventType.Fired,
+      ts: 100,
+      ruleId: created.id,
+      symbolId: 'AAPL',
+      context: {
+        inboundEvent: {
+          kind: EvaluationTriggerKind.Tick,
+          ts: 100,
+          symbolId: 'AAPL',
+          price: 101,
+        },
+        lookupSnapshot: {
+          current: 101,
+          open: null,
+          high: null,
+          low: null,
+          close: null,
+          volume: null,
+        },
+      },
+    };
+    await eventLog.appendRuleEvent(created.id, fired);
+    await eventLog.appendRuleEvent(created.id, { ...fired, ts: 200 });
+    await eventLog.appendRuleEvent(created.id, { ...fired, ts: 300 });
+    const events = await service.listEvents(created.id, { to: 300 });
+    expect(events.map((e) => e.ts)).toEqual([200, 100]);
+  });
+
+  it('listEvents with from and to returns the half-open window ANDed with before', async () => {
+    const created = await service.create(buildRule());
+    const fired: RuleEventEntry = {
+      type: RuleEventType.Fired,
+      ts: 100,
+      ruleId: created.id,
+      symbolId: 'AAPL',
+      context: {
+        inboundEvent: {
+          kind: EvaluationTriggerKind.Tick,
+          ts: 100,
+          symbolId: 'AAPL',
+          price: 101,
+        },
+        lookupSnapshot: {
+          current: 101,
+          open: null,
+          high: null,
+          low: null,
+          close: null,
+          volume: null,
+        },
+      },
+    };
+    await eventLog.appendRuleEvent(created.id, fired);
+    await eventLog.appendRuleEvent(created.id, { ...fired, ts: 150 });
+    await eventLog.appendRuleEvent(created.id, { ...fired, ts: 200 });
+    await eventLog.appendRuleEvent(created.id, { ...fired, ts: 250 });
+    await eventLog.appendRuleEvent(created.id, { ...fired, ts: 300 });
+    const events = await service.listEvents(created.id, { from: 150, to: 300, before: 250 });
+    expect(events.map((e) => e.ts)).toEqual([200, 150]);
+  });
+
+  it('listSymbolEvents with from and to returns the half-open window on the mirrored log', async () => {
+    const fired: RuleEventEntry = {
+      type: RuleEventType.Fired,
+      ts: 100,
+      ruleId: 'r1',
+      symbolId: 'AAPL',
+      context: {
+        inboundEvent: {
+          kind: EvaluationTriggerKind.Tick,
+          ts: 100,
+          symbolId: 'AAPL',
+          price: 101,
+        },
+        lookupSnapshot: {
+          current: 101,
+          open: null,
+          high: null,
+          low: null,
+          close: null,
+          volume: null,
+        },
+      },
+    };
+    await eventLog.appendSymbolEvent('AAPL', fired);
+    await eventLog.appendSymbolEvent('AAPL', { ...fired, ts: 200 });
+    await eventLog.appendSymbolEvent('AAPL', { ...fired, ts: 300 });
+    const events = await service.listSymbolEvents('AAPL', { from: 100, to: 300 });
+    expect(events.map((e) => e.ts)).toEqual([200, 100]);
+  });
 });

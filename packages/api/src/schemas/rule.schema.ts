@@ -343,11 +343,17 @@ export const RuleListQuerySchema = Type.Object(
 
 /**
  * Query parameters for the event-log read endpoints.
+ *
+ * `from` and `to` bound the entry's source `ts` (inclusive lower, exclusive
+ * upper) and back the chart's visible-window read; `before` is the older
+ * "next page" cursor and ANDs with the window.
  */
 export const RuleEventsQuerySchema = Type.Object(
   {
     limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 500 })),
     before: Type.Optional(Type.Number()),
+    from: Type.Optional(Type.Number()),
+    to: Type.Optional(Type.Number()),
   },
   { additionalProperties: false },
 );

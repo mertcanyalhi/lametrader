@@ -184,4 +184,31 @@ describe('rulesController', () => {
     expect(response.statusCode).toEqual(200);
     expect(response.json()).toEqual({ count: 0 });
   });
+
+  it('GET /symbols/:id/rule-events accepts from and to and returns the windowed slice', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/symbols/AAPL/rule-events?from=100&to=200',
+    });
+    expect(response.statusCode).toEqual(200);
+    expect(response.json()).toEqual([]);
+  });
+
+  it('GET /symbols/:id/rule-events with a non-numeric from returns 400', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/symbols/AAPL/rule-events?from=foo',
+    });
+    expect(response.statusCode).toEqual(400);
+  });
+
+  it('GET /rules/:id/events accepts from and to and returns the windowed slice', async () => {
+    const created = await rules.create(buildRuleInput());
+    const response = await app.inject({
+      method: 'GET',
+      url: `/rules/${created.id}/events?from=100&to=200`,
+    });
+    expect(response.statusCode).toEqual(200);
+    expect(response.json()).toEqual([]);
+  });
 });

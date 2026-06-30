@@ -1,5 +1,6 @@
 import type {
   EventLog,
+  EventLogAppendListener,
   IndicatorStateListener,
   Period,
   StateRepository,
@@ -46,6 +47,13 @@ export interface ConnectOptions {
   onIndicatorState?: IndicatorStateListener;
   /** Where the quote stream service emits each derived quote event (defaults to a no-op). */
   onSymbolQuote?: SymbolQuoteListener;
+  /**
+   * Where the rule event-log emits each successful append (defaults to a no-op).
+   *
+   * Invoked once per side per fire (rule + symbol), so a listener targeting
+   * the chart's symbol-keyed live feed filters on `target.kind === 'symbol'`.
+   */
+  onRuleEvent?: EventLogAppendListener;
   /** Per-period poll cadence in ms (required to enable a useful polling loop). */
   pollIntervals: Record<Period, number>;
   /**
@@ -164,6 +172,13 @@ export async function connectServices(
   const ruleRepo = new MongoRuleRepository(db, profileRepo);
   await ruleRepo.ensureIndexes();
   const eventLog = new MongoEventLog(db);
+  await eventLog.ensureIndexes();
+  // Forward each successful append to the user-supplied sink so the API can
+  // publish per-symbol rule events to the chart's live stream.
+  if (options.onRuleEvent !== undefined) {
+    const sink = options.onRuleEvent;
+    eventLog.onAppend((entry, target) => sink(entry, target));
+  }
   // The indicator store needs an `IndicatorService` for warm-ups; we
   // construct that here (it predates the rule engine fan-out) and reuse it in
   // the live indicator path below.
