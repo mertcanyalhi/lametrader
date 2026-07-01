@@ -24,6 +24,7 @@ function Harness({
   indicators = [],
   symbolStateKeys = [],
   globalStateKeys = [],
+  indicatorStateKeysByKey,
   literalValueType,
   onSnapshot,
 }: {
@@ -31,6 +32,7 @@ function Harness({
   indicators?: IndicatorInstance[];
   symbolStateKeys?: string[];
   globalStateKeys?: string[];
+  indicatorStateKeysByKey?: Record<string, string[]>;
   literalValueType?: StateValueType;
   onSnapshot?: (operand: ConditionOperand) => void;
 }): ReactNode {
@@ -46,6 +48,7 @@ function Harness({
         indicators={indicators}
         symbolStateKeys={symbolStateKeys}
         globalStateKeys={globalStateKeys}
+        indicatorStateKeysByKey={indicatorStateKeysByKey}
         literalValueType={literalValueType}
         ariaLabel="Left operand kind"
       />
@@ -139,6 +142,65 @@ describe('OperandPicker', () => {
     expect(screen.getByText('lastFiredAt')).toBeDefined();
     expect(screen.getByText('cooldown')).toBeDefined();
     expect(screen.getByLabelText('Symbol state key (custom)')).toBeDefined();
+  });
+
+  it('seeds the IndicatorRef state-key dropdown from the catalog entry matching the selected instance', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness
+        initial={{
+          kind: OperandKind.IndicatorRef,
+          instanceId: 'ind-a',
+          stateKey: '',
+          valueType: StateValueType.Number,
+        }}
+        indicators={[
+          {
+            id: 'ind-a',
+            indicatorKey: 'supertrend',
+            version: 1,
+            inputs: {},
+            summary: 'Supertrend',
+          },
+        ]}
+        indicatorStateKeysByKey={{ supertrend: ['signal', 'value'], sma: ['value'] }}
+      />,
+    );
+    const trigger = screen.getByLabelText('Indicator state field');
+    await user.click(trigger);
+    expect({
+      signal: screen.getByText('signal'),
+      value: screen.getByText('value'),
+      custom: screen.getByLabelText('Indicator state field (custom)'),
+    }).toEqual({
+      signal: expect.anything(),
+      value: expect.anything(),
+      custom: expect.anything(),
+    });
+  });
+
+  it('falls back to a freetext-only combobox for IndicatorRef when the catalog has no entry for the indicator key', () => {
+    render(
+      <Harness
+        initial={{
+          kind: OperandKind.IndicatorRef,
+          instanceId: 'ind-a',
+          stateKey: '',
+          valueType: StateValueType.Number,
+        }}
+        indicators={[
+          {
+            id: 'ind-a',
+            indicatorKey: 'supertrend',
+            version: 1,
+            inputs: {},
+            summary: 'Supertrend',
+          },
+        ]}
+        indicatorStateKeysByKey={{ sma: ['value'] }}
+      />,
+    );
+    expect(screen.getByLabelText('Indicator state field (custom)')).toBeDefined();
   });
 });
 

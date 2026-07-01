@@ -18,7 +18,11 @@ import {
 import { Box, Flex, Select, Text, TextField } from '@radix-ui/themes';
 import type { ReactNode } from 'react';
 import { isBoolOperand, OperandValueKind, operandValueKind } from '../../lib/rule-form-schema.js';
-import { OperandPicker, operandNeedsInterval } from './operand-picker.js';
+import {
+  type IndicatorStateKeysByKey,
+  OperandPicker,
+  operandNeedsInterval,
+} from './operand-picker.js';
 import { legalOperatorsFor, OPERATOR_OPTIONS, OperatorPicker } from './operator-picker.js';
 import { PERIOD_LABELS } from './trigger-picker.js';
 
@@ -66,6 +70,7 @@ export function LeafEditor({
   indicators,
   instancePeriods,
   knownStateKeys,
+  indicatorStateKeysByKey,
   priorActions = [],
 }: {
   value: LeafCondition;
@@ -73,6 +78,7 @@ export function LeafEditor({
   indicators: IndicatorInstance[];
   instancePeriods: InstancePeriods;
   knownStateKeys: KnownStateKeys;
+  indicatorStateKeysByKey?: IndicatorStateKeysByKey;
   priorActions?: Action[];
 }): ReactNode {
   const left = value.left;
@@ -93,6 +99,7 @@ export function LeafEditor({
             indicators={visibleIndicators}
             symbolStateKeys={knownStateKeys.symbol}
             globalStateKeys={knownStateKeys.global}
+            indicatorStateKeysByKey={indicatorStateKeysByKey}
             ariaLabel="Left operand kind"
           />
         </Box>
@@ -118,6 +125,7 @@ export function LeafEditor({
               onChange,
               visibleIndicators,
               knownStateKeys,
+              indicatorStateKeysByKey,
               left,
               priorActions,
             )}
@@ -149,6 +157,7 @@ function renderFamilyBody(
   onChange: (next: LeafCondition) => void,
   indicators: IndicatorInstance[],
   knownStateKeys: KnownStateKeys,
+  indicatorStateKeysByKey: IndicatorStateKeysByKey | undefined,
   left: ConditionOperand,
   priorActions: Action[],
 ): ReactNode {
@@ -168,6 +177,7 @@ function renderFamilyBody(
             indicators={indicators}
             symbolStateKeys={knownStateKeys.symbol}
             globalStateKeys={knownStateKeys.global}
+            indicatorStateKeysByKey={indicatorStateKeysByKey}
             literalValueType={rhsLiteralType}
             ariaLabel="Right operand kind"
           />
@@ -186,6 +196,7 @@ function renderFamilyBody(
               indicators={indicators}
               symbolStateKeys={knownStateKeys.symbol}
               globalStateKeys={knownStateKeys.global}
+              indicatorStateKeysByKey={indicatorStateKeysByKey}
               literalValueType={rhsLiteralType}
               ariaLabel="Upper bound operand kind"
             />
@@ -200,6 +211,7 @@ function renderFamilyBody(
               indicators={indicators}
               symbolStateKeys={knownStateKeys.symbol}
               globalStateKeys={knownStateKeys.global}
+              indicatorStateKeysByKey={indicatorStateKeysByKey}
               literalValueType={rhsLiteralType}
               ariaLabel="Lower bound operand kind"
             />

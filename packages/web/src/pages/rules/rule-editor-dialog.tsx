@@ -20,6 +20,7 @@ import { type ReactNode, useState } from 'react';
 import { type SubmitHandler, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { ApiError } from '../../lib/api-fetch.js';
+import { useIndicatorCatalog } from '../../lib/hooks/indicators.js';
 import { useProfiles } from '../../lib/hooks/profiles.js';
 import {
   type RuleInput,
@@ -33,7 +34,7 @@ import { FIELD_LABELS, type RuleFormValues, ruleFormSchema } from '../../lib/rul
 import { ActionsPicker } from './actions-picker.js';
 import { ConditionTreeEditor } from './condition-tree-editor.js';
 import type { InstancePeriods, KnownStateKeys } from './leaf-editor.js';
-import { filterIndicatorsByScope } from './operand-picker.js';
+import { filterIndicatorsByScope, type IndicatorStateKeysByKey } from './operand-picker.js';
 import { ScopePicker } from './scope-picker.js';
 import { TRIGGER_KIND_EXPLANATIONS, TRIGGER_KIND_LABELS, TriggerPicker } from './trigger-picker.js';
 
@@ -84,6 +85,15 @@ export function RuleEditorDialog({
     symbol: Object.keys(symbolStateQuery.data ?? {}),
     global: Object.keys(globalStateQuery.data ?? {}),
   };
+
+  // Seed the `IndicatorRef` operand's state-key combobox from the catalog —
+  // one map entry per `IndicatorDefinition.key`, listing its `state[].key`s.
+  const indicatorCatalogQuery = useIndicatorCatalog();
+  const indicatorStateKeysByKey: IndicatorStateKeysByKey = {};
+  const catalog = Array.isArray(indicatorCatalogQuery.data) ? indicatorCatalogQuery.data : [];
+  for (const definition of catalog) {
+    indicatorStateKeysByKey[definition.key] = definition.state.map((field) => field.key);
+  }
 
   // Lazy: assume each instance is computed at the symbol's first watched
   // period; the IndicatorInstance shape doesn't carry the explicit period,
@@ -219,6 +229,7 @@ export function RuleEditorDialog({
                 indicators={scopedIndicators}
                 instancePeriods={instancePeriods}
                 knownStateKeys={knownStateKeys}
+                indicatorStateKeysByKey={indicatorStateKeysByKey}
                 priorActions={actions}
               />
               {conditionError ? (

@@ -26,6 +26,7 @@ import {
   type KnownStateKeys,
   LeafEditor,
 } from './leaf-editor.js';
+import type { IndicatorStateKeysByKey } from './operand-picker.js';
 
 /**
  * The recursive condition-tree editor — walks a {@link ConditionNode}
@@ -44,6 +45,7 @@ export function ConditionTreeEditor({
   indicators,
   instancePeriods,
   knownStateKeys,
+  indicatorStateKeysByKey,
   priorActions = [],
 }: {
   value: ConditionNode;
@@ -51,6 +53,12 @@ export function ConditionTreeEditor({
   indicators: IndicatorInstance[];
   instancePeriods: InstancePeriods;
   knownStateKeys: KnownStateKeys;
+  /**
+   * Per-indicator-definition state-key catalog — feeds the `IndicatorRef`
+   * operand's state-key combobox. Threaded straight through to every
+   * `<OperandPicker>` a leaf renders.
+   */
+  indicatorStateKeysByKey?: IndicatorStateKeysByKey;
   /**
    * Actions declared on the same rule — fed into each leaf so the RHS literal
    * input can infer its type from a matching `SetState` action's `value.type`
@@ -67,6 +75,7 @@ export function ConditionTreeEditor({
       indicators={indicators}
       instancePeriods={instancePeriods}
       knownStateKeys={knownStateKeys}
+      indicatorStateKeysByKey={indicatorStateKeysByKey}
       priorActions={priorActions}
     />
   );
@@ -97,6 +106,7 @@ function NodeView({
   indicators,
   instancePeriods,
   knownStateKeys,
+  indicatorStateKeysByKey,
   priorActions,
 }: {
   path: number[];
@@ -106,6 +116,7 @@ function NodeView({
   indicators: IndicatorInstance[];
   instancePeriods: InstancePeriods;
   knownStateKeys: KnownStateKeys;
+  indicatorStateKeysByKey: IndicatorStateKeysByKey | undefined;
   priorActions: Action[];
 }): ReactNode {
   if (node.kind === ConditionNodeKind.Leaf) {
@@ -124,6 +135,7 @@ function NodeView({
           indicators={indicators}
           instancePeriods={instancePeriods}
           knownStateKeys={knownStateKeys}
+          indicatorStateKeysByKey={indicatorStateKeysByKey}
           priorActions={priorActions}
         />
       </Card>
@@ -190,6 +202,7 @@ function NodeView({
                     indicators={indicators}
                     instancePeriods={instancePeriods}
                     knownStateKeys={knownStateKeys}
+                    indicatorStateKeysByKey={indicatorStateKeysByKey}
                     priorActions={priorActions}
                   />
                 </Box>

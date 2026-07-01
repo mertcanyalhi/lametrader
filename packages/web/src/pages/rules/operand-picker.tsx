@@ -15,6 +15,18 @@ import type { ReactNode } from 'react';
 import { StateKeyPicker } from './state-key-picker.js';
 
 /**
+ * Per-indicator-key catalog of the state-field keys the definition declares.
+ *
+ * Keyed by {@link IndicatorDefinition.key} (e.g. `'sma'` → `['value']`,
+ * `'supertrend'` → `['signal', 'value']`).
+ *
+ * Feeds the `IndicatorRef` operand's state-key combobox — missing entries fall
+ * through to a freetext-only picker via {@link StateKeyPicker}'s empty-list
+ * behaviour.
+ */
+export type IndicatorStateKeysByKey = Record<string, string[]>;
+
+/**
  * Drop-down options for the operand-kind selector, in the order they render.
  *
  * Grouped by category so the picker reads top-to-bottom: tick / bar OHLCV /
@@ -85,6 +97,11 @@ export const RHS_ALLOWED_KINDS = OPERAND_KIND_OPTIONS.map((option) => option.val
  *                          row's `interval` by the caller before passing in.
  * @param symbolStateKeys - Known symbol-state keys to seed the dropdown.
  * @param globalStateKeys - Known global-state keys to seed the dropdown.
+ * @param indicatorStateKeysByKey - Per-indicator-definition state-key catalog,
+ *                                    keyed by `IndicatorDefinition.key`. Used
+ *                                    to seed the `IndicatorRef.stateKey`
+ *                                    combobox. Missing entries fall through
+ *                                    to a freetext-only picker.
  * @param literalValueType - When this is an RHS Literal, the LHS-derived value
  *                            type that types the input control. `undefined`
  *                            means "infer from the operand itself".
@@ -97,6 +114,7 @@ export function OperandPicker({
   indicators,
   symbolStateKeys,
   globalStateKeys,
+  indicatorStateKeysByKey,
   literalValueType,
   ariaLabel,
 }: {
@@ -105,6 +123,7 @@ export function OperandPicker({
   indicators: IndicatorInstance[];
   symbolStateKeys: string[];
   globalStateKeys: string[];
+  indicatorStateKeysByKey?: IndicatorStateKeysByKey;
   literalValueType?: StateValueType;
   ariaLabel: string;
 }): ReactNode {
@@ -158,6 +177,7 @@ export function OperandPicker({
         indicators={indicators}
         symbolStateKeys={symbolStateKeys}
         globalStateKeys={globalStateKeys}
+        indicatorStateKeysByKey={indicatorStateKeysByKey}
         literalValueType={literalValueType}
       />
     </Flex>
@@ -178,6 +198,7 @@ function OperandDetail({
   indicators,
   symbolStateKeys,
   globalStateKeys,
+  indicatorStateKeysByKey,
   literalValueType,
 }: {
   value: ConditionOperand;
@@ -185,6 +206,7 @@ function OperandDetail({
   indicators: IndicatorInstance[];
   symbolStateKeys: string[];
   globalStateKeys: string[];
+  indicatorStateKeysByKey?: IndicatorStateKeysByKey;
   literalValueType?: StateValueType;
 }): ReactNode {
   switch (value.kind) {
@@ -195,7 +217,10 @@ function OperandDetail({
     case OperandKind.Close:
     case OperandKind.Volume:
       return null;
-    case OperandKind.IndicatorRef:
+    case OperandKind.IndicatorRef: {
+      const selected = indicators.find((instance) => instance.id === value.instanceId);
+      const indicatorKey = selected?.indicatorKey ?? '';
+      const knownStateKeys = indicatorStateKeysByKey?.[indicatorKey] ?? [];
       return (
         <Flex direction="column" gap="2">
           <Select.Root
@@ -211,14 +236,15 @@ function OperandDetail({
               ))}
             </Select.Content>
           </Select.Root>
-          <TextField.Root
-            aria-label="Indicator state field"
-            placeholder="State field key (e.g. signal)"
+          <StateKeyPicker
             value={value.stateKey}
-            onChange={(event) => onChange({ ...value, stateKey: event.target.value })}
+            knownKeys={knownStateKeys}
+            ariaLabel="Indicator state field"
+            onChange={(stateKey) => onChange({ ...value, stateKey })}
           />
         </Flex>
       );
+    }
     case OperandKind.SymbolStateRef:
       return (
         <StateKeyPicker
