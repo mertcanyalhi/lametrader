@@ -180,7 +180,7 @@ describe('SymbolRuleEventsDialog', () => {
     render(<SymbolRuleEventsDialog symbolId={SYMBOL} />, { wrapper });
     await user.click(await screen.findByRole('button', { name: 'Events (1)' }));
     expect(
-      await screen.findByRole('heading', { name: `Rule events for ${SYMBOL}` }),
+      await screen.findByRole('heading', { name: `Rule events ${SYMBOL}` }),
     ).toBeInTheDocument();
     expect(
       ['Source ts', 'Fired at', 'Rule', 'Type', 'Detail'].map(

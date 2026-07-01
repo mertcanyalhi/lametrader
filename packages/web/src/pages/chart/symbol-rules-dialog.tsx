@@ -79,14 +79,19 @@ function ScopedDialog({ profileId, symbolId }: { profileId: string; symbolId: st
           </Button>
         </Dialog.Trigger>
         <Dialog.Content maxWidth="900px">
-          <Dialog.Title>Rules for {symbolId}</Dialog.Title>
+          <Flex align="center" justify="between" gap="3">
+            <Dialog.Title mb="0">
+              Rules{' '}
+              <Text as="span" size="4" weight="regular" color="gray">
+                {symbolId}
+              </Text>
+            </Dialog.Title>
+            <Button onClick={() => setCreating(true)}>
+              <Plus size={16} aria-hidden="true" />
+              New rule
+            </Button>
+          </Flex>
           <Flex direction="column" gap="3" mt="3">
-            <Flex justify="end">
-              <Button onClick={() => setCreating(true)}>
-                <Plus size={16} aria-hidden="true" />
-                New rule
-              </Button>
-            </Flex>
             {rulesQuery.isPending ? (
               <Skeleton height="1.25rem" width="10rem" />
             ) : rulesQuery.isError ? (

@@ -1,5 +1,4 @@
 import {
-  type Period,
   type Rule,
   type RuleScope,
   RuleScopeKind,
@@ -12,12 +11,11 @@ import {
   Button,
   Flex,
   IconButton,
-  Switch,
   Table,
   Text,
   Tooltip,
 } from '@radix-ui/themes';
-import { Activity, Pencil, Trash2 } from 'lucide-react';
+import { Activity, Pause, Pencil, Play, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { ApiError } from '../../lib/api-fetch.js';
@@ -69,7 +67,7 @@ function isVisible(
  * 1. play/pause toggle — flips `enabled` via {@link usePatchRule}.
  * 2. Name + colored Active/Inactive badge.
  * 3. Scope — `Single <symbol>` / `Multiple <count>` / `All` per #426.
- * 4. Trigger — kind label plus per-kind disambiguator (`(1m)`, `(60000ms)`, …).
+ * 4. Trigger — kind label plus a per-kind disambiguator badge (`1m`, `60000ms`, …).
  * 5. Last fired — formatted timestamp or `Never`.
  * 6. Actions — Edit / Events / Delete icon buttons.
  *
@@ -150,21 +148,27 @@ function RuleRow({
     <Table.Row align="center">
       {isVisible(columns, 'enabled') ? (
         <Table.Cell>
-          <Switch
-            checked={rule.enabled}
+          <IconButton
+            type="button"
+            variant="ghost"
+            color="gray"
             disabled={patch.isPending}
-            onCheckedChange={(next) =>
-              patch.mutate({ id: rule.id, patch: { enabled: next === true } })
-            }
+            onClick={() => patch.mutate({ id: rule.id, patch: { enabled: !rule.enabled } })}
             aria-label={rule.enabled ? `Disable ${rule.name}` : `Enable ${rule.name}`}
-          />
+          >
+            {rule.enabled ? (
+              <Pause size={16} aria-hidden="true" />
+            ) : (
+              <Play size={16} aria-hidden="true" />
+            )}
+          </IconButton>
         </Table.Cell>
       ) : null}
       {isVisible(columns, 'name') ? (
         <Table.Cell>
           <Flex direction="column" gap="1">
             <Flex gap="2" align="center">
-              <Text weight="bold">{rule.name}</Text>
+              <Text>{rule.name}</Text>
               <Badge color={rule.enabled ? 'green' : 'gray'}>
                 {rule.enabled ? 'Active' : 'Inactive'}
               </Badge>
@@ -184,7 +188,7 @@ function RuleRow({
       ) : null}
       {isVisible(columns, 'trigger') ? (
         <Table.Cell>
-          <Text size="2">{formatTrigger(rule.trigger)}</Text>
+          <TriggerCell trigger={rule.trigger} />
         </Table.Cell>
       ) : null}
       {isVisible(columns, 'lastFired') ? (
@@ -237,7 +241,7 @@ function ScopeCell({ scope }: { scope: RuleScope }): ReactNode {
     case RuleScopeKind.Symbol:
       return (
         <Text size="2">
-          Single <Text weight="medium">{scope.symbolId}</Text>
+          Single <Badge variant="soft">{scope.symbolId}</Badge>
         </Text>
       );
     case RuleScopeKind.Symbols:
@@ -252,36 +256,37 @@ function ScopeCell({ scope }: { scope: RuleScope }): ReactNode {
 }
 
 /**
- * Format a {@link Trigger} as one human-readable line — the kind's label, plus
- * a parenthesised disambiguator when the trigger needs one
- * (bar-cadence period or wall-clock intervalMs).
- *
- * `EveryTime` / `Once` carry no disambiguator and render as the bare label.
+ * The Trigger cell — the kind's label plus, when the trigger needs one, its
+ * disambiguator (bar-cadence period or wall-clock intervalMs) in a Badge so
+ * the variable part reads at a glance.
  */
-export function formatTrigger(trigger: Trigger): string {
-  const label = TRIGGER_KIND_LABELS[trigger.kind];
+function TriggerCell({ trigger }: { trigger: Trigger }): ReactNode {
+  const detail = triggerDetail(trigger);
+  return (
+    <Flex gap="2" align="center">
+      <Text size="2">{TRIGGER_KIND_LABELS[trigger.kind]}</Text>
+      {detail !== null ? <Badge variant="soft">{detail}</Badge> : null}
+    </Flex>
+  );
+}
+
+/**
+ * The trigger's disambiguator token — a compact bar-cadence period (`'1m'`) or
+ * wall-clock interval (`'60000ms'`), or `null` for triggers that carry none
+ * (`EveryTime` / `Once`).
+ */
+export function triggerDetail(trigger: Trigger): string | null {
   if (
     trigger.kind === TriggerKind.OncePerBar ||
     trigger.kind === TriggerKind.OncePerBarOpen ||
     trigger.kind === TriggerKind.OncePerBarClose
   ) {
-    return `${label} (${shortPeriod(trigger.period)})`;
+    return trigger.period;
   }
   if (trigger.kind === TriggerKind.OncePerInterval) {
-    return `${label} (${trigger.intervalMs}ms)`;
+    return `${trigger.intervalMs}ms`;
   }
-  return label;
-}
-
-/**
- * Compact period label for the trigger column — short over the long
- * picker copy so each row stays on one line.
- *
- * The {@link Period} enum's string value is already a compact token
- * (`'1m'`, `'1h'`, …), so we surface it directly.
- */
-function shortPeriod(period: Period): string {
-  return period;
+  return null;
 }
 
 /**
