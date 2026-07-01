@@ -124,7 +124,7 @@ describe('OperandPicker', () => {
     });
   });
 
-  it('seeds the state-key dropdown with the known keys plus a freetext fallback', async () => {
+  it('exposes the known symbol-state keys as filterable combobox options', async () => {
     const user = userEvent.setup();
     render(
       <Harness
@@ -136,15 +136,44 @@ describe('OperandPicker', () => {
         symbolStateKeys={['lastFiredAt', 'cooldown']}
       />,
     );
-    // The Radix Select trigger surfaces its options on open.
-    const trigger = screen.getByLabelText('Symbol state key');
-    await user.click(trigger);
-    expect(screen.getByText('lastFiredAt')).toBeDefined();
-    expect(screen.getByText('cooldown')).toBeDefined();
-    expect(screen.getByLabelText('Symbol state key (custom)')).toBeDefined();
+    const input = screen.getByLabelText('Symbol state key');
+    await user.click(input);
+    await user.keyboard('{ArrowDown}');
+    expect({
+      lastFiredAt: screen.getByText('lastFiredAt'),
+      cooldown: screen.getByText('cooldown'),
+    }).toEqual({
+      lastFiredAt: expect.anything(),
+      cooldown: expect.anything(),
+    });
   });
 
-  it('seeds the IndicatorRef state-key dropdown from the catalog entry matching the selected instance', async () => {
+  it('writes a freshly-typed symbol-state key through onCreateOption on Enter', async () => {
+    const user = userEvent.setup();
+    const snapshots: ConditionOperand[] = [];
+    render(
+      <Harness
+        initial={{
+          kind: OperandKind.SymbolStateRef,
+          key: '',
+          valueType: StateValueType.Number,
+        }}
+        symbolStateKeys={[]}
+        onSnapshot={(operand) => snapshots.push(operand)}
+      />,
+    );
+    const input = screen.getByLabelText('Symbol state key');
+    await user.click(input);
+    await user.keyboard('novel{Enter}');
+    const last = snapshots[snapshots.length - 1];
+    expect(last).toEqual({
+      kind: OperandKind.SymbolStateRef,
+      key: 'novel',
+      valueType: StateValueType.Number,
+    });
+  });
+
+  it('seeds the IndicatorRef state-key options from the catalog entry matching the selected instance', async () => {
     const user = userEvent.setup();
     render(
       <Harness
@@ -166,20 +195,19 @@ describe('OperandPicker', () => {
         indicatorStateKeysByKey={{ supertrend: ['signal', 'value'], sma: ['value'] }}
       />,
     );
-    const trigger = screen.getByLabelText('Indicator state field');
-    await user.click(trigger);
+    const input = screen.getByLabelText('Indicator state field');
+    await user.click(input);
+    await user.keyboard('{ArrowDown}');
     expect({
       signal: screen.getByText('signal'),
       value: screen.getByText('value'),
-      custom: screen.getByLabelText('Indicator state field (custom)'),
     }).toEqual({
       signal: expect.anything(),
       value: expect.anything(),
-      custom: expect.anything(),
     });
   });
 
-  it('falls back to a freetext-only combobox for IndicatorRef when the catalog has no entry for the indicator key', () => {
+  it('renders an IndicatorRef combobox even when the catalog has no entry for the indicator key', () => {
     render(
       <Harness
         initial={{
@@ -200,7 +228,7 @@ describe('OperandPicker', () => {
         indicatorStateKeysByKey={{ sma: ['value'] }}
       />,
     );
-    expect(screen.getByLabelText('Indicator state field (custom)')).toBeDefined();
+    expect(screen.getByLabelText('Indicator state field')).toBeDefined();
   });
 });
 

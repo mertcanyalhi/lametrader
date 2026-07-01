@@ -50,7 +50,7 @@ function Harness({
 }
 
 describe('ActionsPicker — state-key combobox', () => {
-  it('renders the StateKeyPicker dropdown + freetext fallback for SetSymbolState', async () => {
+  it('exposes the known symbol-state keys as filterable options for SetSymbolState', async () => {
     const user = userEvent.setup();
     render(
       <Harness
@@ -64,15 +64,19 @@ describe('ActionsPicker — state-key combobox', () => {
         knownStateKeys={{ symbol: ['lastFiredAt', 'cooldown'], global: [] }}
       />,
     );
-    // Both the dropdown trigger and the custom-text fallback share the label root.
-    const trigger = screen.getByLabelText('Symbol state key');
-    await user.click(trigger);
-    expect(screen.getByText('lastFiredAt')).toBeDefined();
-    expect(screen.getByText('cooldown')).toBeDefined();
-    expect(screen.getByLabelText('Symbol state key (custom)')).toBeDefined();
+    const input = screen.getByLabelText('Symbol state key');
+    await user.click(input);
+    await user.keyboard('{ArrowDown}');
+    expect({
+      lastFiredAt: screen.getByText('lastFiredAt'),
+      cooldown: screen.getByText('cooldown'),
+    }).toEqual({
+      lastFiredAt: expect.anything(),
+      cooldown: expect.anything(),
+    });
   });
 
-  it('renders the StateKeyPicker dropdown + freetext fallback for SetGlobalState', () => {
+  it('renders a single Global state key combobox for SetGlobalState', () => {
     render(
       <Harness
         initial={[
@@ -86,10 +90,9 @@ describe('ActionsPicker — state-key combobox', () => {
       />,
     );
     expect(screen.getByLabelText('Global state key')).toBeDefined();
-    expect(screen.getByLabelText('Global state key (custom)')).toBeDefined();
   });
 
-  it('renders the StateKeyPicker for RemoveSymbolState', () => {
+  it('renders a single Symbol state key combobox for RemoveSymbolState', () => {
     render(
       <Harness
         initial={[{ kind: ActionKind.RemoveSymbolState, key: '' }]}
@@ -97,10 +100,9 @@ describe('ActionsPicker — state-key combobox', () => {
       />,
     );
     expect(screen.getByLabelText('Symbol state key')).toBeDefined();
-    expect(screen.getByLabelText('Symbol state key (custom)')).toBeDefined();
   });
 
-  it('renders the StateKeyPicker for RemoveGlobalState', () => {
+  it('renders a single Global state key combobox for RemoveGlobalState', () => {
     render(
       <Harness
         initial={[{ kind: ActionKind.RemoveGlobalState, key: '' }]}
@@ -108,10 +110,9 @@ describe('ActionsPicker — state-key combobox', () => {
       />,
     );
     expect(screen.getByLabelText('Global state key')).toBeDefined();
-    expect(screen.getByLabelText('Global state key (custom)')).toBeDefined();
   });
 
-  it('writes the freetext value through to the action on change', async () => {
+  it('writes a freshly-typed key through onCreateOption on Enter', async () => {
     const user = userEvent.setup();
     const snapshots: Action[][] = [];
     render(
@@ -121,7 +122,9 @@ describe('ActionsPicker — state-key combobox', () => {
         onSnapshot={(actions) => snapshots.push(actions)}
       />,
     );
-    await user.type(screen.getByLabelText('Symbol state key (custom)'), 'novel');
+    const input = screen.getByLabelText('Symbol state key');
+    await user.click(input);
+    await user.keyboard('novel{Enter}');
     const last = snapshots[snapshots.length - 1];
     expect(last).toEqual([{ kind: ActionKind.RemoveSymbolState, key: 'novel' }]);
   });
