@@ -434,7 +434,12 @@ function AddView({
 
   return (
     <>
-      <Dialog.Title>Configure {pick.name}</Dialog.Title>
+      <Dialog.Title>
+        Configure{' '}
+        <Text as="span" size="4" weight="regular" color="gray">
+          {pick.name}
+        </Text>
+      </Dialog.Title>
       <Dialog.Description size="2" color="gray">
         {pick.description}
       </Dialog.Description>
@@ -499,7 +504,12 @@ function EditView({
 
   return (
     <>
-      <Dialog.Title>Edit {definition.name}</Dialog.Title>
+      <Dialog.Title>
+        Edit{' '}
+        <Text as="span" size="4" weight="regular" color="gray">
+          {definition.name}
+        </Text>
+      </Dialog.Title>
       <Dialog.Description size="2" color="gray">
         {definition.description}
       </Dialog.Description>

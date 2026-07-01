@@ -154,7 +154,7 @@ describe('SymbolRulesDialog', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Rules (0)' })).not.toBeNull());
   });
 
-  it('opens to a title "Rules for <symbolId>" when the trigger is clicked', async () => {
+  it('opens to a title "Rules <symbolId>" when the trigger is clicked', async () => {
     onRequest('/profiles', () => [
       {
         id: 'profile-1',
@@ -174,7 +174,7 @@ describe('SymbolRulesDialog', () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole('button', { name: 'Rules (1)' }));
 
-    expect(screen.getByRole('heading', { name: 'Rules for crypto:BTCUSDT' })).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'Rules crypto:BTCUSDT' })).toBeDefined();
   });
 
   it('renders the RulesTable with the Scope column omitted (implicit single symbol)', async () => {

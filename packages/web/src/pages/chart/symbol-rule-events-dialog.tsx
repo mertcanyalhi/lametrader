@@ -140,7 +140,12 @@ export function SymbolRuleEventsDialog({ symbolId }: { symbolId: string }): Reac
         </Button>
       </Dialog.Trigger>
       <Dialog.Content maxWidth="900px">
-        <Dialog.Title>Rule events for {symbolId}</Dialog.Title>
+        <Dialog.Title>
+          Rule events{' '}
+          <Text as="span" size="4" weight="regular" color="gray">
+            {symbolId}
+          </Text>
+        </Dialog.Title>
         {open ? <EventsTableView symbolId={symbolId} /> : null}
         <Flex gap="3" mt="4" justify="end">
           <Dialog.Close>
