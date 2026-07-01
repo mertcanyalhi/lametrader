@@ -18,7 +18,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { formatTrigger, RulesTable } from './rules-table';
+import { RulesTable, triggerDetail } from './rules-table';
 
 afterEach(() => {
   cleanup();
@@ -105,20 +105,18 @@ function Harness({
   );
 }
 
-describe('formatTrigger', () => {
-  it('returns "Every time" for an EveryTime trigger', () => {
-    expect(formatTrigger({ kind: TriggerKind.EveryTime })).toEqual('Every time');
+describe('triggerDetail', () => {
+  it('returns null for an EveryTime trigger', () => {
+    expect(triggerDetail({ kind: TriggerKind.EveryTime })).toEqual(null);
   });
 
-  it('returns "Once per bar (1m)" for a OncePerBar 1-minute trigger', () => {
-    expect(formatTrigger({ kind: TriggerKind.OncePerBar, period: Period.OneMinute })).toEqual(
-      'Once per bar (1m)',
-    );
+  it('returns "1m" for a OncePerBar 1-minute trigger', () => {
+    expect(triggerDetail({ kind: TriggerKind.OncePerBar, period: Period.OneMinute })).toEqual('1m');
   });
 
-  it('returns "Once per interval (60000ms)" for a 60 s wall-clock trigger', () => {
-    expect(formatTrigger({ kind: TriggerKind.OncePerInterval, intervalMs: 60_000 })).toEqual(
-      'Once per interval (60000ms)',
+  it('returns "60000ms" for a 60 s wall-clock trigger', () => {
+    expect(triggerDetail({ kind: TriggerKind.OncePerInterval, intervalMs: 60_000 })).toEqual(
+      '60000ms',
     );
   });
 });
@@ -226,7 +224,7 @@ describe('RulesTable play/pause toggle', () => {
     const user = userEvent.setup();
     const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
     render(<Harness rules={[ruleWith({ id: 'r1', name: 'Cross above', enabled: true })]} />);
-    const toggle = screen.getByRole('switch', { name: 'Disable Cross above' });
+    const toggle = screen.getByRole('button', { name: 'Disable Cross above' });
     await user.click(toggle);
     const patchCall = fetchMock.mock.calls.find((call) => {
       const init = call[1] as RequestInit | undefined;

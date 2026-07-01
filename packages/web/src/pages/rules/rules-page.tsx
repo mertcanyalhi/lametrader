@@ -112,7 +112,7 @@ function RulesContent({
   if (query.data.length === 0) {
     return (
       <Text size="2" color="gray">
-        No rules yet — create one to start firing notifications and state mutations.
+        No rules in this profile yet.
       </Text>
     );
   }

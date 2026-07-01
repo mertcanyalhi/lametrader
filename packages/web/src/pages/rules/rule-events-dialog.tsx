@@ -1,8 +1,21 @@
 import { type Rule, type RuleEventEntry, RuleEventType } from '@lametrader/core';
-import { Badge, Callout, Dialog, Flex, Skeleton, Table, Text } from '@radix-ui/themes';
-import type { ReactNode } from 'react';
+import { Badge, Button, Callout, Dialog, Flex, Skeleton, Table, Text } from '@radix-ui/themes';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import { type ReactNode, useState } from 'react';
 import { formatTimestamp } from '../../lib/format.js';
 import { useRuleEvents } from '../../lib/hooks/rules.js';
+
+/** Rows shown per page in the events table. */
+const PAGE_SIZE = 10;
+
+/** The sortable columns of the events table. */
+type SortColumn = 'type' | 'ts';
+
+/** A column + direction the events table is sorted by. */
+interface Sort {
+  column: SortColumn;
+  dir: 'asc' | 'desc';
+}
 
 /**
  * Per-event color so the "type" badge reads at a glance even in a dense log.
@@ -21,9 +34,8 @@ const EVENT_COLORS: Readonly<Record<RuleEventType, 'green' | 'amber' | 'blue' | 
 /**
  * The rule-events view — newest-first table of one rule's event log.
  *
- * Opened from the rules table's Events action; fetches via {@link useRuleEvents}.
- * Pagination is out of scope here (the default 50-entry page covers normal
- * inspection; deeper history goes through the dedicated symbol-events view).
+ * Opened from the rules table's Events action; fetches via {@link useRuleEvents}
+ * (the 50 most recent entries) and renders them sortable + paginated.
  */
 export function RuleEventsDialog({
   rule,
@@ -39,11 +51,13 @@ export function RuleEventsDialog({
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content maxWidth="720px">
-        <Dialog.Title>Events — {rule.name}</Dialog.Title>
-        <Dialog.Description size="2" color="gray">
-          Newest first; the 50 most recent entries.
-        </Dialog.Description>
+      <Dialog.Content maxWidth="720px" aria-describedby={undefined}>
+        <Dialog.Title>
+          Events —{' '}
+          <Text as="span" size="4" weight="regular" color="gray">
+            {rule.name}
+          </Text>
+        </Dialog.Title>
         <Flex direction="column" gap="2" mt="3">
           {query.isPending ? (
             <Skeleton height="6rem" />
@@ -65,38 +79,127 @@ export function RuleEventsDialog({
 }
 
 /**
- * Dense table of {@link RuleEventEntry}s.
+ * Sortable, paginated table of {@link RuleEventEntry}s.
  *
- * Two columns: a type badge + the source timestamp; details are surfaced
- * per-row as a one-line summary (rendered destination + body, mutated key,
- * etc.) so the user gets the full picture without expanding rows.
+ * Type/When headers toggle the sort (default newest-first by timestamp);
+ * details are surfaced per-row as a one-line summary. The whole event log is
+ * already in memory (≤50 entries), so sort/slice happens client-side.
  */
 function RuleEventsTable({ events }: { events: RuleEventEntry[] }): ReactNode {
+  const [sort, setSort] = useState<Sort>({ column: 'ts', dir: 'desc' });
+  const [page, setPage] = useState(0);
+
+  const sorted = [...events].sort((a, b) => {
+    const cmp = sort.column === 'ts' ? a.ts - b.ts : a.type.localeCompare(b.type);
+    return sort.dir === 'asc' ? cmp : -cmp;
+  });
+  const pageCount = Math.ceil(sorted.length / PAGE_SIZE);
+  const current = Math.min(page, pageCount - 1);
+  const rows = sorted.slice(current * PAGE_SIZE, current * PAGE_SIZE + PAGE_SIZE);
+
+  /** Toggle direction when re-clicking the active column, else switch to it. */
+  function toggleSort(column: SortColumn): void {
+    setSort((prev) =>
+      prev.column === column
+        ? { column, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+        : { column, dir: 'desc' },
+    );
+    setPage(0);
+  }
+
   return (
-    <Table.Root variant="surface" size="1">
-      <Table.Header>
-        <Table.Row>
-          <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
-          <Table.ColumnHeaderCell>When</Table.ColumnHeaderCell>
-          <Table.ColumnHeaderCell>Details</Table.ColumnHeaderCell>
-        </Table.Row>
-      </Table.Header>
-      <Table.Body>
-        {events.map((event) => (
-          <Table.Row key={eventKey(event)}>
-            <Table.Cell>
-              <Badge color={EVENT_COLORS[event.type]}>{event.type}</Badge>
-            </Table.Cell>
-            <Table.Cell>
-              <Text size="1">{formatTimestamp(event.ts)}</Text>
-            </Table.Cell>
-            <Table.Cell>
-              <Text size="1">{describeEvent(event)}</Text>
-            </Table.Cell>
+    <>
+      <Table.Root variant="surface" size="1">
+        <Table.Header>
+          <Table.Row>
+            <SortableHeader label="Type" column="type" sort={sort} onSort={toggleSort} />
+            <SortableHeader label="When" column="ts" sort={sort} onSort={toggleSort} />
+            <Table.ColumnHeaderCell>Details</Table.ColumnHeaderCell>
           </Table.Row>
-        ))}
-      </Table.Body>
-    </Table.Root>
+        </Table.Header>
+        <Table.Body>
+          {rows.map((event) => (
+            <Table.Row key={eventKey(event)}>
+              <Table.Cell>
+                <Badge color={EVENT_COLORS[event.type]}>{event.type}</Badge>
+              </Table.Cell>
+              <Table.Cell>
+                <Text size="1">{formatTimestamp(event.ts)}</Text>
+              </Table.Cell>
+              <Table.Cell>
+                <Text size="1">{describeEvent(event)}</Text>
+              </Table.Cell>
+            </Table.Row>
+          ))}
+        </Table.Body>
+      </Table.Root>
+      {pageCount > 1 ? (
+        <Flex align="center" justify="end" gap="3" mt="1">
+          <Text size="1" color="gray">
+            Page {current + 1} of {pageCount}
+          </Text>
+          <Button
+            type="button"
+            size="1"
+            variant="soft"
+            color="gray"
+            disabled={current === 0}
+            onClick={() => setPage(current - 1)}
+          >
+            Previous
+          </Button>
+          <Button
+            type="button"
+            size="1"
+            variant="soft"
+            color="gray"
+            disabled={current >= pageCount - 1}
+            onClick={() => setPage(current + 1)}
+          >
+            Next
+          </Button>
+        </Flex>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * A clickable column header that sorts the events table by {@link column} and
+ * shows a chevron when it's the active sort.
+ */
+function SortableHeader({
+  label,
+  column,
+  sort,
+  onSort,
+}: {
+  label: string;
+  column: SortColumn;
+  sort: Sort;
+  onSort: (column: SortColumn) => void;
+}): ReactNode {
+  const active = sort.column === column;
+  return (
+    <Table.ColumnHeaderCell>
+      <Button
+        type="button"
+        variant="ghost"
+        color="gray"
+        size="1"
+        onClick={() => onSort(column)}
+        aria-label={`Sort by ${label}`}
+      >
+        {label}
+        {active ? (
+          sort.dir === 'asc' ? (
+            <ChevronUp size={12} aria-hidden="true" />
+          ) : (
+            <ChevronDown size={12} aria-hidden="true" />
+          )
+        ) : null}
+      </Button>
+    </Table.ColumnHeaderCell>
   );
 }
 
