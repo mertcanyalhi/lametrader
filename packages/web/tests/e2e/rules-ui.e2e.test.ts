@@ -62,11 +62,13 @@ describe('rules web UI bundle (e2e)', () => {
     expect(bundles.includes('Price')).toEqual(true);
   });
 
-  it('emits a bundle carrying the chart-page symbol-scoped rules dialog title copy', () => {
-    // 'Rules for ' is the symbol-scoped rules modal's title prefix (the
-    // chart bottom-bar Rules button opens it). Presence in the bundle confirms
-    // the dialog ships with the deployable artifact (issue #427).
+  it('emits a bundle carrying the chart-page symbol-scoped rules dialog empty-state copy', () => {
+    // The empty-state copy is a strong marker unique to the symbol-scoped
+    // rules dialog (the chart bottom-bar Rules button opens it). Presence in
+    // the bundle confirms the dialog ships with the deployable artifact
+    // (issue #427). Replaces the old "Rules for " title-prefix marker after
+    // PR #453 renamed the header copy.
     const bundles = readBundles();
-    expect(bundles.includes('Rules for ')).toEqual(true);
+    expect(bundles.includes('No rules yet — create one')).toEqual(true);
   });
 });
