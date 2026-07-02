@@ -18,13 +18,13 @@ export const STATE_QUERY_KEY = ['state'] as const;
 const STATE_OVERLAY_REFETCH_MS = 5_000;
 
 /** Stable key for the per-symbol state-map query. */
-export function symbolStateKey(symbolId: string) {
-  return [...STATE_QUERY_KEY, 'symbol', symbolId] as const;
+export function symbolStateKey(profileId: string, symbolId: string) {
+  return [...STATE_QUERY_KEY, 'symbol', profileId, symbolId] as const;
 }
 
 /** Stable key for the global state-map query. */
-export function globalStateKey() {
-  return [...STATE_QUERY_KEY, 'global'] as const;
+export function globalStateKey(profileId: string) {
+  return [...STATE_QUERY_KEY, 'global', profileId] as const;
 }
 
 /** Stable key for one symbol's state-key catalog. */
@@ -53,28 +53,42 @@ export function symbolStateSeriesKey(input: {
 }
 
 /**
- * Fetch a symbol's current rule-engine state map
- * (`GET /symbols/:id/state`). Empty state resolves to `{}`; an unwatched
- * symbol surfaces as an `ApiError` (404).
+ * Fetch a symbol's current rule-engine state map for a given profile
+ * (`GET /symbols/:id/state?profileId=<id>`). Empty state resolves to `{}`;
+ * an unwatched symbol surfaces as an `ApiError` (404). State is
+ * partitioned by `profileId` per issue #281, so the caller must pass one;
+ * the query is disabled when either `profileId` or `symbolId` is empty.
  */
 export function useSymbolState(
+  profileId: string,
   symbolId: string,
 ): UseQueryResult<Record<string, StateValue>, Error> {
   return useQuery({
-    queryKey: symbolStateKey(symbolId),
+    queryKey: symbolStateKey(profileId, symbolId),
     queryFn: () =>
-      apiFetch<Record<string, StateValue>>(`/symbols/${encodeURIComponent(symbolId)}/state`),
+      apiFetch<Record<string, StateValue>>(
+        `/symbols/${encodeURIComponent(symbolId)}/state?profileId=${encodeURIComponent(profileId)}`,
+      ),
+    enabled: profileId !== '' && symbolId !== '',
   });
 }
 
 /**
- * Fetch the cross-symbol global rule-engine state map
- * (`GET /state/global`). Empty state resolves to `{}`.
+ * Fetch the cross-symbol global rule-engine state map for a given profile
+ * (`GET /profiles/:profileId/state/global`). Empty state resolves to `{}`.
+ * The endpoint sits under `/profiles` since state is partitioned by
+ * `profileId` (#281); the query is disabled when `profileId` is empty.
  */
-export function useGlobalState(): UseQueryResult<Record<string, StateValue>, Error> {
+export function useGlobalState(
+  profileId: string,
+): UseQueryResult<Record<string, StateValue>, Error> {
   return useQuery({
-    queryKey: globalStateKey(),
-    queryFn: () => apiFetch<Record<string, StateValue>>('/state/global'),
+    queryKey: globalStateKey(profileId),
+    queryFn: () =>
+      apiFetch<Record<string, StateValue>>(
+        `/profiles/${encodeURIComponent(profileId)}/state/global`,
+      ),
+    enabled: profileId !== '',
   });
 }
 

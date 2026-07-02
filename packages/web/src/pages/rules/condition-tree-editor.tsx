@@ -45,6 +45,7 @@ export function ConditionTreeEditor({
   indicators,
   instancePeriods,
   knownStateKeys,
+  stateKeysLoading,
   indicatorStateKeysByKey,
   priorActions = [],
 }: {
@@ -53,6 +54,8 @@ export function ConditionTreeEditor({
   indicators: IndicatorInstance[];
   instancePeriods: InstancePeriods;
   knownStateKeys: KnownStateKeys;
+  /** Whether the state-key catalogs are still loading — shown in the pickers. */
+  stateKeysLoading?: boolean;
   /**
    * Per-indicator-definition state-key catalog — feeds the `IndicatorRef`
    * operand's state-key combobox. Threaded straight through to every
@@ -75,6 +78,7 @@ export function ConditionTreeEditor({
       indicators={indicators}
       instancePeriods={instancePeriods}
       knownStateKeys={knownStateKeys}
+      stateKeysLoading={stateKeysLoading}
       indicatorStateKeysByKey={indicatorStateKeysByKey}
       priorActions={priorActions}
     />
@@ -106,6 +110,7 @@ function NodeView({
   indicators,
   instancePeriods,
   knownStateKeys,
+  stateKeysLoading,
   indicatorStateKeysByKey,
   priorActions,
 }: {
@@ -116,6 +121,7 @@ function NodeView({
   indicators: IndicatorInstance[];
   instancePeriods: InstancePeriods;
   knownStateKeys: KnownStateKeys;
+  stateKeysLoading: boolean | undefined;
   indicatorStateKeysByKey: IndicatorStateKeysByKey | undefined;
   priorActions: Action[];
 }): ReactNode {
@@ -135,6 +141,7 @@ function NodeView({
           indicators={indicators}
           instancePeriods={instancePeriods}
           knownStateKeys={knownStateKeys}
+          stateKeysLoading={stateKeysLoading}
           indicatorStateKeysByKey={indicatorStateKeysByKey}
           priorActions={priorActions}
         />
@@ -202,6 +209,7 @@ function NodeView({
                     indicators={indicators}
                     instancePeriods={instancePeriods}
                     knownStateKeys={knownStateKeys}
+                    stateKeysLoading={stateKeysLoading}
                     indicatorStateKeysByKey={indicatorStateKeysByKey}
                     priorActions={priorActions}
                   />

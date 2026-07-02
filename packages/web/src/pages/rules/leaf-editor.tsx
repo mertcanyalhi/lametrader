@@ -70,6 +70,7 @@ export function LeafEditor({
   indicators,
   instancePeriods,
   knownStateKeys,
+  stateKeysLoading,
   indicatorStateKeysByKey,
   priorActions = [],
 }: {
@@ -78,6 +79,7 @@ export function LeafEditor({
   indicators: IndicatorInstance[];
   instancePeriods: InstancePeriods;
   knownStateKeys: KnownStateKeys;
+  stateKeysLoading?: boolean;
   indicatorStateKeysByKey?: IndicatorStateKeysByKey;
   priorActions?: Action[];
 }): ReactNode {
@@ -99,6 +101,7 @@ export function LeafEditor({
             indicators={visibleIndicators}
             symbolStateKeys={knownStateKeys.symbol}
             globalStateKeys={knownStateKeys.global}
+            stateKeysLoading={stateKeysLoading}
             indicatorStateKeysByKey={indicatorStateKeysByKey}
             ariaLabel="Left operand kind"
           />
@@ -125,6 +128,7 @@ export function LeafEditor({
               onChange,
               visibleIndicators,
               knownStateKeys,
+              stateKeysLoading,
               indicatorStateKeysByKey,
               left,
               priorActions,
@@ -157,6 +161,7 @@ function renderFamilyBody(
   onChange: (next: LeafCondition) => void,
   indicators: IndicatorInstance[],
   knownStateKeys: KnownStateKeys,
+  stateKeysLoading: boolean | undefined,
   indicatorStateKeysByKey: IndicatorStateKeysByKey | undefined,
   left: ConditionOperand,
   priorActions: Action[],
@@ -177,6 +182,7 @@ function renderFamilyBody(
             indicators={indicators}
             symbolStateKeys={knownStateKeys.symbol}
             globalStateKeys={knownStateKeys.global}
+            stateKeysLoading={stateKeysLoading}
             indicatorStateKeysByKey={indicatorStateKeysByKey}
             literalValueType={rhsLiteralType}
             ariaLabel="Right operand kind"
@@ -196,6 +202,7 @@ function renderFamilyBody(
               indicators={indicators}
               symbolStateKeys={knownStateKeys.symbol}
               globalStateKeys={knownStateKeys.global}
+              stateKeysLoading={stateKeysLoading}
               indicatorStateKeysByKey={indicatorStateKeysByKey}
               literalValueType={rhsLiteralType}
               ariaLabel="Upper bound operand kind"
@@ -211,6 +218,7 @@ function renderFamilyBody(
               indicators={indicators}
               symbolStateKeys={knownStateKeys.symbol}
               globalStateKeys={knownStateKeys.global}
+              stateKeysLoading={stateKeysLoading}
               indicatorStateKeysByKey={indicatorStateKeysByKey}
               literalValueType={rhsLiteralType}
               ariaLabel="Lower bound operand kind"

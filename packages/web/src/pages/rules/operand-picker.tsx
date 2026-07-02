@@ -114,6 +114,7 @@ export function OperandPicker({
   indicators,
   symbolStateKeys,
   globalStateKeys,
+  stateKeysLoading,
   indicatorStateKeysByKey,
   literalValueType,
   ariaLabel,
@@ -123,6 +124,7 @@ export function OperandPicker({
   indicators: IndicatorInstance[];
   symbolStateKeys: string[];
   globalStateKeys: string[];
+  stateKeysLoading?: boolean;
   indicatorStateKeysByKey?: IndicatorStateKeysByKey;
   literalValueType?: StateValueType;
   ariaLabel: string;
@@ -177,6 +179,7 @@ export function OperandPicker({
         indicators={indicators}
         symbolStateKeys={symbolStateKeys}
         globalStateKeys={globalStateKeys}
+        stateKeysLoading={stateKeysLoading}
         indicatorStateKeysByKey={indicatorStateKeysByKey}
         literalValueType={literalValueType}
       />
@@ -198,6 +201,7 @@ function OperandDetail({
   indicators,
   symbolStateKeys,
   globalStateKeys,
+  stateKeysLoading,
   indicatorStateKeysByKey,
   literalValueType,
 }: {
@@ -206,6 +210,7 @@ function OperandDetail({
   indicators: IndicatorInstance[];
   symbolStateKeys: string[];
   globalStateKeys: string[];
+  stateKeysLoading?: boolean;
   indicatorStateKeysByKey?: IndicatorStateKeysByKey;
   literalValueType?: StateValueType;
 }): ReactNode {
@@ -251,6 +256,7 @@ function OperandDetail({
           value={value.key}
           knownKeys={symbolStateKeys}
           ariaLabel="Symbol state key"
+          isLoading={stateKeysLoading}
           onChange={(key) => onChange({ ...value, key })}
         />
       );
@@ -260,6 +266,7 @@ function OperandDetail({
           value={value.key}
           knownKeys={globalStateKeys}
           ariaLabel="Global state key"
+          isLoading={stateKeysLoading}
           onChange={(key) => onChange({ ...value, key })}
         />
       );

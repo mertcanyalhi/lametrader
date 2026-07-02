@@ -79,12 +79,13 @@ export function RuleEditorDialog({
       : initial.scope.kind === RuleScopeKind.Symbols
         ? (initial.scope.symbolIds[0] ?? '')
         : (watchedSymbols[0]?.id ?? '');
-  const symbolStateQuery = useSymbolState(seedSymbolId);
-  const globalStateQuery = useGlobalState();
+  const symbolStateQuery = useSymbolState(initial.profileId, seedSymbolId);
+  const globalStateQuery = useGlobalState(initial.profileId);
   const knownStateKeys: KnownStateKeys = {
     symbol: Object.keys(symbolStateQuery.data ?? {}),
     global: Object.keys(globalStateQuery.data ?? {}),
   };
+  const stateKeysLoading = symbolStateQuery.isPending || globalStateQuery.isPending;
 
   // Seed the `IndicatorRef` operand's state-key combobox from the catalog —
   // one map entry per `IndicatorDefinition.key`, listing its `state[].key`s.
@@ -229,6 +230,7 @@ export function RuleEditorDialog({
                 indicators={scopedIndicators}
                 instancePeriods={instancePeriods}
                 knownStateKeys={knownStateKeys}
+                stateKeysLoading={stateKeysLoading}
                 indicatorStateKeysByKey={indicatorStateKeysByKey}
                 priorActions={actions}
               />
@@ -246,6 +248,7 @@ export function RuleEditorDialog({
                   setValue('actions', next, { shouldDirty: true, shouldValidate: false })
                 }
                 knownStateKeys={knownStateKeys}
+                stateKeysLoading={stateKeysLoading}
               />
               {actionsError ? (
                 <Text role="alert" color="red" size="1">
