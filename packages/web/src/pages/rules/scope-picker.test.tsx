@@ -66,45 +66,43 @@ function Harness({
 }
 
 describe('ScopePicker', () => {
-  it('renders a single-symbol popover trigger for the Symbol kind', () => {
+  it('renders a single-symbol combobox for the Symbol kind', () => {
     render(<Harness initial={{ kind: RuleScopeKind.Symbol, symbolId: 'crypto:BTCUSDT' }} />);
-    expect(screen.getByLabelText('Rule symbol')).toBeDefined();
-    expect(screen.queryByLabelText('Rule symbols')).toEqual(null);
+    expect(screen.getByRole('combobox', { name: 'Rule symbol' })).toBeDefined();
+    expect(screen.queryByRole('combobox', { name: 'Rule symbols' })).toEqual(null);
   });
 
-  it('renders a multi-checkbox group for the Symbols kind', () => {
+  it('renders a multi-symbol combobox for the Symbols kind', () => {
     render(<Harness initial={{ kind: RuleScopeKind.Symbols, symbolIds: ['crypto:BTCUSDT'] }} />);
-    expect(screen.getByRole('group', { name: 'Rule symbols' })).toBeDefined();
+    expect(screen.getByRole('combobox', { name: 'Rule symbols' })).toBeDefined();
   });
 
-  it('renders nothing extra for the AllSymbols kind', () => {
+  it('renders no symbol combobox for the AllSymbols kind', () => {
     render(<Harness initial={{ kind: RuleScopeKind.AllSymbols }} />);
-    expect(screen.queryByLabelText('Rule symbol')).toEqual(null);
-    expect(screen.queryByLabelText('Rule symbols')).toEqual(null);
+    expect(screen.queryByRole('combobox', { name: 'Rule symbol' })).toEqual(null);
+    expect(screen.queryByRole('combobox', { name: 'Rule symbols' })).toEqual(null);
   });
 });
 
-describe('ScopePicker — Symbol filter combobox', () => {
-  it('exposes a filter input inside the popover when the trigger opens', async () => {
+describe('ScopePicker — Symbol combobox', () => {
+  it('lists watched symbols alphabetically regardless of watchlist order', async () => {
     const user = userEvent.setup();
-    render(<Harness initial={{ kind: RuleScopeKind.Symbol, symbolId: '' }} />);
-    await user.click(screen.getByLabelText('Rule symbol'));
-    expect(screen.getByLabelText('Filter symbols')).toBeDefined();
+    const unsorted: WatchedSymbol[] = [SYMBOLS[2], SYMBOLS[0], SYMBOLS[1]] as WatchedSymbol[];
+    render(<Harness initial={{ kind: RuleScopeKind.Symbol, symbolId: '' }} symbols={unsorted} />);
+    await user.click(screen.getByRole('combobox', { name: 'Rule symbol' }));
+    const options = screen.getAllByRole('option').map((option) => option.textContent);
+    expect(options).toEqual(['crypto:BTCUSDT', 'crypto:ETHUSDT', 'crypto:SOLUSDT']);
   });
 
-  it('narrows the listbox to symbols matching the filter (case-insensitive)', async () => {
+  it('narrows the options to symbols matching the typed filter (case-insensitive)', async () => {
     const user = userEvent.setup();
     render(<Harness initial={{ kind: RuleScopeKind.Symbol, symbolId: '' }} />);
-    await user.click(screen.getByLabelText('Rule symbol'));
-    await user.type(screen.getByLabelText('Filter symbols'), 'eth');
-    const listbox = screen.getByRole('listbox', { name: 'Filtered symbols' });
-    const options = Array.from(listbox.querySelectorAll('[role="option"]')).map(
-      (option) => option.textContent,
-    );
+    await user.type(screen.getByRole('combobox', { name: 'Rule symbol' }), 'eth');
+    const options = screen.getAllByRole('option').map((option) => option.textContent);
     expect(options).toEqual(['crypto:ETHUSDT']);
   });
 
-  it('selects the picked symbol on click and closes the popover', async () => {
+  it('selects the picked symbol on click', async () => {
     const user = userEvent.setup();
     const snapshots: RuleScope[] = [];
     render(
@@ -113,30 +111,22 @@ describe('ScopePicker — Symbol filter combobox', () => {
         onSnapshot={(scope) => snapshots.push(scope)}
       />,
     );
-    await user.click(screen.getByLabelText('Rule symbol'));
+    await user.click(screen.getByRole('combobox', { name: 'Rule symbol' }));
     await user.click(screen.getByRole('option', { name: 'crypto:ETHUSDT' }));
     expect(snapshots).toEqual([{ kind: RuleScopeKind.Symbol, symbolId: 'crypto:ETHUSDT' }]);
   });
 });
 
-describe('ScopePicker — Symbols filter multi-select', () => {
-  it('exposes a filter input above the checkbox group', () => {
-    render(<Harness initial={{ kind: RuleScopeKind.Symbols, symbolIds: [] }} />);
-    expect(screen.getByLabelText('Filter symbols')).toBeDefined();
-  });
-
-  it('hides non-matching symbols from the checkbox group while filtered', async () => {
+describe('ScopePicker — Symbols multi-combobox', () => {
+  it('narrows the options to symbols matching the typed filter', async () => {
     const user = userEvent.setup();
     render(<Harness initial={{ kind: RuleScopeKind.Symbols, symbolIds: [] }} />);
-    await user.type(screen.getByLabelText('Filter symbols'), 'sol');
-    const group = screen.getByRole('group', { name: 'Rule symbols' });
-    const visible = Array.from(group.querySelectorAll('label')).map((label) =>
-      label.textContent?.trim(),
-    );
-    expect(visible).toEqual(['crypto:SOLUSDT']);
+    await user.type(screen.getByRole('combobox', { name: 'Rule symbols' }), 'sol');
+    const options = screen.getAllByRole('option').map((option) => option.textContent);
+    expect(options).toEqual(['crypto:SOLUSDT']);
   });
 
-  it('toggles a checkbox without dropping previously-selected hidden ids', async () => {
+  it('adds the picked symbol to the selection without dropping prior picks', async () => {
     const user = userEvent.setup();
     const snapshots: RuleScope[] = [];
     render(
@@ -145,8 +135,8 @@ describe('ScopePicker — Symbols filter multi-select', () => {
         onSnapshot={(scope) => snapshots.push(scope)}
       />,
     );
-    await user.type(screen.getByLabelText('Filter symbols'), 'sol');
-    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('combobox', { name: 'Rule symbols' }));
+    await user.click(screen.getByRole('option', { name: 'crypto:SOLUSDT' }));
     expect(snapshots).toEqual([
       {
         kind: RuleScopeKind.Symbols,

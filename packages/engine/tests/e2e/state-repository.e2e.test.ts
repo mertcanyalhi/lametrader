@@ -41,7 +41,6 @@ describe('state persistence (e2e)', () => {
       { name: 'String', value: { type: StateValueType.String, value: 'hello' } },
       { name: 'Number', value: { type: StateValueType.Number, value: 42 } },
       { name: 'Bool', value: { type: StateValueType.Bool, value: true } },
-      { name: 'Enum', value: { type: StateValueType.Enum, value: 'risk-on' } },
     ];
 
     for (const { name, value } of cases) {

@@ -20,12 +20,8 @@ import {
 } from '@radix-ui/themes';
 import { Plus, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import {
-  applyBoolShortcut,
-  type InstancePeriods,
-  type KnownStateKeys,
-  LeafEditor,
-} from './leaf-editor.js';
+import { type InstancePeriods, type KnownStateKeys, LeafEditor } from './leaf-editor.js';
+import type { IndicatorStateKeysByKey } from './operand-picker.js';
 
 /**
  * The recursive condition-tree editor — walks a {@link ConditionNode}
@@ -44,6 +40,8 @@ export function ConditionTreeEditor({
   indicators,
   instancePeriods,
   knownStateKeys,
+  stateKeysLoading,
+  indicatorStateKeysByKey,
   priorActions = [],
 }: {
   value: ConditionNode;
@@ -51,6 +49,14 @@ export function ConditionTreeEditor({
   indicators: IndicatorInstance[];
   instancePeriods: InstancePeriods;
   knownStateKeys: KnownStateKeys;
+  /** Whether the state-key catalogs are still loading — shown in the pickers. */
+  stateKeysLoading?: boolean;
+  /**
+   * Per-indicator-definition state-key catalog — feeds the `IndicatorRef`
+   * operand's state-key combobox. Threaded straight through to every
+   * `<OperandPicker>` a leaf renders.
+   */
+  indicatorStateKeysByKey?: IndicatorStateKeysByKey;
   /**
    * Actions declared on the same rule — fed into each leaf so the RHS literal
    * input can infer its type from a matching `SetState` action's `value.type`
@@ -67,6 +73,8 @@ export function ConditionTreeEditor({
       indicators={indicators}
       instancePeriods={instancePeriods}
       knownStateKeys={knownStateKeys}
+      stateKeysLoading={stateKeysLoading}
+      indicatorStateKeysByKey={indicatorStateKeysByKey}
       priorActions={priorActions}
     />
   );
@@ -97,6 +105,8 @@ function NodeView({
   indicators,
   instancePeriods,
   knownStateKeys,
+  stateKeysLoading,
+  indicatorStateKeysByKey,
   priorActions,
 }: {
   path: number[];
@@ -106,6 +116,8 @@ function NodeView({
   indicators: IndicatorInstance[];
   instancePeriods: InstancePeriods;
   knownStateKeys: KnownStateKeys;
+  stateKeysLoading: boolean | undefined;
+  indicatorStateKeysByKey: IndicatorStateKeysByKey | undefined;
   priorActions: Action[];
 }): ReactNode {
   if (node.kind === ConditionNodeKind.Leaf) {
@@ -114,16 +126,13 @@ function NodeView({
         <LeafEditor
           value={node.leaf}
           onChange={(nextLeaf) =>
-            onChange(
-              replaceAt(root, path, {
-                kind: ConditionNodeKind.Leaf,
-                leaf: applyBoolShortcut(nextLeaf),
-              }),
-            )
+            onChange(replaceAt(root, path, { kind: ConditionNodeKind.Leaf, leaf: nextLeaf }))
           }
           indicators={indicators}
           instancePeriods={instancePeriods}
           knownStateKeys={knownStateKeys}
+          stateKeysLoading={stateKeysLoading}
+          indicatorStateKeysByKey={indicatorStateKeysByKey}
           priorActions={priorActions}
         />
       </Card>
@@ -190,6 +199,8 @@ function NodeView({
                     indicators={indicators}
                     instancePeriods={instancePeriods}
                     knownStateKeys={knownStateKeys}
+                    stateKeysLoading={stateKeysLoading}
+                    indicatorStateKeysByKey={indicatorStateKeysByKey}
                     priorActions={priorActions}
                   />
                 </Box>

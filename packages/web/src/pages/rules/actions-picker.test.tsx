@@ -24,7 +24,7 @@ beforeEach(() => {
 
 function Harness({
   initial,
-  knownStateKeys = { symbol: [], global: [] },
+  knownStateKeys = { symbol: {}, global: {} },
   onSnapshot,
 }: {
   initial: Action[];
@@ -50,7 +50,7 @@ function Harness({
 }
 
 describe('ActionsPicker — state-key combobox', () => {
-  it('renders the StateKeyPicker dropdown + freetext fallback for SetSymbolState', async () => {
+  it('exposes the known symbol-state keys as filterable options for SetSymbolState', async () => {
     const user = userEvent.setup();
     render(
       <Harness
@@ -61,18 +61,28 @@ describe('ActionsPicker — state-key combobox', () => {
             value: { type: StateValueType.String, value: '' },
           },
         ]}
-        knownStateKeys={{ symbol: ['lastFiredAt', 'cooldown'], global: [] }}
+        knownStateKeys={{
+          symbol: {
+            lastFiredAt: { type: StateValueType.Number, value: 0 },
+            cooldown: { type: StateValueType.Number, value: 0 },
+          },
+          global: {},
+        }}
       />,
     );
-    // Both the dropdown trigger and the custom-text fallback share the label root.
-    const trigger = screen.getByLabelText('Symbol state key');
-    await user.click(trigger);
-    expect(screen.getByText('lastFiredAt')).toBeDefined();
-    expect(screen.getByText('cooldown')).toBeDefined();
-    expect(screen.getByLabelText('Symbol state key (custom)')).toBeDefined();
+    const input = screen.getByLabelText('Symbol state key');
+    await user.click(input);
+    await user.keyboard('{ArrowDown}');
+    expect({
+      lastFiredAt: screen.getByText('lastFiredAt'),
+      cooldown: screen.getByText('cooldown'),
+    }).toEqual({
+      lastFiredAt: expect.anything(),
+      cooldown: expect.anything(),
+    });
   });
 
-  it('renders the StateKeyPicker dropdown + freetext fallback for SetGlobalState', () => {
+  it('renders a single Global state key combobox for SetGlobalState', () => {
     render(
       <Harness
         initial={[
@@ -82,46 +92,57 @@ describe('ActionsPicker — state-key combobox', () => {
             value: { type: StateValueType.String, value: '' },
           },
         ]}
-        knownStateKeys={{ symbol: [], global: ['cycle', 'session'] }}
+        knownStateKeys={{
+          symbol: {},
+          global: {
+            cycle: { type: StateValueType.Number, value: 0 },
+            session: { type: StateValueType.String, value: '' },
+          },
+        }}
       />,
     );
     expect(screen.getByLabelText('Global state key')).toBeDefined();
-    expect(screen.getByLabelText('Global state key (custom)')).toBeDefined();
   });
 
-  it('renders the StateKeyPicker for RemoveSymbolState', () => {
+  it('renders a single Symbol state key combobox for RemoveSymbolState', () => {
     render(
       <Harness
         initial={[{ kind: ActionKind.RemoveSymbolState, key: '' }]}
-        knownStateKeys={{ symbol: ['cooldown'], global: [] }}
+        knownStateKeys={{
+          symbol: { cooldown: { type: StateValueType.Number, value: 0 } },
+          global: {},
+        }}
       />,
     );
     expect(screen.getByLabelText('Symbol state key')).toBeDefined();
-    expect(screen.getByLabelText('Symbol state key (custom)')).toBeDefined();
   });
 
-  it('renders the StateKeyPicker for RemoveGlobalState', () => {
+  it('renders a single Global state key combobox for RemoveGlobalState', () => {
     render(
       <Harness
         initial={[{ kind: ActionKind.RemoveGlobalState, key: '' }]}
-        knownStateKeys={{ symbol: [], global: ['cycle'] }}
+        knownStateKeys={{
+          symbol: {},
+          global: { cycle: { type: StateValueType.Number, value: 0 } },
+        }}
       />,
     );
     expect(screen.getByLabelText('Global state key')).toBeDefined();
-    expect(screen.getByLabelText('Global state key (custom)')).toBeDefined();
   });
 
-  it('writes the freetext value through to the action on change', async () => {
+  it('writes a freshly-typed key through onCreateOption on Enter', async () => {
     const user = userEvent.setup();
     const snapshots: Action[][] = [];
     render(
       <Harness
         initial={[{ kind: ActionKind.RemoveSymbolState, key: '' }]}
-        knownStateKeys={{ symbol: [], global: [] }}
+        knownStateKeys={{ symbol: {}, global: {} }}
         onSnapshot={(actions) => snapshots.push(actions)}
       />,
     );
-    await user.type(screen.getByLabelText('Symbol state key (custom)'), 'novel');
+    const input = screen.getByLabelText('Symbol state key');
+    await user.click(input);
+    await user.keyboard('novel{Enter}');
     const last = snapshots[snapshots.length - 1];
     expect(last).toEqual([{ kind: ActionKind.RemoveSymbolState, key: 'novel' }]);
   });
@@ -137,11 +158,186 @@ describe('ActionsPicker — state-key combobox', () => {
             template: '',
           },
         ]}
-        knownStateKeys={{ symbol: ['a'], global: ['b'] }}
+        knownStateKeys={{
+          symbol: { a: { type: StateValueType.Number, value: 0 } },
+          global: { b: { type: StateValueType.Bool, value: false } },
+        }}
       />,
     );
     expect(screen.queryByLabelText('Symbol state key')).toEqual(null);
     expect(screen.queryByLabelText('Global state key')).toEqual(null);
     expect(screen.getByLabelText('Notification template')).toBeDefined();
+  });
+});
+
+describe('ActionsPicker — SetState value type follows the picked key', () => {
+  it('sets value.value.type + resets value.value.value when the user picks a known symbol-state key of a different type', async () => {
+    const user = userEvent.setup();
+    const snapshots: Action[][] = [];
+    render(
+      <Harness
+        initial={[
+          {
+            kind: ActionKind.SetSymbolState,
+            key: '',
+            value: { type: StateValueType.String, value: '' },
+          },
+        ]}
+        knownStateKeys={{
+          symbol: {
+            cooldown: { type: StateValueType.Number, value: 1800 },
+          },
+          global: {},
+        }}
+        onSnapshot={(actions) => snapshots.push(actions)}
+      />,
+    );
+    const input = screen.getByLabelText('Symbol state key');
+    await user.click(input);
+    await user.click(screen.getByText('cooldown'));
+    const last = snapshots[snapshots.length - 1];
+    expect(last).toEqual([
+      {
+        kind: ActionKind.SetSymbolState,
+        key: 'cooldown',
+        value: { type: StateValueType.Number, value: 0 },
+      },
+    ]);
+  });
+
+  it('sets value.value.type + resets value.value.value when the user picks a known global-state key of a different type', async () => {
+    const user = userEvent.setup();
+    const snapshots: Action[][] = [];
+    render(
+      <Harness
+        initial={[
+          {
+            kind: ActionKind.SetGlobalState,
+            key: '',
+            value: { type: StateValueType.Number, value: 0 },
+          },
+        ]}
+        knownStateKeys={{
+          symbol: {},
+          global: {
+            session: { type: StateValueType.String, value: 'us-open' },
+          },
+        }}
+        onSnapshot={(actions) => snapshots.push(actions)}
+      />,
+    );
+    const input = screen.getByLabelText('Global state key');
+    await user.click(input);
+    await user.click(screen.getByText('session'));
+    const last = snapshots[snapshots.length - 1];
+    expect(last).toEqual([
+      {
+        kind: ActionKind.SetGlobalState,
+        key: 'session',
+        value: { type: StateValueType.String, value: '' },
+      },
+    ]);
+  });
+
+  it('hides the Value type dropdown when the current key matches a known symbol-state key', () => {
+    render(
+      <Harness
+        initial={[
+          {
+            kind: ActionKind.SetSymbolState,
+            key: 'cooldown',
+            value: { type: StateValueType.Number, value: 0 },
+          },
+        ]}
+        knownStateKeys={{
+          symbol: { cooldown: { type: StateValueType.Number, value: 1800 } },
+          global: {},
+        }}
+      />,
+    );
+    expect(screen.queryByLabelText('State value type')).toEqual(null);
+  });
+
+  it('hides the Value type dropdown when the current key matches a known global-state key', () => {
+    render(
+      <Harness
+        initial={[
+          {
+            kind: ActionKind.SetGlobalState,
+            key: 'session',
+            value: { type: StateValueType.String, value: '' },
+          },
+        ]}
+        knownStateKeys={{
+          symbol: {},
+          global: { session: { type: StateValueType.String, value: 'us-open' } },
+        }}
+      />,
+    );
+    expect(screen.queryByLabelText('State value type')).toEqual(null);
+  });
+
+  it('shows the Value type dropdown when the SetSymbolState key is empty', () => {
+    render(
+      <Harness
+        initial={[
+          {
+            kind: ActionKind.SetSymbolState,
+            key: '',
+            value: { type: StateValueType.String, value: '' },
+          },
+        ]}
+        knownStateKeys={{
+          symbol: { cooldown: { type: StateValueType.Number, value: 1800 } },
+          global: {},
+        }}
+      />,
+    );
+    expect(screen.getByLabelText('State value type')).toBeDefined();
+  });
+
+  it('shows the Value type dropdown when the SetSymbolState key is a freetext-created key not present in the known map', () => {
+    render(
+      <Harness
+        initial={[
+          {
+            kind: ActionKind.SetSymbolState,
+            key: 'novel',
+            value: { type: StateValueType.String, value: '' },
+          },
+        ]}
+        knownStateKeys={{
+          symbol: { cooldown: { type: StateValueType.Number, value: 1800 } },
+          global: {},
+        }}
+      />,
+    );
+    expect(screen.getByLabelText('State value type')).toBeDefined();
+  });
+
+  it('renders a Switch (not a text input) for the value widget after picking a known Bool symbol-state key', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness
+        initial={[
+          {
+            kind: ActionKind.SetSymbolState,
+            key: '',
+            value: { type: StateValueType.String, value: '' },
+          },
+        ]}
+        knownStateKeys={{
+          symbol: {
+            activated: { type: StateValueType.Bool, value: true },
+          },
+          global: {},
+        }}
+      />,
+    );
+    const input = screen.getByLabelText('Symbol state key');
+    await user.click(input);
+    await user.click(screen.getByText('activated'));
+    const stateValue = screen.getByLabelText('State value');
+    expect(stateValue.getAttribute('role')).toEqual('switch');
   });
 });

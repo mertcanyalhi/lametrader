@@ -58,10 +58,12 @@ export function ActionsPicker({
   value,
   onChange,
   knownStateKeys,
+  stateKeysLoading,
 }: {
   value: Action[];
   onChange: (next: Action[]) => void;
   knownStateKeys: KnownStateKeys;
+  stateKeysLoading?: boolean;
 }): ReactNode {
   return (
     <Flex direction="column" gap="2">
@@ -73,6 +75,7 @@ export function ActionsPicker({
           onChange={(next) => onChange(value.map((existing, i) => (i === index ? next : existing)))}
           onRemove={() => onChange(value.filter((_, i) => i !== index))}
           knownStateKeys={knownStateKeys}
+          stateKeysLoading={stateKeysLoading}
         />
       ))}
       <Flex>
@@ -96,11 +99,13 @@ function ActionRow({
   onChange,
   onRemove,
   knownStateKeys,
+  stateKeysLoading,
 }: {
   value: Action;
   onChange: (next: Action) => void;
   onRemove: () => void;
   knownStateKeys: KnownStateKeys;
+  stateKeysLoading?: boolean;
 }): ReactNode {
   return (
     <Card variant="surface">
@@ -131,7 +136,12 @@ function ActionRow({
             </IconButton>
           </Tooltip>
         </Flex>
-        <ActionBody value={value} onChange={onChange} knownStateKeys={knownStateKeys} />
+        <ActionBody
+          value={value}
+          onChange={onChange}
+          knownStateKeys={knownStateKeys}
+          stateKeysLoading={stateKeysLoading}
+        />
       </Flex>
     </Card>
   );
@@ -142,20 +152,36 @@ function ActionBody({
   value,
   onChange,
   knownStateKeys,
+  stateKeysLoading,
 }: {
   value: Action;
   onChange: (next: Action) => void;
   knownStateKeys: KnownStateKeys;
+  stateKeysLoading?: boolean;
 }): ReactNode {
   switch (value.kind) {
     case ActionKind.Notification:
       return <NotificationBody value={value} onChange={onChange} />;
     case ActionKind.SetSymbolState:
     case ActionKind.SetGlobalState:
-      return <SetStateBody value={value} onChange={onChange} knownStateKeys={knownStateKeys} />;
+      return (
+        <SetStateBody
+          value={value}
+          onChange={onChange}
+          knownStateKeys={knownStateKeys}
+          stateKeysLoading={stateKeysLoading}
+        />
+      );
     case ActionKind.RemoveSymbolState:
     case ActionKind.RemoveGlobalState:
-      return <RemoveStateBody value={value} onChange={onChange} knownStateKeys={knownStateKeys} />;
+      return (
+        <RemoveStateBody
+          value={value}
+          onChange={onChange}
+          knownStateKeys={knownStateKeys}
+          stateKeysLoading={stateKeysLoading}
+        />
+      );
   }
 }
 
@@ -210,48 +236,68 @@ function NotificationBody({
  *
  * Reuses the {@link StateKeyPicker} so users see suggestions from the same
  * `knownStateKeys` catalog the operand picker reads, with freetext fallback.
+ *
+ * When the picked key already exists in the known-state map, its persisted
+ * `StateValueType` is authoritative: the action's `value` is reset to that
+ * type's neutral zero and the "Value type" dropdown is hidden. Freshly-created
+ * keys (empty or freetext) still expose the dropdown so the user picks a type
+ * once, up front.
  */
 function SetStateBody({
   value,
   onChange,
   knownStateKeys,
+  stateKeysLoading,
 }: {
   value: SetSymbolStateAction | SetGlobalStateAction;
   onChange: (next: Action) => void;
   knownStateKeys: KnownStateKeys;
+  stateKeysLoading?: boolean;
 }): ReactNode {
-  const knownKeys =
+  const knownMap =
     value.kind === ActionKind.SetSymbolState ? knownStateKeys.symbol : knownStateKeys.global;
+  const knownKeys = Object.keys(knownMap);
   const ariaLabel =
     value.kind === ActionKind.SetSymbolState ? 'Symbol state key' : 'Global state key';
+  const knownForCurrent = value.key === '' ? undefined : knownMap[value.key];
   return (
     <Flex direction="column" gap="2">
       <StateKeyPicker
         value={value.key}
         knownKeys={knownKeys}
         ariaLabel={ariaLabel}
-        onChange={(key) => onChange({ ...value, key })}
-      />
-      <Flex gap="2" align="center">
-        <Text size="2" color="gray">
-          Value type
-        </Text>
-        <Select.Root
-          value={value.value.type}
-          onValueChange={(next) =>
-            onChange({ ...value, value: defaultStateValue(next as StateValueType) })
+        isLoading={stateKeysLoading}
+        onChange={(key) => {
+          const known = knownMap[key];
+          if (known === undefined) {
+            onChange({ ...value, key });
+            return;
           }
-        >
-          <Select.Trigger aria-label="State value type" />
-          <Select.Content>
-            {Object.values(StateValueType).map((type) => (
-              <Select.Item key={type} value={type}>
-                {type}
-              </Select.Item>
-            ))}
-          </Select.Content>
-        </Select.Root>
-      </Flex>
+          onChange({ ...value, key, value: defaultStateValue(known.type) });
+        }}
+      />
+      {knownForCurrent === undefined ? (
+        <Flex gap="2" align="center">
+          <Text size="2" color="gray">
+            Value type
+          </Text>
+          <Select.Root
+            value={value.value.type}
+            onValueChange={(next) =>
+              onChange({ ...value, value: defaultStateValue(next as StateValueType) })
+            }
+          >
+            <Select.Trigger aria-label="State value type" />
+            <Select.Content>
+              {Object.values(StateValueType).map((type) => (
+                <Select.Item key={type} value={type}>
+                  {type}
+                </Select.Item>
+              ))}
+            </Select.Content>
+          </Select.Root>
+        </Flex>
+      ) : null}
       <StateValueInput value={value} onChange={onChange} />
     </Flex>
   );
@@ -305,19 +351,6 @@ function StateValueInput({
           }
         />
       );
-    case StateValueType.Enum:
-      return (
-        <TextField.Root
-          aria-label="State value"
-          value={value.value.value}
-          onChange={(event) =>
-            onChange({
-              ...value,
-              value: { type: StateValueType.Enum, value: event.target.value },
-            })
-          }
-        />
-      );
   }
 }
 
@@ -328,20 +361,23 @@ function RemoveStateBody({
   value,
   onChange,
   knownStateKeys,
+  stateKeysLoading,
 }: {
   value: RemoveSymbolStateAction | RemoveGlobalStateAction;
   onChange: (next: Action) => void;
   knownStateKeys: KnownStateKeys;
+  stateKeysLoading?: boolean;
 }): ReactNode {
-  const knownKeys =
+  const knownMap =
     value.kind === ActionKind.RemoveSymbolState ? knownStateKeys.symbol : knownStateKeys.global;
   const ariaLabel =
     value.kind === ActionKind.RemoveSymbolState ? 'Symbol state key' : 'Global state key';
   return (
     <StateKeyPicker
       value={value.key}
-      knownKeys={knownKeys}
+      knownKeys={Object.keys(knownMap)}
       ariaLabel={ariaLabel}
+      isLoading={stateKeysLoading}
       onChange={(key) => onChange({ ...value, key })}
     />
   );
@@ -391,8 +427,6 @@ function defaultStateValue(type: StateValueType): StateValue {
     case StateValueType.Bool:
       return { type, value: false };
     case StateValueType.String:
-      return { type, value: '' };
-    case StateValueType.Enum:
       return { type, value: '' };
   }
 }

@@ -7,7 +7,6 @@ export enum StateValueType {
   String = 'string',
   Number = 'number',
   Bool = 'bool',
-  Enum = 'enum',
 }
 
 /**
@@ -21,5 +20,4 @@ export enum StateValueType {
 export type StateValue =
   | { type: StateValueType.String; value: string }
   | { type: StateValueType.Number; value: number }
-  | { type: StateValueType.Bool; value: boolean }
-  | { type: StateValueType.Enum; value: string };
+  | { type: StateValueType.Bool; value: boolean };

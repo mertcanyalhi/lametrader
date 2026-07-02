@@ -23,10 +23,6 @@ export const StateValueSchema = Type.Union(
       { type: Type.Literal(StateValueType.Bool), value: Type.Boolean() },
       { additionalProperties: false },
     ),
-    Type.Object(
-      { type: Type.Literal(StateValueType.Enum), value: Type.String() },
-      { additionalProperties: false },
-    ),
   ],
   {},
 );

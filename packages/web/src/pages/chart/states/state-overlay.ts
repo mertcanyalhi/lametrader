@@ -97,8 +97,8 @@ export function stateOverlayToMarkers(
 }
 
 /**
- * Stringify a {@link StateValue} for marker text. Numbers / strings /
- * enums use their `value` verbatim; bools become `true` / `false`.
+ * Stringify a {@link StateValue} for marker text. Numbers / strings
+ * use their `value` verbatim; bools become `true` / `false`.
  */
 function renderStateValueText(value: StateValue): string {
   switch (value.type) {
@@ -107,7 +107,6 @@ function renderStateValueText(value: StateValue): string {
     case StateValueType.Number:
       return String(value.value);
     case StateValueType.String:
-    case StateValueType.Enum:
       return value.value;
   }
 }

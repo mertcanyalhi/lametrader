@@ -128,22 +128,8 @@ export function valueTypeKind(valueType: StateValueType): OperandValueKind {
     case StateValueType.Bool:
       return OperandValueKind.Bool;
     case StateValueType.String:
-    case StateValueType.Enum:
       return OperandValueKind.StringLike;
   }
-}
-
-/**
- * Whether an operand carries a `valueType` that should drive a bool-shortcut
- * row layout (operator + RHS hidden, saved leaf is `Equals(operand, true)`).
- *
- * `Literal` carries its own value and isn't a candidate for the shortcut.
- */
-export function isBoolOperand(operand: ConditionOperand): boolean {
-  if (operand.kind === OperandKind.IndicatorRef) return operand.valueType === StateValueType.Bool;
-  if (operand.kind === OperandKind.SymbolStateRef) return operand.valueType === StateValueType.Bool;
-  if (operand.kind === OperandKind.GlobalStateRef) return operand.valueType === StateValueType.Bool;
-  return false;
 }
 
 /**

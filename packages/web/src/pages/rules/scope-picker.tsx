@@ -1,17 +1,14 @@
 import { type RuleScope, RuleScopeKind, type WatchedSymbol } from '@lametrader/core';
+import { Flex, Select } from '@radix-ui/themes';
+import { type ReactNode, useMemo } from 'react';
+import ReactSelect, { type MultiValue } from 'react-select';
 import {
-  Box,
-  Button,
-  Checkbox,
-  Flex,
-  Popover,
-  ScrollArea,
-  Select,
-  Text,
-  TextField,
-} from '@radix-ui/themes';
-import { ChevronDown, Search } from 'lucide-react';
-import { type ReactNode, useMemo, useState } from 'react';
+  DropdownIndicator,
+  type SelectOption,
+  selectClassNames,
+  selectStyles,
+  useRadixPortalTarget,
+} from '../../lib/select-skin.js';
 
 /**
  * Human-readable label for each {@link RuleScopeKind}.
@@ -23,21 +20,13 @@ export const SCOPE_KIND_LABELS: Readonly<Record<RuleScopeKind, string>> = {
 };
 
 /**
- * Max height of the symbol-list scroll area inside the pickers.
- *
- * Keeps the dialog footprint stable when the watchlist grows; the body scrolls
- * once it overflows.
- */
-const SYMBOL_LIST_MAX_HEIGHT = '18rem';
-
-/**
  * The scope picker — picks one of `Symbol` / `Symbols(list)` / `AllSymbols`
  * and, when the kind needs one, the symbol(s) to bind to.
  *
- * `Symbol` shows a searchable single-select combobox (filter input + scrollable
- * option list), scaling to hundreds of symbols without lag.
- * `Symbols(list)` shows a filterable multi-checkbox list inside a scroll area.
- * `AllSymbols` shows nothing.
+ * `Symbol` shows a searchable single-select combobox; `Symbols(list)` the same
+ * combobox with multi-select. Both are react-select shells re-skinned to match
+ * the surrounding Radix `Select` triggers (see `lib/select-skin`), and both list
+ * the watched symbols alphabetically. `AllSymbols` shows nothing.
  */
 export function ScopePicker({
   value,
@@ -48,6 +37,15 @@ export function ScopePicker({
   onChange: (next: RuleScope) => void;
   watchedSymbols: WatchedSymbol[];
 }): ReactNode {
+  // Sort once, alphabetically by id, so every combobox lists symbols in order.
+  const options = useMemo<SelectOption[]>(
+    () =>
+      [...watchedSymbols]
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .map((symbol) => ({ value: symbol.id, label: symbol.id })),
+    [watchedSymbols],
+  );
+
   return (
     <Flex direction="column" gap="2">
       <Select.Root
@@ -66,17 +64,23 @@ export function ScopePicker({
         </Select.Content>
       </Select.Root>
       {value.kind === RuleScopeKind.Symbol ? (
-        <SingleSymbolPicker
-          value={value.symbolId}
-          watchedSymbols={watchedSymbols}
-          onChange={(symbolId) => onChange({ kind: RuleScopeKind.Symbol, symbolId })}
+        <SymbolCombobox
+          ariaLabel="Rule symbol"
+          placeholder="Pick a symbol"
+          options={options}
+          selected={value.symbolId === '' ? [] : [value.symbolId]}
+          isMulti={false}
+          onChange={(ids) => onChange({ kind: RuleScopeKind.Symbol, symbolId: ids[0] ?? '' })}
         />
       ) : null}
       {value.kind === RuleScopeKind.Symbols ? (
-        <MultiSymbolPicker
-          value={value.symbolIds}
-          watchedSymbols={watchedSymbols}
-          onChange={(symbolIds) => onChange({ kind: RuleScopeKind.Symbols, symbolIds })}
+        <SymbolCombobox
+          ariaLabel="Rule symbols"
+          placeholder="Pick symbols"
+          options={options}
+          selected={value.symbolIds}
+          isMulti
+          onChange={(ids) => onChange({ kind: RuleScopeKind.Symbols, symbolIds: ids })}
         />
       ) : null}
     </Flex>
@@ -84,174 +88,67 @@ export function ScopePicker({
 }
 
 /**
- * Single-symbol searchable combobox — a Radix `<Popover>` with a filter input on
- * top and a scrollable, filtered option list below.
+ * Searchable symbol combobox — a react-select shell that filters the (already
+ * alphabetically-sorted) option list as the user types.
  *
- * Radix's bare `<Select>` has type-to-search but no visible filter; this widget
- * surfaces the query field so users can see the active filter and clear it.
- * Filter matches are case-insensitive substring against the symbol id.
+ * `isMulti` toggles single- vs multi-select; both report their selection back
+ * as an id array (single = 0-or-1 entries) so the caller stays uniform. The menu
+ * is portaled out of the enclosing Dialog's overflow box (see
+ * {@link useRadixPortalTarget}).
  */
-function SingleSymbolPicker({
-  value,
-  watchedSymbols,
+function SymbolCombobox({
+  ariaLabel,
+  placeholder,
+  options,
+  selected,
+  isMulti,
   onChange,
 }: {
-  value: string;
-  watchedSymbols: WatchedSymbol[];
-  onChange: (symbolId: string) => void;
+  ariaLabel: string;
+  placeholder: string;
+  options: SelectOption[];
+  selected: string[];
+  isMulti: boolean;
+  onChange: (ids: string[]) => void;
 }): ReactNode {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const matches = useMemo(() => filterSymbols(watchedSymbols, query), [watchedSymbols, query]);
+  const [setPortalRef, portalTarget] = useRadixPortalTarget();
+  const selectedOptions = options.filter((option) => selected.includes(option.value));
 
   return (
-    <Popover.Root
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) setQuery('');
-      }}
-    >
-      <Popover.Trigger>
-        <Button
-          type="button"
-          variant="surface"
-          color="gray"
-          aria-label="Rule symbol"
-          className="w-full justify-between"
-        >
-          <Text size="2" color={value === '' ? 'gray' : undefined}>
-            {value === '' ? 'Pick a symbol' : value}
-          </Text>
-          <ChevronDown size={14} aria-hidden="true" />
-        </Button>
-      </Popover.Trigger>
-      <Popover.Content size="1" minWidth="240px">
-        <Flex direction="column" gap="2">
-          <TextField.Root
-            aria-label="Filter symbols"
-            placeholder="Filter symbols"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            autoFocus
-          >
-            <TextField.Slot>
-              <Search size={14} aria-hidden="true" />
-            </TextField.Slot>
-          </TextField.Root>
-          <ScrollArea
-            type="auto"
-            scrollbars="vertical"
-            style={{ maxHeight: SYMBOL_LIST_MAX_HEIGHT }}
-          >
-            <Flex direction="column" gap="1" role="listbox" aria-label="Filtered symbols">
-              {matches.length === 0 ? (
-                <Text size="2" color="gray" m="2">
-                  No matches.
-                </Text>
-              ) : (
-                matches.map((symbol) => {
-                  const selected = symbol.id === value;
-                  return (
-                    <Button
-                      key={symbol.id}
-                      type="button"
-                      variant={selected ? 'soft' : 'ghost'}
-                      color="gray"
-                      role="option"
-                      aria-selected={selected}
-                      className="justify-start"
-                      onClick={() => {
-                        onChange(symbol.id);
-                        setOpen(false);
-                        setQuery('');
-                      }}
-                    >
-                      {symbol.id}
-                    </Button>
-                  );
-                })
-              )}
-            </Flex>
-          </ScrollArea>
-        </Flex>
-      </Popover.Content>
-    </Popover.Root>
+    <div ref={setPortalRef}>
+      <ReactSelect<SelectOption, boolean>
+        unstyled
+        isMulti={isMulti}
+        isClearable={false}
+        options={options}
+        value={isMulti ? selectedOptions : (selectedOptions[0] ?? null)}
+        onChange={(picked) => onChange(pickedIds(picked))}
+        closeMenuOnSelect={!isMulti}
+        aria-label={ariaLabel}
+        inputId={`symbol-${ariaLabel.replaceAll(' ', '-').toLowerCase()}`}
+        placeholder={placeholder}
+        noOptionsMessage={() => 'No matches.'}
+        menuPlacement="auto"
+        menuPosition="fixed"
+        menuPortalTarget={portalTarget ?? undefined}
+        menuShouldScrollIntoView={false}
+        components={{ DropdownIndicator }}
+        styles={selectStyles}
+        classNames={selectClassNames}
+      />
+    </div>
   );
 }
 
 /**
- * Multi-symbol filterable picker — filter input on top, scrollable checkbox list
- * below. Filter matches are case-insensitive substring against the symbol id.
- *
- * Selections are preserved across filter changes (hidden checked items still
- * count); the visible list narrows to matches while the filter is non-empty.
+ * Flatten react-select's `onChange` payload — a single option, a multi-value
+ * array, or `null` — to a plain id array. `'value' in picked` distinguishes the
+ * single option from the (array) multi-value in a way TypeScript can narrow.
  */
-function MultiSymbolPicker({
-  value,
-  watchedSymbols,
-  onChange,
-}: {
-  value: string[];
-  watchedSymbols: WatchedSymbol[];
-  onChange: (next: string[]) => void;
-}): ReactNode {
-  const [query, setQuery] = useState('');
-  const matches = useMemo(() => filterSymbols(watchedSymbols, query), [watchedSymbols, query]);
-
-  return (
-    <Flex direction="column" gap="2">
-      <TextField.Root
-        aria-label="Filter symbols"
-        placeholder="Filter symbols"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-      >
-        <TextField.Slot>
-          <Search size={14} aria-hidden="true" />
-        </TextField.Slot>
-      </TextField.Root>
-      <Box style={{ maxHeight: SYMBOL_LIST_MAX_HEIGHT, overflow: 'auto' }}>
-        <Flex direction="column" gap="2" role="group" aria-label="Rule symbols">
-          {matches.length === 0 ? (
-            <Text size="2" color="gray">
-              No matches.
-            </Text>
-          ) : (
-            matches.map((symbol) => {
-              const checked = value.includes(symbol.id);
-              return (
-                <Text as="label" key={symbol.id} size="2">
-                  <Flex gap="2" align="center">
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={(next) => {
-                        const isOn = next === true;
-                        const nextIds = isOn
-                          ? [...value, symbol.id]
-                          : value.filter((id) => id !== symbol.id);
-                        onChange(nextIds);
-                      }}
-                    />
-                    {symbol.id}
-                  </Flex>
-                </Text>
-              );
-            })
-          )}
-        </Flex>
-      </Box>
-    </Flex>
-  );
-}
-
-/**
- * Case-insensitive substring filter on `WatchedSymbol.id`.
- */
-function filterSymbols(symbols: WatchedSymbol[], query: string): WatchedSymbol[] {
-  const trimmed = query.trim().toLowerCase();
-  if (trimmed === '') return symbols;
-  return symbols.filter((symbol) => symbol.id.toLowerCase().includes(trimmed));
+function pickedIds(picked: SelectOption | MultiValue<SelectOption> | null): string[] {
+  if (picked === null) return [];
+  if ('value' in picked) return [picked.value];
+  return picked.map((option) => option.value);
 }
 
 /**

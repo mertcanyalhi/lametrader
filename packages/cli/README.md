@@ -213,7 +213,7 @@ State is **partitioned by profile** (#281), so every subcommand requires `--prof
 
 - **`list --profile <id> --symbol <id>`** — print the symbol's current state map (`{ [key]: StateValue }`) for the profile as JSON. Unknown symbol errors with `SymbolNotFoundError`.
 - **`list --profile <id> --global`** — print the profile's global state map as JSON.
-- **`set --profile <id> --symbol <id>|--global --key <k> --value <v> --type <string|number|bool|enum>`** — write the value under the profile (the `--type` flag validates `--value`: numbers must be finite, `bool` must be `true`/`false`). On success, prints the new state map.
+- **`set --profile <id> --symbol <id>|--global --key <k> --value <v> --type <string|number|bool>`** — write the value under the profile (the `--type` flag validates `--value`: numbers must be finite, `bool` must be `true`/`false`). On success, prints the new state map.
 - **`remove --profile <id> --symbol <id>|--global --key <k>`** — drop the key under the profile; prints the new state map (a no-op when the key was already absent).
 
 Exactly one of `--symbol` / `--global` must be provided for every subcommand.
@@ -224,7 +224,7 @@ Exactly one of `--symbol` / `--global` must be provided for every subcommand.
 npm run cli -- state list --profile p1 --symbol crypto:BTCUSDT
 npm run cli -- state list --profile p1 --global
 npm run cli -- state set --profile p1 --symbol crypto:BTCUSDT --key armed --value true --type bool
-npm run cli -- state set --profile p1 --global --key regime --value risk-on --type enum
+npm run cli -- state set --profile p1 --global --key regime --value risk-on --type string
 npm run cli -- state remove --profile p1 --symbol crypto:BTCUSDT --key armed
 npm run cli -- state remove --profile p1 --global --key regime
 ```

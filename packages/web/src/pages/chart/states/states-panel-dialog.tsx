@@ -1,7 +1,6 @@
-import type { SymbolType } from '@lametrader/core';
+import { type StateValue, StateValueType, type SymbolType } from '@lametrader/core';
 import {
   Badge,
-  Box,
   Button,
   Callout,
   Checkbox,
@@ -17,7 +16,11 @@ import {
   getStoredStateOverlays,
   setStoredStateOverlays,
 } from '../../../lib/chart-state-overlays.js';
-import { type SymbolStateKey, useSymbolStateKeys } from '../../../lib/hooks/state.js';
+import {
+  type SymbolStateKey,
+  useSymbolState,
+  useSymbolStateKeys,
+} from '../../../lib/hooks/state.js';
 import { useSelectedProfile } from '../../../lib/selected-profile-context.js';
 
 /** Props for the states-panel trigger + dialog. */
@@ -99,7 +102,12 @@ export function StatesPanelDialog({
         {profileId === null ? (
           <NoProfileView />
         ) : (
-          <PickerView symbolId={symbolId} selected={selected} onApply={applySelection} />
+          <PickerView
+            symbolId={symbolId}
+            profileId={profileId}
+            selected={selected}
+            onApply={applySelection}
+          />
         )}
       </Dialog.Content>
     </Dialog.Root>
@@ -132,6 +140,19 @@ function NoProfileView(): ReactNode {
   );
 }
 
+/** Render a state key's latest value as a compact single token; `—` if unset. */
+function formatStateValue(value: StateValue | undefined): string {
+  if (value === undefined) return '—';
+  switch (value.type) {
+    case StateValueType.Bool:
+      return value.value ? 'true' : 'false';
+    case StateValueType.Number:
+      return String(value.value);
+    case StateValueType.String:
+      return value.value;
+  }
+}
+
 /**
  * The picker body — search input + scrollable list of one checkbox per known
  * state key. Filters by case-insensitive substring on the key text; the
@@ -140,14 +161,17 @@ function NoProfileView(): ReactNode {
  */
 function PickerView({
   symbolId,
+  profileId,
   selected,
   onApply,
 }: {
   symbolId: string;
+  profileId: string;
   selected: string[];
   onApply: (next: string[]) => void;
 }): ReactNode {
   const keysQuery = useSymbolStateKeys(symbolId);
+  const stateQuery = useSymbolState(profileId, symbolId);
   const [query, setQuery] = useState('');
 
   const filtered = useMemo<SymbolStateKey[]>(() => {
@@ -200,8 +224,8 @@ function PickerView({
                     />
                     <span>{row.key}</span>
                   </Text>
-                  <Text size="1" color="gray">
-                    {row.valueType}
+                  <Text size="1" color="gray" className="font-mono">
+                    {formatStateValue(stateQuery.data?.[row.key])}
                   </Text>
                 </Flex>
               ))

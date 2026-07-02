@@ -20,11 +20,11 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Equal,
+  EqualNot,
   type LucideIcon,
   Move,
   MoveDownRight,
   MoveUpRight,
-  Slash,
   Square,
   SquareArrowOutDownLeft,
   SquareArrowOutUpRight,
@@ -112,7 +112,7 @@ export const OPERATOR_OPTIONS: ReadonlyArray<OperatorOption> = [
     family: LeafConditionFamily.Comparison,
     value: ComparisonOperator.Neq,
     label: 'not equals',
-    icon: Slash,
+    icon: EqualNot,
   },
   // Crossing
   {

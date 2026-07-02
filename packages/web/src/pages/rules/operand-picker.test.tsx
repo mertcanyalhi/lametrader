@@ -12,6 +12,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { type ReactNode, useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
+import type { KnownStateKeys } from './leaf-editor';
 import { filterIndicatorsByScope, OPERAND_KIND_OPTIONS, OperandPicker } from './operand-picker';
 
 afterEach(() => {
@@ -22,15 +23,15 @@ afterEach(() => {
 function Harness({
   initial,
   indicators = [],
-  symbolStateKeys = [],
-  globalStateKeys = [],
+  knownStateKeys = { symbol: {}, global: {} },
+  indicatorStateKeysByKey,
   literalValueType,
   onSnapshot,
 }: {
   initial: ConditionOperand;
   indicators?: IndicatorInstance[];
-  symbolStateKeys?: string[];
-  globalStateKeys?: string[];
+  knownStateKeys?: KnownStateKeys;
+  indicatorStateKeysByKey?: Record<string, string[]>;
   literalValueType?: StateValueType;
   onSnapshot?: (operand: ConditionOperand) => void;
 }): ReactNode {
@@ -44,8 +45,8 @@ function Harness({
           onSnapshot?.(next);
         }}
         indicators={indicators}
-        symbolStateKeys={symbolStateKeys}
-        globalStateKeys={globalStateKeys}
+        knownStateKeys={knownStateKeys}
+        indicatorStateKeysByKey={indicatorStateKeysByKey}
         literalValueType={literalValueType}
         ariaLabel="Left operand kind"
       />
@@ -121,7 +122,7 @@ describe('OperandPicker', () => {
     });
   });
 
-  it('seeds the state-key dropdown with the known keys plus a freetext fallback', async () => {
+  it('exposes the known symbol-state keys as filterable combobox options', async () => {
     const user = userEvent.setup();
     render(
       <Harness
@@ -130,15 +131,184 @@ describe('OperandPicker', () => {
           key: '',
           valueType: StateValueType.Number,
         }}
-        symbolStateKeys={['lastFiredAt', 'cooldown']}
+        knownStateKeys={{
+          symbol: {
+            lastFiredAt: { type: StateValueType.Number, value: 0 },
+            cooldown: { type: StateValueType.Number, value: 0 },
+          },
+          global: {},
+        }}
       />,
     );
-    // The Radix Select trigger surfaces its options on open.
-    const trigger = screen.getByLabelText('Symbol state key');
-    await user.click(trigger);
-    expect(screen.getByText('lastFiredAt')).toBeDefined();
-    expect(screen.getByText('cooldown')).toBeDefined();
-    expect(screen.getByLabelText('Symbol state key (custom)')).toBeDefined();
+    const input = screen.getByLabelText('Symbol state key');
+    await user.click(input);
+    await user.keyboard('{ArrowDown}');
+    expect({
+      lastFiredAt: screen.getByText('lastFiredAt'),
+      cooldown: screen.getByText('cooldown'),
+    }).toEqual({
+      lastFiredAt: expect.anything(),
+      cooldown: expect.anything(),
+    });
+  });
+
+  it('writes a freshly-typed symbol-state key through onCreateOption on Enter', async () => {
+    const user = userEvent.setup();
+    const snapshots: ConditionOperand[] = [];
+    render(
+      <Harness
+        initial={{
+          kind: OperandKind.SymbolStateRef,
+          key: '',
+          valueType: StateValueType.Number,
+        }}
+        knownStateKeys={{ symbol: {}, global: {} }}
+        onSnapshot={(operand) => snapshots.push(operand)}
+      />,
+    );
+    const input = screen.getByLabelText('Symbol state key');
+    await user.click(input);
+    await user.keyboard('novel{Enter}');
+    const last = snapshots[snapshots.length - 1];
+    expect(last).toEqual({
+      kind: OperandKind.SymbolStateRef,
+      key: 'novel',
+      valueType: StateValueType.Number,
+    });
+  });
+
+  it("adopts the known symbol-state key's valueType and hides the Value type row on pick", async () => {
+    const user = userEvent.setup();
+    const snapshots: ConditionOperand[] = [];
+    render(
+      <Harness
+        initial={{
+          kind: OperandKind.SymbolStateRef,
+          key: '',
+          valueType: StateValueType.Number,
+        }}
+        knownStateKeys={{
+          symbol: {
+            testbool: { type: StateValueType.Bool, value: true },
+          },
+          global: {},
+        }}
+        onSnapshot={(operand) => snapshots.push(operand)}
+      />,
+    );
+    const input = screen.getByLabelText('Symbol state key');
+    await user.click(input);
+    await user.click(screen.getByText('testbool'));
+    const last = snapshots[snapshots.length - 1];
+    expect(last).toEqual({
+      kind: OperandKind.SymbolStateRef,
+      key: 'testbool',
+      valueType: StateValueType.Bool,
+    });
+    expect(screen.queryByLabelText('Symbol state value type')).toEqual(null);
+  });
+
+  it('exposes a Value type row on a freetext-created symbol-state key so the user picks its type', () => {
+    render(
+      <Harness
+        initial={{
+          kind: OperandKind.SymbolStateRef,
+          key: 'novel',
+          valueType: StateValueType.Number,
+        }}
+        knownStateKeys={{ symbol: {}, global: {} }}
+      />,
+    );
+    expect(screen.getByLabelText('Symbol state value type')).toBeDefined();
+  });
+
+  it("adopts the known global-state key's valueType and hides the Value type row on pick", async () => {
+    const user = userEvent.setup();
+    const snapshots: ConditionOperand[] = [];
+    render(
+      <Harness
+        initial={{
+          kind: OperandKind.GlobalStateRef,
+          key: '',
+          valueType: StateValueType.Number,
+        }}
+        knownStateKeys={{
+          symbol: {},
+          global: {
+            session: { type: StateValueType.String, value: 'us-open' },
+          },
+        }}
+        onSnapshot={(operand) => snapshots.push(operand)}
+      />,
+    );
+    const input = screen.getByLabelText('Global state key');
+    await user.click(input);
+    await user.click(screen.getByText('session'));
+    const last = snapshots[snapshots.length - 1];
+    expect(last).toEqual({
+      kind: OperandKind.GlobalStateRef,
+      key: 'session',
+      valueType: StateValueType.String,
+    });
+    expect(screen.queryByLabelText('Global state value type')).toEqual(null);
+  });
+
+  it('seeds the IndicatorRef state-key options from the catalog entry matching the selected instance', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness
+        initial={{
+          kind: OperandKind.IndicatorRef,
+          instanceId: 'ind-a',
+          stateKey: '',
+          valueType: StateValueType.Number,
+        }}
+        indicators={[
+          {
+            id: 'ind-a',
+            indicatorKey: 'supertrend',
+            version: 1,
+            inputs: {},
+            summary: 'Supertrend',
+          },
+        ]}
+        indicatorStateKeysByKey={{ supertrend: ['signal', 'value'], sma: ['value'] }}
+      />,
+    );
+    const input = screen.getByLabelText('Indicator state field');
+    await user.click(input);
+    await user.keyboard('{ArrowDown}');
+    expect({
+      signal: screen.getByText('signal'),
+      value: screen.getByText('value'),
+    }).toEqual({
+      signal: expect.anything(),
+      value: expect.anything(),
+    });
+  });
+
+  it('renders an IndicatorRef combobox even when the catalog has no entry for the indicator key', () => {
+    render(
+      <Harness
+        initial={{
+          kind: OperandKind.IndicatorRef,
+          instanceId: 'ind-a',
+          stateKey: '',
+          valueType: StateValueType.Number,
+        }}
+        indicators={[
+          {
+            id: 'ind-a',
+            indicatorKey: 'supertrend',
+            version: 1,
+            inputs: {},
+            summary: 'Supertrend',
+          },
+        ]}
+        indicatorStateKeysByKey={{ sma: ['value'] }}
+      />,
+    );
+    expect(screen.getByLabelText('Indicator state field')).toBeDefined();
   });
 });
 

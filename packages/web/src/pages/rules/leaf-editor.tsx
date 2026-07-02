@@ -13,23 +13,34 @@ import {
   type Operator,
   type Period,
   StateOperator,
+  type StateValue,
   StateValueType,
 } from '@lametrader/core';
 import { Box, Flex, Select, Text, TextField } from '@radix-ui/themes';
 import type { ReactNode } from 'react';
-import { isBoolOperand, OperandValueKind, operandValueKind } from '../../lib/rule-form-schema.js';
-import { OperandPicker, operandNeedsInterval } from './operand-picker.js';
+import { OperandValueKind, operandValueKind } from '../../lib/rule-form-schema.js';
+import {
+  type IndicatorStateKeysByKey,
+  OperandPicker,
+  operandNeedsInterval,
+} from './operand-picker.js';
 import { legalOperatorsFor, OPERATOR_OPTIONS, OperatorPicker } from './operator-picker.js';
 import { PERIOD_LABELS } from './trigger-picker.js';
 
 /**
- * State keys to seed the operand pickers' state-key dropdowns with.
+ * Known state entries per scope — each map is `key → its current stored value`.
  *
- * Two flat lists; freetext entry is always allowed (per #396 AC).
+ * Feeds two things at once:
+ * - The operand + actions pickers' state-key comboboxes (`Object.keys(...)`
+ *   gives the option list — freetext entry is always allowed per #396 AC).
+ * - The `SetSymbolState` / `SetGlobalState` action row: when the user picks a
+ *   known key, the action's `value.value.type` follows the persisted type
+ *   (`Record[key].type`) so the value input widget matches without a second
+ *   "Value type" dropdown step.
  */
 export interface KnownStateKeys {
-  symbol: string[];
-  global: string[];
+  symbol: Record<string, StateValue>;
+  global: Record<string, StateValue>;
 }
 
 /**
@@ -51,10 +62,6 @@ export type InstancePeriods = Record<string, Period | undefined>;
  * - Channel — LHS + two bounds (Upper / Lower), `Interval` if any operand needs it.
  * - Moving — LHS + a numeric `threshold` + an integer `bars`, no RHS picker.
  *
- * When the LHS resolves to a Bool-typed operand, hides the operator + RHS rows
- * (single-operand sugar) and persists the leaf as `State / Equals` against
- * `Literal(true)` on save.
- *
  * `priorActions` lets the RHS literal infer its type from a same-rule
  * `SetState` action that writes the same state key (per issue #428 item 8). The
  * editor doesn't know about action ordering across leaves; the full action list
@@ -66,6 +73,8 @@ export function LeafEditor({
   indicators,
   instancePeriods,
   knownStateKeys,
+  stateKeysLoading,
+  indicatorStateKeysByKey,
   priorActions = [],
 }: {
   value: LeafCondition;
@@ -73,10 +82,11 @@ export function LeafEditor({
   indicators: IndicatorInstance[];
   instancePeriods: InstancePeriods;
   knownStateKeys: KnownStateKeys;
+  stateKeysLoading?: boolean;
+  indicatorStateKeysByKey?: IndicatorStateKeysByKey;
   priorActions?: Action[];
 }): ReactNode {
   const left = value.left;
-  const boolShortcut = isBoolOperand(left);
   const visibleIndicators = filterIndicatorsByPeriod(indicators, value.interval, instancePeriods);
   const intervalRequired = needsInterval(value);
 
@@ -91,36 +101,35 @@ export function LeafEditor({
             value={left}
             onChange={(next) => onChange(updateLeft(value, next, priorActions))}
             indicators={visibleIndicators}
-            symbolStateKeys={knownStateKeys.symbol}
-            globalStateKeys={knownStateKeys.global}
+            knownStateKeys={knownStateKeys}
+            stateKeysLoading={stateKeysLoading}
+            indicatorStateKeysByKey={indicatorStateKeysByKey}
             ariaLabel="Left operand kind"
           />
         </Box>
-        {boolShortcut ? null : (
-          <Box minWidth="180px">
-            <Text as="div" size="1" color="gray" mb="1">
-              Operator
-            </Text>
-            <OperatorPicker
-              value={value.operator}
-              left={left}
-              onChange={({ operator, family }) =>
-                onChange(changeOperator(value, operator, family, priorActions))
-              }
-              ariaLabel="Operator"
-            />
-          </Box>
+        <Box minWidth="180px">
+          <Text as="div" size="1" color="gray" mb="1">
+            Operator
+          </Text>
+          <OperatorPicker
+            value={value.operator}
+            left={left}
+            onChange={({ operator, family }) =>
+              onChange(changeOperator(value, operator, family, priorActions))
+            }
+            ariaLabel="Operator"
+          />
+        </Box>
+        {renderFamilyBody(
+          value,
+          onChange,
+          visibleIndicators,
+          knownStateKeys,
+          stateKeysLoading,
+          indicatorStateKeysByKey,
+          left,
+          priorActions,
         )}
-        {boolShortcut
-          ? null
-          : renderFamilyBody(
-              value,
-              onChange,
-              visibleIndicators,
-              knownStateKeys,
-              left,
-              priorActions,
-            )}
       </Flex>
       {intervalRequired ? (
         <Flex gap="2" align="center">
@@ -149,6 +158,8 @@ function renderFamilyBody(
   onChange: (next: LeafCondition) => void,
   indicators: IndicatorInstance[],
   knownStateKeys: KnownStateKeys,
+  stateKeysLoading: boolean | undefined,
+  indicatorStateKeysByKey: IndicatorStateKeysByKey | undefined,
   left: ConditionOperand,
   priorActions: Action[],
 ): ReactNode {
@@ -166,8 +177,9 @@ function renderFamilyBody(
             value={leaf.right}
             onChange={(next) => onChange({ ...leaf, right: next })}
             indicators={indicators}
-            symbolStateKeys={knownStateKeys.symbol}
-            globalStateKeys={knownStateKeys.global}
+            knownStateKeys={knownStateKeys}
+            stateKeysLoading={stateKeysLoading}
+            indicatorStateKeysByKey={indicatorStateKeysByKey}
             literalValueType={rhsLiteralType}
             ariaLabel="Right operand kind"
           />
@@ -184,8 +196,9 @@ function renderFamilyBody(
               value={leaf.upper}
               onChange={(next) => onChange({ ...leaf, upper: next })}
               indicators={indicators}
-              symbolStateKeys={knownStateKeys.symbol}
-              globalStateKeys={knownStateKeys.global}
+              knownStateKeys={knownStateKeys}
+              stateKeysLoading={stateKeysLoading}
+              indicatorStateKeysByKey={indicatorStateKeysByKey}
               literalValueType={rhsLiteralType}
               ariaLabel="Upper bound operand kind"
             />
@@ -198,8 +211,9 @@ function renderFamilyBody(
               value={leaf.lower}
               onChange={(next) => onChange({ ...leaf, lower: next })}
               indicators={indicators}
-              symbolStateKeys={knownStateKeys.symbol}
-              globalStateKeys={knownStateKeys.global}
+              knownStateKeys={knownStateKeys}
+              stateKeysLoading={stateKeysLoading}
+              indicatorStateKeysByKey={indicatorStateKeysByKey}
               literalValueType={rhsLiteralType}
               ariaLabel="Lower bound operand kind"
             />
@@ -317,7 +331,6 @@ function retypeLiteralOperand(operand: ConditionOperand, type: StateValueType): 
     case StateValueType.Bool:
       return { kind: OperandKind.Literal, value: { type, value: false } };
     case StateValueType.String:
-    case StateValueType.Enum:
       return { kind: OperandKind.Literal, value: { type, value: '' } };
   }
 }
@@ -411,7 +424,6 @@ function defaultLiteral(type: StateValueType): ConditionOperand {
     case StateValueType.Bool:
       return { kind: OperandKind.Literal, value: { type, value: false } };
     case StateValueType.String:
-    case StateValueType.Enum:
       return { kind: OperandKind.Literal, value: { type, value: '' } };
   }
 }
@@ -589,25 +601,4 @@ function filterIndicatorsByPeriod(
     const period = instancePeriods[instance.id];
     return period === undefined || period === interval;
   });
-}
-
-/**
- * Apply the bool-shortcut sugar when the leaf's LHS resolves to a Bool-typed
- * operand: persist the leaf as `State / Equals` against `Literal(true)`.
- *
- * Called by the editor's submit handler so the form's transient state survives
- * without that rewrite (the UI hides the operator + RHS rows in the meantime).
- */
-export function applyBoolShortcut(leaf: LeafCondition): LeafCondition {
-  if (!isBoolOperand(leaf.left)) return leaf;
-  return {
-    family: LeafConditionFamily.State,
-    operator: StateOperator.Equals,
-    left: leaf.left,
-    right: {
-      kind: OperandKind.Literal,
-      value: { type: StateValueType.Bool, value: true },
-    },
-    interval: leaf.interval,
-  };
 }

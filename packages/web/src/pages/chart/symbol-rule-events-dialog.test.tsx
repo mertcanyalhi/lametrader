@@ -183,7 +183,7 @@ describe('SymbolRuleEventsDialog', () => {
       await screen.findByRole('heading', { name: `Rule events ${SYMBOL}` }),
     ).toBeInTheDocument();
     expect(
-      ['Source ts', 'Fired at', 'Rule', 'Type', 'Detail'].map(
+      ['Source at', 'Fired at', 'Rule', 'Type', 'Detail'].map(
         (header) => within(screen.getByRole('table')).queryAllByText(header).length > 0,
       ),
     ).toEqual([true, true, true, true, true]);
@@ -243,7 +243,7 @@ describe('SymbolRuleEventsDialog', () => {
     });
   });
 
-  it('toggles the sort axis to ts when the Source ts header is clicked', async () => {
+  it('toggles the sort axis to ts when the Source at header is clicked', async () => {
     matchers.push({ includes: '/rule-events/count', body: () => ({ count: 2 }) });
     matchers.push({
       includes: `/symbols/${encodeURIComponent(SYMBOL)}/rule-events?`,
@@ -261,8 +261,8 @@ describe('SymbolRuleEventsDialog', () => {
     render(<SymbolRuleEventsDialog symbolId={SYMBOL} />, { wrapper });
     await user.click(await screen.findByRole('button', { name: 'Events (2)' }));
     await screen.findByText('newer ts');
-    // Click "Source ts" → sort axis ts desc — newer ts (2_000) comes first.
-    await user.click(screen.getByRole('button', { name: 'Sort by Source ts' }));
+    // Click "Source at" → sort axis ts desc — newer ts (2_000) comes first.
+    await user.click(screen.getByRole('button', { name: 'Sort by Source at' }));
     await waitFor(() => {
       const rows = within(screen.getByRole('table')).getAllByRole('row');
       const first = rows[1];

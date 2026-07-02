@@ -10,9 +10,22 @@ import {
   type StateValue,
   StateValueType,
 } from '@lametrader/core';
-import { Flex, Select, Switch, TextField } from '@radix-ui/themes';
+import { Flex, Select, Switch, Text, TextField } from '@radix-ui/themes';
 import type { ReactNode } from 'react';
+import type { KnownStateKeys } from './leaf-editor.js';
 import { StateKeyPicker } from './state-key-picker.js';
+
+/**
+ * Per-indicator-key catalog of the state-field keys the definition declares.
+ *
+ * Keyed by {@link IndicatorDefinition.key} (e.g. `'sma'` → `['value']`,
+ * `'supertrend'` → `['signal', 'value']`).
+ *
+ * Feeds the `IndicatorRef` operand's state-key combobox — missing entries fall
+ * through to a freetext-only picker via {@link StateKeyPicker}'s empty-list
+ * behaviour.
+ */
+export type IndicatorStateKeysByKey = Record<string, string[]>;
 
 /**
  * Drop-down options for the operand-kind selector, in the order they render.
@@ -85,6 +98,11 @@ export const RHS_ALLOWED_KINDS = OPERAND_KIND_OPTIONS.map((option) => option.val
  *                          row's `interval` by the caller before passing in.
  * @param symbolStateKeys - Known symbol-state keys to seed the dropdown.
  * @param globalStateKeys - Known global-state keys to seed the dropdown.
+ * @param indicatorStateKeysByKey - Per-indicator-definition state-key catalog,
+ *                                    keyed by `IndicatorDefinition.key`. Used
+ *                                    to seed the `IndicatorRef.stateKey`
+ *                                    combobox. Missing entries fall through
+ *                                    to a freetext-only picker.
  * @param literalValueType - When this is an RHS Literal, the LHS-derived value
  *                            type that types the input control. `undefined`
  *                            means "infer from the operand itself".
@@ -95,16 +113,18 @@ export function OperandPicker({
   value,
   onChange,
   indicators,
-  symbolStateKeys,
-  globalStateKeys,
+  knownStateKeys,
+  stateKeysLoading,
+  indicatorStateKeysByKey,
   literalValueType,
   ariaLabel,
 }: {
   value: ConditionOperand;
   onChange: (next: ConditionOperand) => void;
   indicators: IndicatorInstance[];
-  symbolStateKeys: string[];
-  globalStateKeys: string[];
+  knownStateKeys: KnownStateKeys;
+  stateKeysLoading?: boolean;
+  indicatorStateKeysByKey?: IndicatorStateKeysByKey;
   literalValueType?: StateValueType;
   ariaLabel: string;
 }): ReactNode {
@@ -156,8 +176,9 @@ export function OperandPicker({
         value={value}
         onChange={onChange}
         indicators={indicators}
-        symbolStateKeys={symbolStateKeys}
-        globalStateKeys={globalStateKeys}
+        knownStateKeys={knownStateKeys}
+        stateKeysLoading={stateKeysLoading}
+        indicatorStateKeysByKey={indicatorStateKeysByKey}
         literalValueType={literalValueType}
       />
     </Flex>
@@ -176,15 +197,17 @@ function OperandDetail({
   value,
   onChange,
   indicators,
-  symbolStateKeys,
-  globalStateKeys,
+  knownStateKeys,
+  stateKeysLoading,
+  indicatorStateKeysByKey,
   literalValueType,
 }: {
   value: ConditionOperand;
   onChange: (next: ConditionOperand) => void;
   indicators: IndicatorInstance[];
-  symbolStateKeys: string[];
-  globalStateKeys: string[];
+  knownStateKeys: KnownStateKeys;
+  stateKeysLoading?: boolean;
+  indicatorStateKeysByKey?: IndicatorStateKeysByKey;
   literalValueType?: StateValueType;
 }): ReactNode {
   switch (value.kind) {
@@ -195,7 +218,10 @@ function OperandDetail({
     case OperandKind.Close:
     case OperandKind.Volume:
       return null;
-    case OperandKind.IndicatorRef:
+    case OperandKind.IndicatorRef: {
+      const selected = indicators.find((instance) => instance.id === value.instanceId);
+      const indicatorKey = selected?.indicatorKey ?? '';
+      const indicatorKeyList = indicatorStateKeysByKey?.[indicatorKey] ?? [];
       return (
         <Flex direction="column" gap="2">
           <Select.Root
@@ -211,32 +237,73 @@ function OperandDetail({
               ))}
             </Select.Content>
           </Select.Root>
-          <TextField.Root
-            aria-label="Indicator state field"
-            placeholder="State field key (e.g. signal)"
+          <StateKeyPicker
             value={value.stateKey}
-            onChange={(event) => onChange({ ...value, stateKey: event.target.value })}
+            knownKeys={indicatorKeyList}
+            ariaLabel="Indicator state field"
+            onChange={(stateKey) => onChange({ ...value, stateKey })}
           />
         </Flex>
       );
-    case OperandKind.SymbolStateRef:
+    }
+    case OperandKind.SymbolStateRef: {
+      const symbolMap = knownStateKeys.symbol;
+      const knownForCurrent = value.key === '' ? undefined : symbolMap[value.key];
       return (
-        <StateKeyPicker
-          value={value.key}
-          knownKeys={symbolStateKeys}
-          ariaLabel="Symbol state key"
-          onChange={(key) => onChange({ ...value, key })}
-        />
+        <Flex direction="column" gap="2">
+          <StateKeyPicker
+            value={value.key}
+            knownKeys={Object.keys(symbolMap)}
+            ariaLabel="Symbol state key"
+            isLoading={stateKeysLoading}
+            onChange={(key) => {
+              const known = symbolMap[key];
+              if (known === undefined) {
+                onChange({ ...value, key });
+                return;
+              }
+              onChange({ ...value, key, valueType: known.type });
+            }}
+          />
+          {knownForCurrent === undefined ? (
+            <ValueTypeRow
+              value={value.valueType}
+              ariaLabel="Symbol state value type"
+              onChange={(valueType) => onChange({ ...value, valueType })}
+            />
+          ) : null}
+        </Flex>
       );
-    case OperandKind.GlobalStateRef:
+    }
+    case OperandKind.GlobalStateRef: {
+      const globalMap = knownStateKeys.global;
+      const knownForCurrent = value.key === '' ? undefined : globalMap[value.key];
       return (
-        <StateKeyPicker
-          value={value.key}
-          knownKeys={globalStateKeys}
-          ariaLabel="Global state key"
-          onChange={(key) => onChange({ ...value, key })}
-        />
+        <Flex direction="column" gap="2">
+          <StateKeyPicker
+            value={value.key}
+            knownKeys={Object.keys(globalMap)}
+            ariaLabel="Global state key"
+            isLoading={stateKeysLoading}
+            onChange={(key) => {
+              const known = globalMap[key];
+              if (known === undefined) {
+                onChange({ ...value, key });
+                return;
+              }
+              onChange({ ...value, key, valueType: known.type });
+            }}
+          />
+          {knownForCurrent === undefined ? (
+            <ValueTypeRow
+              value={value.valueType}
+              ariaLabel="Global state value type"
+              onChange={(valueType) => onChange({ ...value, valueType })}
+            />
+          ) : null}
+        </Flex>
       );
+    }
     case OperandKind.Literal:
       return (
         <LiteralValueInput
@@ -246,6 +313,42 @@ function OperandDetail({
         />
       );
   }
+}
+
+/**
+ * `Value type` picker rendered next to a state-ref operand's key combobox when
+ * the key isn't in the known-state catalog (freetext / to-be-created key).
+ *
+ * Lets the user declare the ref's `valueType` up front so the operator picker
+ * narrows correctly and any downstream RHS literal picks the right widget.
+ * Known keys hide this row — the persisted type is authoritative.
+ */
+function ValueTypeRow({
+  value,
+  ariaLabel,
+  onChange,
+}: {
+  value: StateValueType;
+  ariaLabel: string;
+  onChange: (next: StateValueType) => void;
+}): ReactNode {
+  return (
+    <Flex gap="2" align="center">
+      <Text size="2" color="gray">
+        Value type
+      </Text>
+      <Select.Root value={value} onValueChange={(next) => onChange(next as StateValueType)}>
+        <Select.Trigger aria-label={ariaLabel} />
+        <Select.Content>
+          {Object.values(StateValueType).map((type) => (
+            <Select.Item key={type} value={type}>
+              {type}
+            </Select.Item>
+          ))}
+        </Select.Content>
+      </Select.Root>
+    </Flex>
+  );
 }
 
 /**
@@ -304,11 +407,9 @@ function LiteralValueInput({
         />
       );
     }
-    case StateValueType.String:
-    case StateValueType.Enum: {
+    case StateValueType.String: {
       const current =
-        (value.value.type === StateValueType.String || value.value.type === StateValueType.Enum) &&
-        typeof value.value.value === 'string'
+        value.value.type === StateValueType.String && typeof value.value.value === 'string'
           ? value.value.value
           : '';
       return (
@@ -402,8 +503,6 @@ function defaultLiteralValue(type: StateValueType): StateValue {
     case StateValueType.Bool:
       return { type, value: false };
     case StateValueType.String:
-      return { type, value: '' };
-    case StateValueType.Enum:
       return { type, value: '' };
   }
 }

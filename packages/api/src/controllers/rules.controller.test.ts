@@ -6,6 +6,8 @@ import {
   OperandKind,
   Period,
   type Rule,
+  type RuleEventEntry,
+  RuleEventType,
   RuleScopeKind,
   StateValueType,
   TriggerKind,
@@ -61,20 +63,20 @@ function buildRuleInput(
 
 describe('rulesController', () => {
   let watchlist: InMemoryWatchlistRepository;
+  let eventLog: InMemoryEventLog;
   let rules: RuleService;
   let app: ReturnType<typeof createApp>;
 
   beforeEach(async () => {
     watchlist = new InMemoryWatchlistRepository();
     await watchlist.add({ id: 'AAPL', periods: [Period.M1] });
+    eventLog = new InMemoryEventLog(() => 0);
     let nextId = 0;
     const now = 1_000_000;
-    rules = new RuleService(
-      new InMemoryRuleRepository(),
-      new InMemoryEventLog(() => 0),
-      watchlist,
-      { newId: () => `rule-${++nextId}`, now: () => now },
-    );
+    rules = new RuleService(new InMemoryRuleRepository(), eventLog, watchlist, {
+      newId: () => `rule-${++nextId}`,
+      now: () => now,
+    });
     app = createApp(buildAppDeps({ rules }));
   });
 
@@ -174,6 +176,43 @@ describe('rulesController', () => {
     });
     expect(response.statusCode).toEqual(200);
     expect(response.json()).toEqual([]);
+  });
+
+  it('GET /symbols/:id/rule-events returns 200 for a legacy Fired entry whose inbound event carries numeric prev/current', async () => {
+    // A `Fired` row written by an earlier engine version that inlined an OHLCV
+    // data-update event as the firing inbound — its `prev`/`current` are raw
+    // numbers, not `StateValue`. Cast because that shape predates the current
+    // `RuleEventEntry` type; it still lives in append-only logs on disk.
+    const legacy = {
+      type: RuleEventType.Fired,
+      ts: 150,
+      ruleId: 'rule-legacy',
+      symbolId: 'AAPL',
+      firedAt: 160,
+      context: {
+        inboundEvent: {
+          kind: 'openValueChanged',
+          ts: 150,
+          symbolId: 'AAPL',
+          prev: 395.98,
+          current: 395.76,
+        },
+        lookupSnapshot: {
+          current: 395.76,
+          open: 395.76,
+          high: 395.76,
+          low: 395.76,
+          close: 395.76,
+          volume: 0,
+        },
+      },
+    } as unknown as RuleEventEntry;
+    await eventLog.appendSymbolEvent('AAPL', legacy);
+
+    const response = await app.inject({ method: 'GET', url: '/symbols/AAPL/rule-events' });
+
+    expect(response.statusCode).toEqual(200);
+    expect(response.json()).toEqual([legacy]);
   });
 
   it('GET /symbols/:id/rule-events/count returns 200 + { count: 0 } for a symbol with no events', async () => {

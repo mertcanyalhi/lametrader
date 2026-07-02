@@ -55,10 +55,6 @@ export const StateValueSchema = Type.Union([
     { type: Type.Literal(StateValueType.Bool), value: Type.Boolean() },
     { additionalProperties: false },
   ),
-  Type.Object(
-    { type: Type.Literal(StateValueType.Enum), value: Type.String() },
-    { additionalProperties: false },
-  ),
 ]);
 
 /**
@@ -202,10 +198,15 @@ export const EvaluationTriggerEventSchema = Type.Object(
     profileId: Type.Optional(Type.String()),
     /** SymbolStateChanged / GlobalStateChanged: the state-map key. */
     key: Type.Optional(Type.String()),
-    /** SymbolStateChanged / GlobalStateChanged / IndicatorChanged: the prev value (or null). */
-    prev: Type.Optional(Type.Union([StateValueSchema, Type.Null()])),
-    /** SymbolStateChanged / GlobalStateChanged / IndicatorChanged: the current value (or null). */
-    current: Type.Optional(Type.Union([StateValueSchema, Type.Null()])),
+    /**
+     * SymbolStateChanged / GlobalStateChanged / IndicatorChanged: the prev
+     * value (or null). Also allows a raw `number`: the append-only log holds
+     * `Fired` entries from earlier engine versions that inlined OHLCV
+     * data-update events (numeric `prev`/`current`) as the firing inbound.
+     */
+    prev: Type.Optional(Type.Union([StateValueSchema, Type.Number(), Type.Null()])),
+    /** As {@link prev}: current value — `StateValue`, raw `number` (legacy), or null. */
+    current: Type.Optional(Type.Union([StateValueSchema, Type.Number(), Type.Null()])),
   },
   { additionalProperties: false },
 );

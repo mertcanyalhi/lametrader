@@ -30,7 +30,7 @@ describe('state hooks', () => {
     return ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   }
 
-  it('useSymbolState GETs /api/symbols/:id/state and returns a populated map', async () => {
+  it('useSymbolState GETs /api/symbols/:id/state?profileId=... and returns a populated map', async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
@@ -40,7 +40,7 @@ describe('state hooks', () => {
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       ),
     );
-    const { result } = renderHook(() => useSymbolState('crypto:BTCUSDT'), {
+    const { result } = renderHook(() => useSymbolState('profile-1', 'crypto:BTCUSDT'), {
       wrapper: makeWrapper(),
     });
     await waitFor(() => {
@@ -49,14 +49,16 @@ describe('state hooks', () => {
         cooldown: { type: 'number', value: 42 },
       });
     });
-    expect(fetchSpy.mock.calls[0]?.[0]).toBe('/api/symbols/crypto%3ABTCUSDT/state');
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe(
+      '/api/symbols/crypto%3ABTCUSDT/state?profileId=profile-1',
+    );
   });
 
   it('useSymbolState resolves with {} when the API returns an empty map', async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
     );
-    const { result } = renderHook(() => useSymbolState('crypto:BTCUSDT'), {
+    const { result } = renderHook(() => useSymbolState('profile-1', 'crypto:BTCUSDT'), {
       wrapper: makeWrapper(),
     });
     await waitFor(() => {
@@ -64,29 +66,47 @@ describe('state hooks', () => {
     });
   });
 
-  it('useGlobalState GETs /api/state/global and returns a populated map', async () => {
+  it('useSymbolState stays disabled when profileId is empty', () => {
+    const { result } = renderHook(() => useSymbolState('', 'crypto:BTCUSDT'), {
+      wrapper: makeWrapper(),
+    });
+    expect({ fetched: fetchSpy.mock.calls.length, data: result.current.data }).toEqual({
+      fetched: 0,
+      data: undefined,
+    });
+  });
+
+  it('useGlobalState GETs /api/profiles/:profileId/state/global and returns a populated map', async () => {
     fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({ regime: { type: StateValueType.Enum, value: 'risk-on' } }), {
+      new Response(JSON.stringify({ regime: { type: StateValueType.String, value: 'risk-on' } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
     );
-    const { result } = renderHook(() => useGlobalState(), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useGlobalState('profile-1'), { wrapper: makeWrapper() });
     await waitFor(() => {
       expect(result.current.data).toEqual({
-        regime: { type: 'enum', value: 'risk-on' },
+        regime: { type: 'string', value: 'risk-on' },
       });
     });
-    expect(fetchSpy.mock.calls[0]?.[0]).toBe('/api/state/global');
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe('/api/profiles/profile-1/state/global');
   });
 
   it('useGlobalState resolves with {} when no global keys are set', async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
     );
-    const { result } = renderHook(() => useGlobalState(), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useGlobalState('profile-1'), { wrapper: makeWrapper() });
     await waitFor(() => {
       expect(result.current.data).toEqual({});
+    });
+  });
+
+  it('useGlobalState stays disabled when profileId is empty', () => {
+    const { result } = renderHook(() => useGlobalState(''), { wrapper: makeWrapper() });
+    expect({ fetched: fetchSpy.mock.calls.length, data: result.current.data }).toEqual({
+      fetched: 0,
+      data: undefined,
     });
   });
 

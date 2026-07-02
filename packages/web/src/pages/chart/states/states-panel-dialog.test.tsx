@@ -60,6 +60,17 @@ describe('StatesPanelDialog', () => {
         method === 'GET' && url === `/api/symbols/${encodeURIComponent(SYMBOL_ID)}/state-keys`,
       respond: () => ({ status: 200, body: stateKeys }),
     });
+    matchers.push({
+      match: (url, method) =>
+        method === 'GET' && url.startsWith(`/api/symbols/${encodeURIComponent(SYMBOL_ID)}/state?`),
+      respond: () => ({
+        status: 200,
+        body: {
+          cooldown: { type: StateValueType.Number, value: 3 },
+          last_signal: { type: StateValueType.String, value: 'buy' },
+        },
+      }),
+    });
 
     globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
       const method = init?.method ?? 'GET';
@@ -145,6 +156,20 @@ describe('StatesPanelDialog', () => {
       cooldownChecked: cooldown.getAttribute('aria-checked'),
       lastSignalChecked: lastSignal.getAttribute('aria-checked'),
     }).toEqual({ cooldownChecked: 'false', lastSignalChecked: 'false' });
+  });
+
+  it('shows the latest value for each state key', async () => {
+    setStoredProfileId(PROFILE.id);
+    renderPanel();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'States (0)' }));
+
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByRole('checkbox', { name: 'cooldown' });
+    expect({
+      cooldown: within(dialog).queryByText('3') !== null,
+      lastSignal: within(dialog).queryByText('buy') !== null,
+    }).toEqual({ cooldown: true, lastSignal: true });
   });
 
   it('toggling a checkbox persists the next selection to localStorage and bumps the badge count', async () => {

@@ -28,6 +28,19 @@ const COUNT_BADGE_CAP = 99;
 const MAX_ROWS_FETCHED = 500;
 
 /**
+ * Per-event color so the `Type` badge reads at a glance in a dense log.
+ * Mirrors the rules-page events dialog. Gray is the fallback for anything new.
+ */
+const EVENT_COLORS: Readonly<Record<RuleEventType, 'green' | 'amber' | 'blue' | 'red' | 'gray'>> = {
+  [RuleEventType.Fired]: 'green',
+  [RuleEventType.NotificationSent]: 'blue',
+  [RuleEventType.StateSet]: 'blue',
+  [RuleEventType.StateRemoved]: 'amber',
+  [RuleEventType.Error]: 'red',
+  [RuleEventType.CycleOverflow]: 'red',
+};
+
+/**
  * Which axis the events table is sorted by. The settled design (per issue
  * #425) makes both `firedAt` (wall-clock persistence) and `ts` (source bar /
  * tick timestamp) sortable; the default is newest-first on `firedAt`.
@@ -65,7 +78,6 @@ function renderStateValue(value: StateValue): string {
     case StateValueType.Number:
       return String(value.value);
     case StateValueType.String:
-    case StateValueType.Enum:
       return value.value;
   }
 }
@@ -111,7 +123,7 @@ function renderDetail(entry: RuleEventEntry): string {
 /**
  * The chart's bottom-bar Events panel — a trigger button labeled with the
  * current symbol's rule-event count, opening a dialog that lists each entry
- * with the two timestamps (`Source ts` from the bar / tick that drove
+ * with the two timestamps (`Source at` from the bar / tick that drove
  * evaluation, `Fired at` from the event-log adapter's persistence stamp),
  * the rule that produced it, its variant `Type`, and a `Detail` summary.
  *
@@ -216,7 +228,7 @@ function EventsTableView({ symbolId }: { symbolId: string }): ReactNode {
         <Table.Header>
           <Table.Row>
             <SortableHeader
-              label="Source ts"
+              label="Source at"
               tooltip="Candle / bar / tick timestamp that drove evaluation"
               axis="ts"
               sort={sort}
@@ -251,7 +263,9 @@ function EventsTableView({ symbolId }: { symbolId: string }): ReactNode {
                   {entry.firedAt !== undefined ? formatTimestamp(entry.firedAt) : '—'}
                 </Table.Cell>
                 <Table.Cell>{rulesById.get(entry.ruleId) ?? entry.ruleId}</Table.Cell>
-                <Table.Cell>{entry.type}</Table.Cell>
+                <Table.Cell>
+                  <Badge color={EVENT_COLORS[entry.type]}>{entry.type}</Badge>
+                </Table.Cell>
                 <Table.Cell className="break-words">{renderDetail(entry)}</Table.Cell>
               </Table.Row>
             ))

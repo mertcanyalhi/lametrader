@@ -1,6 +1,6 @@
 # State values are a tagged union, not bare `unknown`
 
-- Status: accepted
+- Status: accepted (amended 2026-07-02 — `Enum` variant removed, see Update below)
 
 ## Context
 
@@ -41,6 +41,17 @@ The companion guards (`isNumber(v): v is StateValue & { type: Number }`, etc.) l
   Bare `unknown` would have made the same change silent.
 - **This forecloses on shapes we don't yet support** — no arrays, no nested objects, no `null` as a first-class value (remove the key instead).
   When one of those is genuinely needed, it's a new ADR, not a quiet broadening.
+
+## Update (2026-07-02): `Enum` variant removed
+
+The tagged-union decision stands; the `Enum` variant does not.
+`enum` and `string` both carried a `string` at runtime and both mapped to the same operator family (string-like), so the "deliberate split" above never paid for itself: the editor rendered a free-text input for both (the closed member set lives on the producing action, not the value, so there was nothing to populate a dropdown from), and carrying two indistinguishable string variants only added a redundant branch to every `switch` on `type`.
+
+`StateValueType` is now `{ String, Number, Bool }`.
+The indicator cascade bridge, which previously wrapped string outputs as `Enum`, now wraps them as `String`.
+Legacy persisted `{ type: 'enum' }` values are not migrated — the API schema no longer accepts them (test data was cleared instead).
+
+The `FieldType.Enum` used by **indicator input/state descriptors** is a separate concept and is unchanged.
 
 ## Closes
 

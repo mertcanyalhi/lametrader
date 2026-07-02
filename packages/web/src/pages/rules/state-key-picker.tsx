@@ -1,68 +1,92 @@
-import { Flex, Select, TextField } from '@radix-ui/themes';
 import type { ReactNode } from 'react';
+import CreatableSelect from 'react-select/creatable';
+import {
+  DropdownIndicator,
+  type SelectOption as Option,
+  selectClassNames,
+  selectStyles,
+  useRadixPortalTarget,
+} from '../../lib/select-skin.js';
 
 /**
- * Combobox-style state-key input — a Radix `<Select>` seeded with known keys
- * paired with a freetext `<TextField>` fallback for keys that don't exist yet.
+ * Searchable "find or create" state-key combobox — a single input that
+ * filters the known-key list as the user types and creates a brand-new key
+ * on `Enter` (or by clicking the `Create "…"` row) when none of the seeded
+ * options match.
  *
- * Used wherever the user references a symbol-state or global-state key — both
- * from the operand picker (LHS / RHS of a leaf condition) and from the action
- * editor (`SetState` / `RemoveState` rows).
+ * Built on {@link CreatableSelect} from `react-select/creatable`; the visual
+ * shell is `unstyled` and re-skinned via Radix Themes CSS variables so it
+ * matches the surrounding `Select` triggers in both light and dark modes.
  *
- * Key invariants:
- * - The dropdown lists every known key in insertion order, de-duplicated.
- * - The freetext input mirrors `value` so the user can type a brand-new key
- *   that doesn't yet appear in `knownKeys`; the parent gets the new value via
- *   `onChange`.
- * - Empty `value` shows the dropdown's placeholder; selecting a key from the
- *   list overwrites `value` and the freetext field re-syncs on the next render.
+ * The dropdown menu is portaled to the nearest `.radix-themes` ancestor
+ * (found via {@link setPortalRef}) rather than inline: inline, the menu was
+ * clipped by the enclosing `Dialog`'s `overflow: auto` box, hiding any
+ * option that fell past the dialog's edge. Portaling to `document.body`
+ * would escape the clip but silently break Radix's CSS tokens
+ * (`--font-size-*`, `--space-*`, `--gray-*`, `--accent-*`), which are only
+ * defined under `.radix-themes`; portaling to the closest `.radix-themes`
+ * keeps both — the tokens resolve and the menu escapes the overflow box.
+ * `menuPosition="fixed"` positions the portaled menu against the viewport
+ * (required once it leaves the control's DOM flow), and `menuPlacement="auto"`
+ * flips it above the control when there's no room below.
  *
  * @param value      - The current key string (may be `''`).
  * @param knownKeys  - Keys to seed the dropdown with (de-duplicated in place).
- * @param ariaLabel  - Accessible name for the dropdown trigger. The freetext
- *                       input takes `${ariaLabel} (custom)` so screen readers
- *                       differentiate the two controls.
- * @param onChange   - Receives the next key on any edit (dropdown click or
- *                       freetext keystroke).
+ * @param ariaLabel  - Accessible name for the combobox input.
+ * @param isLoading  - When `true`, disables editing and shows the react-select
+ *                       spinner so the user knows a state fetch is in flight.
+ * @param onChange   - Receives the next key on any edit (pick, create, or
+ *                       filter-and-select).
  */
 export function StateKeyPicker({
   value,
   knownKeys,
   ariaLabel,
+  isLoading,
   onChange,
 }: {
   value: string;
   knownKeys: string[];
   ariaLabel: string;
+  isLoading?: boolean;
   onChange: (key: string) => void;
 }): ReactNode {
   // De-duplicate while preserving order so a key the user just typed still
   // appears in the dropdown for re-selection.
   const seen = new Set<string>();
-  const options: string[] = [];
+  const options: Option[] = [];
   for (const key of knownKeys) {
     if (key === '' || seen.has(key)) continue;
     seen.add(key);
-    options.push(key);
+    options.push({ value: key, label: key });
   }
+  const current = value === '' ? null : { value, label: value };
+
+  const [setPortalRef, portalTarget] = useRadixPortalTarget();
+
   return (
-    <Flex direction="column" gap="2">
-      <Select.Root value={value === '' ? undefined : value} onValueChange={onChange}>
-        <Select.Trigger placeholder="Pick a key" aria-label={ariaLabel} />
-        <Select.Content>
-          {options.map((key) => (
-            <Select.Item key={key} value={key}>
-              {key}
-            </Select.Item>
-          ))}
-        </Select.Content>
-      </Select.Root>
-      <TextField.Root
-        aria-label={`${ariaLabel} (custom)`}
-        placeholder="Or type a new key"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
+    <div ref={setPortalRef}>
+      <CreatableSelect<Option>
+        unstyled
+        isClearable={false}
+        isLoading={isLoading === true}
+        isDisabled={isLoading === true}
+        value={current}
+        options={options}
+        onChange={(option) => onChange(option?.value ?? '')}
+        onCreateOption={(input) => onChange(input)}
+        formatCreateLabel={(input) => `Create "${input}"`}
+        aria-label={ariaLabel}
+        inputId={`state-key-${ariaLabel.replaceAll(' ', '-').toLowerCase()}`}
+        placeholder={isLoading === true ? 'Loading keys…' : 'Pick or create a key'}
+        menuPlacement="auto"
+        menuPosition="fixed"
+        menuPortalTarget={portalTarget ?? undefined}
+        menuShouldScrollIntoView={false}
+        components={{ DropdownIndicator }}
+        styles={selectStyles}
+        classNames={selectClassNames}
       />
-    </Flex>
+    </div>
   );
 }

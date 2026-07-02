@@ -43,7 +43,7 @@ describe('StateCascadeBridge', () => {
       scope: { kind: StateScope.Global },
       key: 'last-signal',
       prev: null,
-      current: { type: StateValueType.Enum, value: 'long' },
+      current: { type: StateValueType.String, value: 'long' },
       ts: 120_000,
     };
     bridge.handleStateChange(inbound);
@@ -54,7 +54,7 @@ describe('StateCascadeBridge', () => {
         profileId: 'profile-B',
         key: 'last-signal',
         prev: null,
-        current: { type: StateValueType.Enum, value: 'long' },
+        current: { type: StateValueType.String, value: 'long' },
       },
     ]);
   });

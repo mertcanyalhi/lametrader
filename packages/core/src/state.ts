@@ -20,10 +20,3 @@ export function isNumber(v: StateValue): v is StateValue & { type: StateValueTyp
 export function isBool(v: StateValue): v is StateValue & { type: StateValueType.Bool } {
   return v.type === StateValueType.Bool;
 }
-
-/**
- * Type-guard: narrows `v` to the `Enum` variant of {@link StateValue}.
- */
-export function isEnum(v: StateValue): v is StateValue & { type: StateValueType.Enum } {
-  return v.type === StateValueType.Enum;
-}
