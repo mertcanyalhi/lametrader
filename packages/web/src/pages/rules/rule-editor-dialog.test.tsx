@@ -70,14 +70,6 @@ function makeFetchStub(): ReturnType<typeof vi.fn> {
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    // Any /symbols/:id/state-keys response — the rules editor seeds its
-    // state-key combobox from this endpoint.
-    if (url.includes('/api/symbols/') && url.endsWith('/state-keys')) {
-      return new Response('[]', {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
     return new Response('{}', {
       status: 404,
       headers: { 'Content-Type': 'application/json' },
