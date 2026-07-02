@@ -96,7 +96,12 @@ export function StateKeyPicker({
       classNames={{
         control: ({ isFocused, isDisabled }) =>
           cn(
-            'flex items-center h-8 rounded-[max(var(--radius-2),var(--radius-full))] text-[var(--font-size-2)] leading-[var(--line-height-2)] gap-1 pl-[var(--space-2)] pr-0 transition-colors',
+            // Values verified in-browser to line up with the sibling Radix
+            // Select's trigger: min-height inherits so react-select's inline
+            // default doesn't bloat the row, font-size scales relative to
+            // Radix's own token, and the asymmetric L/R padding matches the
+            // trigger's built-in indent + chevron offset.
+            'flex items-center [min-height:inherit] rounded-[max(var(--radius-2),var(--radius-full))] text-[0.95em] leading-[var(--line-height-2)] pt-0 pr-[5px] pb-0 pl-[10px] transition-colors',
             'bg-[var(--color-surface)] text-[var(--gray-12)]',
             'shadow-[inset_0_0_0_1px_var(--gray-a7)]',
             isDisabled && 'opacity-60',
@@ -114,11 +119,7 @@ export function StateKeyPicker({
         menuList: () => 'py-[var(--space-1)] max-h-56 overflow-y-auto',
         option: ({ isFocused, isSelected }) =>
           cn(
-            // Values verified in-browser to line up with the sibling Radix
-            // Select's items: min-height inherits the row height set on the
-            // menu list, font-size scales relative to Radix's own token, and
-            // the L/R padding matches the Select item's built-in indent.
-            'flex items-center [min-height:inherit] text-[0.95em] pt-0 pr-[5px] pb-0 pl-[10px] cursor-pointer',
+            'flex items-center min-h-[var(--space-6)] px-[var(--space-3)] py-0 text-[var(--font-size-2)] leading-[var(--line-height-2)] cursor-pointer',
             isSelected
               ? 'bg-[var(--accent-9)] text-[var(--accent-contrast)]'
               : isFocused
