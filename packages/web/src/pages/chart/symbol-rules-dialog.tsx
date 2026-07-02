@@ -1,7 +1,7 @@
 import type { Rule } from '@lametrader/core';
 import { Badge, Button, Callout, Dialog, Flex, Skeleton, Text } from '@radix-ui/themes';
 import { ListChecks, Plus, TriangleAlert } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { makeDraftRule } from '../../lib/draft-rule.js';
 import { useRules } from '../../lib/hooks/rules.js';
 import { useSelectedProfile } from '../../lib/selected-profile-context.js';
@@ -61,6 +61,24 @@ function ScopedDialog({ profileId, symbolId }: { profileId: string; symbolId: st
   const rulesQuery = useRules({ profileId, symbolId });
   const rules = rulesQuery.data ?? [];
 
+  // A child editor/events dialog is portaled outside this content; closing it
+  // (Cancel / Esc) bounces focus through <body>, which this dialog's dismiss
+  // layer sees as an outside-interaction and would close on. The ref lags the
+  // child state by a macrotask so the guard is still armed when that late event
+  // lands (reading current state here fires too early — state is already false).
+  // ponytail: single boolean assumes one child open at a time (true here).
+  const childOpenRef = useRef(false);
+  useEffect(() => {
+    if (creating || editing !== null || eventsRule !== null) {
+      childOpenRef.current = true;
+      return;
+    }
+    const id = setTimeout(() => {
+      childOpenRef.current = false;
+    }, 0);
+    return () => clearTimeout(id);
+  }, [creating, editing, eventsRule]);
+
   return (
     <>
       <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -80,13 +98,11 @@ function ScopedDialog({ profileId, symbolId }: { profileId: string; symbolId: st
         </Dialog.Trigger>
         <Dialog.Content
           maxWidth="900px"
-          // A nested editor/events dialog is portaled outside this content, so
-          // synchronously closing it (e.g. Cancel) leaks the same pointer/focus
-          // event here as an outside-interaction and would close this dialog too.
-          // Ignore it while a child dialog is open — this dialog shouldn't
-          // dismiss on outside interaction with a child on top of it anyway.
           onInteractOutside={(event) => {
-            if (creating || editing !== null || eventsRule !== null) event.preventDefault();
+            if (childOpenRef.current) event.preventDefault();
+          }}
+          onEscapeKeyDown={(event) => {
+            if (childOpenRef.current) event.preventDefault();
           }}
         >
           <Flex align="center" justify="between" gap="3">
