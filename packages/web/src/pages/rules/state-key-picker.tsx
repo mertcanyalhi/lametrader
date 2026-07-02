@@ -93,15 +93,21 @@ export function StateKeyPicker({
       menuPlacement="auto"
       menuShouldScrollIntoView={false}
       components={{ DropdownIndicator }}
+      styles={{
+        control: (base) => ({ ...base, minHeight: 32, fontSize: 14, paddingLeft: 12 }),
+        option: (base) => ({
+          ...base,
+          minHeight: 28,
+          fontSize: 14,
+          padding: '0 12px',
+          display: 'flex',
+          alignItems: 'center',
+        }),
+      }}
       classNames={{
         control: ({ isFocused, isDisabled }) =>
           cn(
-            // Values verified in-browser to line up with the sibling Radix
-            // Select's trigger: min-height inherits so react-select's inline
-            // default doesn't bloat the row, font-size scales relative to
-            // Radix's own token, and the asymmetric L/R padding matches the
-            // trigger's built-in indent + chevron offset.
-            'flex items-center [min-height:inherit] rounded-[max(var(--radius-2),var(--radius-full))] text-[0.95em] leading-[var(--line-height-2)] pt-0 pr-[5px] pb-0 pl-[10px] transition-colors',
+            'flex items-center rounded-[max(var(--radius-2),var(--radius-full))] leading-[var(--line-height-2)] transition-colors',
             'bg-[var(--color-surface)] text-[var(--gray-12)]',
             'shadow-[inset_0_0_0_1px_var(--gray-a7)]',
             isDisabled && 'opacity-60',
@@ -119,7 +125,7 @@ export function StateKeyPicker({
         menuList: () => 'py-[var(--space-1)] max-h-56 overflow-y-auto',
         option: ({ isFocused, isSelected }) =>
           cn(
-            'flex items-center min-h-[var(--space-6)] px-[var(--space-3)] py-0 text-[var(--font-size-2)] leading-[var(--line-height-2)] cursor-pointer',
+            'cursor-pointer leading-[var(--line-height-2)]',
             isSelected
               ? 'bg-[var(--accent-9)] text-[var(--accent-contrast)]'
               : isFocused
