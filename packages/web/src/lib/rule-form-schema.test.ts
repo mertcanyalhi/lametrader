@@ -6,12 +6,7 @@ import {
   StateValueType,
 } from '@lametrader/core';
 import { describe, expect, it } from 'vitest';
-import {
-  isBoolOperand,
-  isConditionTreeNonEmpty,
-  OperandValueKind,
-  operandValueKind,
-} from './rule-form-schema';
+import { isConditionTreeNonEmpty, OperandValueKind, operandValueKind } from './rule-form-schema';
 
 describe('operandValueKind', () => {
   it('resolves Price to Numeric', () => {
@@ -44,39 +39,6 @@ describe('operandValueKind', () => {
         value: { type: StateValueType.String, value: 'hi' },
       }),
     ).toEqual(OperandValueKind.StringLike);
-  });
-});
-
-describe('isBoolOperand', () => {
-  it('returns true for a Bool-typed indicator-ref', () => {
-    expect(
-      isBoolOperand({
-        kind: OperandKind.IndicatorRef,
-        instanceId: 'i1',
-        stateKey: 'signal',
-        valueType: StateValueType.Bool,
-      }),
-    ).toEqual(true);
-  });
-
-  it('returns false for a Number indicator-ref', () => {
-    expect(
-      isBoolOperand({
-        kind: OperandKind.IndicatorRef,
-        instanceId: 'i1',
-        stateKey: 'value',
-        valueType: StateValueType.Number,
-      }),
-    ).toEqual(false);
-  });
-
-  it('returns false for a Literal (which carries its own value)', () => {
-    expect(
-      isBoolOperand({
-        kind: OperandKind.Literal,
-        value: { type: StateValueType.Bool, value: true },
-      }),
-    ).toEqual(false);
   });
 });
 

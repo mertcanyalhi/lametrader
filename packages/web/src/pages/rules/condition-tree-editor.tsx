@@ -20,12 +20,7 @@ import {
 } from '@radix-ui/themes';
 import { Plus, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import {
-  applyBoolShortcut,
-  type InstancePeriods,
-  type KnownStateKeys,
-  LeafEditor,
-} from './leaf-editor.js';
+import { type InstancePeriods, type KnownStateKeys, LeafEditor } from './leaf-editor.js';
 import type { IndicatorStateKeysByKey } from './operand-picker.js';
 
 /**
@@ -131,12 +126,7 @@ function NodeView({
         <LeafEditor
           value={node.leaf}
           onChange={(nextLeaf) =>
-            onChange(
-              replaceAt(root, path, {
-                kind: ConditionNodeKind.Leaf,
-                leaf: applyBoolShortcut(nextLeaf),
-              }),
-            )
+            onChange(replaceAt(root, path, { kind: ConditionNodeKind.Leaf, leaf: nextLeaf }))
           }
           indicators={indicators}
           instancePeriods={instancePeriods}

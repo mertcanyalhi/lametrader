@@ -18,7 +18,7 @@ import {
 } from '@lametrader/core';
 import { Box, Flex, Select, Text, TextField } from '@radix-ui/themes';
 import type { ReactNode } from 'react';
-import { isBoolOperand, OperandValueKind, operandValueKind } from '../../lib/rule-form-schema.js';
+import { OperandValueKind, operandValueKind } from '../../lib/rule-form-schema.js';
 import {
   type IndicatorStateKeysByKey,
   OperandPicker,
@@ -62,10 +62,6 @@ export type InstancePeriods = Record<string, Period | undefined>;
  * - Channel — LHS + two bounds (Upper / Lower), `Interval` if any operand needs it.
  * - Moving — LHS + a numeric `threshold` + an integer `bars`, no RHS picker.
  *
- * When the LHS resolves to a Bool-typed operand, hides the operator + RHS rows
- * (single-operand sugar) and persists the leaf as `State / Equals` against
- * `Literal(true)` on save.
- *
  * `priorActions` lets the RHS literal infer its type from a same-rule
  * `SetState` action that writes the same state key (per issue #428 item 8). The
  * editor doesn't know about action ordering across leaves; the full action list
@@ -91,7 +87,6 @@ export function LeafEditor({
   priorActions?: Action[];
 }): ReactNode {
   const left = value.left;
-  const boolShortcut = isBoolOperand(left);
   const visibleIndicators = filterIndicatorsByPeriod(indicators, value.interval, instancePeriods);
   const intervalRequired = needsInterval(value);
 
@@ -112,33 +107,29 @@ export function LeafEditor({
             ariaLabel="Left operand kind"
           />
         </Box>
-        {boolShortcut ? null : (
-          <Box minWidth="180px">
-            <Text as="div" size="1" color="gray" mb="1">
-              Operator
-            </Text>
-            <OperatorPicker
-              value={value.operator}
-              left={left}
-              onChange={({ operator, family }) =>
-                onChange(changeOperator(value, operator, family, priorActions))
-              }
-              ariaLabel="Operator"
-            />
-          </Box>
+        <Box minWidth="180px">
+          <Text as="div" size="1" color="gray" mb="1">
+            Operator
+          </Text>
+          <OperatorPicker
+            value={value.operator}
+            left={left}
+            onChange={({ operator, family }) =>
+              onChange(changeOperator(value, operator, family, priorActions))
+            }
+            ariaLabel="Operator"
+          />
+        </Box>
+        {renderFamilyBody(
+          value,
+          onChange,
+          visibleIndicators,
+          knownStateKeys,
+          stateKeysLoading,
+          indicatorStateKeysByKey,
+          left,
+          priorActions,
         )}
-        {boolShortcut
-          ? null
-          : renderFamilyBody(
-              value,
-              onChange,
-              visibleIndicators,
-              knownStateKeys,
-              stateKeysLoading,
-              indicatorStateKeysByKey,
-              left,
-              priorActions,
-            )}
       </Flex>
       {intervalRequired ? (
         <Flex gap="2" align="center">
@@ -612,25 +603,4 @@ function filterIndicatorsByPeriod(
     const period = instancePeriods[instance.id];
     return period === undefined || period === interval;
   });
-}
-
-/**
- * Apply the bool-shortcut sugar when the leaf's LHS resolves to a Bool-typed
- * operand: persist the leaf as `State / Equals` against `Literal(true)`.
- *
- * Called by the editor's submit handler so the form's transient state survives
- * without that rewrite (the UI hides the operator + RHS rows in the meantime).
- */
-export function applyBoolShortcut(leaf: LeafCondition): LeafCondition {
-  if (!isBoolOperand(leaf.left)) return leaf;
-  return {
-    family: LeafConditionFamily.State,
-    operator: StateOperator.Equals,
-    left: leaf.left,
-    right: {
-      kind: OperandKind.Literal,
-      value: { type: StateValueType.Bool, value: true },
-    },
-    interval: leaf.interval,
-  };
 }

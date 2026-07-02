@@ -91,6 +91,7 @@ export function StateKeyPicker({
       inputId={`state-key-${ariaLabel.replaceAll(' ', '-').toLowerCase()}`}
       placeholder={isLoading === true ? 'Loading keys…' : 'Pick or create a key'}
       menuPlacement="auto"
+      menuPosition="fixed"
       menuShouldScrollIntoView={false}
       components={{ DropdownIndicator }}
       styles={{

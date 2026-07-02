@@ -134,19 +134,6 @@ export function valueTypeKind(valueType: StateValueType): OperandValueKind {
 }
 
 /**
- * Whether an operand carries a `valueType` that should drive a bool-shortcut
- * row layout (operator + RHS hidden, saved leaf is `Equals(operand, true)`).
- *
- * `Literal` carries its own value and isn't a candidate for the shortcut.
- */
-export function isBoolOperand(operand: ConditionOperand): boolean {
-  if (operand.kind === OperandKind.IndicatorRef) return operand.valueType === StateValueType.Bool;
-  if (operand.kind === OperandKind.SymbolStateRef) return operand.valueType === StateValueType.Bool;
-  if (operand.kind === OperandKind.GlobalStateRef) return operand.valueType === StateValueType.Bool;
-  return false;
-}
-
-/**
  * Yup schema for the rule editor's basic-fields form — the **user-facing**
  * validation layer. The server re-validates every write via the domain schema
  * validator (per ADR 0016 / ADR 0011), so this is the UX layer, not the

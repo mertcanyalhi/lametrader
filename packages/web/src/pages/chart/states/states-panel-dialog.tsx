@@ -1,7 +1,6 @@
 import type { SymbolType } from '@lametrader/core';
 import {
   Badge,
-  Box,
   Button,
   Callout,
   Checkbox,

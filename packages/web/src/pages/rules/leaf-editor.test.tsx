@@ -18,7 +18,7 @@ import { Theme } from '@radix-ui/themes';
 import { cleanup, render, screen } from '@testing-library/react';
 import { type ReactNode, useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { applyBoolShortcut, LeafEditor, needsInterval, resolveRhsLiteralType } from './leaf-editor';
+import { LeafEditor, needsInterval, resolveRhsLiteralType } from './leaf-editor';
 
 afterEach(() => {
   cleanup();
@@ -122,7 +122,7 @@ describe('LeafEditor — reference shapes from #396', () => {
     expect(intervalPicker).toBeDefined();
   });
 
-  it('Ex.3 Bool indicator-state shortcut — hides the operator + RHS and applyBoolShortcut emits State/Equals(true)', () => {
+  it('Ex.3 Bool indicator-state leaf — surfaces the operator + a bool-typed RHS Switch so the user picks the compared value explicitly', () => {
     const indicators: IndicatorInstance[] = [
       {
         id: 'super-1h',
@@ -153,44 +153,17 @@ describe('LeafEditor — reference shapes from #396', () => {
         instancePeriods={{ 'super-1h': Period.OneHour }}
       />,
     );
-    const operator = screen.queryByLabelText('Operator');
-    const rhs = screen.queryByLabelText('Right operand kind');
-    expect({ operatorHidden: operator === null, rhsHidden: rhs === null }).toEqual({
-      operatorHidden: true,
-      rhsHidden: true,
-    });
-
-    // The serializer rewrites a bool-typed leaf to State / Equals against
-    // Literal(true) — same call path the editor uses on save.
-    const persisted = applyBoolShortcut({
-      family: LeafConditionFamily.Comparison,
-      operator: ComparisonOperator.Gt,
-      left: {
-        kind: OperandKind.IndicatorRef,
-        instanceId: 'super-1h',
-        stateKey: 'superTrendBuy',
-        valueType: StateValueType.Bool,
-      },
-      right: {
-        kind: OperandKind.Literal,
-        value: { type: StateValueType.Number, value: 0 },
-      },
-      interval: Period.OneHour,
-    });
-    expect(persisted).toEqual({
-      family: LeafConditionFamily.State,
-      operator: StateOperator.Equals,
-      left: {
-        kind: OperandKind.IndicatorRef,
-        instanceId: 'super-1h',
-        stateKey: 'superTrendBuy',
-        valueType: StateValueType.Bool,
-      },
-      right: {
-        kind: OperandKind.Literal,
-        value: { type: StateValueType.Bool, value: true },
-      },
-      interval: Period.OneHour,
+    const operator = screen.getByLabelText('Operator');
+    const rhs = screen.getByLabelText('Right operand kind');
+    const literal = screen.getByLabelText('Literal value');
+    expect({
+      operatorPresent: operator !== null,
+      rhsPresent: rhs !== null,
+      literalRole: literal.getAttribute('role'),
+    }).toEqual({
+      operatorPresent: true,
+      rhsPresent: true,
+      literalRole: 'switch',
     });
   });
 
