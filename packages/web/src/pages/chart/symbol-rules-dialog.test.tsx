@@ -284,10 +284,9 @@ describe('SymbolRulesDialog', () => {
     // The editor opens with the create-mode title "New rule".
     expect(screen.getByRole('heading', { name: 'New rule' })).toBeDefined();
     // The scope field is pre-populated with the chart's symbol id; the
-    // single-symbol picker surfaces it as the text on its accessible "Rule
-    // symbol" trigger button.
-    const scopePicker = screen.getByRole('button', { name: 'Rule symbol' });
-    expect(scopePicker.textContent).toContain('crypto:BTCUSDT');
+    // single-symbol combobox surfaces it as its selected value.
+    expect(screen.getByRole('combobox', { name: 'Rule symbol' })).toBeDefined();
+    expect(screen.getByText('crypto:BTCUSDT')).toBeDefined();
   });
 
   it('renders a warning callout pointing to the profile picker when no profile is selected', async () => {
