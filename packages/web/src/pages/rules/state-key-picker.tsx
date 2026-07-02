@@ -114,7 +114,11 @@ export function StateKeyPicker({
         menuList: () => 'py-[var(--space-1)] max-h-56 overflow-y-auto',
         option: ({ isFocused, isSelected }) =>
           cn(
-            'flex items-center min-h-[var(--space-6)] px-[var(--space-3)] py-0 text-[var(--font-size-2)] leading-[var(--line-height-2)] cursor-pointer',
+            // Values verified in-browser to line up with the sibling Radix
+            // Select's items: min-height inherits the row height set on the
+            // menu list, font-size scales relative to Radix's own token, and
+            // the L/R padding matches the Select item's built-in indent.
+            'flex items-center [min-height:inherit] text-[0.95em] pt-0 pr-[5px] pb-0 pl-[10px] cursor-pointer',
             isSelected
               ? 'bg-[var(--accent-9)] text-[var(--accent-contrast)]'
               : isFocused
