@@ -14,4 +14,16 @@ import { defineConfig } from 'vite';
  */
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // ponytail: dev-only proxy so `/api/*` (and WS upgrades) hit the API on :3000
+  // instead of returning index.html. Override the target via VITE_API_TARGET.
+  server: {
+    proxy: {
+      '/api': {
+        target: process.env.VITE_API_TARGET ?? 'http://localhost:3000',
+        changeOrigin: true,
+        ws: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    },
+  },
 });
