@@ -94,7 +94,13 @@ export function StateKeyPicker({
       menuShouldScrollIntoView={false}
       components={{ DropdownIndicator }}
       styles={{
-        control: (base) => ({ ...base, minHeight: 32, fontSize: 14, paddingLeft: 12 }),
+        control: (base) => ({
+          ...base,
+          minHeight: 32,
+          fontSize: 14,
+          paddingLeft: 12,
+          paddingRight: 5,
+        }),
         option: (base) => ({
           ...base,
           minHeight: 28,
