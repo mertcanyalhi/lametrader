@@ -29,6 +29,19 @@ interface Option {
 }
 
 /**
+ * Resolve the Radix Themes root element so the menu portal inherits its CSS
+ * scope (`--font-size-*`, `--space-*`, `--gray-*`, `--accent-*`).
+ * `<Theme>` scopes every token to `.radix-themes`; portaling to `document.body`
+ * escapes that scope and lets the options render at the browser default
+ * font-size instead of `var(--font-size-2)`. Fall back to `document.body` for
+ * SSR / test harnesses that don't mount a `<Theme>`.
+ */
+function radixThemesRoot(): HTMLElement | undefined {
+  if (typeof document === 'undefined') return undefined;
+  return document.querySelector<HTMLElement>('.radix-themes') ?? document.body;
+}
+
+/**
  * Searchable "find or create" state-key combobox — a single input that
  * filters the known-key list as the user types and creates a brand-new key
  * on `Enter` (or by clicking the `Create "…"` row) when none of the seeded
@@ -85,7 +98,7 @@ export function StateKeyPicker({
       aria-label={ariaLabel}
       inputId={`state-key-${ariaLabel.replaceAll(' ', '-').toLowerCase()}`}
       placeholder={isLoading === true ? 'Loading keys…' : 'Pick or create a key'}
-      menuPortalTarget={typeof document !== 'undefined' ? document.body : undefined}
+      menuPortalTarget={radixThemesRoot()}
       styles={{ menuPortal: (base) => ({ ...base, zIndex: 60 }) }}
       components={{ DropdownIndicator }}
       classNames={{
