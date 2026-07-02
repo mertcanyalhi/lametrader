@@ -55,7 +55,7 @@ describe('state API (e2e)', () => {
     await state.setGlobalState(
       'profile-1',
       'regime',
-      { type: StateValueType.Enum, value: 'risk-on' },
+      { type: StateValueType.String, value: 'risk-on' },
       100,
     );
     await state.setGlobalState(
@@ -70,7 +70,7 @@ describe('state API (e2e)', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
-      regime: { type: 'enum', value: 'risk-on' },
+      regime: { type: 'string', value: 'risk-on' },
       lastSweep: { type: 'number', value: 42 },
     });
   });
@@ -79,7 +79,7 @@ describe('state API (e2e)', () => {
     await state.setGlobalState(
       'profile-1',
       'regime',
-      { type: StateValueType.Enum, value: 'risk-on' },
+      { type: StateValueType.String, value: 'risk-on' },
       100,
     );
     const res = await app.inject({

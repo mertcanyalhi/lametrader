@@ -65,7 +65,6 @@ function renderStateValue(value: StateValue): string {
     case StateValueType.Number:
       return String(value.value);
     case StateValueType.String:
-    case StateValueType.Enum:
       return value.value;
   }
 }

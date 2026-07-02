@@ -331,7 +331,6 @@ function retypeLiteralOperand(operand: ConditionOperand, type: StateValueType): 
     case StateValueType.Bool:
       return { kind: OperandKind.Literal, value: { type, value: false } };
     case StateValueType.String:
-    case StateValueType.Enum:
       return { kind: OperandKind.Literal, value: { type, value: '' } };
   }
 }
@@ -425,7 +424,6 @@ function defaultLiteral(type: StateValueType): ConditionOperand {
     case StateValueType.Bool:
       return { kind: OperandKind.Literal, value: { type, value: false } };
     case StateValueType.String:
-    case StateValueType.Enum:
       return { kind: OperandKind.Literal, value: { type, value: '' } };
   }
 }

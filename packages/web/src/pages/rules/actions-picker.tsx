@@ -351,19 +351,6 @@ function StateValueInput({
           }
         />
       );
-    case StateValueType.Enum:
-      return (
-        <TextField.Root
-          aria-label="State value"
-          value={value.value.value}
-          onChange={(event) =>
-            onChange({
-              ...value,
-              value: { type: StateValueType.Enum, value: event.target.value },
-            })
-          }
-        />
-      );
   }
 }
 
@@ -440,8 +427,6 @@ function defaultStateValue(type: StateValueType): StateValue {
     case StateValueType.Bool:
       return { type, value: false };
     case StateValueType.String:
-      return { type, value: '' };
-    case StateValueType.Enum:
       return { type, value: '' };
   }
 }

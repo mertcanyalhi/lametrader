@@ -69,7 +69,7 @@ const seed = async () => {
     mode: { type: StateValueType.String, value: 'armed' },
   };
   const globalState: Record<string, StateValue> = {
-    regime: { type: StateValueType.Enum, value: 'bull' },
+    regime: { type: StateValueType.String, value: 'bull' },
   };
 
   const barWindow = { from: 0, to: 4 * 60_000 };
@@ -128,7 +128,7 @@ describe('buildEvaluationContext', () => {
     const globalRef = ctx.resolveLatest({
       kind: OperandKind.GlobalStateRef,
       key: 'regime',
-      valueType: StateValueType.Enum,
+      valueType: StateValueType.String,
     });
     const literal = ctx.resolveLatest({
       kind: OperandKind.Literal,
@@ -156,7 +156,7 @@ describe('buildEvaluationContext', () => {
       // SMA(3) over [10,20,30] = 20.
       indicatorRef: { type: StateValueType.Number, value: 20 },
       symbolRef: { type: StateValueType.String, value: 'armed' },
-      globalRef: { type: StateValueType.Enum, value: 'bull' },
+      globalRef: { type: StateValueType.String, value: 'bull' },
       literal: { type: StateValueType.Number, value: 42 },
     });
   });
@@ -207,7 +207,7 @@ describe('buildEvaluationContext', () => {
       mode: { type: StateValueType.String, value: 'disarmed' },
     };
     const prevGlobalStates: Record<string, StateValue> = {
-      regime: { type: StateValueType.Enum, value: 'bear' },
+      regime: { type: StateValueType.String, value: 'bear' },
     };
 
     const barWindow = { from: 0, to: 4 * 60_000 };
@@ -240,7 +240,7 @@ describe('buildEvaluationContext', () => {
     const prevGlobal = ctx.resolvePrev({
       kind: OperandKind.GlobalStateRef,
       key: 'regime',
-      valueType: StateValueType.Enum,
+      valueType: StateValueType.String,
     });
     const prevLiteral = ctx.resolvePrev({
       kind: OperandKind.Literal,
@@ -253,7 +253,7 @@ describe('buildEvaluationContext', () => {
       // Bars are [10, 20, 30] — prev close is 20.
       prevClose: { type: StateValueType.Number, value: 20 },
       prevSymbol: { type: StateValueType.String, value: 'disarmed' },
-      prevGlobal: { type: StateValueType.Enum, value: 'bear' },
+      prevGlobal: { type: StateValueType.String, value: 'bear' },
       prevLiteral: { type: StateValueType.Number, value: 42 },
     });
   });

@@ -33,7 +33,7 @@ const log = getLogger('engine.rules.bridges');
  * `(symbolId, period, instanceId, stateKey)` slot.
  * The first observation of a key (`prev === null`) always emits.
  * Raw state values are wrapped in {@link StateValue}s by their JavaScript
- * type: numbers → `Number`, booleans → `Bool`, strings → `Enum`.
+ * type: numbers → `Number`, booleans → `Bool`, strings → `String`.
  * Null / undefined / unsupported types are skipped (the bar is in warm-up
  * or the indicator emitted no value for that key).
  *
@@ -148,7 +148,7 @@ function slotKey(symbolId: string, period: Period, instanceId: string, stateKey:
 function toStateValue(raw: unknown): StateValue | null {
   if (typeof raw === 'number') return { type: StateValueType.Number, value: raw };
   if (typeof raw === 'boolean') return { type: StateValueType.Bool, value: raw };
-  if (typeof raw === 'string') return { type: StateValueType.Enum, value: raw };
+  if (typeof raw === 'string') return { type: StateValueType.String, value: raw };
   return null;
 }
 

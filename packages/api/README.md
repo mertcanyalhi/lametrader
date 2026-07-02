@@ -369,7 +369,7 @@ Read-side views of the rule-engine state — the per-profile global key/value st
 
 State is **partitioned by profile** (#281) — two profiles operating on the same symbol see isolated `state.*` namespaces, so every read takes a `profileId`.
 
-A `StateValue` is a tagged scalar: `{ "type": "string" | "number" | "bool" | "enum", "value": ... }`.
+A `StateValue` is a tagged scalar: `{ "type": "string" | "number" | "bool", "value": ... }`.
 
 ### Endpoints
 

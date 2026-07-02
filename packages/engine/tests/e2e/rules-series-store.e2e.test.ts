@@ -94,7 +94,7 @@ describe('rules series store + EvaluationContext (e2e)', () => {
       mode: { type: StateValueType.String, value: 'armed' },
     };
     const globalState: Record<string, StateValue> = {
-      regime: { type: StateValueType.Enum, value: 'bull' },
+      regime: { type: StateValueType.String, value: 'bull' },
     };
 
     const ctx = buildEvaluationContext({
@@ -128,7 +128,7 @@ describe('rules series store + EvaluationContext (e2e)', () => {
       global: ctx.resolveLatest({
         kind: OperandKind.GlobalStateRef,
         key: 'regime',
-        valueType: StateValueType.Enum,
+        valueType: StateValueType.String,
       }),
       literal: ctx.resolveLatest({
         kind: OperandKind.Literal,
@@ -141,7 +141,7 @@ describe('rules series store + EvaluationContext (e2e)', () => {
       // SMA(3) over [..., 28, 30] = mean(26, 28, 30) = 28.
       indicator: { type: StateValueType.Number, value: 28 },
       symbol: { type: StateValueType.String, value: 'armed' },
-      global: { type: StateValueType.Enum, value: 'bull' },
+      global: { type: StateValueType.String, value: 'bull' },
       literal: { type: StateValueType.Number, value: 99 },
     });
 

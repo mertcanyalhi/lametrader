@@ -25,13 +25,13 @@ function buildApp(seed: Array<[string, StateValue]> = []) {
 describe('GET /profiles/:profileId/state/global', () => {
   it("returns the profile's global state map (200)", async () => {
     const app = buildApp([
-      ['regime', { type: StateValueType.Enum, value: 'risk-on' }],
+      ['regime', { type: StateValueType.String, value: 'risk-on' }],
       ['lastSweep', { type: StateValueType.Number, value: 42 }],
     ]);
     const res = await app.inject({ method: 'GET', url: '/profiles/profile-1/state/global' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
-      regime: { type: 'enum', value: 'risk-on' },
+      regime: { type: 'string', value: 'risk-on' },
       lastSweep: { type: 'number', value: 42 },
     });
   });
@@ -46,7 +46,7 @@ describe('GET /profiles/:profileId/state/global', () => {
   });
 
   it('returns {} for a different profileId that has no keys', async () => {
-    const app = buildApp([['regime', { type: StateValueType.Enum, value: 'risk-on' }]]);
+    const app = buildApp([['regime', { type: StateValueType.String, value: 'risk-on' }]]);
     const res = await app.inject({
       method: 'GET',
       url: '/profiles/profile-2/state/global',

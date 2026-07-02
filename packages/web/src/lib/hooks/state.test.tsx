@@ -78,7 +78,7 @@ describe('state hooks', () => {
 
   it('useGlobalState GETs /api/profiles/:profileId/state/global and returns a populated map', async () => {
     fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({ regime: { type: StateValueType.Enum, value: 'risk-on' } }), {
+      new Response(JSON.stringify({ regime: { type: StateValueType.String, value: 'risk-on' } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
@@ -86,7 +86,7 @@ describe('state hooks', () => {
     const { result } = renderHook(() => useGlobalState('profile-1'), { wrapper: makeWrapper() });
     await waitFor(() => {
       expect(result.current.data).toEqual({
-        regime: { type: 'enum', value: 'risk-on' },
+        regime: { type: 'string', value: 'risk-on' },
       });
     });
     expect(fetchSpy.mock.calls[0]?.[0]).toBe('/api/profiles/profile-1/state/global');

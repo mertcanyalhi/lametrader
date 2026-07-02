@@ -553,7 +553,5 @@ function defaultStateValueFor(type: StateValueType): StateValue {
       return { type, value: false };
     case StateValueType.String:
       return { type, value: '' };
-    case StateValueType.Enum:
-      return { type, value: '' };
   }
 }

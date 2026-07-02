@@ -128,7 +128,6 @@ export function valueTypeKind(valueType: StateValueType): OperandValueKind {
     case StateValueType.Bool:
       return OperandValueKind.Bool;
     case StateValueType.String:
-    case StateValueType.Enum:
       return OperandValueKind.StringLike;
   }
 }

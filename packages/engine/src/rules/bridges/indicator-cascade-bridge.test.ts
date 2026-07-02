@@ -68,7 +68,7 @@ describe('IndicatorCascadeBridge', () => {
         instanceId: 'instance-1',
         stateKey: 'signal',
         prev: null,
-        current: { type: StateValueType.Enum, value: 'up' },
+        current: { type: StateValueType.String, value: 'up' },
       },
       {
         kind: EvaluationTriggerKind.IndicatorChanged,

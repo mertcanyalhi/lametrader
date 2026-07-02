@@ -407,11 +407,9 @@ function LiteralValueInput({
         />
       );
     }
-    case StateValueType.String:
-    case StateValueType.Enum: {
+    case StateValueType.String: {
       const current =
-        (value.value.type === StateValueType.String || value.value.type === StateValueType.Enum) &&
-        typeof value.value.value === 'string'
+        value.value.type === StateValueType.String && typeof value.value.value === 'string'
           ? value.value.value
           : '';
       return (
@@ -505,8 +503,6 @@ function defaultLiteralValue(type: StateValueType): StateValue {
     case StateValueType.Bool:
       return { type, value: false };
     case StateValueType.String:
-      return { type, value: '' };
-    case StateValueType.Enum:
       return { type, value: '' };
   }
 }

@@ -31,7 +31,7 @@ enum StateSubcommand {
  * - `list --profile <id> --global` — print the profile's global state map as
  *   JSON.
  * - `set --profile <id> --symbol <id>|--global --key <k> --value <v> --type <t>`
- *   — write a value under the profile (`string|number|bool|enum`); the type
+ *   — write a value under the profile (`string|number|bool`); the type
  *   flag validates `--value` against the chosen variant. On success, prints
  *   the new state map.
  * - `remove --profile <id> --symbol <id>|--global --key <k>` — drop a key
@@ -89,7 +89,7 @@ export async function runState(
       const scope = pickScope(values);
       if (!values.key) throw new Error('state set requires --key');
       if (values.value === undefined) throw new Error('state set requires --value');
-      if (!values.type) throw new Error('state set requires --type (string|number|bool|enum)');
+      if (!values.type) throw new Error('state set requires --type (string|number|bool)');
       const stateValue = parseStateValue(values.type, values.value);
       const ts = Date.now();
       if (scope.kind === 'symbol') {
@@ -156,7 +156,7 @@ function pickScope(values: {
  * Parse a `--value` flag against the explicit `--type`, building a
  * {@link StateValue} the repository can write. `bool` accepts `"true"`/`"false"`
  * (case-insensitive); `number` must parse as a finite number;
- * `string` / `enum` round-trip the raw value.
+ * `string` round-trips the raw value.
  */
 function parseStateValue(type: string, raw: string): StateValue {
   switch (type) {
@@ -176,10 +176,8 @@ function parseStateValue(type: string, raw: string): StateValue {
       }
       return { type: StateValueType.Bool, value: lower === 'true' };
     }
-    case StateValueType.Enum:
-      return { type: StateValueType.Enum, value: raw };
     default:
-      throw new Error(`unknown --type ${type} (expected string|number|bool|enum)`);
+      throw new Error(`unknown --type ${type} (expected string|number|bool)`);
   }
 }
 

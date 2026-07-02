@@ -28,7 +28,7 @@ describe('stateOverlayToMarkers', () => {
       [
         { ts: 1_000, value: { type: StateValueType.String, value: 'buy' } },
         { ts: 2_000, value: { type: StateValueType.Bool, value: true } },
-        { ts: 3_000, value: { type: StateValueType.Enum, value: 'risk-on' } },
+        { ts: 3_000, value: { type: StateValueType.String, value: 'risk-on' } },
       ],
       '#abc',
     );

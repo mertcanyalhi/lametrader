@@ -88,11 +88,11 @@ describe('runState list --global', () => {
     await state.setGlobalState(
       PROFILE,
       'regime',
-      { type: StateValueType.Enum, value: 'risk-on' },
+      { type: StateValueType.String, value: 'risk-on' },
       100,
     );
     const output = await runState(['list', '--profile', PROFILE, '--global'], symbols, state);
-    expect(JSON.parse(output)).toEqual({ regime: { type: 'enum', value: 'risk-on' } });
+    expect(JSON.parse(output)).toEqual({ regime: { type: 'string', value: 'risk-on' } });
   });
 
   it('prints {} when no global keys have been set for the profile', async () => {
@@ -272,12 +272,12 @@ describe('runState set --global', () => {
         '--value',
         'risk-on',
         '--type',
-        'enum',
+        'string',
       ],
       symbols,
       state,
     );
-    expect(JSON.parse(output)).toEqual({ regime: { type: 'enum', value: 'risk-on' } });
+    expect(JSON.parse(output)).toEqual({ regime: { type: 'string', value: 'risk-on' } });
   });
 });
 
@@ -305,7 +305,7 @@ describe('runState remove', () => {
     await state.setGlobalState(
       PROFILE,
       'regime',
-      { type: StateValueType.Enum, value: 'risk-on' },
+      { type: StateValueType.String, value: 'risk-on' },
       100,
     );
     const output = await runState(

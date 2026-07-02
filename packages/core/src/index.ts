@@ -170,7 +170,7 @@ export {
   TriggerKind,
   type VolumeChangedEvent,
 } from './rules/index.js';
-export { isBool, isEnum, isNumber, isString } from './state.js';
+export { isBool, isNumber, isString } from './state.js';
 export { type StateValue, StateValueType } from './state.types.js';
 export {
   type GlobalStateScope,
