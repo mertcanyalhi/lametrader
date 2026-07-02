@@ -12,6 +12,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { type ReactNode, useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
+import type { KnownStateKeys } from './leaf-editor';
 import { filterIndicatorsByScope, OPERAND_KIND_OPTIONS, OperandPicker } from './operand-picker';
 
 afterEach(() => {
@@ -22,16 +23,14 @@ afterEach(() => {
 function Harness({
   initial,
   indicators = [],
-  symbolStateKeys = [],
-  globalStateKeys = [],
+  knownStateKeys = { symbol: {}, global: {} },
   indicatorStateKeysByKey,
   literalValueType,
   onSnapshot,
 }: {
   initial: ConditionOperand;
   indicators?: IndicatorInstance[];
-  symbolStateKeys?: string[];
-  globalStateKeys?: string[];
+  knownStateKeys?: KnownStateKeys;
   indicatorStateKeysByKey?: Record<string, string[]>;
   literalValueType?: StateValueType;
   onSnapshot?: (operand: ConditionOperand) => void;
@@ -46,8 +45,7 @@ function Harness({
           onSnapshot?.(next);
         }}
         indicators={indicators}
-        symbolStateKeys={symbolStateKeys}
-        globalStateKeys={globalStateKeys}
+        knownStateKeys={knownStateKeys}
         indicatorStateKeysByKey={indicatorStateKeysByKey}
         literalValueType={literalValueType}
         ariaLabel="Left operand kind"
@@ -133,7 +131,13 @@ describe('OperandPicker', () => {
           key: '',
           valueType: StateValueType.Number,
         }}
-        symbolStateKeys={['lastFiredAt', 'cooldown']}
+        knownStateKeys={{
+          symbol: {
+            lastFiredAt: { type: StateValueType.Number, value: 0 },
+            cooldown: { type: StateValueType.Number, value: 0 },
+          },
+          global: {},
+        }}
       />,
     );
     const input = screen.getByLabelText('Symbol state key');
@@ -158,7 +162,7 @@ describe('OperandPicker', () => {
           key: '',
           valueType: StateValueType.Number,
         }}
-        symbolStateKeys={[]}
+        knownStateKeys={{ symbol: {}, global: {} }}
         onSnapshot={(operand) => snapshots.push(operand)}
       />,
     );
@@ -171,6 +175,82 @@ describe('OperandPicker', () => {
       key: 'novel',
       valueType: StateValueType.Number,
     });
+  });
+
+  it("adopts the known symbol-state key's valueType and hides the Value type row on pick", async () => {
+    const user = userEvent.setup();
+    const snapshots: ConditionOperand[] = [];
+    render(
+      <Harness
+        initial={{
+          kind: OperandKind.SymbolStateRef,
+          key: '',
+          valueType: StateValueType.Number,
+        }}
+        knownStateKeys={{
+          symbol: {
+            testbool: { type: StateValueType.Bool, value: true },
+          },
+          global: {},
+        }}
+        onSnapshot={(operand) => snapshots.push(operand)}
+      />,
+    );
+    const input = screen.getByLabelText('Symbol state key');
+    await user.click(input);
+    await user.click(screen.getByText('testbool'));
+    const last = snapshots[snapshots.length - 1];
+    expect(last).toEqual({
+      kind: OperandKind.SymbolStateRef,
+      key: 'testbool',
+      valueType: StateValueType.Bool,
+    });
+    expect(screen.queryByLabelText('Symbol state value type')).toEqual(null);
+  });
+
+  it('exposes a Value type row on a freetext-created symbol-state key so the user picks its type', () => {
+    render(
+      <Harness
+        initial={{
+          kind: OperandKind.SymbolStateRef,
+          key: 'novel',
+          valueType: StateValueType.Number,
+        }}
+        knownStateKeys={{ symbol: {}, global: {} }}
+      />,
+    );
+    expect(screen.getByLabelText('Symbol state value type')).toBeDefined();
+  });
+
+  it("adopts the known global-state key's valueType and hides the Value type row on pick", async () => {
+    const user = userEvent.setup();
+    const snapshots: ConditionOperand[] = [];
+    render(
+      <Harness
+        initial={{
+          kind: OperandKind.GlobalStateRef,
+          key: '',
+          valueType: StateValueType.Number,
+        }}
+        knownStateKeys={{
+          symbol: {},
+          global: {
+            session: { type: StateValueType.String, value: 'us-open' },
+          },
+        }}
+        onSnapshot={(operand) => snapshots.push(operand)}
+      />,
+    );
+    const input = screen.getByLabelText('Global state key');
+    await user.click(input);
+    await user.click(screen.getByText('session'));
+    const last = snapshots[snapshots.length - 1];
+    expect(last).toEqual({
+      kind: OperandKind.GlobalStateRef,
+      key: 'session',
+      valueType: StateValueType.String,
+    });
+    expect(screen.queryByLabelText('Global state value type')).toEqual(null);
   });
 
   it('seeds the IndicatorRef state-key options from the catalog entry matching the selected instance', async () => {

@@ -94,8 +94,6 @@ export function LeafEditor({
   const boolShortcut = isBoolOperand(left);
   const visibleIndicators = filterIndicatorsByPeriod(indicators, value.interval, instancePeriods);
   const intervalRequired = needsInterval(value);
-  const symbolStateKeyList = Object.keys(knownStateKeys.symbol);
-  const globalStateKeyList = Object.keys(knownStateKeys.global);
 
   return (
     <Flex direction="column" gap="2">
@@ -108,8 +106,7 @@ export function LeafEditor({
             value={left}
             onChange={(next) => onChange(updateLeft(value, next, priorActions))}
             indicators={visibleIndicators}
-            symbolStateKeys={symbolStateKeyList}
-            globalStateKeys={globalStateKeyList}
+            knownStateKeys={knownStateKeys}
             stateKeysLoading={stateKeysLoading}
             indicatorStateKeysByKey={indicatorStateKeysByKey}
             ariaLabel="Left operand kind"
@@ -176,8 +173,6 @@ function renderFamilyBody(
   priorActions: Action[],
 ): ReactNode {
   const rhsLiteralType = resolveRhsLiteralType(leaf, left, priorActions);
-  const symbolStateKeyList = Object.keys(knownStateKeys.symbol);
-  const globalStateKeyList = Object.keys(knownStateKeys.global);
   switch (leaf.family) {
     case LeafConditionFamily.Comparison:
     case LeafConditionFamily.Crossing:
@@ -191,8 +186,7 @@ function renderFamilyBody(
             value={leaf.right}
             onChange={(next) => onChange({ ...leaf, right: next })}
             indicators={indicators}
-            symbolStateKeys={symbolStateKeyList}
-            globalStateKeys={globalStateKeyList}
+            knownStateKeys={knownStateKeys}
             stateKeysLoading={stateKeysLoading}
             indicatorStateKeysByKey={indicatorStateKeysByKey}
             literalValueType={rhsLiteralType}
@@ -211,8 +205,7 @@ function renderFamilyBody(
               value={leaf.upper}
               onChange={(next) => onChange({ ...leaf, upper: next })}
               indicators={indicators}
-              symbolStateKeys={symbolStateKeyList}
-              globalStateKeys={globalStateKeyList}
+              knownStateKeys={knownStateKeys}
               stateKeysLoading={stateKeysLoading}
               indicatorStateKeysByKey={indicatorStateKeysByKey}
               literalValueType={rhsLiteralType}
@@ -227,8 +220,7 @@ function renderFamilyBody(
               value={leaf.lower}
               onChange={(next) => onChange({ ...leaf, lower: next })}
               indicators={indicators}
-              symbolStateKeys={symbolStateKeyList}
-              globalStateKeys={globalStateKeyList}
+              knownStateKeys={knownStateKeys}
               stateKeysLoading={stateKeysLoading}
               indicatorStateKeysByKey={indicatorStateKeysByKey}
               literalValueType={rhsLiteralType}
