@@ -82,8 +82,8 @@ export function RuleEditorDialog({
   const symbolStateQuery = useSymbolState(initial.profileId, seedSymbolId);
   const globalStateQuery = useGlobalState(initial.profileId);
   const knownStateKeys: KnownStateKeys = {
-    symbol: Object.keys(symbolStateQuery.data ?? {}),
-    global: Object.keys(globalStateQuery.data ?? {}),
+    symbol: symbolStateQuery.data ?? {},
+    global: globalStateQuery.data ?? {},
   };
   const stateKeysLoading = symbolStateQuery.isPending || globalStateQuery.isPending;
 

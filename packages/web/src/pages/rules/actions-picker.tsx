@@ -236,6 +236,12 @@ function NotificationBody({
  *
  * Reuses the {@link StateKeyPicker} so users see suggestions from the same
  * `knownStateKeys` catalog the operand picker reads, with freetext fallback.
+ *
+ * When the picked key already exists in the known-state map, its persisted
+ * `StateValueType` is authoritative: the action's `value` is reset to that
+ * type's neutral zero and the "Value type" dropdown is hidden. Freshly-created
+ * keys (empty or freetext) still expose the dropdown so the user picks a type
+ * once, up front.
  */
 function SetStateBody({
   value,
@@ -248,10 +254,12 @@ function SetStateBody({
   knownStateKeys: KnownStateKeys;
   stateKeysLoading?: boolean;
 }): ReactNode {
-  const knownKeys =
+  const knownMap =
     value.kind === ActionKind.SetSymbolState ? knownStateKeys.symbol : knownStateKeys.global;
+  const knownKeys = Object.keys(knownMap);
   const ariaLabel =
     value.kind === ActionKind.SetSymbolState ? 'Symbol state key' : 'Global state key';
+  const knownForCurrent = value.key === '' ? undefined : knownMap[value.key];
   return (
     <Flex direction="column" gap="2">
       <StateKeyPicker
@@ -259,28 +267,37 @@ function SetStateBody({
         knownKeys={knownKeys}
         ariaLabel={ariaLabel}
         isLoading={stateKeysLoading}
-        onChange={(key) => onChange({ ...value, key })}
-      />
-      <Flex gap="2" align="center">
-        <Text size="2" color="gray">
-          Value type
-        </Text>
-        <Select.Root
-          value={value.value.type}
-          onValueChange={(next) =>
-            onChange({ ...value, value: defaultStateValue(next as StateValueType) })
+        onChange={(key) => {
+          const known = knownMap[key];
+          if (known === undefined) {
+            onChange({ ...value, key });
+            return;
           }
-        >
-          <Select.Trigger aria-label="State value type" />
-          <Select.Content>
-            {Object.values(StateValueType).map((type) => (
-              <Select.Item key={type} value={type}>
-                {type}
-              </Select.Item>
-            ))}
-          </Select.Content>
-        </Select.Root>
-      </Flex>
+          onChange({ ...value, key, value: defaultStateValue(known.type) });
+        }}
+      />
+      {knownForCurrent === undefined ? (
+        <Flex gap="2" align="center">
+          <Text size="2" color="gray">
+            Value type
+          </Text>
+          <Select.Root
+            value={value.value.type}
+            onValueChange={(next) =>
+              onChange({ ...value, value: defaultStateValue(next as StateValueType) })
+            }
+          >
+            <Select.Trigger aria-label="State value type" />
+            <Select.Content>
+              {Object.values(StateValueType).map((type) => (
+                <Select.Item key={type} value={type}>
+                  {type}
+                </Select.Item>
+              ))}
+            </Select.Content>
+          </Select.Root>
+        </Flex>
+      ) : null}
       <StateValueInput value={value} onChange={onChange} />
     </Flex>
   );
@@ -364,14 +381,14 @@ function RemoveStateBody({
   knownStateKeys: KnownStateKeys;
   stateKeysLoading?: boolean;
 }): ReactNode {
-  const knownKeys =
+  const knownMap =
     value.kind === ActionKind.RemoveSymbolState ? knownStateKeys.symbol : knownStateKeys.global;
   const ariaLabel =
     value.kind === ActionKind.RemoveSymbolState ? 'Symbol state key' : 'Global state key';
   return (
     <StateKeyPicker
       value={value.key}
-      knownKeys={knownKeys}
+      knownKeys={Object.keys(knownMap)}
       ariaLabel={ariaLabel}
       isLoading={stateKeysLoading}
       onChange={(key) => onChange({ ...value, key })}

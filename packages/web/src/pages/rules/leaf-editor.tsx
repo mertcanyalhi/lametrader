@@ -13,6 +13,7 @@ import {
   type Operator,
   type Period,
   StateOperator,
+  type StateValue,
   StateValueType,
 } from '@lametrader/core';
 import { Box, Flex, Select, Text, TextField } from '@radix-ui/themes';
@@ -27,13 +28,19 @@ import { legalOperatorsFor, OPERATOR_OPTIONS, OperatorPicker } from './operator-
 import { PERIOD_LABELS } from './trigger-picker.js';
 
 /**
- * State keys to seed the operand pickers' state-key dropdowns with.
+ * Known state entries per scope — each map is `key → its current stored value`.
  *
- * Two flat lists; freetext entry is always allowed (per #396 AC).
+ * Feeds two things at once:
+ * - The operand + actions pickers' state-key comboboxes (`Object.keys(...)`
+ *   gives the option list — freetext entry is always allowed per #396 AC).
+ * - The `SetSymbolState` / `SetGlobalState` action row: when the user picks a
+ *   known key, the action's `value.value.type` follows the persisted type
+ *   (`Record[key].type`) so the value input widget matches without a second
+ *   "Value type" dropdown step.
  */
 export interface KnownStateKeys {
-  symbol: string[];
-  global: string[];
+  symbol: Record<string, StateValue>;
+  global: Record<string, StateValue>;
 }
 
 /**
@@ -87,6 +94,8 @@ export function LeafEditor({
   const boolShortcut = isBoolOperand(left);
   const visibleIndicators = filterIndicatorsByPeriod(indicators, value.interval, instancePeriods);
   const intervalRequired = needsInterval(value);
+  const symbolStateKeyList = Object.keys(knownStateKeys.symbol);
+  const globalStateKeyList = Object.keys(knownStateKeys.global);
 
   return (
     <Flex direction="column" gap="2">
@@ -99,8 +108,8 @@ export function LeafEditor({
             value={left}
             onChange={(next) => onChange(updateLeft(value, next, priorActions))}
             indicators={visibleIndicators}
-            symbolStateKeys={knownStateKeys.symbol}
-            globalStateKeys={knownStateKeys.global}
+            symbolStateKeys={symbolStateKeyList}
+            globalStateKeys={globalStateKeyList}
             stateKeysLoading={stateKeysLoading}
             indicatorStateKeysByKey={indicatorStateKeysByKey}
             ariaLabel="Left operand kind"
@@ -167,6 +176,8 @@ function renderFamilyBody(
   priorActions: Action[],
 ): ReactNode {
   const rhsLiteralType = resolveRhsLiteralType(leaf, left, priorActions);
+  const symbolStateKeyList = Object.keys(knownStateKeys.symbol);
+  const globalStateKeyList = Object.keys(knownStateKeys.global);
   switch (leaf.family) {
     case LeafConditionFamily.Comparison:
     case LeafConditionFamily.Crossing:
@@ -180,8 +191,8 @@ function renderFamilyBody(
             value={leaf.right}
             onChange={(next) => onChange({ ...leaf, right: next })}
             indicators={indicators}
-            symbolStateKeys={knownStateKeys.symbol}
-            globalStateKeys={knownStateKeys.global}
+            symbolStateKeys={symbolStateKeyList}
+            globalStateKeys={globalStateKeyList}
             stateKeysLoading={stateKeysLoading}
             indicatorStateKeysByKey={indicatorStateKeysByKey}
             literalValueType={rhsLiteralType}
@@ -200,8 +211,8 @@ function renderFamilyBody(
               value={leaf.upper}
               onChange={(next) => onChange({ ...leaf, upper: next })}
               indicators={indicators}
-              symbolStateKeys={knownStateKeys.symbol}
-              globalStateKeys={knownStateKeys.global}
+              symbolStateKeys={symbolStateKeyList}
+              globalStateKeys={globalStateKeyList}
               stateKeysLoading={stateKeysLoading}
               indicatorStateKeysByKey={indicatorStateKeysByKey}
               literalValueType={rhsLiteralType}
@@ -216,8 +227,8 @@ function renderFamilyBody(
               value={leaf.lower}
               onChange={(next) => onChange({ ...leaf, lower: next })}
               indicators={indicators}
-              symbolStateKeys={knownStateKeys.symbol}
-              globalStateKeys={knownStateKeys.global}
+              symbolStateKeys={symbolStateKeyList}
+              globalStateKeys={globalStateKeyList}
               stateKeysLoading={stateKeysLoading}
               indicatorStateKeysByKey={indicatorStateKeysByKey}
               literalValueType={rhsLiteralType}

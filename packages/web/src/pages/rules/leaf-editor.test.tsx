@@ -48,7 +48,7 @@ function Harness({
         }}
         indicators={indicators}
         instancePeriods={instancePeriods}
-        knownStateKeys={{ symbol: [], global: [] }}
+        knownStateKeys={{ symbol: {}, global: {} }}
         priorActions={priorActions}
       />
     </Theme>
