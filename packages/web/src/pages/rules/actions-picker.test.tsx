@@ -314,4 +314,30 @@ describe('ActionsPicker — SetState value type follows the picked key', () => {
     );
     expect(screen.getByLabelText('State value type')).toBeDefined();
   });
+
+  it('renders a Switch (not a text input) for the value widget after picking a known Bool symbol-state key', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness
+        initial={[
+          {
+            kind: ActionKind.SetSymbolState,
+            key: '',
+            value: { type: StateValueType.String, value: '' },
+          },
+        ]}
+        knownStateKeys={{
+          symbol: {
+            activated: { type: StateValueType.Bool, value: true },
+          },
+          global: {},
+        }}
+      />,
+    );
+    const input = screen.getByLabelText('Symbol state key');
+    await user.click(input);
+    await user.click(screen.getByText('activated'));
+    const stateValue = screen.getByLabelText('State value');
+    expect(stateValue.getAttribute('role')).toEqual('switch');
+  });
 });
