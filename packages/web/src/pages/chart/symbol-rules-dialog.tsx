@@ -78,7 +78,17 @@ function ScopedDialog({ profileId, symbolId }: { profileId: string; symbolId: st
             </Badge>
           </Button>
         </Dialog.Trigger>
-        <Dialog.Content maxWidth="900px">
+        <Dialog.Content
+          maxWidth="900px"
+          // A nested editor/events dialog is portaled outside this content, so
+          // synchronously closing it (e.g. Cancel) leaks the same pointer/focus
+          // event here as an outside-interaction and would close this dialog too.
+          // Ignore it while a child dialog is open — this dialog shouldn't
+          // dismiss on outside interaction with a child on top of it anyway.
+          onInteractOutside={(event) => {
+            if (creating || editing !== null || eventsRule !== null) event.preventDefault();
+          }}
+        >
           <Flex align="center" justify="between" gap="3">
             <Dialog.Title mb="0">
               Rules{' '}
