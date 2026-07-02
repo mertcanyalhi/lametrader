@@ -1,5 +1,12 @@
 import { yupResolver } from '@hookform/resolvers/yup';
-import { type IndicatorInstance, type Period, type Rule, RuleScopeKind } from '@lametrader/core';
+import {
+  type IndicatorInstance,
+  type Period,
+  type Rule,
+  RuleScopeKind,
+  type StateValue,
+  StateValueType,
+} from '@lametrader/core';
 import {
   AlertDialog,
   Box,
@@ -28,7 +35,7 @@ import {
   useDeleteRule,
   usePatchRule,
 } from '../../lib/hooks/rules.js';
-import { useGlobalState, useSymbolState } from '../../lib/hooks/state.js';
+import { useGlobalState, useSymbolStateKeys } from '../../lib/hooks/state.js';
 import { useWatchlist } from '../../lib/hooks/symbols.js';
 import { FIELD_LABELS, type RuleFormValues, ruleFormSchema } from '../../lib/rule-form-schema.js';
 import { ActionsPicker } from './actions-picker.js';
@@ -73,19 +80,27 @@ export function RuleEditorDialog({
 
   // Seed state-key dropdowns: pick the firing symbol's state if scope is
   // single-symbol, otherwise the first watched symbol; global state always.
+  //
+  // Symbol-state uses the events-log-backed `/state-keys` catalog so a key
+  // that's ever been written under the symbol seeds the combobox with its
+  // known type, even if currently removed or if it was written by a rule
+  // on a different profile (issue #434). The typed-value fetch on `/state`
+  // was profile-scoped and empty for the common case (fresh profile, rule
+  // scope not narrowing to the write-target symbol), which starved the
+  // auto-type path.
   const seedSymbolId =
     initial.scope.kind === RuleScopeKind.Symbol
       ? initial.scope.symbolId
       : initial.scope.kind === RuleScopeKind.Symbols
         ? (initial.scope.symbolIds[0] ?? '')
         : (watchedSymbols[0]?.id ?? '');
-  const symbolStateQuery = useSymbolState(initial.profileId, seedSymbolId);
+  const symbolStateKeysQuery = useSymbolStateKeys(seedSymbolId);
   const globalStateQuery = useGlobalState(initial.profileId);
   const knownStateKeys: KnownStateKeys = {
-    symbol: symbolStateQuery.data ?? {},
+    symbol: symbolStateEntriesFromKeys(symbolStateKeysQuery.data ?? []),
     global: globalStateQuery.data ?? {},
   };
-  const stateKeysLoading = symbolStateQuery.isPending || globalStateQuery.isPending;
+  const stateKeysLoading = symbolStateKeysQuery.isPending || globalStateQuery.isPending;
 
   // Seed the `IndicatorRef` operand's state-key combobox from the catalog —
   // one map entry per `IndicatorDefinition.key`, listing its `state[].key`s.
@@ -510,4 +525,35 @@ function computeInstancePeriods(
     result[instance.id] = fallback;
   }
   return result;
+}
+
+/**
+ * Turn `useSymbolStateKeys`' `[{ key, valueType }]` catalog into the
+ * `Record<string, StateValue>` shape {@link KnownStateKeys} carries. Value
+ * is filled with the type's neutral zero — the actions picker only reads
+ * `.type` off it, so the value never surfaces.
+ */
+function symbolStateEntriesFromKeys(
+  keys: ReadonlyArray<{ key: string; valueType: StateValueType }>,
+): Record<string, StateValue> {
+  const result: Record<string, StateValue> = {};
+  if (!Array.isArray(keys)) return result;
+  for (const { key, valueType } of keys) {
+    result[key] = defaultStateValueFor(valueType);
+  }
+  return result;
+}
+
+/** Neutral zero for each {@link StateValueType} — used only for shape padding. */
+function defaultStateValueFor(type: StateValueType): StateValue {
+  switch (type) {
+    case StateValueType.Number:
+      return { type, value: 0 };
+    case StateValueType.Bool:
+      return { type, value: false };
+    case StateValueType.String:
+      return { type, value: '' };
+    case StateValueType.Enum:
+      return { type, value: '' };
+  }
 }
