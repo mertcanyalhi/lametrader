@@ -1,6 +1,24 @@
+import { ChevronDown } from 'lucide-react';
 import type { ReactNode } from 'react';
+import type { DropdownIndicatorProps } from 'react-select';
 import CreatableSelect from 'react-select/creatable';
 import { cn } from '../../lib/cn.js';
+
+/**
+ * Custom dropdown-caret icon — matches the size of Radix Themes' Select
+ * trigger chevron (Radix uses a ~15px icon; react-select's default is 20px).
+ */
+function DropdownIndicator(props: DropdownIndicatorProps<Option, false>): ReactNode {
+  const { innerProps } = props;
+  return (
+    <div
+      {...innerProps}
+      className="text-[var(--gray-11)] hover:text-[var(--gray-12)] px-1 flex items-center"
+    >
+      <ChevronDown size={15} aria-hidden="true" />
+    </div>
+  );
+}
 
 /** One row in the combobox's dropdown — a known state key. */
 interface Option {
@@ -69,10 +87,11 @@ export function StateKeyPicker({
       placeholder={isLoading === true ? 'Loading keys…' : 'Pick or create a key'}
       menuPortalTarget={typeof document !== 'undefined' ? document.body : undefined}
       styles={{ menuPortal: (base) => ({ ...base, zIndex: 60 }) }}
+      components={{ DropdownIndicator }}
       classNames={{
         control: ({ isFocused, isDisabled }) =>
           cn(
-            'flex items-center h-8 rounded-[max(var(--radius-2),var(--radius-full))] text-sm gap-1 pl-3 pr-1 transition-colors',
+            'flex items-center h-8 rounded-[max(var(--radius-2),var(--radius-full))] text-[var(--font-size-2)] leading-[var(--line-height-2)] gap-1 pl-[var(--space-2)] pr-0 transition-colors',
             'bg-[var(--color-surface)] text-[var(--gray-12)]',
             'shadow-[inset_0_0_0_1px_var(--gray-a7)]',
             isDisabled && 'opacity-60',
@@ -82,25 +101,25 @@ export function StateKeyPicker({
         placeholder: () => 'text-[var(--gray-a11)]',
         singleValue: () => 'text-[var(--gray-12)]',
         input: () => 'text-[var(--gray-12)] m-0 p-0',
-        indicatorsContainer: () => 'flex items-center gap-0.5',
+        indicatorsContainer: () => 'flex items-center',
         indicatorSeparator: () => 'hidden',
-        dropdownIndicator: () =>
-          'text-[var(--gray-11)] hover:text-[var(--gray-12)] px-1 flex items-center',
-        loadingIndicator: () => 'text-[var(--gray-11)] px-1 flex items-center',
+        loadingIndicator: () => 'text-[var(--gray-11)] px-1 flex items-center scale-75',
         menu: () =>
           'mt-1 rounded-[max(var(--radius-3),var(--radius-full))] border border-[var(--gray-a6)] bg-[var(--color-panel-solid)] text-[var(--gray-12)] shadow-lg overflow-hidden',
-        menuList: () => 'py-1 max-h-56 overflow-y-auto',
+        menuList: () => 'py-[var(--space-1)] max-h-56 overflow-y-auto',
         option: ({ isFocused, isSelected }) =>
           cn(
-            'px-3 py-1.5 text-sm cursor-pointer',
+            'flex items-center min-h-[var(--space-6)] px-[var(--space-3)] py-0 text-[var(--font-size-2)] leading-[var(--line-height-2)] cursor-pointer',
             isSelected
               ? 'bg-[var(--accent-9)] text-[var(--accent-contrast)]'
               : isFocused
                 ? 'bg-[var(--gray-a4)]'
                 : '',
           ),
-        noOptionsMessage: () => 'p-3 text-sm text-[var(--gray-a11)]',
-        loadingMessage: () => 'p-3 text-sm text-[var(--gray-a11)]',
+        noOptionsMessage: () =>
+          'px-[var(--space-3)] py-[var(--space-2)] text-[var(--font-size-2)] leading-[var(--line-height-2)] text-[var(--gray-a11)]',
+        loadingMessage: () =>
+          'px-[var(--space-3)] py-[var(--space-2)] text-[var(--font-size-2)] leading-[var(--line-height-2)] text-[var(--gray-a11)]',
       }}
     />
   );
