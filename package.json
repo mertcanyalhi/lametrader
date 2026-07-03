@@ -22,7 +22,7 @@
     "check:full": "npm run check && npm run test:e2e",
     "cli": "npm run start -w @lametrader/cli --",
     "api": "npm run start -w @lametrader/api",
-    "api:dev": "npm run dev -w @lametrader/api",
+    "api:dev": "npm run dev -w @lametrader/api | pino-pretty -i pid,hostname",
     "web": "npm run dev -w @lametrader/web",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
