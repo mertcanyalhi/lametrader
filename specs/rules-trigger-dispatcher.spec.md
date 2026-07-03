@@ -23,8 +23,9 @@ Each bullet maps to exactly one test.
 - [ ] An `OncePerBar` rule fires on the first matching tick within a bar window; a second matching tick in the same bar is suppressed.
 - [ ] After a `BarOpened` for the trigger's `period`, the `OncePerBar` latch re-arms — the next matching tick fires again.
 - [ ] A `BarOpened` for a DIFFERENT `period` than the trigger does NOT re-arm the `OncePerBar` latch (period-specific re-arm).
-- [ ] A `Once` rule's first fire calls `RuleRepository.save` with `enabled: false` (auto-disable persists via the existing save path).
-- [ ] A `Once` rule that has already fired (via prior `save` setting `enabled: false`) is not returned by `listEnabledForSymbol` and so does not fire again on the next matching tick.
+- [ ] A `Once` rule's first fire atomically claims the lifetime via `RuleRepository.claimOnceFire` (which sets `enabled: false`); the racy `get`→`save` auto-disable is gone. See `specs/once-trigger-gate.spec.md` for the lifetime once-ever invariant the claim owns.
+- [ ] A `Once` rule whose `claimOnceFire` returns `false` (already claimed, e.g. a concurrent chain won) is gate-blocked and does not fire.
+- [ ] A `Once` rule that has already fired (now `enabled: false`) is not returned by `listEnabledForSymbol` and so does not fire again on the next matching tick.
 - [ ] `IntervalScheduler.start(rule)` schedules a `Timer` event emission at `intervalMs` boundaries; on each scheduled tick the dispatcher's gate allows a `OncePerInterval` fire regardless of whether a tick or bar arrived in between.
 - [ ] `IntervalScheduler.stop(ruleId)` cancels the timer for a single rule (idempotent — stopping an unknown id is a no-op).
 - [ ] A `SymbolStateChanged` event routes only to rules whose condition references that `(profileId, symbolId, key)` slot — a rule reading a different key is NOT evaluated.

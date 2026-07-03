@@ -47,7 +47,7 @@ interface DroppedCandidate {
  * the real implementations.
  */
 export interface TriggerDispatcherDeps {
-  /** Read enabled rules + write back the auto-disabled `Once` rule. */
+  /** Read enabled rules + atomically claim a `Once` rule's lifetime fire. */
   rules: RuleRepository;
   /**
    * Build a fresh {@link EvaluationContext} for one
@@ -111,9 +111,11 @@ export interface FireRecord {
  * 2. For each `(rule, firingSymbolId)` pair: build the context, evaluate
  *    the condition tree, and run the per-trigger gate.
  *    - `EveryTime` — no gate.
- *    - `Once` — gate fires on the first match, then we save the rule
- *      with `enabled: false` so the next dispatch's `listEnabledForSymbol`
- *      drops it.
+ *    - `Once` — atomically claims the single lifetime fire via
+ *      `rules.claimOnceFire` (test-and-set to `enabled: false`) before
+ *      recording it; a caller that loses the claim skips silently, so the
+ *      rule fires exactly once even across concurrent chains (#462). The
+ *      next dispatch's `listEnabledForSymbol` then drops the disabled rule.
  *    - `OncePerBar` — in-memory latch per `(ruleId, firingSymbolId,
  *      barStart)` records the last-fire bar; gate suppresses repeats
  *      until a `BarOpened(period)` clears the latch.
@@ -188,14 +190,22 @@ export class TriggerDispatcher {
         droppedCandidates.push({ ruleId: rule.id, reason: 'gate-blocked' });
         continue;
       }
+      // `Once` — atomically claim the single lifetime fire BEFORE recording
+      // it. The claim (test-and-set in the repository) sets `enabled: false`
+      // and reports whether this caller won. If another per-symbol chain — or
+      // an earlier firing symbol in this same fan-out — already claimed it,
+      // this caller loses and skips silently, so the rule fires exactly once
+      // over its lifetime regardless of concurrent interleaving (#462).
+      if (
+        rule.trigger.kind === TriggerKind.Once &&
+        !(await this.deps.rules.claimOnceFire(rule.id))
+      ) {
+        droppedCandidates.push({ ruleId: rule.id, reason: 'gate-blocked' });
+        continue;
+      }
       this.recordFire(rule, event, firingSymbolId);
       eligibleIds.push(rule.id);
       fires.push({ ruleId: rule.id, firingSymbolId, event });
-      // `Once` auto-disable persists via the existing save path.
-      if (rule.trigger.kind === TriggerKind.Once) {
-        const fresh = await this.deps.rules.get(rule.id);
-        if (fresh !== null) await this.deps.rules.save({ ...fresh, enabled: false });
-      }
     }
 
     if (log.isLevelEnabled('trace')) {
@@ -266,8 +276,9 @@ export class TriggerDispatcher {
   /**
    * Per-trigger gate decision.
    *
-   * `EveryTime` always allows; `Once` always allows (the auto-disable in
-   * `dispatch` makes the next `listEnabledForSymbol` drop the rule);
+   * `EveryTime` always allows; `Once` always allows here (the atomic
+   * `claimOnceFire` in `dispatch` owns the lifetime once-ever invariant and
+   * makes the next `listEnabledForSymbol` drop the rule);
    * `OncePerBarOpen` / `OncePerBarClose` always allow (`routes` already
    * ensured kind + period match); `OncePerBar` checks the latch; and
    * `OncePerInterval` checks the elapsed time since last fire.

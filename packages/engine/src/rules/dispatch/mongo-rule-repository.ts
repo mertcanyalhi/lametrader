@@ -86,6 +86,19 @@ export class MongoRuleRepository implements RuleRepository {
     return doc ? toRule(doc) : null;
   }
 
+  async claimOnceFire(ruleId: string): Promise<boolean> {
+    // Single-document atomicity: the `{ enabled: true }` filter is part of
+    // the same update, so exactly one concurrent caller matches and flips
+    // the flag; every other caller (already-disabled or absent) matches
+    // nothing. `$set` on one field also avoids the whole-document
+    // `replaceOne` lost-update window a reload-then-save would open.
+    const result = await this.collection.findOneAndUpdate(
+      { _id: ruleId, enabled: true },
+      { $set: { enabled: false } },
+    );
+    return result !== null;
+  }
+
   async save(rule: Rule): Promise<void> {
     await this.collection.replaceOne({ _id: rule.id }, toDocument(rule), { upsert: true });
   }
