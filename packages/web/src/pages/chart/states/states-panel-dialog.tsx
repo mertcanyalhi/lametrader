@@ -44,7 +44,7 @@ export interface StatesPanelDialogProps {
 }
 
 /**
- * The chart's bottom-bar States panel — mirrors the Indicators button + dialog.
+ * The chart's bottom-bar State changes panel — mirrors the Indicators button + dialog.
  *
  * Trigger renders with the count of currently overlaid keys; clicking opens a
  * dialog whose body is a search input and a scrollable list of one checkbox per
@@ -72,7 +72,7 @@ export function StatesPanelDialog({
     setSelected(profileId ? getStoredStateOverlays(profileId, symbolId) : []);
   }, [profileId, symbolId]);
 
-  const triggerAriaLabel = profileId ? `States (${selected.length})` : 'States';
+  const triggerAriaLabel = profileId ? `State changes (${selected.length})` : 'State changes';
 
   function applySelection(next: string[]): void {
     setSelected(next);
@@ -90,7 +90,7 @@ export function StatesPanelDialog({
           aria-label={triggerAriaLabel}
         >
           <Layers size={14} aria-hidden="true" />
-          States
+          State changes
           {profileId ? (
             <Badge variant="soft" color="gray" radius="full">
               {selected.length}
@@ -122,7 +122,7 @@ export function StatesPanelDialog({
 function NoProfileView(): ReactNode {
   return (
     <>
-      <Dialog.Title>States</Dialog.Title>
+      <Dialog.Title>State changes</Dialog.Title>
       <Callout.Root color="amber" mt="3">
         <Callout.Icon>
           <TriangleAlert size={16} aria-hidden="true" />
@@ -190,7 +190,7 @@ function PickerView({
 
   return (
     <>
-      <Dialog.Title>States</Dialog.Title>
+      <Dialog.Title>State changes</Dialog.Title>
       <Flex direction="column" gap="3" mt="3">
         <TextField.Root
           value={query}

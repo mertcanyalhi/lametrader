@@ -4,7 +4,7 @@
 - Touches:
   - `engine` — new `StateHistoryService` (application use-case) derives the per-symbol state-key catalog and time-series for one `(symbolId, profileId, key)` from the existing `EventLog.symbolEvents()` (`StateSet`/`StateRemoved` entries).
   - `api` — two new endpoints under the existing `symbols` controller: `GET /symbols/:id/state-keys?profileId=` (catalog) and `GET /symbols/:id/state/:key/series?profileId=&from=&to=` (time-series).
-  - `web` — `useSymbolStateKeys(symbolId, profileId)` + `useSymbolStateTimeSeries(symbolId, profileId, key, from, to)` hooks; new `StatesPanelDialog` mirroring `IndicatorPanelDialog`; new `StateOverlay` descriptor and chart sync extending the existing overlay infrastructure (line for numeric, markers for bool/enum/string); the **States** button mounted next to **Indicators** on the chart bottom bar.
+  - `web` — `useSymbolStateKeys(symbolId, profileId)` + `useSymbolStateTimeSeries(symbolId, profileId, key, from, to)` hooks; new `StatesPanelDialog` mirroring `IndicatorPanelDialog`; new `StateOverlay` descriptor and chart sync extending the existing overlay infrastructure (line for numeric, markers for bool/enum/string); the **State changes** button mounted next to **Indicators** on the chart bottom bar.
 
 ## Goal
 
@@ -118,7 +118,7 @@ Web `useSymbolStateTimeSeries`:
 
 Web `StatesPanelDialog`:
 
-- [ ] Trigger renders with the `States (N)` accessible name where `N` is the count of currently overlaid keys persisted for `(profileId, symbolId)`.
+- [ ] Trigger renders with the `State changes (N)` accessible name where `N` is the count of currently overlaid keys persisted for `(profileId, symbolId)`.
 - [ ] Clicking the trigger opens a dialog whose body shows a search input and a scrollable list of one checkbox per key from `useSymbolStateKeys`.
 - [ ] Toggling a checkbox persists the next selection set to `localStorage` under the `(profileId, symbolId)` namespace, and the trigger's badge count updates.
 - [ ] When no profile is selected the dialog renders the warning callout (same pattern as `IndicatorPanelDialog`).

@@ -112,41 +112,58 @@ describe('StatesPanelDialog', () => {
     );
   }
 
-  it('labels the trigger "States" when no profile is selected', async () => {
+  it('exposes "State changes" as both the trigger accessible name and visible label when no profile is selected', async () => {
     profiles = [];
     renderPanel();
 
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'States' })).not.toBeNull());
+    const button = await screen.findByRole('button', { name: 'State changes' });
+    expect({
+      accessibleName: button.getAttribute('aria-label'),
+      visibleLabel: button.textContent,
+    }).toEqual({ accessibleName: 'State changes', visibleLabel: 'State changes' });
   });
 
-  it('labels the trigger "States (N)" with the count of currently overlaid keys for (profileId, symbolId)', async () => {
+  it('labels the trigger "State changes (N)" with the count of currently overlaid keys for (profileId, symbolId)', async () => {
     setStoredProfileId(PROFILE.id);
     setStoredStateOverlays(PROFILE.id, SYMBOL_ID, ['cooldown', 'last_signal']);
     renderPanel();
 
     await waitFor(() =>
-      expect(screen.queryByRole('button', { name: 'States (2)' })).not.toBeNull(),
+      expect(screen.queryByRole('button', { name: 'State changes (2)' })).not.toBeNull(),
     );
+  });
+
+  it('titles the opened dialog "State changes" when a profile is selected', async () => {
+    setStoredProfileId(PROFILE.id);
+    renderPanel();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'State changes (0)' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect({
+      title: within(dialog).getByRole('heading').textContent,
+    }).toEqual({ title: 'State changes' });
   });
 
   it('renders a warning callout and no checkboxes when no profile is selected', async () => {
     profiles = [];
     renderPanel();
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'States' }));
+    await user.click(await screen.findByRole('button', { name: 'State changes' }));
 
     const dialog = await screen.findByRole('dialog');
     expect({
+      title: within(dialog).getByRole('heading').textContent,
       warning: within(dialog).queryByText(/select or create a profile to overlay states/i) !== null,
       checkboxes: within(dialog).queryAllByRole('checkbox').length,
-    }).toEqual({ warning: true, checkboxes: 0 });
+    }).toEqual({ title: 'State changes', warning: true, checkboxes: 0 });
   });
 
   it('opens a dialog with a search input and one checkbox per state-key returned by the API', async () => {
     setStoredProfileId(PROFILE.id);
     renderPanel();
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'States (0)' }));
+    await user.click(await screen.findByRole('button', { name: 'State changes (0)' }));
 
     const dialog = await screen.findByRole('dialog');
     await within(dialog).findByRole('textbox', { name: 'Search state keys' });
@@ -162,7 +179,7 @@ describe('StatesPanelDialog', () => {
     setStoredProfileId(PROFILE.id);
     renderPanel();
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'States (0)' }));
+    await user.click(await screen.findByRole('button', { name: 'State changes (0)' }));
 
     const dialog = await screen.findByRole('dialog');
     await within(dialog).findByRole('checkbox', { name: 'cooldown' });
@@ -177,7 +194,7 @@ describe('StatesPanelDialog', () => {
     const onChange = vi.fn<(next: string[]) => void>();
     renderPanel(SymbolType.Crypto, { onChange });
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'States (0)' }));
+    await user.click(await screen.findByRole('button', { name: 'State changes (0)' }));
 
     const dialog = await screen.findByRole('dialog');
     await user.click(await within(dialog).findByRole('checkbox', { name: 'cooldown' }));
