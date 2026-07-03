@@ -8,6 +8,7 @@ import {
   NotificationChannel,
   type Notifier,
   OperandKind,
+  Period,
   type Rule,
   RuleEventType,
   type RuleRepository,
@@ -23,6 +24,8 @@ import {
 } from '@lametrader/core';
 import {
   ActionRunner,
+  ArraySeriesView,
+  barSeriesKey,
   buildEvaluationContext,
   type EvaluationLookups,
   IndicatorSeriesStore,
@@ -32,7 +35,7 @@ import {
   InMemoryStateRepository,
   InMemoryWatchlistRepository,
   RuleOrchestrator,
-  TickRing,
+  type SeriesView,
   TriggerDispatcher,
 } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
@@ -94,23 +97,16 @@ async function wire(opts: {
   const eventLog = new InMemoryEventLog(() => 9_999);
   const indicatorStore = new IndicatorSeriesStore();
   const { lookups } = liveLookups(state, { current: opts.tickPrice ?? 120 });
-  // Default tick rings — one per rule's firing scope, seeded so Price > 100
-  // evaluates true.
-  const tickRings = new Map<string, InstanceType<typeof TickRing>>();
-  for (const r of opts.rules) {
-    const ids =
-      r.scope.kind === RuleScopeKind.Symbol
-        ? [r.scope.symbolId]
-        : r.scope.kind === RuleScopeKind.Symbols
-          ? r.scope.symbolIds
-          : [];
-    for (const id of ids) {
-      if (tickRings.has(id)) continue;
-      const ring = new TickRing();
-      ring.push(0, opts.tickPrice ?? 120);
-      tickRings.set(id, ring);
-    }
-  }
+  // Default bar-close series seeded so Price > 100 evaluates true; Price reads
+  // the latest close (the platform ingests candles, not trades).
+  const barSeries = new Map<string, SeriesView>([
+    [
+      barSeriesKey(Period.OneMinute, 'close'),
+      new ArraySeriesView([
+        { ts: 0, value: { type: StateValueType.Number, value: opts.tickPrice ?? 120 } },
+      ]),
+    ],
+  ]);
   const dispatcher = new TriggerDispatcher({
     rules: repo,
     buildContext: (_event, firingSymbolId, profileId) =>
@@ -118,7 +114,7 @@ async function wire(opts: {
         symbolId: firingSymbolId,
         profileId,
         candleRepository: null as unknown as never,
-        tickRings,
+        barSeries,
         indicatorStore,
         barWindow: { from: 0, to: Number.MAX_SAFE_INTEGER },
         getSymbolState: (pid, symbolId, key) => lookups.getSymbolState(pid, symbolId, key),

@@ -201,11 +201,11 @@ export async function connectServices(
   });
   const rules = new RuleService(ruleRepo, eventLog, watchlist);
   const stateHistory = new StateHistoryService(eventLog);
+  // UI-only: the quote stream renders live quotes to the browser. The rule
+  // engine's tick feed comes from the polling loop below (not from here), so
+  // rule evaluation never depends on a client being subscribed.
   const quoteStream = new QuoteStreamService(watchlist, config, candleRepo, {
-    onQuote: (event) => {
-      (options.onSymbolQuote ?? (() => {}))(event);
-      wiredRuleEngine?.tickBridge.handleQuote(event);
-    },
+    onQuote: options.onSymbolQuote ?? (() => {}),
   });
 
   // Fan the polling loop's per-candle event to every sink: the user-supplied
@@ -217,6 +217,7 @@ export async function connectServices(
   const candleListener = options.onCandle ?? (() => {});
   const polling = new PollingService(sources, candleRepo, watchlist, {
     onCandle: (event) => {
+      log.trace({ ...event }, 'candle polled');
       candleListener(event);
       indicatorService
         .handleCandle(event)

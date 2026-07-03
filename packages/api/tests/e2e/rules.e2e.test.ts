@@ -186,17 +186,19 @@ describe('/rules (e2e)', () => {
     expect(initialCount.statusCode).toEqual(200);
     expect(initialCount.json()).toEqual({ count: 0 });
 
-    // 4) Drive a tick through the live quote bridge.
-    wired.tickBridge.handleQuote({
+    // 4) Drive a tick via a poll — the candle's close is the tick price.
+    wired.barBridge.handleCandle({
       id: SYMBOL_ID,
-      subscriptionId: 'sub-1',
-      quote: {
-        symbolId: SYMBOL_ID,
-        price: 101,
-        bid: null,
-        ask: null,
+      period: Period.M1,
+      candle: {
         time: 1_700_000_000_000,
+        open: 101,
+        high: 101,
+        low: 101,
+        close: 101,
+        volume: 10,
       },
+      final: false,
     });
     await wired.drain();
 

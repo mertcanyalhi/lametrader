@@ -91,9 +91,11 @@ describe('wireRuleEngine', () => {
       indicatorStore,
     });
 
-    wired.tickBridge.handleQuote({
+    wired.barBridge.handleCandle({
       id: 'AAPL',
-      quote: { time: 1_000, price: 101, final: false },
+      period: Period.OneMinute,
+      candle: { time: 60_000, open: 101, high: 101, low: 101, close: 101, volume: 10 },
+      final: false,
     });
     await wired.drain();
 
@@ -131,17 +133,29 @@ describe('wireRuleEngine', () => {
         indicatorStore,
       });
 
-      wired.tickBridge.handleQuote({
+      wired.barBridge.handleCandle({
         id: 'AAPL',
-        quote: { time: 1_000, price: 101, final: false },
+        period: Period.OneMinute,
+        candle: { time: 60_000, open: 101, high: 101, low: 101, close: 101, volume: 10 },
+        final: false,
       });
       await wired.drain();
 
+      // The candle fans out to a BarOpened and a Tick; the corrupt repository
+      // throws on each, so one Error entry is appended per event.
       const symbolEvents = await eventLog.symbolEvents('AAPL');
       expect(symbolEvents).toEqual([
         {
           type: RuleEventType.Error,
-          ts: 1_000,
+          ts: 60_000,
+          firedAt: 0,
+          ruleId: '',
+          symbolId: 'AAPL',
+          reason: 'orchestrator process failed: repository timeout',
+        },
+        {
+          type: RuleEventType.Error,
+          ts: 60_000,
           firedAt: 0,
           ruleId: '',
           symbolId: 'AAPL',
@@ -229,9 +243,11 @@ describe('wireRuleEngine', () => {
       0,
     );
 
-    wired.tickBridge.handleQuote({
+    wired.barBridge.handleCandle({
       id: 'AAPL',
-      quote: { time: 1_000, price: 101, final: false },
+      period: Period.OneMinute,
+      candle: { time: 60_000, open: 101, high: 101, low: 101, close: 101, volume: 10 },
+      final: false,
     });
     await wired.drain();
 
@@ -557,7 +573,7 @@ describe('wireRuleEngine', () => {
           },
           lookupSnapshot: {
             period: Period.OneMinute,
-            current: null,
+            current: 105,
             open: 104,
             high: 107,
             low: 103,
@@ -617,8 +633,18 @@ describe('wireRuleEngine', () => {
       indicatorStore,
     });
 
-    wired.tickBridge.handleQuote({ id: 'AAPL', quote: { time: 1_000, price: 50, final: false } });
-    wired.tickBridge.handleQuote({ id: 'AAPL', quote: { time: 2_000, price: 150, final: false } });
+    wired.barBridge.handleCandle({
+      id: 'AAPL',
+      period: Period.OneMinute,
+      candle: { time: 1_000, open: 50, high: 50, low: 50, close: 50, volume: 5 },
+      final: false,
+    });
+    wired.barBridge.handleCandle({
+      id: 'AAPL',
+      period: Period.OneMinute,
+      candle: { time: 2_000, open: 150, high: 150, low: 150, close: 150, volume: 10 },
+      final: false,
+    });
     await wired.drain();
 
     expect(await eventLog.symbolEvents('AAPL')).toEqual([

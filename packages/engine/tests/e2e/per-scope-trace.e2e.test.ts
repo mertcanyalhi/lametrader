@@ -101,9 +101,11 @@ describe('rules engine per-scope trace logging (e2e)', () => {
       candleRepository,
       indicatorStore,
     });
-    wired.tickBridge.handleQuote({
+    wired.barBridge.handleCandle({
       id: 'AAPL',
-      quote: { time: 1_000, price: 101, final: false },
+      period: Period.OneMinute,
+      candle: { time: 1_000, open: 101, high: 101, low: 101, close: 101, volume: 10 },
+      final: false,
     });
     await wired.drain();
 
@@ -150,9 +152,11 @@ describe('rules engine per-scope trace logging (e2e)', () => {
       candleRepository,
       indicatorStore,
     });
-    wired.tickBridge.handleQuote({
+    wired.barBridge.handleCandle({
       id: 'AAPL',
-      quote: { time: 1_000, price: 101, final: false },
+      period: Period.OneMinute,
+      candle: { time: 1_000, open: 101, high: 101, low: 101, close: 101, volume: 10 },
+      final: false,
     });
     await wired.drain();
 

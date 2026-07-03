@@ -12,7 +12,6 @@ import {
   RuleScopeKind,
   StateScope,
   StateValueType,
-  type SymbolQuoteEvent,
   SymbolType,
   TriggerKind,
 } from '@lametrader/core';
@@ -56,16 +55,18 @@ function feedCandle(wired: WiredRuleEngine, period: Period, time: number, open: 
   });
 }
 
-/** Feed a tick (drives `OncePerBar` evaluation) through the tick bridge. */
+/**
+ * Feed a 1m poll (drives `OncePerBar` evaluation via the candle's tick). The 1m
+ * OHLCV update is isolated from the rule's own interval, so it only supplies the
+ * tick that wakes the trigger.
+ */
 function feedTick(wired: WiredRuleEngine, time: number, price: number): void {
-  const event: SymbolQuoteEvent = {
-    subscriptionId: 'sub-1',
+  wired.barBridge.handleCandle({
     id: SYMBOL,
     period: Period.OneMinute,
-    quote: { price, change: 0, changePct: 0, time },
+    candle: cryptoCandle(time, price),
     final: false,
-  };
-  wired.tickBridge.handleQuote(event);
+  });
 }
 
 /**
@@ -128,17 +129,19 @@ describe('period-aware OHLCV rule evaluation (e2e)', () => {
       indicatorStore: new IndicatorSeriesStore(),
     });
 
-    // 1h bar opens at 50100 (above); 1m bar opens at 49000 (below).
+    // 1h bar opens at 50100 (above threshold). The 1h poll IS a tick (close
+    // 50100), which drives OncePerBar(1h) evaluation reading the 1h open — it
+    // fires immediately. A later 1m bar below the threshold can't re-fire the
+    // latched rule, proving the rule reads the 1h open, not the 1m one.
     feedCandle(wired, Period.OneHour, 3_600_000, 50100);
     feedCandle(wired, Period.OneMinute, 3_660_000, 49000);
-    // A tick drives OncePerBar evaluation; it reads Open at the 1h interval.
     feedTick(wired, 3_660_001, 49500);
     await wired.drain();
 
     expect(await eventLog.symbolEvents(SYMBOL)).toEqual([
       {
         type: RuleEventType.StateSet,
-        ts: 3_660_001,
+        ts: 3_600_000,
         firedAt: 0,
         ruleId: 'r-open-1h',
         symbolId: SYMBOL,
@@ -148,20 +151,20 @@ describe('period-aware OHLCV rule evaluation (e2e)', () => {
       },
       {
         type: RuleEventType.Fired,
-        ts: 3_660_001,
+        ts: 3_600_000,
         firedAt: 0,
         ruleId: 'r-open-1h',
         symbolId: SYMBOL,
         context: {
           inboundEvent: {
             kind: EvaluationTriggerKind.Tick,
-            ts: 3_660_001,
+            ts: 3_600_000,
             symbolId: SYMBOL,
-            price: 49500,
+            price: 50100,
           },
           lookupSnapshot: {
             period: Period.OneHour,
-            current: 49500,
+            current: 50100,
             open: 50100,
             high: 50200,
             low: 50000,

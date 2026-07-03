@@ -30,11 +30,22 @@ import { InMemoryStateRepository } from '../../state/in-memory-state-repository.
 import { InMemoryWatchlistRepository } from '../../symbols/in-memory-watchlist-repository.js';
 import { TriggerDispatcher } from '../dispatch/dispatcher.js';
 import { InMemoryRuleRepository } from '../dispatch/in-memory-rule-repository.js';
-import { buildEvaluationContext } from '../evaluation-context.js';
+import { barSeriesKey, buildEvaluationContext } from '../evaluation-context.js';
 import type { EvaluationContext } from '../evaluation-context.types.js';
-import { IndicatorSeriesStore } from '../indicator-series-store.js';
-import { TickRing } from '../tick-ring.js';
+import { ArraySeriesView, IndicatorSeriesStore } from '../indicator-series-store.js';
+import type { SeriesView } from '../series.types.js';
 import type { EvaluationLookups } from '../wire/live-evaluation-lookups.types.js';
+
+/** A bar-close series carrying a single snapshot value — backs the `Price` operand. */
+function closeSeriesAt(close: number): Map<string, SeriesView> {
+  return new Map([
+    [
+      barSeriesKey(Period.OneMinute, 'close'),
+      new ArraySeriesView([{ ts: 0, value: { type: StateValueType.Number, value: close } }]),
+    ],
+  ]);
+}
+
 import { ActionRunner } from './action-runner.js';
 import { InMemoryEventLog } from './in-memory-event-log.js';
 import { RuleOrchestrator } from './orchestrator.js';
@@ -109,7 +120,7 @@ async function buildOrchestrator(opts: {
   state?: StateRepository;
   watchlist?: WatchlistRepository;
   lookups?: EvaluationLookups;
-  tickRings?: ReadonlyMap<string, TickRing>;
+  barSeries?: ReadonlyMap<string, SeriesView>;
   now?: () => number;
   rulesRepo?: RuleRepository;
 }): Promise<{
@@ -127,25 +138,9 @@ async function buildOrchestrator(opts: {
   const lookups = opts.lookups ?? fixedLookups(120);
   const watchlist = opts.watchlist ?? new InMemoryWatchlistRepository();
   const eventLog = new InMemoryEventLog(opts.now ?? (() => 9_999));
-  // Default tick ring per rule's firing symbol, seeded at price 120 so a
-  // Price > 100 condition evaluates true. Tests that need specific tick
-  // data override `tickRings` directly.
-  const defaultRings = new Map<string, TickRing>();
-  for (const r of opts.rules) {
-    const ids =
-      r.scope.kind === RuleScopeKind.Symbol
-        ? [r.scope.symbolId]
-        : r.scope.kind === RuleScopeKind.Symbols
-          ? r.scope.symbolIds
-          : [];
-    for (const id of ids) {
-      if (defaultRings.has(id)) continue;
-      const ring = new TickRing();
-      ring.push(0, 120);
-      defaultRings.set(id, ring);
-    }
-  }
-  const tickRings = opts.tickRings ?? defaultRings;
+  // Default bar-close series at 120 so a Price > 100 condition evaluates true.
+  // Tests that need a specific price override `barSeries` directly.
+  const barSeries = opts.barSeries ?? closeSeriesAt(120);
   const indicatorStore = new IndicatorSeriesStore();
   const buildContext = (
     _event: RuleEvent,
@@ -156,7 +151,7 @@ async function buildOrchestrator(opts: {
       symbolId: firingSymbolId,
       profileId,
       candleRepository: null as unknown as never,
-      tickRings,
+      barSeries,
       indicatorStore,
       barWindow: { from: 0, to: Number.MAX_SAFE_INTEGER },
       getSymbolState: (pid, symbolId, key) => lookups.getSymbolState(pid, symbolId, key),
@@ -448,12 +443,6 @@ describe('RuleOrchestrator', () => {
       exchange: 'NMS',
       periods: [Period.OneMinute],
     });
-    const ringByName = new Map<string, TickRing>();
-    for (const id of ['AAPL', 'MSFT']) {
-      const ring = new TickRing();
-      ring.push(0, 120);
-      ringByName.set(id, ring);
-    }
     const { orchestrator, eventLog } = await buildOrchestrator({
       rules: [
         ruleWith({
@@ -463,7 +452,7 @@ describe('RuleOrchestrator', () => {
         }),
       ],
       watchlist,
-      tickRings: ringByName,
+      barSeries: closeSeriesAt(120),
     });
     const timer: TimerEvent = {
       kind: EvaluationTriggerKind.Timer,
@@ -503,12 +492,6 @@ describe('RuleOrchestrator', () => {
       exchange: 'NMS',
       periods: [Period.OneMinute],
     });
-    const ringByName = new Map<string, TickRing>();
-    for (const id of ['AAPL', 'MSFT', 'GOOG']) {
-      const ring = new TickRing();
-      ring.push(0, 120);
-      ringByName.set(id, ring);
-    }
     const { orchestrator, eventLog } = await buildOrchestrator({
       rules: [
         ruleWith({
@@ -518,7 +501,7 @@ describe('RuleOrchestrator', () => {
         }),
       ],
       watchlist,
-      tickRings: ringByName,
+      barSeries: closeSeriesAt(120),
     });
     const timer: TimerEvent = {
       kind: EvaluationTriggerKind.Timer,
@@ -552,15 +535,11 @@ describe('RuleOrchestrator', () => {
   });
 
   it('leaves lastFiredAt untouched when no rule fires (condition unmet)', async () => {
-    // Seed the tick ring below the rule's `Price > 100` threshold so the
+    // Seed the close below the rule's `Price > 100` threshold so the
     // condition evaluates false; the orchestrator must NOT stamp lastFiredAt.
-    const ringByName = new Map<string, TickRing>();
-    const ring = new TickRing();
-    ring.push(0, 50);
-    ringByName.set('AAPL', ring);
     const { orchestrator, rules } = await buildOrchestrator({
       rules: [ruleWith({ id: 'r1' })],
-      tickRings: ringByName,
+      barSeries: closeSeriesAt(50),
     });
     await orchestrator.process(TICK_EVENT);
     const persisted = await rules.get('r1');

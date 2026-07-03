@@ -1,29 +1,24 @@
 import {
-  ConfigKey,
   type EquityCandle,
   type EvaluationTriggerEvent,
   EvaluationTriggerKind,
   type IndicatorStateEvent,
   Period,
   StateValueType,
-  type SymbolQuoteEvent,
   SymbolType,
+  type TickEvent,
 } from '@lametrader/core';
 import {
   BarLifecycleBridge,
-  ConfigService,
   defaultIndicators,
   IndicatorCascadeBridge,
   IndicatorService,
   InMemoryCandleRepository,
-  InMemoryConfigRepository,
   InMemoryMarketDataSource,
   InMemoryStateRepository,
   InMemoryWatchlistRepository,
   PollingService,
-  QuoteStreamService,
   StateCascadeBridge,
-  TickBridge,
 } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 
@@ -85,7 +80,6 @@ describe('rules bridges (e2e)', () => {
     };
 
     // ── Wire bridges ──
-    const tickBridge = new TickBridge(sink);
     const barLifecycleBridge = new BarLifecycleBridge(sink);
     const stateCascadeBridge = new StateCascadeBridge(sink);
     const indicatorCascadeBridge = new IndicatorCascadeBridge(sink);
@@ -109,18 +103,6 @@ describe('rules bridges (e2e)', () => {
       [SYMBOL_POLLED_ONLY]: [equityCandle(1_000_000, 200)],
     });
 
-    // ── Quote stream → TickBridge (subscribed only for AAPL) ──
-    const config = new ConfigService(
-      new InMemoryConfigRepository([
-        [ConfigKey.Periods, [Period.OneMinute]],
-        [ConfigKey.DefaultPeriod, Period.OneMinute],
-      ]),
-    );
-    const quoteStream = new QuoteStreamService(watchlist, config, candleRepo, {
-      onQuote: (event: SymbolQuoteEvent) => tickBridge.handleQuote(event),
-    });
-    await quoteStream.subscribe(SYMBOL_QUOTED);
-
     // ── State repo → StateCascadeBridge ──
     const stateRepo = new InMemoryStateRepository();
     stateRepo.onStateChanged((event) => stateCascadeBridge.handleStateChange(event));
@@ -142,8 +124,16 @@ describe('rules bridges (e2e)', () => {
     const polling = new PollingService([source], candleRepo, watchlist, {
       onCandle: (event) => {
         barLifecycleBridge.handleCandle(event);
-        // QuoteStreamService also consumes candles to derive quotes for subscribed symbols.
-        quoteStream.handleCandle(event);
+        // The platform ingests candles, not trades, so each poll IS the tick:
+        // derive a Tick from the candle close for every polled symbol (this is
+        // what the wire does in production).
+        const tick: TickEvent = {
+          kind: EvaluationTriggerKind.Tick,
+          ts: event.candle.time,
+          symbolId: event.id,
+          price: event.candle.close,
+        };
+        sink(tick);
         // IndicatorService recomputes per its own subscriptions; await chain handled below.
         indicatorEnqueue(() => indicatorService.handleCandle(event));
       },
@@ -171,8 +161,8 @@ describe('rules bridges (e2e)', () => {
       1_200_000,
     );
 
-    // ── Assert: polled-only symbol got BarOpened (no Tick); quoted got Tick too;
-    //   cascade carried profileId ──
+    // ── Assert: every polled symbol got BarOpened + a Tick from its candle
+    //   close (ticks are no longer quote-gated); cascade carried profileId ──
     const barOpenedForPolledOnly = emitted.filter(
       (e) => e.kind === EvaluationTriggerKind.BarOpened && e.symbolId === SYMBOL_POLLED_ONLY,
     );
@@ -200,7 +190,14 @@ describe('rules bridges (e2e)', () => {
         period: Period.OneMinute,
       },
     ]);
-    expect(tickForPolledOnly).toEqual([]);
+    expect(tickForPolledOnly).toEqual([
+      {
+        kind: EvaluationTriggerKind.Tick,
+        ts: 1_000_000,
+        symbolId: SYMBOL_POLLED_ONLY,
+        price: 200,
+      },
+    ]);
     expect(barOpenedForQuoted).toEqual([
       {
         kind: EvaluationTriggerKind.BarOpened,

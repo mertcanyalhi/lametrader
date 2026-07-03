@@ -1,11 +1,9 @@
 import {
-  type EvaluationTriggerEvent,
   EvaluationTriggerKind,
   Period,
   type StateChangedEvent,
   StateScope,
   StateValueType,
-  type SymbolQuoteEvent,
 } from '@lametrader/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { CandleEvent } from '../../candles/polling-service.types.js';
@@ -13,7 +11,6 @@ import { _resetLogRoot, _resetLogScopes } from '../../log.js';
 import { BarLifecycleBridge } from './bar-lifecycle-bridge.js';
 import { IndicatorCascadeBridge } from './indicator-cascade-bridge.js';
 import { StateCascadeBridge } from './state-cascade-bridge.js';
-import { TickBridge } from './tick-bridge.js';
 
 function parseRecord(line: string): Record<string, unknown> {
   return JSON.parse(line);
@@ -31,43 +28,6 @@ describe('bridges trace', () => {
   afterEach(() => {
     _resetLogRoot();
     _resetLogScopes([]);
-  });
-
-  it('TickBridge emits a bridge_emit trace per quote with the outbound Tick payload', () => {
-    const records: Record<string, unknown>[] = [];
-    _resetLogRoot({
-      write: (line) => {
-        records.push(parseRecord(line));
-      },
-    });
-    _resetLogScopes([{ pattern: 'engine.rules.bridges', level: 'trace' }]);
-    const sink: EvaluationTriggerEvent[] = [];
-    const bridge = new TickBridge((e) => sink.push(e));
-    const inbound: SymbolQuoteEvent = {
-      id: 'AAPL',
-      quote: { time: 1_000, price: 101, final: false },
-    };
-
-    bridge.handleQuote(inbound);
-
-    expect(bridgeRecords(records)).toEqual([
-      {
-        level: 10,
-        time: expect.any(Number),
-        app: 'engine',
-        scope: 'engine.rules.bridges',
-        bridge: 'tick',
-        inboundEventKind: 'quote',
-        emittedEventKind: EvaluationTriggerKind.Tick,
-        payload: {
-          kind: EvaluationTriggerKind.Tick,
-          ts: 1_000,
-          symbolId: 'AAPL',
-          price: 101,
-        },
-        msg: 'bridge_emit',
-      },
-    ]);
   });
 
   it('StateCascadeBridge emits a bridge_emit trace with the outbound SymbolStateChanged payload', () => {

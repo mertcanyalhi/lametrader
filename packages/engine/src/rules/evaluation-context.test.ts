@@ -15,7 +15,6 @@ import { movingAverage } from '../indicators/sma.js';
 import { InMemoryWatchlistRepository } from '../symbols/in-memory-watchlist-repository.js';
 import { buildEvaluationContext, prewarmBarSeries } from './evaluation-context.js';
 import { IndicatorSeriesStore } from './indicator-series-store.js';
-import { TickRing } from './tick-ring.js';
 
 const SYMBOL = 'BTC';
 const PERIOD = Period.OneMinute;
@@ -61,10 +60,6 @@ const seed = async () => {
     inputs: { length: 3, source: 'close' },
   });
 
-  const tickRing = new TickRing();
-  tickRing.push(100, 9);
-  tickRing.push(200, 11);
-
   const symbolState: Record<string, StateValue> = {
     mode: { type: StateValueType.String, value: 'armed' },
   };
@@ -85,7 +80,6 @@ const seed = async () => {
     symbolId: SYMBOL,
     profileId: PROFILE,
     candleRepository: repo,
-    tickRings: new Map([[SYMBOL, tickRing]]),
     indicatorStore,
     barWindow,
     barSeries,
@@ -93,7 +87,7 @@ const seed = async () => {
     getGlobalState: (_profileId, key) => globalState[key] ?? null,
   });
 
-  return { ctx, repo, indicatorStore, tickRing };
+  return { ctx, repo, indicatorStore };
 };
 
 describe('buildEvaluationContext', () => {
@@ -139,7 +133,8 @@ describe('buildEvaluationContext', () => {
       globalRef,
       literal,
     }).toEqual({
-      price: { type: StateValueType.Number, value: 11 },
+      // Price is the latest bar close (no tick feed) — bars [10,20,30] → 30.
+      price: { type: StateValueType.Number, value: 30 },
       open: { type: StateValueType.Number, value: 30 },
       high: { type: StateValueType.Number, value: 30.5 },
       low: { type: StateValueType.Number, value: 29.5 },
@@ -183,7 +178,6 @@ describe('buildEvaluationContext', () => {
       symbolId: SYMBOL,
       profileId: PROFILE,
       candleRepository: repo,
-      tickRings: new Map(),
       indicatorStore,
       barWindow,
       barSeries,
@@ -204,7 +198,51 @@ describe('buildEvaluationContext', () => {
     });
   });
 
-  it('resolveSeries returns a tick-axis series for Price with backward walk + asOf + length', async () => {
+  it('resolveLatest falls back to the latest bar close for Price when no tick has been observed', async () => {
+    const repo = new InMemoryCandleRepository();
+    await repo.save(SYMBOL, PERIOD, [candle(60_000, 42)]);
+
+    const watchlist = new InMemoryWatchlistRepository([
+      {
+        id: SYMBOL,
+        type: SymbolType.Crypto,
+        description: 'BTC',
+        exchange: 'Binance',
+        periods: [PERIOD],
+      },
+    ]);
+    const indicators = new IndicatorRegistry();
+    indicators.register(movingAverage);
+    const indicatorStore = new IndicatorSeriesStore(
+      new IndicatorService(indicators, watchlist, repo),
+    );
+
+    const barWindow = { from: 0, to: 2 * 60_000 };
+    const barSeries = await prewarmBarSeries(repo, SYMBOL, barWindow, [
+      { period: PERIOD, axis: 'close' },
+    ]);
+
+    const ctx = buildEvaluationContext({
+      symbolId: SYMBOL,
+      profileId: PROFILE,
+      candleRepository: repo,
+      // No tick has been observed for the symbol.
+      indicatorStore,
+      barWindow,
+      barSeries,
+      getSymbolState: () => null,
+      getGlobalState: () => null,
+    });
+
+    // A bare Price leaf carries no interval; Price falls back to the latest
+    // close of the only observed period.
+    expect(ctx.resolveLatest({ kind: OperandKind.Price })).toEqual({
+      type: StateValueType.Number,
+      value: 42,
+    });
+  });
+
+  it('resolveSeries returns the close-axis series for Price with backward walk + asOf + length', async () => {
     const { ctx } = await seed();
     const series = ctx.resolveSeries({ kind: OperandKind.Price });
     const walked = [...series.backwardWalk()];
@@ -212,14 +250,15 @@ describe('buildEvaluationContext', () => {
     expect({
       length: series.length,
       walked,
-      asOfMid: series.asOf(150),
+      asOfMid: series.asOf(150_000),
     }).toEqual({
-      length: 2,
+      length: 3,
       walked: [
-        { ts: 200, value: { type: StateValueType.Number, value: 11 } },
-        { ts: 100, value: { type: StateValueType.Number, value: 9 } },
+        { ts: 180_000, value: { type: StateValueType.Number, value: 30 } },
+        { ts: 120_000, value: { type: StateValueType.Number, value: 20 } },
+        { ts: 60_000, value: { type: StateValueType.Number, value: 10 } },
       ],
-      asOfMid: { ts: 100, value: { type: StateValueType.Number, value: 9 } },
+      asOfMid: { ts: 120_000, value: { type: StateValueType.Number, value: 20 } },
     });
   });
 
@@ -242,10 +281,6 @@ describe('buildEvaluationContext', () => {
     const indicatorService = new IndicatorService(indicators, watchlist, repo);
     const indicatorStore = new IndicatorSeriesStore(indicatorService);
 
-    const tickRing = new TickRing();
-    tickRing.push(100, 9);
-    tickRing.push(200, 11);
-
     const prevSymbolStates: Record<string, StateValue> = {
       mode: { type: StateValueType.String, value: 'disarmed' },
     };
@@ -262,7 +297,6 @@ describe('buildEvaluationContext', () => {
       symbolId: SYMBOL,
       profileId: PROFILE,
       candleRepository: repo,
-      tickRings: new Map([[SYMBOL, tickRing]]),
       indicatorStore,
       barWindow,
       barSeries,
@@ -291,8 +325,8 @@ describe('buildEvaluationContext', () => {
     });
 
     expect({ prevPrice, prevClose, prevSymbol, prevGlobal, prevLiteral }).toEqual({
-      // Tick ring has (100,9) and (200,11) — prev is the older one.
-      prevPrice: { type: StateValueType.Number, value: 9 },
+      // Price reads the close series — prev close of [10,20,30] is 20.
+      prevPrice: { type: StateValueType.Number, value: 20 },
       // Bars are [10, 20, 30] — prev close is 20.
       prevClose: { type: StateValueType.Number, value: 20 },
       prevSymbol: { type: StateValueType.String, value: 'disarmed' },

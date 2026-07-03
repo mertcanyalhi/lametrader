@@ -3,7 +3,6 @@ import { type BarAxis, BarSeriesView } from './bar-series-view.js';
 import type { EvaluationContext } from './evaluation-context.types.js';
 import { ArraySeriesView, type IndicatorSeriesStore } from './indicator-series-store.js';
 import type { SeriesPoint, SeriesView } from './series.types.js';
-import type { TickRing } from './tick-ring.js';
 
 /**
  * Inputs for {@link buildEvaluationContext}.
@@ -22,8 +21,6 @@ export interface EvaluationContextDeps {
   profileId: string;
   /** Read-side candle store for OHLCV operands. */
   candleRepository: CandleRepository;
-  /** Per-symbol tick rings (`Price` operand reads from `tickRings.get(symbolId)`). */
-  tickRings: ReadonlyMap<string, TickRing>;
   /** In-memory indicator series store (`IndicatorRef` operand). */
   indicatorStore: IndicatorSeriesStore;
   /**
@@ -80,7 +77,6 @@ export interface EvaluationContextDeps {
  * `(period, axis)`); every operator call after that is synchronous.
  */
 export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationContext {
-  const tickRing = deps.tickRings.get(deps.symbolId) ?? null;
   const barSeries: ReadonlyMap<string, SeriesView> =
     deps.barSeries ?? new Map<string, SeriesView>();
 
@@ -89,7 +85,7 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
     resolveLatest(operand, interval) {
       switch (operand.kind) {
         case OperandKind.Price:
-          return tickRing?.asOf(Number.MAX_SAFE_INTEGER)?.value ?? null;
+          return priceSeries(barSeries, interval)?.asOf(Number.MAX_SAFE_INTEGER)?.value ?? null;
         case OperandKind.Open:
         case OperandKind.High:
         case OperandKind.Low:
@@ -110,8 +106,10 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
     },
     resolvePrev(operand, interval) {
       switch (operand.kind) {
-        case OperandKind.Price:
-          return tickRing ? prevFromSeries(tickRing) : null;
+        case OperandKind.Price: {
+          const view = priceSeries(barSeries, interval);
+          return view ? prevFromSeries(view) : null;
+        }
         case OperandKind.Open:
         case OperandKind.High:
         case OperandKind.Low:
@@ -136,7 +134,7 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
     resolveSeries(operand, interval) {
       switch (operand.kind) {
         case OperandKind.Price:
-          return tickRing ?? EMPTY_SERIES;
+          return priceSeries(barSeries, interval) ?? EMPTY_SERIES;
         case OperandKind.Open:
         case OperandKind.High:
         case OperandKind.Low:
@@ -197,6 +195,28 @@ export async function prewarmBarSeries(
  */
 export function barSeriesKey(period: Period, axis: BarAxis): string {
   return `${period}|${axis}`;
+}
+
+/**
+ * The bar-close series that backs the `Price` operand. The platform ingests
+ * candles, not trades, so "the current price" is the latest bar close (the
+ * forming bar's close is the last observed trade).
+ *
+ * A `Price` leaf that also references an OHLCV / indicator operand carries the
+ * row `interval`, so read that period's close. A bare `Price`-vs-literal leaf
+ * has no interval, so fall back to any observed period's close — every forming
+ * bar's close reflects the same latest trade, so the period doesn't change the
+ * value. Returns `undefined` when the symbol has no observed candle yet.
+ */
+function priceSeries(
+  barSeries: ReadonlyMap<string, SeriesView>,
+  interval: Period | undefined,
+): SeriesView | undefined {
+  if (interval !== undefined) return barSeries.get(barSeriesKey(interval, 'close'));
+  for (const [key, view] of barSeries) {
+    if (key.endsWith('|close')) return view;
+  }
+  return undefined;
 }
 
 /**

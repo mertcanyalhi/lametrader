@@ -13,19 +13,19 @@ import {
   type StateRepository,
   type StateValue,
   type SymbolStateChangedEvent,
+  type TickEvent,
   type WatchlistRepository,
 } from '@lametrader/core';
 
 import type { CandleEvent } from '../../candles/polling-service.types.js';
 import { getLogger } from '../../log.js';
-import { BarLifecycleBridge, IndicatorCascadeBridge, TickBridge } from '../bridges/index.js';
+import { BarLifecycleBridge, IndicatorCascadeBridge } from '../bridges/index.js';
 import { TriggerDispatcher } from '../dispatch/dispatcher.js';
 import { buildEvaluationContext } from '../evaluation-context.js';
 import type { IndicatorSeriesStore } from '../indicator-series-store.js';
 import { ActionRunner } from '../orchestrator/action-runner.js';
 import { RuleOrchestrator } from '../orchestrator/orchestrator.js';
 import { createPerSymbolSerializer } from '../orchestrator/per-symbol-serializer.js';
-import { TickRing } from '../tick-ring.js';
 import { type InitialStateEntry, LiveEvaluationLookups } from './live-evaluation-lookups.js';
 
 /**
@@ -64,9 +64,11 @@ export interface RuleEngineDeps {
  * fan-out the platform's event sources into one engine.
  */
 export interface WiredRuleEngine {
-  /** Bridges {@link SymbolQuoteEvent}s into `TickEvent`s. */
-  tickBridge: TickBridge;
-  /** Bridges {@link CandleEvent}s into `BarOpened` / `BarClosed`. */
+  /**
+   * Bridges {@link CandleEvent}s into `BarOpened` / `BarClosed` plus a `Tick`
+   * carrying the candle's close — the platform ingests candles, not trades,
+   * so each poll is the tick that drives per-tick triggers.
+   */
   barBridge: BarLifecycleBridge;
   /** Bridges indicator stream events into `IndicatorChanged`. */
   indicatorBridge: IndicatorCascadeBridge;
@@ -94,7 +96,6 @@ export interface WiredRuleEngine {
 export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEngine> {
   const lookups = new LiveEvaluationLookups(deps.state);
   await warmLookupsFromPersistedState(lookups, deps);
-  const tickRings = new Map<string, TickRing>();
   const actions = new ActionRunner(deps.state, deps.notifier, lookups);
   const dispatcher = new TriggerDispatcher({
     rules: deps.rules,
@@ -115,7 +116,6 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
         symbolId: firingSymbolId,
         profileId,
         candleRepository: deps.candleRepository,
-        tickRings,
         indicatorStore: deps.indicatorStore,
         barWindow: { from: 0, to: Number.MAX_SAFE_INTEGER },
         getSymbolState: (pid, symbolId, key) => lookups.getSymbolState(pid, symbolId, key),
@@ -159,33 +159,16 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
     }
   });
 
-  // Tick bridge — one inbound quote fans out to exactly one TickEvent, enqueued
-  // as a batch of one. The tick ring push + quote-mirror update ride in the
-  // batch's `record` so series-aware operators (Crossing, Channel, Moving) and
-  // the snapshot see the tick only once the batch's serialized step runs, in
-  // arrival order (#459).
-  const tickBridge = new TickBridge((event) => {
-    if (event.kind !== EvaluationTriggerKind.Tick) return;
-    const tick = event;
-    serializer.enqueue({
-      symbolId: tick.symbolId,
-      record: () => {
-        let ring = tickRings.get(tick.symbolId);
-        if (ring === undefined) {
-          ring = new TickRing();
-          tickRings.set(tick.symbolId, ring);
-        }
-        ring.push(tick.ts, tick.price);
-        lookups.recordQuote(tick.symbolId, tick.price);
-      },
-      events: [tick],
-    });
-  });
-
   // Bar bridge — collect the lifecycle events one candle fans out (synchronous
   // per the bridge contract), then enqueue them as one batch whose `record`
-  // updates the OHLCV mirror for that candle. The five OHLCV axes land together
-  // (one atomic observation) before any of the candle's events are processed.
+  // updates the OHLCV + price mirror for that candle. The five OHLCV axes land
+  // together (one atomic observation) before any of the candle's events.
+  //
+  // The platform ingests candles, not trades, so each poll IS the tick: a
+  // `Tick` carrying the forming bar's close rides in the same batch, after the
+  // candle's bar-lifecycle events, so per-tick triggers (Once / EveryTime /
+  // OncePerBar) evaluate on every poll and a `BarOpened` clears its OncePerBar
+  // latch before the tick that may re-fire it.
   const barBatch: EvaluationTriggerEvent[] = [];
   const barBridge = new BarLifecycleBridge((event) => barBatch.push(event));
   const rawHandleCandle = barBridge.handleCandle.bind(barBridge);
@@ -193,13 +176,19 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
   wrappedBarBridge.handleCandle = (candle: CandleEvent): void => {
     barBatch.length = 0;
     rawHandleCandle(candle);
-    // Always enqueue: even a forming-bar re-poll that fans out no lifecycle
-    // event still advances the OHLCV mirror for later ticks/bars, and running
-    // that update on the chain keeps it ordered with the symbol's other events.
+    const tick: TickEvent = {
+      kind: EvaluationTriggerKind.Tick,
+      ts: candle.candle.time,
+      symbolId: candle.id,
+      price: candle.candle.close,
+    };
     serializer.enqueue({
       symbolId: candle.id,
-      record: () => lookups.recordCandle(candle),
-      events: barBatch.slice(),
+      record: () => {
+        lookups.recordCandle(candle);
+        lookups.recordQuote(candle.id, candle.candle.close); // TODO: Collapse these 2 into a single function; we don't need 2 function calls
+      },
+      events: [...barBatch, tick],
     });
   };
 
@@ -229,7 +218,6 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
   };
 
   return {
-    tickBridge,
     barBridge: wrappedBarBridge,
     indicatorBridge: wrappedIndicatorBridge,
     lookups,

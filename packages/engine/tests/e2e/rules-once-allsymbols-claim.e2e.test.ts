@@ -5,6 +5,7 @@ import {
   LeafConditionFamily,
   NotificationChannel,
   OperandKind,
+  Period,
   type Rule,
   RuleEventType,
   RuleScopeKind,
@@ -12,6 +13,7 @@ import {
   TriggerKind,
 } from '@lametrader/core';
 import {
+  type CandleEvent,
   IndicatorSeriesStore,
   InMemoryCandleRepository,
   InMemoryEventLog,
@@ -22,6 +24,19 @@ import {
   wireRuleEngine,
 } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
+
+/**
+ * A forming-bar candle whose close is the "tick" price. The platform ingests
+ * candles, not trades, so each poll IS the tick that drives per-tick triggers.
+ */
+function pollTick(id: string, time: number, price: number): CandleEvent {
+  return {
+    id,
+    period: Period.OneMinute,
+    candle: { time, open: price, high: price, low: price, close: price, volume: 10 },
+    final: false,
+  };
+}
 
 /**
  * E2e for issue #462: an `AllSymbols`-scoped `Once` rule fires exactly once
@@ -89,8 +104,8 @@ describe('wireRuleEngine AllSymbols Once atomic claim (e2e)', () => {
     // Both ticks enqueue BEFORE draining, so AAPL and MSFT run on separate
     // per-symbol chains concurrently — the exact interleaving the issue
     // describes.
-    wired.tickBridge.handleQuote({ id: 'AAPL', quote: { time: 1_000, price: 101, final: false } });
-    wired.tickBridge.handleQuote({ id: 'MSFT', quote: { time: 1_000, price: 101, final: false } });
+    wired.barBridge.handleCandle(pollTick('AAPL', 1_000, 101));
+    wired.barBridge.handleCandle(pollTick('MSFT', 1_000, 101));
     await wired.drain();
 
     // Rule-scoped log is deterministic regardless of which symbol won the
@@ -124,9 +139,9 @@ describe('wireRuleEngine AllSymbols Once atomic claim (e2e)', () => {
       indicatorStore,
     });
 
-    wired.tickBridge.handleQuote({ id: 'AAPL', quote: { time: 1_000, price: 101, final: false } });
+    wired.barBridge.handleCandle(pollTick('AAPL', 1_000, 101));
     await wired.drain();
-    wired.tickBridge.handleQuote({ id: 'GOOG', quote: { time: 2_000, price: 101, final: false } });
+    wired.barBridge.handleCandle(pollTick('GOOG', 2_000, 101));
     await wired.drain();
 
     const ruleEvents = await eventLog.ruleEvents('r-once');

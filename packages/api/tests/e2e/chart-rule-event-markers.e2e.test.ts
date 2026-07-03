@@ -198,17 +198,12 @@ describe('chart rule-event markers (e2e)', () => {
     expect(before.statusCode).toEqual(200);
     expect(before.json()).toEqual([]);
 
-    // 4) Drive a tick through the live quote bridge.
-    wired.tickBridge.handleQuote({
+    // 4) Drive a tick via a poll — the candle's close is the tick price.
+    wired.barBridge.handleCandle({
       id: SYMBOL_ID,
-      subscriptionId: 'sub-1',
-      quote: {
-        symbolId: SYMBOL_ID,
-        price: 101,
-        bid: null,
-        ask: null,
-        time: tickTs,
-      },
+      period: Period.M1,
+      candle: { time: tickTs, open: 101, high: 101, low: 101, close: 101, volume: 10 },
+      final: false,
     });
     await wired.drain();
     // Let the live frames flush through the socket before assertion.
@@ -284,17 +279,14 @@ describe('chart rule-event markers (e2e)', () => {
     expect(created.statusCode).toEqual(201);
     const rule = created.json();
 
-    // A window + price both distinct from the first test's tick. The `ts` keeps
-    // this fire's events out of that window; the price must differ too because
-    // `TickBridge` is changed-only (#464) — a repeat of the previous
-    // `(symbolId, period)` price emits no tick, so reusing 101 would fire
-    // nothing and the reads below would be empty for the wrong reason. 102 is
-    // still `> 100`, so the rule fires.
+    // A `ts` distinct from the first test's tick keeps this fire's events out of
+    // that window. Price 102 is still `> 100`, so the rule fires.
     const tickTs = 1_700_000_600_000;
-    wired.tickBridge.handleQuote({
+    wired.barBridge.handleCandle({
       id: SYMBOL_ID,
-      subscriptionId: 'sub-2',
-      quote: { symbolId: SYMBOL_ID, price: 102, bid: null, ask: null, time: tickTs },
+      period: Period.M1,
+      candle: { time: tickTs, open: 102, high: 102, low: 102, close: 102, volume: 10 },
+      final: false,
     });
     await wired.drain();
     const windowQs = `from=${tickTs - 1}&to=${tickTs + 1}`;

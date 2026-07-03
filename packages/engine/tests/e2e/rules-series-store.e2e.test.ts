@@ -16,7 +16,6 @@ import {
   InMemoryWatchlistRepository,
   movingAverage,
   prewarmBarSeries,
-  TickRing,
 } from '@lametrader/engine';
 import { describe, expect, it } from 'vitest';
 
@@ -73,12 +72,6 @@ describe('rules series store + EvaluationContext (e2e)', () => {
     await repo.save(SYMBOL, PERIOD, [newBar]);
     await indicatorStore.onBar(INSTANCE_ID, newBar);
 
-    // ── Push a few ticks into the tick ring ──
-    const tickRing = new TickRing();
-    tickRing.push(11 * 60_000 + 1, 29.8);
-    tickRing.push(11 * 60_000 + 500, 30.1);
-    tickRing.push(11 * 60_000 + 1000, 30.4);
-
     // ── Build the EvaluationContext + pre-warm bar series ──
     const barWindow = { from: 0, to: 12 * 60_000 };
     const required: ReadonlyArray<{ period: Period; axis: BarAxis }> = [
@@ -101,7 +94,6 @@ describe('rules series store + EvaluationContext (e2e)', () => {
       symbolId: SYMBOL,
       profileId: PROFILE,
       candleRepository: repo,
-      tickRings: new Map([[SYMBOL, tickRing]]),
       indicatorStore,
       barWindow,
       barSeries,
@@ -135,7 +127,8 @@ describe('rules series store + EvaluationContext (e2e)', () => {
         value: { type: StateValueType.Number, value: 99 },
       }),
     }).toEqual({
-      price: { type: StateValueType.Number, value: 30.4 },
+      // Price is the latest bar close (no tick feed).
+      price: { type: StateValueType.Number, value: 30 },
       close: { type: StateValueType.Number, value: 30 },
       high: { type: StateValueType.Number, value: 30.5 },
       // SMA(3) over [..., 28, 30] = mean(26, 28, 30) = 28.
@@ -145,16 +138,17 @@ describe('rules series store + EvaluationContext (e2e)', () => {
       literal: { type: StateValueType.Number, value: 99 },
     });
 
-    // ── Assert: resolveSeries(Price).asOf returns the right-operand resample ──
+    // ── Assert: resolveSeries(Price) is the close-axis series ──
     const priceSeries = ctx.resolveSeries({ kind: OperandKind.Price });
     expect({
       length: priceSeries.length,
       asOfMid: priceSeries.asOf(11 * 60_000 + 600),
     }).toEqual({
-      length: 3,
+      // 10 seeded bars + the fresh bar = 11 closes in the window.
+      length: 11,
       asOfMid: {
-        ts: 11 * 60_000 + 500,
-        value: { type: StateValueType.Number, value: 30.1 },
+        ts: 11 * 60_000,
+        value: { type: StateValueType.Number, value: 30 },
       },
     });
   });
@@ -171,7 +165,6 @@ describe('rules series store + EvaluationContext (e2e)', () => {
       symbolId: 'crypto:UNKNOWN',
       profileId: PROFILE,
       candleRepository: repo,
-      tickRings: new Map(),
       indicatorStore,
       barWindow: { from: 0, to: 60_000 },
       getSymbolState: () => null,

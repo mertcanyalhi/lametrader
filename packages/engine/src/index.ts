@@ -55,7 +55,6 @@ export {
   BarLifecycleBridge,
   IndicatorCascadeBridge,
   StateCascadeBridge,
-  TickBridge,
 } from './rules/bridges/index.js';
 export {
   type DispatchOptions,
@@ -111,7 +110,6 @@ export {
   RuleService,
   type RuleServiceOptions,
 } from './rules/service/index.js';
-export { TICK_RING_CAPACITY, TickRing } from './rules/tick-ring.js';
 export {
   feedCandleIntoEngine,
   type InitialStateEntry,

@@ -249,9 +249,11 @@ describe('wireRuleEngine cascade ChangesTo / ChangesFrom (regression #433)', () 
     };
     await rules.save(trigger);
 
-    wired.tickBridge.handleQuote({
+    wired.barBridge.handleCandle({
       id: 'AAPL',
-      quote: { time: 1_000, price: 101, final: false },
+      period: Period.OneMinute,
+      candle: { time: 60_000, open: 101, high: 101, low: 101, close: 101, volume: 10 },
+      final: false,
     });
     await wired.drain();
 
@@ -356,9 +358,11 @@ describe('wireRuleEngine cascade ChangesTo / ChangesFrom (regression #433)', () 
     };
     await rules.save(trigger);
 
-    wired.tickBridge.handleQuote({
+    wired.barBridge.handleCandle({
       id: 'AAPL',
-      quote: { time: 1_000, price: 101, final: false },
+      period: Period.OneMinute,
+      candle: { time: 60_000, open: 101, high: 101, low: 101, close: 101, volume: 10 },
+      final: false,
     });
     await wired.drain();
 

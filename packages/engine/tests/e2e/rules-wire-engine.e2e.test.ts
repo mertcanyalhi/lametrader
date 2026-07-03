@@ -92,9 +92,11 @@ describe('wireRuleEngine state-ref evaluation (e2e)', () => {
       0,
     );
 
-    wired.tickBridge.handleQuote({
+    wired.barBridge.handleCandle({
       id: 'AAPL',
-      quote: { time: 1_000, price: 101, final: false },
+      period: Period.OneMinute,
+      candle: { time: 1_000, open: 101, high: 101, low: 101, close: 101, volume: 10 },
+      final: false,
     });
     await wired.drain();
 
@@ -180,9 +182,11 @@ describe('wireRuleEngine state-ref evaluation (e2e)', () => {
       indicatorStore,
     });
 
-    wired.tickBridge.handleQuote({
+    wired.barBridge.handleCandle({
       id: 'AAPL',
-      quote: { time: 1_000, price: 101, final: false },
+      period: Period.OneMinute,
+      candle: { time: 1_000, open: 101, high: 101, low: 101, close: 101, volume: 10 },
+      final: false,
     });
     await wired.drain();
 
@@ -192,102 +196,5 @@ describe('wireRuleEngine state-ref evaluation (e2e)', () => {
       RuleEventType.Fired,
     ]);
     expect(notifier.sent).toEqual([{ destinationName: 'main', body: 'cold state hit' }]);
-  });
-});
-
-describe('wireRuleEngine changed-only tick suppression (e2e, #464)', () => {
-  it('a second tick at the same price drives no orchestrator pass — no listEnabledForSymbol query and no new event-log entries after the first fire', async () => {
-    const rules = new InMemoryRuleRepository();
-    const eventLog = new InMemoryEventLog(() => 0);
-    const state = new InMemoryStateRepository();
-    const watchlist = new InMemoryWatchlistRepository();
-    await watchlist.add({ id: 'AAPL', periods: [Period.OneMinute] });
-    const notifier = new InMemoryNotifier(['main']);
-    const candleRepository = new InMemoryCandleRepository();
-    const indicatorStore = new IndicatorSeriesStore();
-
-    // EveryTime + Price > 100: without suppression a second flat tick at 101
-    // would fire again — so a stable event log after it proves the tick never
-    // reached the dispatcher.
-    const rule: Rule = {
-      id: 'r-flat',
-      profileId: 'profile-flat',
-      name: 'price > 100',
-      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
-      condition: {
-        kind: ConditionNodeKind.Leaf,
-        leaf: {
-          family: LeafConditionFamily.Comparison,
-          operator: ComparisonOperator.Gt,
-          left: { kind: OperandKind.Price },
-          right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 100 } },
-        },
-      },
-      trigger: { kind: TriggerKind.EveryTime },
-      expiration: null,
-      // Notification (not a state mutation) so a fire raises no cascade event —
-      // keeps the per-tick dispatcher-pass count at exactly one.
-      actions: [
-        {
-          kind: ActionKind.Notification,
-          channel: NotificationChannel.Telegram,
-          destinationName: 'main',
-          template: 'above',
-        },
-      ],
-      enabled: true,
-      order: 1,
-      createdAt: 0,
-      updatedAt: 0,
-    };
-    await rules.save(rule);
-
-    // Count dispatcher passes: the dispatcher's only per-event repo read on a
-    // symbol-bearing tick is `listEnabledForSymbol`.
-    let listEnabledCalls = 0;
-    const countingRules: typeof rules = Object.create(rules);
-    countingRules.listEnabledForSymbol = (symbolId, profileId) => {
-      listEnabledCalls += 1;
-      return rules.listEnabledForSymbol(symbolId, profileId);
-    };
-
-    const wired = await wireRuleEngine({
-      rules: countingRules,
-      state,
-      watchlist,
-      eventLog,
-      notifier,
-      candleRepository,
-      indicatorStore,
-    });
-
-    wired.tickBridge.handleQuote({
-      subscriptionId: 'sub-1',
-      id: 'AAPL',
-      period: Period.OneMinute,
-      quote: { time: 1_000, price: 101, change: 0, changePct: 0 },
-      final: false,
-    });
-    await wired.drain();
-
-    const afterFirst = (await eventLog.symbolEvents('AAPL')).map((e) => e.type);
-    expect(afterFirst).toEqual([RuleEventType.NotificationSent, RuleEventType.Fired]);
-    expect(listEnabledCalls).toEqual(1);
-
-    // Second tick, identical price → suppressed at the bridge, no orchestrator pass.
-    wired.tickBridge.handleQuote({
-      subscriptionId: 'sub-1',
-      id: 'AAPL',
-      period: Period.OneMinute,
-      quote: { time: 2_000, price: 101, change: 0, changePct: 0 },
-      final: false,
-    });
-    await wired.drain();
-
-    expect((await eventLog.symbolEvents('AAPL')).map((e) => e.type)).toEqual([
-      RuleEventType.NotificationSent,
-      RuleEventType.Fired,
-    ]);
-    expect(listEnabledCalls).toEqual(1);
   });
 });

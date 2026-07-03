@@ -130,9 +130,11 @@ describe('wireRuleEngine cascade prev-state threading (e2e, regression #433)', (
 
     // One tick drives the whole flow: rule A fires + cascades; rule B then
     // fires from the cascade.
-    wired.tickBridge.handleQuote({
+    wired.barBridge.handleCandle({
       id: 'AAPL',
-      quote: { time: 1_000, price: 101, final: false },
+      period: Period.OneMinute,
+      candle: { time: 1_000, open: 101, high: 101, low: 101, close: 101, volume: 10 },
+      final: false,
     });
     await wired.drain();
 
