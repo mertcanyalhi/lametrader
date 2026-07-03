@@ -15,6 +15,7 @@ import {
 import { getLogger } from '../../log.js';
 import { StateCascadeBridge } from '../bridges/state-cascade-bridge.js';
 import type { TriggerDispatcher } from '../dispatch/dispatcher.js';
+import { TickRuleCache } from '../dispatch/tick-rule-cache.js';
 import type { ActionRunner } from './action-runner.js';
 import { CycleGuard, CycleOverflowError } from './cycle-guard.js';
 import { RuleOutcome } from './orchestrator-trace.types.js';
@@ -99,6 +100,9 @@ export class RuleOrchestrator {
    */
   async process(initialEvent: EvaluationTriggerEvent): Promise<void> {
     const guard = new CycleGuard(this.cycleLimit);
+    // One rule-list cache spans the whole tick (initial event + cascades), so
+    // repeated (symbolId, profileId) lookups hit it instead of re-querying.
+    const ruleListCache = new TickRuleCache(this.deps.rules);
     const cascaded: EvaluationTriggerEvent[] = [];
     const bridge = new StateCascadeBridge((event) => cascaded.push(event));
     const unsubscribe = this.deps.state.onStateChanged((event) => bridge.handleStateChange(event));
@@ -131,7 +135,7 @@ export class RuleOrchestrator {
           },
           'event_received',
         );
-        await this.processOneEvent(next.event);
+        await this.processOneEvent(next.event, ruleListCache);
         for (const c of cascaded.splice(0)) {
           queue.push({ event: c, cascadeDepth: next.cascadeDepth + 1 });
         }
@@ -144,9 +148,12 @@ export class RuleOrchestrator {
   /**
    * Process one event through the dispatcher and run each returned fire.
    */
-  private async processOneEvent(event: EvaluationTriggerEvent): Promise<void> {
+  private async processOneEvent(
+    event: EvaluationTriggerEvent,
+    ruleListCache: TickRuleCache,
+  ): Promise<void> {
     const watchedSymbolIds = await this.watchedSymbolIds(event);
-    const fires = await this.deps.dispatcher.dispatch(event, { watchedSymbolIds });
+    const fires = await this.deps.dispatcher.dispatch(event, { watchedSymbolIds, ruleListCache });
     for (const fire of fires) {
       await this.runOneFire(fire, event);
     }

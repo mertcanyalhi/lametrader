@@ -18,6 +18,7 @@ import type { EvaluationContext } from '../evaluation-context.types.js';
 import { evaluateCondition } from './evaluate-condition.js';
 import { referencesSlot } from './references-slot.js';
 import { routes } from './routes.js';
+import type { RuleListSource } from './tick-rule-cache.js';
 
 /**
  * Scope-bound logger for the dispatcher surface — one
@@ -75,6 +76,13 @@ export interface TriggerDispatcherDeps {
 export interface DispatchOptions {
   /** Watched symbol ids — used for fan-out on symbol-less events. */
   watchedSymbolIds?: readonly string[];
+  /**
+   * Per-tick rule-list memo. When present, the dispatcher routes its
+   * enabled-rule reads through it instead of `deps.rules`, so repeated
+   * `(symbolId, profileId)` lookups within one orchestrator tick issue at
+   * most one query. Omit it and reads go straight to the repository.
+   */
+  ruleListCache?: RuleListSource;
 }
 
 /**
@@ -247,13 +255,16 @@ export class TriggerDispatcher {
         ? event.profileId
         : undefined;
     const symbolId = symbolIdOf(event);
+    // Route rule-list reads through the per-tick cache when the orchestrator
+    // supplied one; otherwise straight to the repository.
+    const source = options.ruleListCache ?? this.deps.rules;
     // Symbol-less events scan all scopes; symbol-bearing events scope-filter
     // via the repo. Either way the per-rule scope expansion below decides
     // the firing symbol(s).
     const enabled =
       symbolId === null
-        ? await this.allEnabledAcrossScopes(profileId, options.watchedSymbolIds)
-        : await this.deps.rules.listEnabledForSymbol(symbolId, profileId);
+        ? await this.allEnabledAcrossScopes(source, profileId, options.watchedSymbolIds)
+        : await source.listEnabledForSymbol(symbolId, profileId);
 
     const out: Array<{ rule: Rule; firingSymbolId: string }> = [];
     for (const rule of enabled) {
@@ -347,15 +358,16 @@ export class TriggerDispatcher {
    * watchlist sizes outgrow the loop cost.
    */
   private async allEnabledAcrossScopes(
+    source: RuleListSource,
     profileId: string | undefined,
     watchedSymbolIds: readonly string[] | undefined,
   ): Promise<Rule[]> {
     const byId = new Map<string, Rule>();
-    for (const rule of await this.deps.rules.listEnabledForSymbol(null, profileId)) {
+    for (const rule of await source.listEnabledForSymbol(null, profileId)) {
       byId.set(rule.id, rule);
     }
     for (const symbolId of watchedSymbolIds ?? []) {
-      for (const rule of await this.deps.rules.listEnabledForSymbol(symbolId, profileId)) {
+      for (const rule of await source.listEnabledForSymbol(symbolId, profileId)) {
         byId.set(rule.id, rule);
       }
     }

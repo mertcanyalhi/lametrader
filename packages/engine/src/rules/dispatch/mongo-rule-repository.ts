@@ -43,12 +43,20 @@ export class MongoRuleRepository implements RuleRepository {
    *
    * - `{ profileId: 1, order: 1 }` — supports per-profile reads sorted by
    *   `order` (the dispatcher's iteration order).
-   * - `{ 'scope.symbolId': 1 }` — supports the `Symbol`-scope lookups
-   *   `listForSymbol` issues.
+   * - `{ 'scope.kind': 1, 'scope.symbolId': 1 }` — covers two of
+   *   `listForSymbol`'s `$or` branches: the `AllSymbols` branch (via the
+   *   `scope.kind` prefix) and the `Symbol` branch (`scope.kind` +
+   *   `scope.symbolId`).
+   * - `{ 'scope.kind': 1, 'scope.symbolIds': 1 }` — covers the `Symbols`
+   *   branch (`scope.kind` + multikey `scope.symbolIds`).
+   *
+   * Together these make every `listForSymbol` `$or` branch index-supported,
+   * so the hot-path rule lookup never falls back to a collection scan.
    */
   async ensureIndexes(): Promise<void> {
     await this.collection.createIndex({ profileId: 1, order: 1 });
-    await this.collection.createIndex({ 'scope.symbolId': 1 });
+    await this.collection.createIndex({ 'scope.kind': 1, 'scope.symbolId': 1 });
+    await this.collection.createIndex({ 'scope.kind': 1, 'scope.symbolIds': 1 });
   }
 
   async list(): Promise<Rule[]> {
@@ -122,12 +130,12 @@ export class MongoRuleRepository implements RuleRepository {
    */
   private async filterByEnabledProfile(rules: Rule[]): Promise<Rule[]> {
     if (this.profiles === undefined) return rules;
-    const profileIds = [...new Set(rules.map((rule) => rule.profileId))];
-    const enabledProfileIds = new Set<string>();
-    for (const id of profileIds) {
-      const profile = await this.profiles.get(id);
-      if (profile?.enabled === true) enabledProfileIds.add(id);
-    }
+    // One batched read instead of one `get` per distinct profile (no N+1).
+    const enabledProfileIds = new Set(
+      (await this.profiles.list())
+        .filter((profile) => profile.enabled)
+        .map((profile) => profile.id),
+    );
     return rules.filter((rule) => enabledProfileIds.has(rule.profileId));
   }
 }

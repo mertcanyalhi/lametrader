@@ -93,12 +93,12 @@ export class InMemoryRuleRepository implements RuleRepository {
    */
   private async filterByEnabledProfile(rules: Rule[]): Promise<Rule[]> {
     if (this.profiles === undefined) return rules;
-    const profileIds = [...new Set(rules.map((rule) => rule.profileId))];
-    const enabledProfileIds = new Set<string>();
-    for (const id of profileIds) {
-      const profile = await this.profiles.get(id);
-      if (profile?.enabled === true) enabledProfileIds.add(id);
-    }
+    // One batched read instead of one `get` per distinct profile (no N+1).
+    const enabledProfileIds = new Set(
+      (await this.profiles.list())
+        .filter((profile) => profile.enabled)
+        .map((profile) => profile.id),
+    );
     return rules.filter((rule) => enabledProfileIds.has(rule.profileId));
   }
 }
