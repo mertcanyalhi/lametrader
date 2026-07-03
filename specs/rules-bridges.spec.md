@@ -16,8 +16,11 @@ Per ADR 0016: tick events come exclusively from live quote subscriptions — no 
 
 ## Acceptance criteria
 
-- [ ] `TickBridge.handleQuote(event)` emits exactly one `TickEvent` per inbound `SymbolQuoteEvent` with `ts = event.quote.time`, `symbolId = event.id`, `price = event.quote.price`.
-- [ ] `TickBridge.handleQuote(event)` ignores the inbound `final` flag (forming and closed quotes both produce a `TickEvent`).
+- [ ] `TickBridge.handleQuote(event)` emits one `TickEvent` on the first observation of a `(symbolId, period)` pair, with `ts = event.quote.time`, `symbolId = event.id`, `price = event.quote.price`.
+- [ ] `TickBridge.handleQuote(event)` emits nothing when the inbound `event.quote.price` equals the last price emitted for the same `(symbolId, period)` — changed-only emission, mirroring the indicator/bar bridges' suppression, so unchanged flat-market ticks and duplicate per-subscription quotes drive no orchestrator pass.
+- [ ] `TickBridge.handleQuote(event)` emits a `TickEvent` again once the price differs from the last emitted price for that `(symbolId, period)`.
+- [ ] `TickBridge` keeps its last-price cache isolated per `(symbolId, period)` — a flat price on one pair does not silence a moving price on another.
+- [ ] `TickBridge.handleQuote(event)` ignores the inbound `final` flag (a forming and a closed quote at different prices each produce a `TickEvent`; the emitted `TickEvent` never carries `final`).
 - [ ] `BarLifecycleBridge.handleCandle(event)` emits `BarOpenedEvent(symbolId, period, ts = candle.time)` on the first observation of a `(symbolId, period)` pair.
 - [ ] `BarLifecycleBridge.handleCandle(event)` emits `BarOpenedEvent` whenever `candle.time` advances past the prior observation for the same `(symbolId, period)`.
 - [ ] `BarLifecycleBridge.handleCandle(event)` emits nothing on a re-poll of the same forming bar (`candle.time` unchanged, `final = false`, and the close has not yet fired).
@@ -32,7 +35,9 @@ Per ADR 0016: tick events come exclusively from live quote subscriptions — no 
 
 ## End-to-end expectation
 
-End-to-end e2e (`rules-bridges.e2e.test.ts`) drives the real `QuoteStreamService` + `PollingService` + `IndicatorService` + `InMemoryStateRepository` through their bridges and asserts the resulting `EvaluationTriggerEvent` stream: a polled-only symbol produces `BarOpened`/`BarClosed` (no `TickEvent`), a quote-subscribed symbol additionally produces `TickEvent` per quote, and a state mutation produces a `SymbolStateChangedEvent` carrying the originating `profileId`.
+End-to-end e2e (`rules-bridges.e2e.test.ts`) drives the real `QuoteStreamService` + `PollingService` + `IndicatorService` + `InMemoryStateRepository` through their bridges and asserts the resulting `EvaluationTriggerEvent` stream: a polled-only symbol produces `BarOpened`/`BarClosed` (no `TickEvent`), a quote-subscribed symbol additionally produces a `TickEvent` per changed quote, and a state mutation produces a `SymbolStateChangedEvent` carrying the originating `profileId`.
+
+The changed-only suppression is proven end-to-end through the wired engine (`rules-wire-engine.e2e.test.ts`): after a fire on the first tick, a second tick at the same price drives no orchestrator pass — no further rule/symbol event-log entries appear.
 
 Critical failure mode: a re-poll of a still-forming bar must not duplicate `BarOpenedEvent` — the e2e drives two consecutive polls on the same forming bar and asserts a single `BarOpenedEvent` was observed.
 
