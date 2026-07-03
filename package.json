@@ -20,7 +20,6 @@
     "coverage": "vitest run --project unit --coverage",
     "check": "npm run typecheck && npm run lint && npm test",
     "check:full": "npm run check && npm run test:e2e",
-    "cli": "npm run start -w @lametrader/cli --",
     "api": "npm run start -w @lametrader/api",
     "api:dev": "npm run dev -w @lametrader/api | pino-pretty -i pid,hostname",
     "web": "npm run dev -w @lametrader/web",

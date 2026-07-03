@@ -16,7 +16,6 @@ const alias = {
   '@lametrader/core': pkgSrc('core'),
   '@lametrader/engine': pkgSrc('engine'),
   '@lametrader/api': pkgSrc('api'),
-  '@lametrader/cli': pkgSrc('cli'),
 };
 
 /**
