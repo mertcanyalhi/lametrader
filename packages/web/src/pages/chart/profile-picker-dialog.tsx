@@ -291,6 +291,7 @@ function ProfileForm({
         name: profile?.name ?? '',
         description: profile?.description ?? '',
         enabled: profile?.enabled ?? true,
+        chartStates: profile?.chartStates ?? [],
       },
       mode: 'onSubmit',
     });
@@ -315,7 +316,12 @@ function ProfileForm({
     }
     if (!profile) return;
     try {
-      const saved = await update.mutateAsync({ id: profile.id, patch: values });
+      // Edit only touches name/description/enabled; omitting scope + chartStates
+      // lets the server preserve them (same preserve-on-PATCH-omit as scope).
+      const saved = await update.mutateAsync({
+        id: profile.id,
+        patch: { name: values.name, description: values.description, enabled: values.enabled },
+      });
       toast.success(`Saved ${saved.name}`);
       onEdited();
     } catch (cause) {

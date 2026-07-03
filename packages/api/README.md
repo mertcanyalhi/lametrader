@@ -137,19 +137,20 @@ curl 'http://localhost:3000/symbols/crypto:BTCUSDT/state?profileId=p1'
 A **profile** is a named, enable/disable-able template scoped to watched symbols — either all of them (the default) or an explicit subset.
 It will later hold indicators and actions.
 
-A profile is `{ id, name, description, enabled, scope, createdAt, updatedAt }`, where `scope` is either `{ "type": "all" }` or `{ "type": "symbols", "symbolIds": [...] }`.
+A profile is `{ id, name, description, enabled, scope, chartStates, createdAt, updatedAt }`, where `scope` is either `{ "type": "all" }` or `{ "type": "symbols", "symbolIds": [...] }`.
 Names are unique.
 Every id in a `symbols` scope must be currently watched, and an empty subset normalizes to `all`.
+`chartStates` is a `string[]` of symbol-state keys whose markers the chart renders for this profile; it defaults to `[]` and is preserved on a `PATCH` that omits it.
 
 ### Endpoints
 
 | Method   | Path             | Body                                       | Description                          |
 | -------- | ---------------- | ------------------------------------------ | ------------------------------------ |
 | `GET`    | `/profiles`      | —                                          | List profiles.                       |
-| `POST`   | `/profiles`      | `{ name, description?, enabled?, scope? }` | Create. **201** / 400 / 409.         |
+| `POST`   | `/profiles`      | `{ name, description?, enabled?, scope?, chartStates? }` | Create. **201** / 400 / 409.         |
 | `GET`    | `/profiles/{id}` | —                                          | Get one. 200 / 404.                  |
-| `PUT`    | `/profiles/{id}` | `{ name, description?, enabled?, scope? }` | Full replace. 200 / 400 / 404 / 409. |
-| `PATCH`  | `/profiles/{id}` | `{ name?, description?, enabled?, scope? }` | Partial update. 200 / 400 / 404 / 409. |
+| `PUT`    | `/profiles/{id}` | `{ name, description?, enabled?, scope?, chartStates? }` | Full replace. 200 / 400 / 404 / 409. |
+| `PATCH`  | `/profiles/{id}` | `{ name?, description?, enabled?, scope?, chartStates? }` | Partial update. 200 / 400 / 404 / 409. |
 | `DELETE` | `/profiles/{id}` | —                                          | Delete. **204** / 404.               |
 
 Errors use the uniform `{ "error": "<reason>" }` body — **400** for invalid input or a scope referencing an unwatched symbol, **404** for an unknown profile, **409** for a duplicate name.

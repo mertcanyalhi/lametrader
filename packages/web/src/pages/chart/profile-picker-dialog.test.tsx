@@ -26,6 +26,7 @@ const SCALPER: Profile = {
   createdAt: NOW,
   updatedAt: NOW,
   indicators: [],
+  chartStates: [],
 };
 
 const SWING: Profile = {
@@ -37,6 +38,7 @@ const SWING: Profile = {
   createdAt: NOW,
   updatedAt: NOW,
   indicators: [],
+  chartStates: [],
 };
 
 const DISABLED: Profile = {
@@ -48,6 +50,7 @@ const DISABLED: Profile = {
   createdAt: NOW,
   updatedAt: NOW,
   indicators: [],
+  chartStates: [],
 };
 
 interface FetchCall {
@@ -180,6 +183,7 @@ describe('ProfilePickerDialog', () => {
       createdAt: NOW,
       updatedAt: NOW,
       indicators: [],
+      chartStates: [],
     };
     matchers.push({
       match: (url, method) => method === 'POST' && url.endsWith('/profiles'),
@@ -209,6 +213,7 @@ describe('ProfilePickerDialog', () => {
         name: created.name,
         description: created.description,
         enabled: true,
+        chartStates: [],
         scope: { type: 'all' },
       },
       stored: created.id,

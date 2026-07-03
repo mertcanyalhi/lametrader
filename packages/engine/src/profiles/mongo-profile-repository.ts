@@ -59,6 +59,7 @@ function toProfile(doc: ProfileDocument): Profile {
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
     indicators: doc.indicators ?? [],
+    chartStates: doc.chartStates ?? [],
   };
 }
 
@@ -75,5 +76,6 @@ function toDocument(profile: Profile): ProfileDocument {
     createdAt: profile.createdAt,
     updatedAt: profile.updatedAt,
     indicators: profile.indicators,
+    chartStates: profile.chartStates,
   };
 }

@@ -53,6 +53,7 @@ describe('POST /profiles', () => {
       createdAt: 1000,
       updatedAt: 1000,
       indicators: [],
+      chartStates: [],
     });
   });
 
@@ -89,6 +90,7 @@ describe('GET /profiles and /profiles/:id', () => {
         createdAt: 1000,
         updatedAt: 1000,
         indicators: [],
+        chartStates: [],
       },
     ]);
 
@@ -116,7 +118,135 @@ describe('PATCH /profiles/:id', () => {
       createdAt: 1000,
       updatedAt: 1000,
       indicators: [],
+      chartStates: [],
     });
+  });
+});
+
+describe('profiles chartStates field', () => {
+  it('persists and echoes chartStates on create (201)', async () => {
+    const app = buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/profiles',
+      payload: { name: 'Scalper', chartStates: ['price:trend', 'rsi:zone'] },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toEqual({
+      id: 'p1',
+      name: 'Scalper',
+      description: '',
+      enabled: true,
+      scope: { type: 'all' },
+      createdAt: 1000,
+      updatedAt: 1000,
+      indicators: [],
+      chartStates: ['price:trend', 'rsi:zone'],
+    });
+  });
+
+  it('reads back chartStates: [] for a profile created without it', async () => {
+    const app = buildApp();
+    await app.inject({ method: 'POST', url: '/profiles', payload: { name: 'Scalper' } });
+    const res = await app.inject({ method: 'GET', url: '/profiles/p1' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      id: 'p1',
+      name: 'Scalper',
+      description: '',
+      enabled: true,
+      scope: { type: 'all' },
+      createdAt: 1000,
+      updatedAt: 1000,
+      indicators: [],
+      chartStates: [],
+    });
+  });
+
+  it('preserves stored chartStates on a PATCH that omits it (200)', async () => {
+    const app = buildApp();
+    await app.inject({
+      method: 'POST',
+      url: '/profiles',
+      payload: { name: 'Scalper', chartStates: ['price:trend'] },
+    });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/profiles/p1',
+      payload: { enabled: false },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      id: 'p1',
+      name: 'Scalper',
+      description: '',
+      enabled: false,
+      scope: { type: 'all' },
+      createdAt: 1000,
+      updatedAt: 1000,
+      indicators: [],
+      chartStates: ['price:trend'],
+    });
+  });
+
+  it('replaces stored chartStates on a PATCH that provides it (200)', async () => {
+    const app = buildApp();
+    await app.inject({
+      method: 'POST',
+      url: '/profiles',
+      payload: { name: 'Scalper', chartStates: ['price:trend'] },
+    });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/profiles/p1',
+      payload: { chartStates: ['rsi:zone'] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      id: 'p1',
+      name: 'Scalper',
+      description: '',
+      enabled: true,
+      scope: { type: 'all' },
+      createdAt: 1000,
+      updatedAt: 1000,
+      indicators: [],
+      chartStates: ['rsi:zone'],
+    });
+  });
+
+  it('persists chartStates on replace (PUT) (200)', async () => {
+    const app = buildApp();
+    await app.inject({ method: 'POST', url: '/profiles', payload: { name: 'Scalper' } });
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/profiles/p1',
+      payload: { name: 'Scalper', chartStates: ['price:trend'] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      id: 'p1',
+      name: 'Scalper',
+      description: '',
+      enabled: true,
+      scope: { type: 'all' },
+      createdAt: 1000,
+      updatedAt: 1000,
+      indicators: [],
+      chartStates: ['price:trend'],
+    });
+  });
+
+  it('rejects a non-array chartStates at the boundary with 400', async () => {
+    const app = buildApp();
+    // An object can't be coerced to string[] by Fastify's schema (a scalar
+    // would be wrapped into a single-element array), so it fails validation.
+    const res = await app.inject({
+      method: 'POST',
+      url: '/profiles',
+      payload: { name: 'Scalper', chartStates: { nope: true } },
+    });
+    expect(res.statusCode).toBe(400);
   });
 });
 
@@ -142,6 +272,7 @@ describe('PUT /profiles/:id', () => {
       createdAt: 1000,
       updatedAt: 1000,
       indicators: [],
+      chartStates: [],
     });
   });
 });

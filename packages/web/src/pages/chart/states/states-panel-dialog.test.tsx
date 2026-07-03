@@ -22,6 +22,7 @@ const PROFILE: Profile = {
   createdAt: NOW,
   updatedAt: NOW,
   indicators: [],
+  chartStates: [],
 };
 
 const SYMBOL_ID = 'crypto:BTCUSDT';

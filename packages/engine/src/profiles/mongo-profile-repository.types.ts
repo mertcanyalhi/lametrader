@@ -20,4 +20,6 @@ export interface ProfileDocument {
   updatedAt: number;
   /** Attached indicator instances. */
   indicators: IndicatorInstance[];
+  /** Symbol-state keys whose markers the chart renders for this profile. */
+  chartStates: string[];
 }
