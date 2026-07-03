@@ -20,7 +20,7 @@ import type { EvaluationContext } from '../evaluation-context.types.js';
  * `lookbackBars + 1` samples, or either reference sample isn't a finite Number.
  */
 export function evaluateMoving(leaf: MovingLeafCondition, ctx: EvaluationContext): boolean {
-  const series = ctx.resolveSeries(leaf.left);
+  const series = ctx.resolveSeries(leaf.left, leaf.interval);
   if (series.length < leaf.lookbackBars + 1) return false;
   let current: number | null = null;
   let past: number | null = null;

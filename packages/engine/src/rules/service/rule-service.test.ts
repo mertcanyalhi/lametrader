@@ -3,6 +3,7 @@ import {
   ComparisonOperator,
   ConditionNodeKind,
   EvaluationTriggerKind,
+  InvalidRuleConditionError,
   LeafConditionFamily,
   OperandKind,
   Period,
@@ -71,8 +72,8 @@ describe('RuleService', () => {
     rules = new InMemoryRuleRepository();
     eventLog = new InMemoryEventLog(() => 0);
     watchlist = new InMemoryWatchlistRepository();
-    await watchlist.add({ id: 'AAPL', periods: [Period.M1] });
-    await watchlist.add({ id: 'MSFT', periods: [Period.M1] });
+    await watchlist.add({ id: 'AAPL', periods: [Period.OneMinute, Period.OneHour] });
+    await watchlist.add({ id: 'MSFT', periods: [Period.OneMinute] });
     nextId = 0;
     nowMs = 1_000_000;
     service = new RuleService(rules, eventLog, watchlist, {
@@ -244,6 +245,94 @@ describe('RuleService', () => {
     });
     const result = await service.create(input);
     expect(result.id).toEqual('rule-1');
+  });
+
+  it('create rejects a condition leaf referencing an OHLCV operand without an interval', async () => {
+    const input = buildRule({
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.Comparison,
+          operator: ComparisonOperator.Gt,
+          left: { kind: OperandKind.Open },
+          right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 100 } },
+        },
+      },
+    });
+    await expect(service.create(input)).rejects.toThrow(InvalidRuleConditionError);
+  });
+
+  it('create rejects a condition interval that is not in the scoped symbol watched periods', async () => {
+    const input = buildRule({
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'MSFT' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.Comparison,
+          operator: ComparisonOperator.Gt,
+          left: { kind: OperandKind.Open },
+          right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 100 } },
+          interval: Period.OneHour,
+        },
+      },
+    });
+    await expect(service.create(input)).rejects.toThrow(InvalidRuleConditionError);
+  });
+
+  it('create accepts a condition interval that is in the scoped symbol watched periods', async () => {
+    const input = buildRule({
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.Comparison,
+          operator: ComparisonOperator.Gt,
+          left: { kind: OperandKind.Open },
+          right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 100 } },
+          interval: Period.OneHour,
+        },
+      },
+    });
+    const result = await service.create(input);
+    expect(result.id).toEqual('rule-1');
+  });
+
+  it('create with AllSymbols scope does not enforce interval membership', async () => {
+    const input = buildRule({
+      scope: { kind: RuleScopeKind.AllSymbols },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.Comparison,
+          operator: ComparisonOperator.Gt,
+          left: { kind: OperandKind.Open },
+          right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 100 } },
+          interval: Period.OneDay,
+        },
+      },
+    });
+    const result = await service.create(input);
+    expect(result.id).toEqual('rule-1');
+  });
+
+  it('patch re-validates the merged condition and rejects an interval-less OHLCV leaf', async () => {
+    const created = await service.create(buildRule());
+    await expect(
+      service.patch(created.id, {
+        condition: {
+          kind: ConditionNodeKind.Leaf,
+          leaf: {
+            family: LeafConditionFamily.Comparison,
+            operator: ComparisonOperator.Gt,
+            left: { kind: OperandKind.Close },
+            right: {
+              kind: OperandKind.Literal,
+              value: { type: StateValueType.Number, value: 100 },
+            },
+          },
+        },
+      }),
+    ).rejects.toThrow(InvalidRuleConditionError);
   });
 
   it('patch merges, re-runs tick-gate, bumps updatedAt, persists', async () => {

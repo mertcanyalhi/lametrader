@@ -1,4 +1,4 @@
-import type { ConditionOperand, StateValue } from '@lametrader/core';
+import type { ConditionOperand, Period, StateValue } from '@lametrader/core';
 
 import type { SeriesView } from './series.types.js';
 
@@ -21,8 +21,12 @@ export interface EvaluationContext {
   /**
    * Current value for the operand, or `null` when the backing store has no
    * value yet (no tick seen / no bar in window / state unset).
+   *
+   * `interval` is the resolving leaf's row interval — required for OHLCV
+   * operands to select the bar period, ignored by period-agnostic operands
+   * (`Price`, state-refs, `Literal`).
    */
-  resolveLatest(operand: ConditionOperand): StateValue | null;
+  resolveLatest(operand: ConditionOperand, interval?: Period): StateValue | null;
   /**
    * Previous (one-step-back) value for the operand, or `null` when no prior
    * snapshot has been observed.
@@ -36,8 +40,11 @@ export interface EvaluationContext {
    * `Literal` returns its constant value (literals don't change).
    *
    * Used by `State` operators (`ChangesTo` / `ChangesFrom`) — never throws.
+   *
+   * `interval` scopes OHLCV operands to their bar period (see
+   * {@link resolveLatest}).
    */
-  resolvePrev(operand: ConditionOperand): StateValue | null;
+  resolvePrev(operand: ConditionOperand, interval?: Period): StateValue | null;
   /**
    * Ordered series view for the operand on its native timeline.
    *
@@ -52,6 +59,9 @@ export interface EvaluationContext {
    *
    * When the underlying store has no value at all, returns an empty series
    * (`length === 0`).
+   *
+   * `interval` scopes OHLCV operands to their bar period (see
+   * {@link resolveLatest}).
    */
-  resolveSeries(operand: ConditionOperand): SeriesView;
+  resolveSeries(operand: ConditionOperand, interval?: Period): SeriesView;
 }

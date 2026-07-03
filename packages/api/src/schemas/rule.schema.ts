@@ -230,6 +230,8 @@ export const RuleEventEntrySchema = Type.Object(
           inboundEvent: EvaluationTriggerEventSchema,
           lookupSnapshot: Type.Object(
             {
+              /** The bar period the OHLCV axes were captured at; absent on legacy entries. */
+              period: Type.Optional(Type.Enum(Period)),
               current: Type.Union([Type.Number(), Type.Null()]),
               open: Type.Union([Type.Number(), Type.Null()]),
               high: Type.Union([Type.Number(), Type.Null()]),

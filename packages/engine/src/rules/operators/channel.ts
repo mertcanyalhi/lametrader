@@ -29,10 +29,10 @@ import type { SeriesView } from '../series.types.js';
  * or no off-boundary baseline found.
  */
 export function evaluateChannel(leaf: ChannelLeafCondition, ctx: EvaluationContext): boolean {
-  const leftSeries = ctx.resolveSeries(leaf.left);
+  const leftSeries = ctx.resolveSeries(leaf.left, leaf.interval);
   if (leftSeries.length === 0) return false;
-  const lowerSeries = ctx.resolveSeries(leaf.lower);
-  const upperSeries = ctx.resolveSeries(leaf.upper);
+  const lowerSeries = ctx.resolveSeries(leaf.lower, leaf.interval);
+  const upperSeries = ctx.resolveSeries(leaf.upper, leaf.interval);
   if (lowerSeries.length === 0 || upperSeries.length === 0) return false;
 
   const walker = leftSeries.backwardWalk();

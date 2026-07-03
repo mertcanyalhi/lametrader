@@ -49,3 +49,19 @@ export class TickRuleNotEligibleError extends RuleError {
     this.name = 'TickRuleNotEligibleError';
   }
 }
+
+/**
+ * Thrown when a rule's condition tree is structurally invalid for the
+ * period-aware evaluation contract — a leaf references an OHLCV or
+ * `IndicatorRef` operand but carries no `interval`, or names an `interval`
+ * that isn't watched for the rule's scoped symbols.
+ *
+ * The API error handler maps {@link RuleError} to 400, so this surfaces as a
+ * bad-request without a dedicated branch.
+ */
+export class InvalidRuleConditionError extends RuleError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidRuleConditionError';
+  }
+}

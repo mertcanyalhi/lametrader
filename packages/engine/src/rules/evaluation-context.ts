@@ -55,7 +55,7 @@ export interface EvaluationContextDeps {
   getPrevIndicator?(instanceId: string, stateKey: string): StateValue | null;
   /**
    * OHLCV bar series the orchestrator pre-loaded for this evaluation, keyed
-   * by axis (`barSeriesKey(axis)`).
+   * by `(period, axis)` (`barSeriesKey(period, axis)`).
    * The sync `resolveLatest` / `resolveSeries` paths read from this map —
    * the `CandleRepository` is async and the operator contract is sync, so
    * the orchestrator (or {@link prewarmBarSeries}) is responsible for
@@ -86,7 +86,7 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
 
   return {
     symbolId: deps.symbolId,
-    resolveLatest(operand) {
+    resolveLatest(operand, interval) {
       switch (operand.kind) {
         case OperandKind.Price:
           return tickRing?.asOf(Number.MAX_SAFE_INTEGER)?.value ?? null;
@@ -95,7 +95,7 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
         case OperandKind.Low:
         case OperandKind.Close:
         case OperandKind.Volume: {
-          const view = barSeries.get(barSeriesKey(operandToAxis(operand)));
+          const view = barSeriesFor(barSeries, interval, operandToAxis(operand));
           return view?.asOf(Number.MAX_SAFE_INTEGER)?.value ?? null;
         }
         case OperandKind.IndicatorRef:
@@ -108,7 +108,7 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
           return operand.value;
       }
     },
-    resolvePrev(operand) {
+    resolvePrev(operand, interval) {
       switch (operand.kind) {
         case OperandKind.Price:
           return tickRing ? prevFromSeries(tickRing) : null;
@@ -117,7 +117,7 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
         case OperandKind.Low:
         case OperandKind.Close:
         case OperandKind.Volume: {
-          const view = barSeries.get(barSeriesKey(operandToAxis(operand)));
+          const view = barSeriesFor(barSeries, interval, operandToAxis(operand));
           return view ? prevFromSeries(view) : null;
         }
         case OperandKind.IndicatorRef: {
@@ -133,7 +133,7 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
           return operand.value;
       }
     },
-    resolveSeries(operand) {
+    resolveSeries(operand, interval) {
       switch (operand.kind) {
         case OperandKind.Price:
           return tickRing ?? EMPTY_SERIES;
@@ -142,7 +142,7 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
         case OperandKind.Low:
         case OperandKind.Close:
         case OperandKind.Volume: {
-          const view = barSeries.get(barSeriesKey(operandToAxis(operand)));
+          const view = barSeriesFor(barSeries, interval, operandToAxis(operand));
           return view ?? EMPTY_SERIES;
         }
         case OperandKind.IndicatorRef:
@@ -184,23 +184,35 @@ export async function prewarmBarSeries(
       barWindow.to,
       axis,
     );
-    out.set(barSeriesKey(axis), view);
+    out.set(barSeriesKey(period, axis), view);
   }
   return out;
 }
 
 /**
- * Cache key for the pre-warmed bar series map.
+ * Cache key for the pre-warmed bar series map — one slot per `(period, axis)`.
  *
- * Lazy: keyed by axis only — each evaluation context is scoped to one
- * `(symbolId, period)` pair via {@link EvaluationContextDeps.barWindow}, so a
- * single axis uniquely identifies the series in this scope. Upgrade path:
- * when an operator needs to read OHLCV across two periods within one rule,
- * extend the key to `${period}|${axis}` and pass `period` through both the
- * prewarm caller and {@link buildEvaluationContext}'s operand axis mapper.
+ * Keyed by period so a rule row scoped to one interval resolves its OHLCV
+ * operands independently of another period's most recent bar (#463).
  */
-export function barSeriesKey(axis: BarAxis): string {
-  return axis;
+export function barSeriesKey(period: Period, axis: BarAxis): string {
+  return `${period}|${axis}`;
+}
+
+/**
+ * Look up the `(period, axis)` bar series for an OHLCV operand.
+ *
+ * `interval` is the resolving leaf's row interval; when absent (a condition
+ * that slipped past validation) there is no period to key on, so the read
+ * yields `null` rather than silently borrowing another period's series.
+ */
+function barSeriesFor(
+  barSeries: ReadonlyMap<string, SeriesView>,
+  interval: Period | undefined,
+  axis: BarAxis,
+): SeriesView | undefined {
+  if (interval === undefined) return undefined;
+  return barSeries.get(barSeriesKey(interval, axis));
 }
 
 /**

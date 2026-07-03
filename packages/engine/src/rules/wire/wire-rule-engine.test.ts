@@ -41,7 +41,7 @@ describe('wireRuleEngine', () => {
     eventLog = new InMemoryEventLog(() => 0);
     state = new InMemoryStateRepository();
     watchlist = new InMemoryWatchlistRepository();
-    await watchlist.add({ id: 'AAPL', periods: [Period.M1] });
+    await watchlist.add({ id: 'AAPL', periods: [Period.OneMinute] });
     notifier = new InMemoryNotifier();
     candles = new InMemoryCandleRepository();
     indicatorStore = new IndicatorSeriesStore();
@@ -260,10 +260,10 @@ describe('wireRuleEngine', () => {
             kind: OperandKind.Literal,
             value: { type: StateValueType.Number, value: 100 },
           },
-          interval: Period.M1,
+          interval: Period.OneMinute,
         },
       },
-      trigger: { kind: TriggerKind.OncePerBarClose, period: Period.M1 },
+      trigger: { kind: TriggerKind.OncePerBarClose, period: Period.OneMinute },
       expiration: null,
       actions: [
         {
@@ -278,7 +278,7 @@ describe('wireRuleEngine', () => {
       updatedAt: 0,
     });
 
-    await candles.save('AAPL', Period.M1, [
+    await candles.save('AAPL', Period.OneMinute, [
       { time: 60_000, open: 99, high: 102, low: 99, close: 101, volume: 10 },
     ]);
 
@@ -294,7 +294,7 @@ describe('wireRuleEngine', () => {
 
     wired.barBridge.handleCandle({
       id: 'AAPL',
-      period: Period.M1,
+      period: Period.OneMinute,
       candle: { time: 60_000, open: 99, high: 102, low: 99, close: 101, volume: 10 },
       final: true,
     });
@@ -372,7 +372,7 @@ describe('wireRuleEngine', () => {
     // Profile is discovered via the rule repository even though the rule's
     // own scope is a different symbol; MSFT is on the watchlist (added in
     // beforeEach via the helper extension below).
-    await watchlist.add({ id: 'MSFT', periods: [Period.M1] });
+    await watchlist.add({ id: 'MSFT', periods: [Period.OneMinute] });
     await state.setSymbolState(
       'profile-1',
       'MSFT',
@@ -489,10 +489,10 @@ describe('wireRuleEngine', () => {
             kind: OperandKind.Literal,
             value: { type: StateValueType.Number, value: 100 },
           },
-          interval: Period.M1,
+          interval: Period.OneMinute,
         },
       },
-      trigger: { kind: TriggerKind.OncePerBarClose, period: Period.M1 },
+      trigger: { kind: TriggerKind.OncePerBarClose, period: Period.OneMinute },
       expiration: null,
       actions: [
         {
@@ -519,13 +519,13 @@ describe('wireRuleEngine', () => {
 
     wired.barBridge.handleCandle({
       id: 'AAPL',
-      period: Period.M1,
+      period: Period.OneMinute,
       candle: { time: 60_000, open: 98, high: 100, low: 97, close: 99, volume: 10 },
       final: true,
     });
     wired.barBridge.handleCandle({
       id: 'AAPL',
-      period: Period.M1,
+      period: Period.OneMinute,
       candle: { time: 120_000, open: 104, high: 107, low: 103, close: 105, volume: 20 },
       final: true,
     });
@@ -553,9 +553,10 @@ describe('wireRuleEngine', () => {
             kind: EvaluationTriggerKind.BarClosed,
             ts: 120_000,
             symbolId: 'AAPL',
-            period: Period.M1,
+            period: Period.OneMinute,
           },
           lookupSnapshot: {
+            period: Period.OneMinute,
             current: null,
             open: 104,
             high: 107,

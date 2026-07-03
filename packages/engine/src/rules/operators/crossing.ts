@@ -29,9 +29,9 @@ import type { SeriesView } from '../series.types.js';
  * found, or any other "no data yet" branch — never throws.
  */
 export function evaluateCrossing(leaf: CrossingLeafCondition, ctx: EvaluationContext): boolean {
-  const leftSeries = ctx.resolveSeries(leaf.left);
+  const leftSeries = ctx.resolveSeries(leaf.left, leaf.interval);
   if (leftSeries.length === 0) return false;
-  const rightSeries = ctx.resolveSeries(leaf.right);
+  const rightSeries = ctx.resolveSeries(leaf.right, leaf.interval);
   if (rightSeries.length === 0) return false;
 
   const walker = leftSeries.backwardWalk();
