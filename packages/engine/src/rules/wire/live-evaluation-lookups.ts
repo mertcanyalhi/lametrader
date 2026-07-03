@@ -79,16 +79,20 @@ export class LiveEvaluationLookups implements EvaluationLookups {
   }
 
   /**
-   * Update the per-symbol tick price from an inbound quote — called by the
-   * orchestrator's tick path before dispatch.
+   * Update the per-symbol tick price from an inbound quote — called inside the
+   * per-symbol serialized step, immediately before the quote's tick event is
+   * processed, so the mirror stays consistent with the event under evaluation
+   * (#459).
    */
   recordQuote(symbolId: string, price: number): void {
     this.tickPrice.set(symbolId, price);
   }
 
   /**
-   * Update the per-symbol OHLCV snapshot from an inbound candle — called by
-   * the orchestrator's bar path before dispatch.
+   * Update the per-symbol OHLCV snapshot from an inbound candle — called inside
+   * the per-symbol serialized step, immediately before that candle's bar
+   * lifecycle events are processed, so the mirror stays consistent with the
+   * event under evaluation (#459).
    *
    * FX candles don't carry `volume` — the snapshot's volume axis stays at 0
    * (operators that read `Volume` on an FX symbol see "no data yet" rather
@@ -140,9 +144,10 @@ export class LiveEvaluationLookups implements EvaluationLookups {
   }
 
   /**
-   * Update an indicator-instance state value — wired to the same upstream the
-   * indicator cascade bridge listens on, so this mirror stays consistent with
-   * the cascade events the dispatcher observes.
+   * Update an indicator-instance state value — called inside the per-symbol
+   * serialized step, immediately before that indicator row's cascade events
+   * are processed, so this mirror stays consistent with the event under
+   * evaluation (#459).
    */
   recordIndicatorState(instanceId: string, stateKey: string, value: StateValue): void {
     this.indicatorState.set(indicatorKey(instanceId, stateKey), value);

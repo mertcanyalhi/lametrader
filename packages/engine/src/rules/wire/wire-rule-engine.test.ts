@@ -2,6 +2,7 @@ import {
   ActionKind,
   ComparisonOperator,
   ConditionNodeKind,
+  EvaluationTriggerKind,
   LeafConditionFamily,
   NotificationChannel,
   OperandKind,
@@ -10,6 +11,7 @@ import {
   RuleEventType,
   RuleScopeKind,
   StateOperator,
+  StateScope,
   StateValueType,
   TriggerKind,
 } from '@lametrader/core';
@@ -462,6 +464,197 @@ describe('wireRuleEngine', () => {
       type: StateValueType.Number,
       value: 3,
     });
+  });
+
+  it('records each candle in-step so a bar-close rule fires only for the bar whose values satisfy it when a rollover batch of two final bars is fed without draining between them (regression #459)', async () => {
+    // A catch-up poll returns two already-closed bars back-to-back; the bridge
+    // fans them out synchronously and the serializer processes them after.
+    // Bar A's close (99) fails `Close > 100`; bar B's close (105) passes.
+    // Before #459 the sync `recordCandle` ran ahead of the queue, so the mirror
+    // already held bar B's close when bar A's `BarClosed` was evaluated —
+    // firing (mis-attributed) for bar A AND again for bar B.
+    const ruleId = 'r-close';
+    await rules.save({
+      id: ruleId,
+      profileId: 'profile-1',
+      name: 'close > 100 once per bar close',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.Comparison,
+          operator: ComparisonOperator.Gt,
+          left: { kind: OperandKind.Close },
+          right: {
+            kind: OperandKind.Literal,
+            value: { type: StateValueType.Number, value: 100 },
+          },
+          interval: Period.M1,
+        },
+      },
+      trigger: { kind: TriggerKind.OncePerBarClose, period: Period.M1 },
+      expiration: null,
+      actions: [
+        {
+          kind: ActionKind.SetSymbolState,
+          key: 'fired',
+          value: { type: StateValueType.Bool, value: true },
+        },
+      ],
+      enabled: true,
+      order: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    });
+
+    const wired = await wireRuleEngine({
+      rules,
+      state,
+      watchlist,
+      eventLog,
+      notifier,
+      candleRepository: candles,
+      indicatorStore,
+    });
+
+    wired.barBridge.handleCandle({
+      id: 'AAPL',
+      period: Period.M1,
+      candle: { time: 60_000, open: 98, high: 100, low: 97, close: 99, volume: 10 },
+      final: true,
+    });
+    wired.barBridge.handleCandle({
+      id: 'AAPL',
+      period: Period.M1,
+      candle: { time: 120_000, open: 104, high: 107, low: 103, close: 105, volume: 20 },
+      final: true,
+    });
+    await wired.drain();
+
+    expect(await eventLog.symbolEvents('AAPL')).toEqual([
+      {
+        type: RuleEventType.StateSet,
+        ts: 120_000,
+        firedAt: 0,
+        ruleId,
+        symbolId: 'AAPL',
+        scope: StateScope.Symbol,
+        key: 'fired',
+        value: { type: StateValueType.Bool, value: true },
+      },
+      {
+        type: RuleEventType.Fired,
+        ts: 120_000,
+        firedAt: 0,
+        ruleId,
+        symbolId: 'AAPL',
+        context: {
+          inboundEvent: {
+            kind: EvaluationTriggerKind.BarClosed,
+            ts: 120_000,
+            symbolId: 'AAPL',
+            period: Period.M1,
+          },
+          lookupSnapshot: {
+            current: null,
+            open: 104,
+            high: 107,
+            low: 103,
+            close: 105,
+            volume: 20,
+          },
+        },
+      },
+    ]);
+  });
+
+  it('records each tick in-step so a failing earlier tick does not read a later tick price fed in the same synchronous batch (regression #459)', async () => {
+    // Two ticks for one symbol arrive back-to-back with no drain between them.
+    // The first (50) fails `Price > 100`; the second (150) passes. Before #459
+    // the tick ring + quote mirror were pushed ahead of the queue, so the first
+    // tick read the second tick's price and fired (mis-attributed at ts 1_000).
+    const ruleId = 'r-price';
+    await rules.save({
+      id: ruleId,
+      profileId: 'profile-1',
+      name: 'price > 100 every time',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.Comparison,
+          operator: ComparisonOperator.Gt,
+          left: { kind: OperandKind.Price },
+          right: {
+            kind: OperandKind.Literal,
+            value: { type: StateValueType.Number, value: 100 },
+          },
+        },
+      },
+      trigger: { kind: TriggerKind.EveryTime },
+      expiration: null,
+      actions: [
+        {
+          kind: ActionKind.SetSymbolState,
+          key: 'hit',
+          value: { type: StateValueType.Bool, value: true },
+        },
+      ],
+      enabled: true,
+      order: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    });
+
+    const wired = await wireRuleEngine({
+      rules,
+      state,
+      watchlist,
+      eventLog,
+      notifier,
+      candleRepository: candles,
+      indicatorStore,
+    });
+
+    wired.tickBridge.handleQuote({ id: 'AAPL', quote: { time: 1_000, price: 50, final: false } });
+    wired.tickBridge.handleQuote({ id: 'AAPL', quote: { time: 2_000, price: 150, final: false } });
+    await wired.drain();
+
+    expect(await eventLog.symbolEvents('AAPL')).toEqual([
+      {
+        type: RuleEventType.StateSet,
+        ts: 2_000,
+        firedAt: 0,
+        ruleId,
+        symbolId: 'AAPL',
+        scope: StateScope.Symbol,
+        key: 'hit',
+        value: { type: StateValueType.Bool, value: true },
+      },
+      {
+        type: RuleEventType.Fired,
+        ts: 2_000,
+        firedAt: 0,
+        ruleId,
+        symbolId: 'AAPL',
+        context: {
+          inboundEvent: {
+            kind: EvaluationTriggerKind.Tick,
+            ts: 2_000,
+            symbolId: 'AAPL',
+            price: 150,
+          },
+          lookupSnapshot: {
+            current: 150,
+            open: null,
+            high: null,
+            low: null,
+            close: null,
+            volume: null,
+          },
+        },
+      },
+    ]);
   });
 
   it('resolves cleanly with no rules persisted (no profiles to warm)', async () => {

@@ -4,6 +4,7 @@ import {
   EvaluationTriggerKind,
   type EventLog,
   type GlobalStateChangedEvent,
+  type IndicatorStateEvent,
   type Notifier,
   type RuleEvent,
   type RuleEventEntry,
@@ -135,62 +136,124 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
     eventLog: deps.eventLog,
   });
 
-  // The serializer keys on an optional `symbolId`; `TimerEvent` lands on the
-  // global chain (no symbol). Widen the type to satisfy the generic constraint.
-  type KeyedTriggerEvent = EvaluationTriggerEvent & { symbolId?: string };
-  const serializer = createPerSymbolSerializer<KeyedTriggerEvent>(async (event) => {
-    try {
-      await orchestrator.process(event);
-    } catch (error) {
-      // Keep the per-symbol chain alive; the orchestrator already handles
-      // CycleOverflow by recording an event and returning — bubbling here
-      // means an unexpected programmer error (corrupt rule, repository
-      // timeout, etc.). Surface it through both the engine log and the
-      // event log so operators can see why a fire was dropped instead of
-      // observing silent inaction (#431).
-      await recordOrchestratorFailure(deps.eventLog, event, error);
+  // The serializer processes one {@link EventBatch} at a time per symbol; each
+  // batch advances the sync lookups mirror *inside* its serialized step (via
+  // `record`) immediately before processing that batch's events — so every
+  // event evaluates against the mirror state of its own upstream observation,
+  // never a later batch's (#459). `TimerEvent`-only batches land on the global
+  // chain (no symbol).
+  const serializer = createPerSymbolSerializer<EventBatch>(async (batch) => {
+    batch.record();
+    for (const event of batch.events) {
+      try {
+        await orchestrator.process(event);
+      } catch (error) {
+        // Keep the per-symbol chain alive; the orchestrator already handles
+        // CycleOverflow by recording an event and returning — bubbling here
+        // means an unexpected programmer error (corrupt rule, repository
+        // timeout, etc.). Surface it through both the engine log and the
+        // event log so operators can see why a fire was dropped instead of
+        // observing silent inaction (#431).
+        await recordOrchestratorFailure(deps.eventLog, event, error);
+      }
     }
   });
 
-  const enqueue = (event: EvaluationTriggerEvent): void => {
-    recordIntoLookups(lookups, event);
-    serializer.enqueue(event as KeyedTriggerEvent);
+  // Tick bridge — one inbound quote fans out to exactly one TickEvent, enqueued
+  // as a batch of one. The tick ring push + quote-mirror update ride in the
+  // batch's `record` so series-aware operators (Crossing, Channel, Moving) and
+  // the snapshot see the tick only once the batch's serialized step runs, in
+  // arrival order (#459).
+  const tickBridge = new TickBridge((event) => {
+    if (event.kind !== EvaluationTriggerKind.Tick) return;
+    const tick = event;
+    serializer.enqueue({
+      symbolId: tick.symbolId,
+      record: () => {
+        let ring = tickRings.get(tick.symbolId);
+        if (ring === undefined) {
+          ring = new TickRing();
+          tickRings.set(tick.symbolId, ring);
+        }
+        ring.push(tick.ts, tick.price);
+        lookups.recordQuote(tick.symbolId, tick.price);
+      },
+      events: [tick],
+    });
+  });
+
+  // Bar bridge — collect the lifecycle events one candle fans out (synchronous
+  // per the bridge contract), then enqueue them as one batch whose `record`
+  // updates the OHLCV mirror for that candle. The five OHLCV axes land together
+  // (one atomic observation) before any of the candle's events are processed.
+  const barBatch: EvaluationTriggerEvent[] = [];
+  const barBridge = new BarLifecycleBridge((event) => barBatch.push(event));
+  const rawHandleCandle = barBridge.handleCandle.bind(barBridge);
+  const wrappedBarBridge: BarLifecycleBridge = Object.create(barBridge);
+  wrappedBarBridge.handleCandle = (candle: CandleEvent): void => {
+    barBatch.length = 0;
+    rawHandleCandle(candle);
+    // Always enqueue: even a forming-bar re-poll that fans out no lifecycle
+    // event still advances the OHLCV mirror for later ticks/bars, and running
+    // that update on the chain keeps it ordered with the symbol's other events.
+    serializer.enqueue({
+      symbolId: candle.id,
+      record: () => lookups.recordCandle(candle),
+      events: barBatch.slice(),
+    });
   };
 
-  // Tick bridge — emits TickEvents into the serializer; also seed the per-symbol
-  // tick ring so series-aware operators (Crossing, Channel, Moving) see prior
-  // ticks.
-  const tickBridge = new TickBridge((event) => {
-    if (event.kind === EvaluationTriggerKind.Tick) {
-      let ring = tickRings.get(event.symbolId);
-      if (ring === undefined) {
-        ring = new TickRing();
-        tickRings.set(event.symbolId, ring);
-      }
-      ring.push(event.ts, event.price);
-    }
-    enqueue(event);
-  });
-  const barBridge = new BarLifecycleBridge(enqueue);
-  const indicatorBridge = new IndicatorCascadeBridge(enqueue);
-
-  // Wrap the bar bridge with a `handleCandle` proxy that first updates the
-  // sync lookups cache (so the action runner's snapshot AND the dispatcher's
-  // sync `barSeries` lookup both see the freshly observed bar).
-  const wrappedBarBridge: BarLifecycleBridge = Object.create(barBridge);
-  const originalHandleCandle = barBridge.handleCandle.bind(barBridge);
-  wrappedBarBridge.handleCandle = (event: CandleEvent) => {
-    lookups.recordCandle(event);
-    originalHandleCandle(event);
+  // Indicator bridge — collect the per-state-key IndicatorChanged events one
+  // upstream row fans out, then enqueue them as one batch whose `record`
+  // mirrors the row's changed values. One row = one atomic observation.
+  const indicatorBatch: EvaluationTriggerEvent[] = [];
+  const indicatorBridge = new IndicatorCascadeBridge((event) => indicatorBatch.push(event));
+  const rawHandleIndicatorState = indicatorBridge.handleIndicatorState.bind(indicatorBridge);
+  const wrappedIndicatorBridge: IndicatorCascadeBridge = Object.create(indicatorBridge);
+  wrappedIndicatorBridge.handleIndicatorState = (event: IndicatorStateEvent): void => {
+    indicatorBatch.length = 0;
+    rawHandleIndicatorState(event);
+    if (indicatorBatch.length === 0) return;
+    const events = indicatorBatch.slice();
+    serializer.enqueue({
+      symbolId: event.id,
+      record: () => {
+        for (const e of events) {
+          if (e.kind === EvaluationTriggerKind.IndicatorChanged && e.current !== null) {
+            lookups.recordIndicatorState(e.instanceId, e.stateKey, e.current);
+          }
+        }
+      },
+      events,
+    });
   };
 
   return {
     tickBridge,
     barBridge: wrappedBarBridge,
-    indicatorBridge,
+    indicatorBridge: wrappedIndicatorBridge,
     lookups,
     drain: serializer.drain,
   };
+}
+
+/**
+ * One unit of serialized work for the per-symbol serializer.
+ *
+ * A batch is one upstream observation (a candle, a quote, or an indicator
+ * state row) fanned out into its trigger events. Its {@link record} advances
+ * the sync {@link LiveEvaluationLookups} mirror and runs *inside* the
+ * serialized step, immediately before {@link events} are processed — so each
+ * event evaluates against the mirror state of its own observation and never a
+ * later batch's (#459).
+ */
+interface EventBatch {
+  /** Serializer key — every event in the batch shares this symbol (absent = global chain). */
+  symbolId?: string;
+  /** Advance the sync lookups mirror for this observation. */
+  record(): void;
+  /** The trigger events to process in order, after {@link record}. */
+  events: readonly EvaluationTriggerEvent[];
 }
 
 /**
@@ -287,26 +350,14 @@ const NULL_PREV_LOOKUPS: CascadePrevLookups = {
 };
 
 /**
- * Side-effect of every event passing through the wire — update the sync
- * mirror so the `ActionRunner` snapshot at fire time matches what the
- * inbound event observed.
- */
-function recordIntoLookups(lookups: LiveEvaluationLookups, event: EvaluationTriggerEvent): void {
-  if (event.kind === EvaluationTriggerKind.Tick) {
-    lookups.recordQuote(event.symbolId, event.price);
-    return;
-  }
-  if (event.kind === EvaluationTriggerKind.IndicatorChanged && event.current !== null) {
-    lookups.recordIndicatorState(event.instanceId, event.stateKey, event.current);
-  }
-}
-
-/**
- * Helper to fan a polling-service candle through both the bar-lifecycle bridge
- * and the lookups mirror. Public so `connect.ts` and tests share one path.
+ * Helper to fan a polling-service candle through the bar-lifecycle bridge.
+ * Public so `connect.ts` and tests share one path.
+ *
+ * The OHLCV mirror is advanced *inside* the serialized step the bridge enqueues
+ * (not synchronously here), so the mirror stays consistent with the candle
+ * event under evaluation (#459).
  */
 export function feedCandleIntoEngine(wired: WiredRuleEngine, event: CandleEvent): void {
-  wired.lookups.recordCandle(event);
   wired.barBridge.handleCandle(event);
 }
 
