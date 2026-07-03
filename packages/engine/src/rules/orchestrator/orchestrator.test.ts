@@ -111,6 +111,7 @@ async function buildOrchestrator(opts: {
   lookups?: EvaluationLookups;
   tickRings?: ReadonlyMap<string, TickRing>;
   now?: () => number;
+  rulesRepo?: RuleRepository;
 }): Promise<{
   orchestrator: RuleOrchestrator;
   notifier: InMemoryNotifier;
@@ -119,7 +120,7 @@ async function buildOrchestrator(opts: {
   eventLog: InMemoryEventLog;
   watchlist: WatchlistRepository;
 }> {
-  const repo = new InMemoryRuleRepository();
+  const repo = opts.rulesRepo ?? new InMemoryRuleRepository();
   for (const r of opts.rules) await repo.save(r);
   const state = opts.state ?? new InMemoryStateRepository();
   const notifier = opts.notifier ?? new InMemoryNotifier(['main']);
@@ -183,7 +184,71 @@ const TICK_AT = (ts: number, symbolId = 'AAPL'): TickEvent => ({
 
 const TICK_EVENT = TICK_AT(1_000);
 
+/**
+ * Wraps a real {@link RuleRepository}, recording every
+ * `listEnabledForSymbol` call so the orchestrator's per-tick query count is
+ * observable.
+ */
+class CountingRuleRepository implements RuleRepository {
+  readonly listEnabledCalls: Array<{ symbolId: string | null; profileId: string | undefined }> = [];
+
+  constructor(private readonly delegate: RuleRepository) {}
+
+  async listEnabledForSymbol(symbolId: string | null, profileId?: string): Promise<Rule[]> {
+    this.listEnabledCalls.push({ symbolId, profileId });
+    return this.delegate.listEnabledForSymbol(symbolId, profileId);
+  }
+
+  list(): Promise<Rule[]> {
+    return this.delegate.list();
+  }
+  listForSymbol(symbolId: string | null, profileId?: string): Promise<Rule[]> {
+    return this.delegate.listForSymbol(symbolId, profileId);
+  }
+  get(id: string): Promise<Rule | null> {
+    return this.delegate.get(id);
+  }
+  claimOnceFire(ruleId: string): Promise<boolean> {
+    return this.delegate.claimOnceFire(ruleId);
+  }
+  save(rule: Rule): Promise<void> {
+    return this.delegate.save(rule);
+  }
+  remove(id: string): Promise<void> {
+    return this.delegate.remove(id);
+  }
+  removeForProfile(profileId: string): Promise<string[]> {
+    return this.delegate.removeForProfile(profileId);
+  }
+}
+
 describe('RuleOrchestrator', () => {
+  it('issues at most one listEnabledForSymbol query per distinct (symbolId, profileId) pair across a tick and its cascades', async () => {
+    const counting = new CountingRuleRepository(new InMemoryRuleRepository());
+    const rule = ruleWith({
+      id: 'r1',
+      profileId: PROFILE_A,
+      actions: [
+        {
+          kind: ActionKind.SetSymbolState,
+          key: 'k1',
+          value: { type: StateValueType.Number, value: 1 },
+        },
+        {
+          kind: ActionKind.SetSymbolState,
+          key: 'k2',
+          value: { type: StateValueType.Number, value: 2 },
+        },
+      ],
+    });
+    const { orchestrator } = await buildOrchestrator({ rules: [rule], rulesRepo: counting });
+    await orchestrator.process(TICK_EVENT);
+    expect(counting.listEnabledCalls).toEqual([
+      { symbolId: 'AAPL', profileId: undefined },
+      { symbolId: 'AAPL', profileId: PROFILE_A },
+    ]);
+  });
+
   it('a Tick on an EveryTime Price > 100 rule fires once and appends [NotificationSent, Fired] to both the rule log and the symbol log', async () => {
     const { orchestrator, notifier, eventLog } = await buildOrchestrator({
       rules: [ruleWith({ id: 'r1' })],
