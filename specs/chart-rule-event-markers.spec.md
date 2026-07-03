@@ -1,6 +1,8 @@
 # Spec: chart rule-event markers
 
-- Status: draft
+- Status: draft (marker-visibility control superseded by #475)
+- Superseded in part: the per-type `EventMarkersPickerDialog` and `buildEventMarkers`' `visibleTypes` gate were removed in #475.
+  Marker visibility is now the active profile's `chartStates`, filtered server-side — see `specs/chart-filter-by-chart-states.spec.md`.
 - Touches:
   - `engine` — `RuleService.listEvents` / `listSymbolEvents` accept `from`/`to`; `MongoEventLog.ensureIndexes()` indexes `events.ts`; `ConnectOptions.onRuleEvent` is forwarded from `eventLog.onAppend`.
   - `api` — `RuleEventsQuerySchema` accepts `from`/`to`; new `ruleEventStream: StreamHub<RuleEventEntry>` + `ruleEventSubscriptionKind`; main publishes per-symbol on `onRuleEvent`.
@@ -26,6 +28,7 @@ Users opt out per event type via a checkbox picker that mirrors the Indicators d
   | `Error`            | `circle`    | red    | `aboveBar`  |
   | `CycleOverflow`    | `square`    | amber  | `aboveBar`  |
 - **Visibility toggle UX** — a separate `Event markers` button on the chart bottom bar opens a dialog with one checkbox per type (mirrors the Indicators picker dialog).
+  **Superseded by #475**: this button + dialog were removed; the active profile's `chartStates` (filtered server-side) is now the single control over which markers render.
 
 ## Acceptance criteria
 
@@ -70,7 +73,7 @@ Users opt out per event type via a checkbox picker that mirrors the Indicators d
 
 - [ ] `buildEventMarkers([], visible)` returns `[]`.
 - [ ] `buildEventMarkers([fired, stateSet, error], visible)` returns one marker per entry with the shape/color/position/text from the settled mapping (full-payload `toEqual`).
-- [ ] Entries whose `type` is hidden in the `visibleTypes` set are dropped from the output.
+- [x] ~~Entries whose `type` is hidden in the `visibleTypes` set are dropped from the output.~~ (removed in #475 — the `visibleTypes` gate is gone; the server-side `chartStates` filter decides what reaches the builder.)
 - [ ] Markers are returned sorted ascending by `time` (the `lightweight-charts` plugin requires it).
 
 ### Web — `CandleChart` wiring
@@ -79,12 +82,15 @@ Users opt out per event type via a checkbox picker that mirrors the Indicators d
 - [ ] When `eventMarkers` is non-empty, the chart attaches one plugin via `createSeriesMarkers(candleSeries, …)` and calls it with the mapped list.
 - [ ] Replacing the `eventMarkers` prop with a new array calls `setMarkers` again with the new mapped list — no new plugin.
 
-### Web — `EventMarkersPickerDialog`
+### Web — `EventMarkersPickerDialog` (removed in #475)
 
-- [ ] The dialog's trigger button is labeled `Event markers` with a count badge showing how many of the six types are currently visible.
-- [ ] Opening the dialog renders one labeled checkbox per `RuleEventType`, all checked by default.
-- [ ] Unchecking a checkbox removes that `RuleEventType` from the `visible` set the parent owns.
-- [ ] The dialog renders inside the chart bottom bar's `Chart actions` group.
+Superseded — the dialog was deleted; markers now render per the active profile's `chartStates`.
+See `specs/chart-filter-by-chart-states.spec.md`.
+
+- [x] ~~The dialog's trigger button is labeled `Event markers` with a count badge showing how many of the six types are currently visible.~~
+- [x] ~~Opening the dialog renders one labeled checkbox per `RuleEventType`, all checked by default.~~
+- [x] ~~Unchecking a checkbox removes that `RuleEventType` from the `visible` set the parent owns.~~
+- [x] ~~The dialog renders inside the chart bottom bar's `Chart actions` group.~~
 
 ## End-to-end expectation
 

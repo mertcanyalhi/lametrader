@@ -6,6 +6,7 @@ import {
   type Period,
   type Rule,
   type RuleEventEntry,
+  RuleEventType,
   RuleNotFoundError,
   type RuleRepository,
   type RuleScope,
@@ -73,6 +74,17 @@ export interface EventListOptions {
   from?: number;
   /** Exclusive upper bound on the entry's source `ts` (epoch ms). */
   to?: number;
+  /**
+   * Chart-state filter for the chart's marker read.
+   *
+   * When defined, keep only `stateSet` / `stateRemoved` entries whose `key`
+   * is in this list; every other event type and every non-matching key is
+   * dropped.
+   * An empty list keeps nothing; `undefined` disables the filter (unfiltered),
+   * so the Events list dialog + count badge — which pass no `chartStates` —
+   * still see the full log.
+   */
+  chartStates?: readonly string[];
 }
 
 /** The set of trigger kinds that are tick-cadence (per ADR 0016). */
@@ -338,15 +350,31 @@ function scopeAdmitsSymbol(scope: RuleScope, symbolId: string): boolean {
  */
 function paginate(events: readonly RuleEventEntry[], options: EventListOptions): RuleEventEntry[] {
   const limit = Math.min(options.limit ?? DEFAULT_EVENT_PAGE_SIZE, MAX_EVENT_PAGE_SIZE);
-  const { before, from, to } = options;
+  const { before, from, to, chartStates } = options;
   const filtered = events.filter((event) => {
     if (before !== undefined && !(event.ts < before)) return false;
     if (from !== undefined && !(event.ts >= from)) return false;
     if (to !== undefined && !(event.ts < to)) return false;
+    if (chartStates !== undefined && !matchesChartStates(event, chartStates)) return false;
     return true;
   });
   return [...filtered]
     .reverse()
     .sort((a, b) => b.ts - a.ts)
     .slice(0, limit);
+}
+
+/**
+ * Whether `event` is a state-change (`stateSet` / `stateRemoved`) whose `key`
+ * is one of the chart-state keys the caller asked for.
+ *
+ * Non-state event types (`fired`, `notificationSent`, `error`,
+ * `cycleOverflow`) never match, so they are dropped from a `chartStates`-
+ * filtered read.
+ */
+function matchesChartStates(event: RuleEventEntry, chartStates: readonly string[]): boolean {
+  if (event.type !== RuleEventType.StateSet && event.type !== RuleEventType.StateRemoved) {
+    return false;
+  }
+  return chartStates.includes(event.key);
 }

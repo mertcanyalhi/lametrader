@@ -9,6 +9,7 @@ import {
   type RuleEventEntry,
   RuleEventType,
   RuleScopeKind,
+  StateScope,
   StateValueType,
   TriggerKind,
 } from '@lametrader/core';
@@ -237,6 +238,59 @@ describe('rulesController', () => {
     const response = await app.inject({
       method: 'GET',
       url: '/symbols/AAPL/rule-events?from=foo',
+    });
+    expect(response.statusCode).toEqual(400);
+  });
+
+  it('GET /symbols/:id/rule-events with chartStates filters to only the matching state keys', async () => {
+    await eventLog.appendSymbolEvent('AAPL', {
+      type: RuleEventType.StateSet,
+      ts: 200,
+      ruleId: 'r1',
+      symbolId: 'AAPL',
+      scope: StateScope.Symbol,
+      key: 'trend',
+      value: { type: StateValueType.Bool, value: true },
+    });
+    await eventLog.appendSymbolEvent('AAPL', {
+      type: RuleEventType.StateSet,
+      ts: 300,
+      ruleId: 'r1',
+      symbolId: 'AAPL',
+      scope: StateScope.Symbol,
+      key: 'other',
+      value: { type: StateValueType.Bool, value: true },
+    });
+    await eventLog.appendSymbolEvent('AAPL', {
+      type: RuleEventType.Error,
+      ts: 400,
+      ruleId: 'r1',
+      symbolId: 'AAPL',
+      reason: 'boom',
+    });
+    const response = await app.inject({
+      method: 'GET',
+      url: `/symbols/AAPL/rule-events?chartStates=${encodeURIComponent(JSON.stringify(['trend']))}`,
+    });
+    expect(response.statusCode).toEqual(200);
+    expect(response.json()).toEqual([
+      {
+        type: RuleEventType.StateSet,
+        ts: 200,
+        firedAt: 0,
+        ruleId: 'r1',
+        symbolId: 'AAPL',
+        scope: StateScope.Symbol,
+        key: 'trend',
+        value: { type: StateValueType.Bool, value: true },
+      },
+    ]);
+  });
+
+  it('GET /symbols/:id/rule-events with a malformed chartStates returns 400', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/symbols/AAPL/rule-events?chartStates=not-json',
     });
     expect(response.statusCode).toEqual(400);
   });

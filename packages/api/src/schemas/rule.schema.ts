@@ -360,3 +360,29 @@ export const RuleEventsQuerySchema = Type.Object(
   },
   { additionalProperties: false },
 );
+
+/**
+ * Query parameters for `GET /symbols/:id/rule-events` — the windowed event
+ * read backing the chart's markers.
+ *
+ * Extends {@link RuleEventsQuerySchema}'s `limit` / `before` / `from` / `to`
+ * with an optional `chartStates` filter: a JSON-encoded array of state keys
+ * (e.g. `["price:trend"]`).
+ * A single JSON string carries the whole set because a repeated query param
+ * cannot distinguish an **empty** array (present ⇒ render nothing) from an
+ * **absent** one (⇒ unfiltered) — a distinction the chart requires.
+ * When present the response keeps only `stateSet` / `stateRemoved` entries
+ * whose `key` is in the list (`[]` ⇒ none); when absent the response is
+ * unfiltered, so the Events list dialog + count badge, which send no filter,
+ * stay untouched.
+ */
+export const SymbolRuleEventsQuerySchema = Type.Object(
+  {
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 500 })),
+    before: Type.Optional(Type.Number()),
+    from: Type.Optional(Type.Number()),
+    to: Type.Optional(Type.Number()),
+    chartStates: Type.Optional(Type.String()),
+  },
+  { additionalProperties: false },
+);

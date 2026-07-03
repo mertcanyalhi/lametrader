@@ -12,6 +12,7 @@ import {
   RuleEventType,
   RuleNotFoundError,
   RuleScopeKind,
+  StateScope,
   StateValueType,
   TickRuleNotEligibleError,
   TriggerKind,
@@ -58,6 +59,36 @@ function buildRule(overrides: Partial<Rule> = {}): Omit<Rule, 'id' | 'createdAt'
     order: 1,
     ...overrides,
   };
+}
+
+/** A minimal `StateSet` symbol event at `ts` writing `key`. */
+function stateSetEntry(ts: number, key: string): RuleEventEntry {
+  return {
+    type: RuleEventType.StateSet,
+    ts,
+    ruleId: 'r1',
+    symbolId: 'AAPL',
+    scope: StateScope.Symbol,
+    key,
+    value: { type: StateValueType.Bool, value: true },
+  };
+}
+
+/** A minimal `StateRemoved` symbol event at `ts` removing `key`. */
+function stateRemovedEntry(ts: number, key: string): RuleEventEntry {
+  return {
+    type: RuleEventType.StateRemoved,
+    ts,
+    ruleId: 'r1',
+    symbolId: 'AAPL',
+    scope: StateScope.Symbol,
+    key,
+  };
+}
+
+/** A minimal `Error` symbol event at `ts`. */
+function errorEntry(ts: number): RuleEventEntry {
+  return { type: RuleEventType.Error, ts, ruleId: 'r1', symbolId: 'AAPL', reason: 'boom' };
 }
 
 describe('RuleService', () => {
@@ -568,5 +599,67 @@ describe('RuleService', () => {
     await eventLog.appendSymbolEvent('AAPL', { ...fired, ts: 300 });
     const events = await service.listSymbolEvents('AAPL', { from: 100, to: 300 });
     expect(events.map((e) => e.ts)).toEqual([200, 100]);
+  });
+
+  it('listSymbolEvents with chartStates keeps only state entries whose key matches, dropping other types and keys', async () => {
+    await eventLog.appendSymbolEvent('AAPL', stateSetEntry(200, 'trend'));
+    await eventLog.appendSymbolEvent('AAPL', stateSetEntry(300, 'other'));
+    await eventLog.appendSymbolEvent('AAPL', stateRemovedEntry(400, 'trend'));
+    await eventLog.appendSymbolEvent('AAPL', errorEntry(500));
+    const events = await service.listSymbolEvents('AAPL', { chartStates: ['trend'] });
+    expect(events).toEqual([
+      {
+        type: RuleEventType.StateRemoved,
+        ts: 400,
+        firedAt: 0,
+        ruleId: 'r1',
+        symbolId: 'AAPL',
+        scope: StateScope.Symbol,
+        key: 'trend',
+      },
+      {
+        type: RuleEventType.StateSet,
+        ts: 200,
+        firedAt: 0,
+        ruleId: 'r1',
+        symbolId: 'AAPL',
+        scope: StateScope.Symbol,
+        key: 'trend',
+        value: { type: StateValueType.Bool, value: true },
+      },
+    ]);
+  });
+
+  it('listSymbolEvents with an empty chartStates returns no entries', async () => {
+    await eventLog.appendSymbolEvent('AAPL', stateSetEntry(200, 'trend'));
+    await eventLog.appendSymbolEvent('AAPL', errorEntry(300));
+    const events = await service.listSymbolEvents('AAPL', { chartStates: [] });
+    expect(events).toEqual([]);
+  });
+
+  it('listSymbolEvents without chartStates returns every entry unfiltered', async () => {
+    await eventLog.appendSymbolEvent('AAPL', stateSetEntry(200, 'trend'));
+    await eventLog.appendSymbolEvent('AAPL', errorEntry(300));
+    const events = await service.listSymbolEvents('AAPL', {});
+    expect(events).toEqual([
+      {
+        type: RuleEventType.Error,
+        ts: 300,
+        firedAt: 0,
+        ruleId: 'r1',
+        symbolId: 'AAPL',
+        reason: 'boom',
+      },
+      {
+        type: RuleEventType.StateSet,
+        ts: 200,
+        firedAt: 0,
+        ruleId: 'r1',
+        symbolId: 'AAPL',
+        scope: StateScope.Symbol,
+        key: 'trend',
+        value: { type: StateValueType.Bool, value: true },
+      },
+    ]);
   });
 });

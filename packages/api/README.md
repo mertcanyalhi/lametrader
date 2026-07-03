@@ -336,10 +336,12 @@ The `fired` event context's `lookupSnapshot` records the `period` its OHLCV axes
 | `PATCH`  | `/rules/{id}`                           | `Partial<RuleInput>` | Partial merge over the existing rule; re-runs the tick-eligibility gate on the merged result. 200 / 400 / 404. |
 | `DELETE` | `/rules/{id}`                           | —               | Delete a rule. **204** / 404.                                                                              |
 | `GET`    | `/rules/{id}/events?limit=&before=&from=&to=`     | —     | Paginated rule events (newest-first); default limit 50, max 500; `before` cursors on `ts` (epoch ms); `from` / `to` apply an inclusive-exclusive window on `ts` (ANDs with `before`). 200 / 404. |
-| `GET`    | `/symbols/{id}/rule-events?limit=&before=&from=&to=` | —  | Paginated symbol-mirrored rule events (newest-first); same pagination + windowing. 200.                  |
+| `GET`    | `/symbols/{id}/rule-events?limit=&before=&from=&to=&chartStates=` | —  | Paginated symbol-mirrored rule events (newest-first); same pagination + windowing, plus an optional `chartStates` marker filter. 200 / 400. |
 | `GET`    | `/symbols/{id}/rule-events/count`       | —               | Count of mirrored rule events for the symbol; response `{ "count": <integer> }`. 200.                      |
 
 `RuleInput` is the client-controllable subset of a `Rule` — every field except `id`, `createdAt`, `updatedAt`. Schema validation is the trust boundary (per ADR 0016 #11); the engine trusts the validator. Multi-field failures surface as `{ error, fields: [{ path, message }, ...] }` with one entry per AJV failure (or one per unwatched symbol id for the tick-eligibility error).
+
+`chartStates` (only on `/symbols/{id}/rule-events`, backing the chart's markers) is a JSON-encoded array of state keys, e.g. `chartStates=%5B%22price%3Atrend%22%5D`. When present the response keeps only `stateSet` / `stateRemoved` entries whose `key` is in the list; an empty `[]` returns nothing; when absent the response is unfiltered — so the Events list dialog + count badge, which send no filter, stay untouched. A malformed value (not a JSON array of strings) is a 400.
 
 ### Example
 
