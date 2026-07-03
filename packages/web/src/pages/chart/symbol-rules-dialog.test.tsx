@@ -13,7 +13,7 @@ import {
 } from '@lametrader/core';
 import { Theme } from '@radix-ui/themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -284,9 +284,12 @@ describe('SymbolRulesDialog', () => {
     // The editor opens with the create-mode title "New rule".
     expect(screen.getByRole('heading', { name: 'New rule' })).toBeDefined();
     // The scope field is pre-populated with the chart's symbol id; the
-    // single-symbol combobox surfaces it as its selected value.
-    expect(screen.getByRole('combobox', { name: 'Rule symbol' })).toBeDefined();
-    expect(screen.getByText('crypto:BTCUSDT')).toBeDefined();
+    // single-symbol combobox surfaces it as its selected value. Scope the
+    // query to the editor dialog so the text match targets the combobox
+    // value, not the outer rules dialog's "Rules crypto:BTCUSDT" header.
+    const editor = screen.getByRole('dialog', { name: 'New rule' });
+    expect(within(editor).getByRole('combobox', { name: 'Rule symbol' })).toBeDefined();
+    expect(within(editor).getByText('crypto:BTCUSDT')).toBeDefined();
   });
 
   it('renders a warning callout pointing to the profile picker when no profile is selected', async () => {
