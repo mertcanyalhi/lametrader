@@ -28,6 +28,8 @@ A bottom action bar holds the profile picker (a single modal that both **selects
 With no profile selected, the indicator panel shows a warning callout pointing back to the profile picker; an attached indicator whose definition's `appliesTo` excludes the current symbol's type renders muted with an "n/a for `<type>`" note (it stays attached on the profile — it just can't compute on this symbol).
 The selected profile is per-user state persisted to `localStorage` (`lametrader.selectedProfileId`), not URL state — sharing a chart link does not share a profile.
 First-run defaulting picks the first enabled profile when nothing is stored; a stored id missing from `GET /profiles` is treated as "No profile" and is not proactively wiped (so a profile re-created elsewhere re-binds).
+The profile create/edit form carries a **Chart states** control — a chips-style combobox (multi-select that also takes free-text) bound to the profile's `chartStates`, the state keys whose markers the chart renders.
+Its suggestions seed from the current chart symbol's known state keys (`GET /symbols/:id/state-keys`) and any typed key is accepted as-is, so a not-yet-written state can be pre-configured; opened away from a chart (e.g. the rules page) the suggestion list is empty and free-text entry still works.
 Crypto and equities get a volume sub-pane; FX (no volume) omits it.
 Candle and volume colors follow the app theme and update live when you toggle it.
 Scrolling back in time loads older history a window at a time until the start of what's stored; a symbol with no stored candles shows a "Run backfill" card that fetches history without leaving the page.

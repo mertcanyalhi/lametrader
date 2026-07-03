@@ -132,6 +132,14 @@ describe('state hooks', () => {
     expect(fetchSpy.mock.calls[0]?.[0]).toBe('/api/symbols/crypto%3ABTCUSDT/state-keys');
   });
 
+  it('useSymbolStateKeys stays disabled when symbolId is empty', () => {
+    const { result } = renderHook(() => useSymbolStateKeys(''), { wrapper: makeWrapper() });
+    expect({ fetched: fetchSpy.mock.calls.length, data: result.current.data }).toEqual({
+      fetched: 0,
+      data: undefined,
+    });
+  });
+
   it('useSymbolStateTimeSeries GETs /api/symbols/:id/state/:key/series with from/to and returns the series', async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response(

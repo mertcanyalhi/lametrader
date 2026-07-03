@@ -35,18 +35,18 @@ export function useCreateProfile(): UseMutationResult<Profile, Error, ProfileFie
   });
 }
 
-/** The patchable subset of a profile from the picker form: name/description/enabled. */
+/** The patchable subset of a profile from the picker form: name/description/enabled/chartStates. */
 export interface UpdateProfileInput {
   /** The profile id to patch. */
   id: string;
-  /** The patch body — only the editable fields, so `scope` + `indicators` are preserved server-side. */
-  patch: Pick<ProfileFields, 'name' | 'description' | 'enabled'>;
+  /** The patch body — only the form-editable fields, so `scope` + `indicators` are preserved server-side. */
+  patch: Pick<ProfileFields, 'name' | 'description' | 'enabled' | 'chartStates'>;
 }
 
 /**
  * Patch a profile's editable fields (`PATCH /profiles/:id`). The picker form
- * only edits name/description/enabled; using `PATCH` lets the server preserve
- * `scope` and `indicators` without the form having to know about them.
+ * edits name/description/enabled/chartStates; using `PATCH` lets the server
+ * preserve `scope` and `indicators` without the form having to know about them.
  */
 export function useUpdateProfile(): UseMutationResult<Profile, Error, UpdateProfileInput> {
   const queryClient = useQueryClient();
