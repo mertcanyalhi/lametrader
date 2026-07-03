@@ -101,8 +101,8 @@ function leafTracePayload(
     family: leaf.family,
     operator: leaf.operator,
     leftKind: leaf.left.kind,
-    leftValue: ctx.resolveLatest(leaf.left),
-    leftPrev: ctx.resolvePrev(leaf.left),
+    leftValue: ctx.resolveLatest(leaf.left, leaf.interval),
+    leftPrev: ctx.resolvePrev(leaf.left, leaf.interval),
     result,
   };
   const right = singleRightOperand(leaf);
@@ -110,8 +110,8 @@ function leafTracePayload(
   return {
     ...base,
     rightKind: right.kind,
-    rightValue: ctx.resolveLatest(right),
-    rightPrev: ctx.resolvePrev(right),
+    rightValue: ctx.resolveLatest(right, leaf.interval),
+    rightPrev: ctx.resolvePrev(right, leaf.interval),
   };
 }
 

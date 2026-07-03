@@ -1,4 +1,4 @@
-import type { StateValue } from '@lametrader/core';
+import type { Period, StateValue } from '@lametrader/core';
 
 /**
  * Synchronous lookups consumed by the {@link ActionRunner} when it snapshots
@@ -9,18 +9,21 @@ import type { StateValue } from '@lametrader/core';
  * is the live implementation backed by the same upstream the bridges read.
  */
 export interface EvaluationLookups {
-  /** Latest current ("last") price for the symbol, or `null` if unknown. */
+  /**
+   * Latest current ("last") price for the symbol, or `null` if unknown.
+   * Ticks are period-agnostic, so this getter takes no period.
+   */
   getCurrentValue(symbolId: string): number | null;
-  /** Latest open value for the symbol, or `null` if unknown. */
-  getOpenValue(symbolId: string): number | null;
-  /** Latest high value for the symbol, or `null` if unknown. */
-  getHighValue(symbolId: string): number | null;
-  /** Latest low value for the symbol, or `null` if unknown. */
-  getLowValue(symbolId: string): number | null;
-  /** Latest close value for the symbol, or `null` if unknown. */
-  getCloseValue(symbolId: string): number | null;
-  /** Latest volume value for the symbol, or `null` if unknown. */
-  getVolumeValue(symbolId: string): number | null;
+  /** Latest open value for `(symbolId, period)`, or `null` if unknown. */
+  getOpenValue(symbolId: string, period: Period): number | null;
+  /** Latest high value for `(symbolId, period)`, or `null` if unknown. */
+  getHighValue(symbolId: string, period: Period): number | null;
+  /** Latest low value for `(symbolId, period)`, or `null` if unknown. */
+  getLowValue(symbolId: string, period: Period): number | null;
+  /** Latest close value for `(symbolId, period)`, or `null` if unknown. */
+  getCloseValue(symbolId: string, period: Period): number | null;
+  /** Latest volume value for `(symbolId, period)`, or `null` if unknown. */
+  getVolumeValue(symbolId: string, period: Period): number | null;
   /** Indicator-instance state by `(instanceId, stateKey)`, or `null`. */
   getIndicatorValue(instanceId: string, stateKey: string): StateValue | null;
   /**

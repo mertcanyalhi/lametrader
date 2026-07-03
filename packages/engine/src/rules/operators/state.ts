@@ -18,9 +18,9 @@ import type { EvaluationContext } from '../evaluation-context.types.js';
  * (prior snapshot); the right via `resolveLatest`.
  */
 export function evaluateState(leaf: StateLeafCondition, ctx: EvaluationContext): boolean {
-  const leftCurrent = ctx.resolveLatest(leaf.left);
-  const leftPrev = ctx.resolvePrev(leaf.left);
-  const right = ctx.resolveLatest(leaf.right);
+  const leftCurrent = ctx.resolveLatest(leaf.left, leaf.interval);
+  const leftPrev = ctx.resolvePrev(leaf.left, leaf.interval);
+  const right = ctx.resolveLatest(leaf.right, leaf.interval);
   switch (leaf.operator) {
     case StateOperator.Equals:
       return nullableEquals(leftCurrent, right);

@@ -1,4 +1,5 @@
 import {
+  type Period,
   type StateRepository,
   StateScope,
   type StateValue,
@@ -7,6 +8,7 @@ import {
 
 import type { CandleEvent } from '../../candles/polling-service.types.js';
 import type { BarAxis } from '../bar-series-view.js';
+import { barSeriesKey } from '../evaluation-context.js';
 import { ArraySeriesView } from '../indicator-series-store.js';
 import type { SeriesPoint, SeriesView } from '../series.types.js';
 import type { EvaluationLookups } from './live-evaluation-lookups.types.js';
@@ -51,8 +53,14 @@ interface OhlcvSnapshot {
 export class LiveEvaluationLookups implements EvaluationLookups {
   /** symbolId → latest tick price. */
   private readonly tickPrice = new Map<string, number>();
-  /** symbolId → latest OHLCV bar snapshot. */
-  private readonly ohlcv = new Map<string, OhlcvSnapshot>();
+  /**
+   * symbolId → (period → latest OHLCV bar snapshot).
+   *
+   * Keyed per period so a symbol watched on multiple periods (e.g. 1m + 1h)
+   * keeps one snapshot per period; recording a 1m candle never overwrites the
+   * value read for the 1h period (#463).
+   */
+  private readonly ohlcv = new Map<string, Map<Period, OhlcvSnapshot>>();
   /** instanceId|stateKey → latest indicator state value. */
   private readonly indicatorState = new Map<string, StateValue>();
   /** profileId|symbolId|key → latest symbol-state value. */
@@ -106,7 +114,12 @@ export class LiveEvaluationLookups implements EvaluationLookups {
       close: number;
       volume?: number;
     };
-    this.ohlcv.set(event.id, {
+    let byPeriod = this.ohlcv.get(event.id);
+    if (byPeriod === undefined) {
+      byPeriod = new Map<Period, OhlcvSnapshot>();
+      this.ohlcv.set(event.id, byPeriod);
+    }
+    byPeriod.set(event.period, {
       open: candle.open,
       high: candle.high,
       low: candle.low,
@@ -116,9 +129,13 @@ export class LiveEvaluationLookups implements EvaluationLookups {
   }
 
   /**
-   * Build a one-axis `SeriesView` map keyed by axis (`barSeriesKey(axis)`)
-   * over the latest OHLCV snapshot for `symbolId`, suitable for handing to
-   * `buildEvaluationContext`'s `barSeries`.
+   * Build a `SeriesView` map keyed by `(period, axis)` (`barSeriesKey`) over
+   * every observed period's latest OHLCV snapshot for `symbolId`, suitable
+   * for handing to `buildEvaluationContext`'s `barSeries`.
+   *
+   * One entry per `(period, axis)` so a per-period operand read (`Open` at
+   * interval 1h) resolves independently of another period's most recent
+   * candle (#463).
    *
    * Lazy: each view holds one point — the snapshot's value at `ts === 0`.
    * Comparison / equality operators only need `asOf(MAX_SAFE_INTEGER) →
@@ -128,17 +145,18 @@ export class LiveEvaluationLookups implements EvaluationLookups {
    * (see spec "Out of scope").
    */
   bookSeriesFor(symbolId: string): Map<string, SeriesView> {
-    const snap = this.ohlcv.get(symbolId);
     const out = new Map<string, SeriesView>();
-    if (snap === undefined) return out;
+    const byPeriod = this.ohlcv.get(symbolId);
+    if (byPeriod === undefined) return out;
     const axes: BarAxis[] = ['open', 'high', 'low', 'close', 'volume'];
-    for (const axis of axes) {
-      const value = snap[axis];
-      const point: SeriesPoint = {
-        ts: 0,
-        value: { type: StateValueType.Number, value },
-      };
-      out.set(axis, new ArraySeriesView([point]));
+    for (const [period, snap] of byPeriod) {
+      for (const axis of axes) {
+        const point: SeriesPoint = {
+          ts: 0,
+          value: { type: StateValueType.Number, value: snap[axis] },
+        };
+        out.set(barSeriesKey(period, axis), new ArraySeriesView([point]));
+      }
     }
     return out;
   }
@@ -156,20 +174,20 @@ export class LiveEvaluationLookups implements EvaluationLookups {
   getCurrentValue(symbolId: string): number | null {
     return this.tickPrice.get(symbolId) ?? null;
   }
-  getOpenValue(symbolId: string): number | null {
-    return this.ohlcv.get(symbolId)?.open ?? null;
+  getOpenValue(symbolId: string, period: Period): number | null {
+    return this.ohlcv.get(symbolId)?.get(period)?.open ?? null;
   }
-  getHighValue(symbolId: string): number | null {
-    return this.ohlcv.get(symbolId)?.high ?? null;
+  getHighValue(symbolId: string, period: Period): number | null {
+    return this.ohlcv.get(symbolId)?.get(period)?.high ?? null;
   }
-  getLowValue(symbolId: string): number | null {
-    return this.ohlcv.get(symbolId)?.low ?? null;
+  getLowValue(symbolId: string, period: Period): number | null {
+    return this.ohlcv.get(symbolId)?.get(period)?.low ?? null;
   }
-  getCloseValue(symbolId: string): number | null {
-    return this.ohlcv.get(symbolId)?.close ?? null;
+  getCloseValue(symbolId: string, period: Period): number | null {
+    return this.ohlcv.get(symbolId)?.get(period)?.close ?? null;
   }
-  getVolumeValue(symbolId: string): number | null {
-    return this.ohlcv.get(symbolId)?.volume ?? null;
+  getVolumeValue(symbolId: string, period: Period): number | null {
+    return this.ohlcv.get(symbolId)?.get(period)?.volume ?? null;
   }
   getIndicatorValue(instanceId: string, stateKey: string): StateValue | null {
     return this.indicatorState.get(indicatorKey(instanceId, stateKey)) ?? null;

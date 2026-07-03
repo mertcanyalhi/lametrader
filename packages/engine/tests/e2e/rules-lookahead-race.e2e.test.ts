@@ -170,6 +170,7 @@ describe('rules look-ahead race across a serialized rollover batch (e2e)', () =>
             period: Period.OneMinute,
           },
           lookupSnapshot: {
+            period: Period.OneMinute,
             current: null,
             open: 104,
             high: 106,
@@ -215,6 +216,7 @@ describe('rules look-ahead race across a serialized rollover batch (e2e)', () =>
             period: Period.OneMinute,
           },
           lookupSnapshot: {
+            period: Period.OneMinute,
             current: null,
             open: 104,
             high: 106,

@@ -243,7 +243,12 @@ function describeEvent(event: RuleEventEntry): string {
       return event.reason;
     case RuleEventType.CycleOverflow:
       return `cycle limit ${event.cycleLimit}`;
-    case RuleEventType.Fired:
-      return `fired on ${event.context.inboundEvent.kind}`;
+    case RuleEventType.Fired: {
+      const inbound = event.context.inboundEvent;
+      const period = 'period' in inbound ? inbound.period : undefined;
+      return period === undefined
+        ? `fired on ${inbound.kind}`
+        : `fired on ${inbound.kind} (${period})`;
+    }
   }
 }

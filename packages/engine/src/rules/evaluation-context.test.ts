@@ -101,19 +101,11 @@ describe('buildEvaluationContext', () => {
     const { ctx } = await seed();
 
     const price = ctx.resolveLatest({ kind: OperandKind.Price });
-    const open = ctx.resolveLatest({
-      kind: OperandKind.Open,
-    });
-    const high = ctx.resolveLatest({
-      kind: OperandKind.High,
-    });
-    const low = ctx.resolveLatest({ kind: OperandKind.Low });
-    const close = ctx.resolveLatest({
-      kind: OperandKind.Close,
-    });
-    const volume = ctx.resolveLatest({
-      kind: OperandKind.Volume,
-    });
+    const open = ctx.resolveLatest({ kind: OperandKind.Open }, PERIOD);
+    const high = ctx.resolveLatest({ kind: OperandKind.High }, PERIOD);
+    const low = ctx.resolveLatest({ kind: OperandKind.Low }, PERIOD);
+    const close = ctx.resolveLatest({ kind: OperandKind.Close }, PERIOD);
+    const volume = ctx.resolveLatest({ kind: OperandKind.Volume }, PERIOD);
     const indicatorRef = ctx.resolveLatest({
       kind: OperandKind.IndicatorRef,
       instanceId: INSTANCE_ID,
@@ -158,6 +150,57 @@ describe('buildEvaluationContext', () => {
       symbolRef: { type: StateValueType.String, value: 'armed' },
       globalRef: { type: StateValueType.String, value: 'bull' },
       literal: { type: StateValueType.Number, value: 42 },
+    });
+  });
+
+  it('resolveLatest reads the OHLCV operand at the given interval, isolating periods', async () => {
+    const repo = new InMemoryCandleRepository();
+    await repo.save(SYMBOL, Period.OneMinute, [candle(60_000, 30)]);
+    await repo.save(SYMBOL, Period.OneHour, [candle(3_600_000, 50)]);
+
+    const watchlist = new InMemoryWatchlistRepository([
+      {
+        id: SYMBOL,
+        type: SymbolType.Crypto,
+        description: 'BTC',
+        exchange: 'Binance',
+        periods: [Period.OneMinute, Period.OneHour],
+      },
+    ]);
+    const indicators = new IndicatorRegistry();
+    indicators.register(movingAverage);
+    const indicatorStore = new IndicatorSeriesStore(
+      new IndicatorService(indicators, watchlist, repo),
+    );
+
+    const barWindow = { from: 0, to: 4 * 3_600_000 };
+    const barSeries = await prewarmBarSeries(repo, SYMBOL, barWindow, [
+      { period: Period.OneMinute, axis: 'close' },
+      { period: Period.OneHour, axis: 'close' },
+    ]);
+
+    const ctx = buildEvaluationContext({
+      symbolId: SYMBOL,
+      profileId: PROFILE,
+      candleRepository: repo,
+      tickRings: new Map(),
+      indicatorStore,
+      barWindow,
+      barSeries,
+      getSymbolState: () => null,
+      getGlobalState: () => null,
+    });
+
+    expect({
+      minuteClose: ctx.resolveLatest({ kind: OperandKind.Close }, Period.OneMinute),
+      hourClose: ctx.resolveLatest({ kind: OperandKind.Close }, Period.OneHour),
+      // A missing interval has no period to key on — resolves to null rather
+      // than borrowing another period's bar.
+      noInterval: ctx.resolveLatest({ kind: OperandKind.Close }),
+    }).toEqual({
+      minuteClose: { type: StateValueType.Number, value: 30 },
+      hourClose: { type: StateValueType.Number, value: 50 },
+      noInterval: null,
     });
   });
 
@@ -231,7 +274,7 @@ describe('buildEvaluationContext', () => {
     });
 
     const prevPrice = ctx.resolvePrev({ kind: OperandKind.Price });
-    const prevClose = ctx.resolvePrev({ kind: OperandKind.Close });
+    const prevClose = ctx.resolvePrev({ kind: OperandKind.Close }, PERIOD);
     const prevSymbol = ctx.resolvePrev({
       kind: OperandKind.SymbolStateRef,
       key: 'mode',

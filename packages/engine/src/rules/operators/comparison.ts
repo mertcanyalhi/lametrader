@@ -16,8 +16,8 @@ import type { EvaluationContext } from '../evaluation-context.types.js';
  * `NaN` — matches CONTEXT.md's "no data yet → false" semantics.
  */
 export function evaluateComparison(leaf: ComparisonLeafCondition, ctx: EvaluationContext): boolean {
-  const left = asNumber(ctx.resolveLatest(leaf.left));
-  const right = asNumber(ctx.resolveLatest(leaf.right));
+  const left = asNumber(ctx.resolveLatest(leaf.left, leaf.interval));
+  const right = asNumber(ctx.resolveLatest(leaf.right, leaf.interval));
   if (left === null || right === null) return false;
   switch (leaf.operator) {
     case ComparisonOperator.Gt:

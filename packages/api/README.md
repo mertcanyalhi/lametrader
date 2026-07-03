@@ -321,6 +321,10 @@ A `Rule` couples a `profileId`, a `scope` (`symbol` / `symbols(list)` / `allSymb
 Tick-cadence triggers (`everyTime` / `once` / `oncePerBar`) require every referenced symbol on the watchlist at create/patch time — per ADR 0016 they ride a live quote stream, not the polling loop.
 `AllSymbols` scope is exempt (fan-out is dynamic).
 
+A condition leaf that references an OHLCV (`open` / `high` / `low` / `close` / `volume`) or `indicatorRef` operand must carry an `interval` (a `Period`) — it disambiguates which bar period the operand resolves against for a symbol watched on more than one period (per ADR 0017).
+Create/patch reject a missing `interval` (400), and — for `symbol` / `symbols` scopes — reject an `interval` that isn't among the scoped symbols' watched periods (`allSymbols` is exempt).
+The `fired` event context's `lookupSnapshot` records the `period` its OHLCV axes were captured at.
+
 ### Endpoints
 
 | Method   | Path                                       | Body            | Description                                                                                                |

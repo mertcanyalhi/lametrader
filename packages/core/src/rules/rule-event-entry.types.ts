@@ -1,3 +1,4 @@
+import type { Period } from '../config.types.js';
 import type { StateScope, StateValue } from '../index.js';
 import type { EvaluationTriggerEvent } from './event.types.js';
 
@@ -62,6 +63,16 @@ interface BaseRuleEventEntry {
  * firing symbol (e.g. `current` before any quote stream has populated it).
  */
 export interface RuleEventLookupSnapshot {
+  /**
+   * The bar period the OHLCV axes below were captured at — the rule's
+   * referenced OHLCV `interval` (the trigger's period for bar-cadence
+   * triggers, else the first OHLCV row interval in the condition).
+   *
+   * Optional: `undefined` when the rule references no OHLCV operand, and on
+   * pre-period-aware entries persisted before this field existed (they still
+   * deserialize and render as "—").
+   */
+  period?: Period;
   /** Latest current ("last") price for the firing symbol, or `null`. */
   current: number | null;
   /** Latest open value, or `null`. */

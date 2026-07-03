@@ -96,7 +96,12 @@ export type {
   SymbolQuoteEvent,
   SymbolQuoteListener,
 } from './quote.types.js';
-export { RuleError, RuleNotFoundError, TickRuleNotEligibleError } from './rule.js';
+export {
+  InvalidRuleConditionError,
+  RuleError,
+  RuleNotFoundError,
+  TickRuleNotEligibleError,
+} from './rule.js';
 export {
   type Action,
   ActionKind,
@@ -114,6 +119,7 @@ export {
   type CrossingLeafCondition,
   CrossingOperator,
   type CycleOverflowRuleEvent,
+  collectConditionIntervals,
   type DataUpdateEvent,
   DataUpdateKind,
   type ErrorRuleEvent,
@@ -130,6 +136,8 @@ export {
   type LeafCondition,
   LeafConditionFamily,
   type LowChangedEvent,
+  leafNeedsInterval,
+  leafOperands,
   type MovingLeafCondition,
   MovingOperator,
   type NotificationAction,
@@ -144,6 +152,7 @@ export {
   type OpenChangedEvent,
   OperandKind,
   type Operator,
+  operandNeedsInterval,
   type RemoveGlobalStateAction,
   type RemoveSymbolStateAction,
   type Rule,
@@ -169,6 +178,7 @@ export {
   type Trigger,
   TriggerKind,
   type VolumeChangedEvent,
+  validateRuleCondition,
 } from './rules/index.js';
 export { isBool, isNumber, isString } from './state.js';
 export { type StateValue, StateValueType } from './state.types.js';

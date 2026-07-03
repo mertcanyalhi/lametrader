@@ -28,6 +28,13 @@ export {
 } from './condition.types.js';
 export { normalizeRule } from './condition-normalize.js';
 export {
+  collectConditionIntervals,
+  leafNeedsInterval,
+  leafOperands,
+  operandNeedsInterval,
+  validateRuleCondition,
+} from './condition-validate.js';
+export {
   type BarClosedEvent,
   type BarOpenedEvent,
   type CloseChangedEvent,

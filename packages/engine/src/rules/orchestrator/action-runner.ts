@@ -1,11 +1,13 @@
 import {
   type Action,
   ActionKind,
+  collectConditionIntervals,
   type EvaluationTriggerEvent,
   EvaluationTriggerKind,
   type FiredRuleEvent,
   type NotificationAction,
   type Notifier,
+  type Period,
   type RemoveGlobalStateAction,
   type RemoveSymbolStateAction,
   type Rule,
@@ -18,6 +20,7 @@ import {
   StateScope,
   type StateValue,
   StateValueType,
+  TriggerKind,
   UnknownDestinationError,
 } from '@lametrader/core';
 
@@ -104,7 +107,7 @@ export class ActionRunner {
       symbolId: firingSymbolId,
       context: {
         inboundEvent: event,
-        lookupSnapshot: this.snapshot(firingSymbolId),
+        lookupSnapshot: this.snapshot(firingSymbolId, snapshotPeriodFor(rule)),
       },
     };
     entries.push(fired);
@@ -221,17 +224,50 @@ export class ActionRunner {
   /**
    * Snapshot the firing symbol's OHLCV lookups for the `Fired.context`
    * payload — captures what the rule actually saw when its actions ran.
+   *
+   * OHLCV is read at `period` (the rule's referenced interval, see
+   * {@link snapshotPeriodFor}) and the period is stamped on the snapshot so a
+   * reader can attribute the values to the right bar. When the rule references
+   * no OHLCV operand (`period` undefined), the OHLCV axes are `null` and the
+   * `period` field is omitted (a period-less snapshot, same shape legacy
+   * entries deserialize as). `current` (the tick price) is always period-less.
    */
-  private snapshot(firingSymbolId: string): RuleEventLookupSnapshot {
+  private snapshot(firingSymbolId: string, period: Period | undefined): RuleEventLookupSnapshot {
+    const current = this.lookups.getCurrentValue(firingSymbolId);
+    if (period === undefined) {
+      return { current, open: null, high: null, low: null, close: null, volume: null };
+    }
     return {
-      current: this.lookups.getCurrentValue(firingSymbolId),
-      open: this.lookups.getOpenValue(firingSymbolId),
-      high: this.lookups.getHighValue(firingSymbolId),
-      low: this.lookups.getLowValue(firingSymbolId),
-      close: this.lookups.getCloseValue(firingSymbolId),
-      volume: this.lookups.getVolumeValue(firingSymbolId),
+      period,
+      current,
+      open: this.lookups.getOpenValue(firingSymbolId, period),
+      high: this.lookups.getHighValue(firingSymbolId, period),
+      low: this.lookups.getLowValue(firingSymbolId, period),
+      close: this.lookups.getCloseValue(firingSymbolId, period),
+      volume: this.lookups.getVolumeValue(firingSymbolId, period),
     };
   }
+}
+
+/**
+ * The bar period a fire's OHLCV snapshot is captured at.
+ *
+ * For a bar-cadence trigger (`OncePerBarOpen` / `OncePerBarClose`) it's the
+ * trigger's period; otherwise the first OHLCV interval referenced by the
+ * condition; `undefined` when the rule references no OHLCV operand.
+ *
+ * Lazy: a rule referencing two OHLCV intervals snapshots the first one only —
+ * the single-axis snapshot shape holds one period. Upgrade path: a per-period
+ * snapshot map when a multi-interval rule needs every axis captured.
+ */
+function snapshotPeriodFor(rule: Rule): Period | undefined {
+  if (
+    rule.trigger.kind === TriggerKind.OncePerBarOpen ||
+    rule.trigger.kind === TriggerKind.OncePerBarClose
+  ) {
+    return rule.trigger.period;
+  }
+  return collectConditionIntervals(rule.condition)[0];
 }
 
 /**

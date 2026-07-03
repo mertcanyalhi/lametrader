@@ -1,5 +1,9 @@
 import {
+  type ConditionNode,
+  collectConditionIntervals,
   type EventLog,
+  InvalidRuleConditionError,
+  type Period,
   type Rule,
   type RuleEventEntry,
   RuleNotFoundError,
@@ -9,6 +13,7 @@ import {
   TickRuleNotEligibleError,
   type Trigger,
   TriggerKind,
+  validateRuleCondition,
   type WatchlistRepository,
 } from '@lametrader/core';
 import { nanoid } from 'nanoid';
@@ -159,6 +164,8 @@ export class RuleService {
    * @throws {@link TickRuleNotEligibleError} when the tick gate rejects.
    */
   async create(input: RuleCreateInput): Promise<Rule> {
+    validateRuleCondition(input.condition);
+    await this.assertIntervalsWatched(input.condition, input.scope);
     await this.assertTickEligible(input.trigger, input.scope);
     const ts = this.now();
     const rule: Rule = {
@@ -189,6 +196,8 @@ export class RuleService {
       createdAt: existing.createdAt,
       updatedAt: this.now(),
     };
+    validateRuleCondition(merged.condition);
+    await this.assertIntervalsWatched(merged.condition, merged.scope);
     await this.assertTickEligible(merged.trigger, merged.scope);
     await this.rules.save(merged);
     return merged;
@@ -254,6 +263,35 @@ export class RuleService {
     throw new TickRuleNotEligibleError(
       `Tick-cadence triggers require watched symbols; not watched: ${unwatched.join(', ')}.`,
       unwatched,
+    );
+  }
+
+  /**
+   * Throw {@link InvalidRuleConditionError} if the condition references a bar
+   * `interval` that isn't watched for the rule's scoped symbols.
+   *
+   * `AllSymbols`-scoped rules are exempt (the symbol set is dynamic at
+   * fire-time, mirroring {@link assertTickEligible}). The check runs against the
+   * union of periods across the scoped symbols that are actually on the
+   * watchlist; when none are watched there's nothing to validate against, so it
+   * passes (unwatched-symbol handling is the tick-eligibility gate's concern).
+   */
+  private async assertIntervalsWatched(condition: ConditionNode, scope: RuleScope): Promise<void> {
+    const intervals = collectConditionIntervals(condition);
+    if (intervals.length === 0) return;
+    const referenced = referencedSymbolIds(scope);
+    if (referenced === null) return;
+    const watchedPeriods = new Set<Period>();
+    for (const symbolId of referenced) {
+      const symbol = await this.watchlist.get(symbolId);
+      if (symbol === null) continue;
+      for (const period of symbol.periods) watchedPeriods.add(period);
+    }
+    if (watchedPeriods.size === 0) return;
+    const unwatched = intervals.filter((interval) => !watchedPeriods.has(interval));
+    if (unwatched.length === 0) return;
+    throw new InvalidRuleConditionError(
+      `Condition interval(s) not watched for the rule's symbols: ${unwatched.join(', ')}.`,
     );
   }
 }

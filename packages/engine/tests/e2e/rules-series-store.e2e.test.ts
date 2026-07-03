@@ -112,8 +112,8 @@ describe('rules series store + EvaluationContext (e2e)', () => {
     // ── Assert: resolveLatest for every operand kind ──
     expect({
       price: ctx.resolveLatest({ kind: OperandKind.Price }),
-      close: ctx.resolveLatest({ kind: OperandKind.Close }),
-      high: ctx.resolveLatest({ kind: OperandKind.High }),
+      close: ctx.resolveLatest({ kind: OperandKind.Close }, PERIOD),
+      high: ctx.resolveLatest({ kind: OperandKind.High }, PERIOD),
       indicator: ctx.resolveLatest({
         kind: OperandKind.IndicatorRef,
         instanceId: INSTANCE_ID,
@@ -179,7 +179,7 @@ describe('rules series store + EvaluationContext (e2e)', () => {
     });
 
     const priceSeries = ctx.resolveSeries({ kind: OperandKind.Price });
-    const closeLatest = ctx.resolveLatest({ kind: OperandKind.Close });
+    const closeLatest = ctx.resolveLatest({ kind: OperandKind.Close }, PERIOD);
 
     expect({
       priceLength: priceSeries.length,
