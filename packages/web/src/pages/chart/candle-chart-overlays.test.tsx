@@ -279,6 +279,7 @@ const PROFILE_FIXTURE: Profile = {
   createdAt: 1_700_000_000_000,
   updatedAt: 1_700_000_000_000,
   indicators: [SMA_INSTANCE_FIXTURE],
+  chartStates: [],
 };
 
 const SMA_LEGEND_OVERLAY: LegendOverlay = {

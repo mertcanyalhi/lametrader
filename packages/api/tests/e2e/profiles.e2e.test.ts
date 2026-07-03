@@ -88,6 +88,7 @@ describe('profiles API (e2e)', () => {
       createdAt: expect.any(Number),
       updatedAt: expect.any(Number),
       indicators: [],
+      chartStates: [],
     });
 
     expect((await app.inject({ method: 'GET', url: '/profiles' })).json()).toEqual([created]);
@@ -119,6 +120,60 @@ describe('profiles API (e2e)', () => {
       (await app.inject({ method: 'DELETE', url: `/profiles/${created.id}` })).statusCode,
     ).toBe(204);
     expect((await app.inject({ method: 'GET', url: '/profiles' })).json()).toEqual([]);
+  });
+
+  it('round-trips chartStates: create persists+echoes, PATCH-omit preserves, PATCH-set replaces', async () => {
+    const create = await app.inject({
+      method: 'POST',
+      url: '/profiles',
+      payload: { name: 'Marked', chartStates: ['price:trend'] },
+    });
+    expect(create.statusCode).toBe(201);
+    const created = create.json() as Profile;
+    expect(created).toEqual({
+      id: expect.any(String),
+      name: 'Marked',
+      description: '',
+      enabled: true,
+      scope: { type: 'all' },
+      createdAt: expect.any(Number),
+      updatedAt: expect.any(Number),
+      indicators: [],
+      chartStates: ['price:trend'],
+    });
+
+    const echoed = (
+      await app.inject({ method: 'GET', url: `/profiles/${created.id}` })
+    ).json() as Profile;
+    expect(echoed.chartStates).toEqual(['price:trend']);
+
+    const patched = await app.inject({
+      method: 'PATCH',
+      url: `/profiles/${created.id}`,
+      payload: { enabled: false },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect((patched.json() as Profile).chartStates).toEqual(['price:trend']);
+
+    const cleared = await app.inject({
+      method: 'PATCH',
+      url: `/profiles/${created.id}`,
+      payload: { chartStates: [] },
+    });
+    expect(cleared.statusCode).toBe(200);
+    expect((cleared.json() as Profile).chartStates).toEqual([]);
+  });
+
+  it('rejects a non-array chartStates with 400 and stores nothing', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/profiles',
+      payload: { name: 'BadStates', chartStates: { nope: true } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(
+      ((await app.inject({ method: 'GET', url: '/profiles' })).json() as Profile[]).length,
+    ).toBe(0);
   });
 
   it('rejects a duplicate name with 409 and stores only the first profile', async () => {

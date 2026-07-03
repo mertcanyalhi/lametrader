@@ -110,6 +110,7 @@ const PROFILE: Profile = {
   createdAt: NOW,
   updatedAt: NOW,
   indicators: [SMA_INSTANCE, VWMA_INSTANCE],
+  chartStates: [],
 };
 
 interface FetchCall {

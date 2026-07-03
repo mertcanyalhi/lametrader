@@ -31,6 +31,7 @@ describe('runProfiles', () => {
       createdAt: 1000,
       updatedAt: 1000,
       indicators: [],
+      chartStates: [],
     });
     expect(JSON.parse(await runProfiles(['list'], service))).toEqual([created]);
   });
@@ -48,6 +49,7 @@ describe('runProfiles', () => {
       createdAt: 1000,
       updatedAt: 1000,
       indicators: [],
+      chartStates: [],
     });
   });
 

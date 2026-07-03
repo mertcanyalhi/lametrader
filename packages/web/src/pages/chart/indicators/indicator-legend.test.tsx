@@ -64,6 +64,7 @@ const PROFILE: Profile = {
   createdAt: NOW,
   updatedAt: NOW,
   indicators: [SMA_INSTANCE],
+  chartStates: [],
 };
 
 /** A legend overlay row with three state points, one warm-up. */

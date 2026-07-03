@@ -209,6 +209,7 @@ describe('ChartPage', () => {
     createdAt: 1,
     updatedAt: 1,
     indicators: [],
+    chartStates: [],
   };
   const DISABLED_PROFILE: Profile = {
     id: 'p-0',
@@ -219,6 +220,7 @@ describe('ChartPage', () => {
     createdAt: 1,
     updatedAt: 1,
     indicators: [],
+    chartStates: [],
   };
 
   it('hosts the profile picker trigger in the bottom-bar Chart actions group', async () => {

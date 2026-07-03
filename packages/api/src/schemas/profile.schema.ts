@@ -49,6 +49,8 @@ export const ProfileSchema = Type.Object(
     createdAt: Type.Number(),
     updatedAt: Type.Number(),
     indicators: Type.Array(IndicatorInstanceSchema),
+    /** Symbol-state keys whose markers the chart renders for this profile. */
+    chartStates: Type.Array(Type.String()),
   },
   { $id: 'Profile', additionalProperties: false },
 );
@@ -88,6 +90,7 @@ export const ProfileInputSchema = Type.Object(
     description: Type.Optional(Type.String()),
     enabled: Type.Optional(Type.Boolean()),
     scope: Type.Optional(ProfileScopeSchema),
+    chartStates: Type.Optional(Type.Array(Type.String())),
   },
   { additionalProperties: false },
 );
@@ -103,6 +106,7 @@ export const ProfilePatchSchema = Type.Object(
     description: Type.Optional(Type.String()),
     enabled: Type.Optional(Type.Boolean()),
     scope: Type.Optional(ProfileScopeSchema),
+    chartStates: Type.Optional(Type.Array(Type.String())),
   },
   { additionalProperties: false },
 );
