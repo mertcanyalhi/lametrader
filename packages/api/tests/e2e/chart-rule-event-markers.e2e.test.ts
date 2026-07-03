@@ -284,12 +284,17 @@ describe('chart rule-event markers (e2e)', () => {
     expect(created.statusCode).toEqual(201);
     const rule = created.json();
 
-    // A window distinct from the first test's tick, so its events don't leak in.
+    // A window + price both distinct from the first test's tick. The `ts` keeps
+    // this fire's events out of that window; the price must differ too because
+    // `TickBridge` is changed-only (#464) — a repeat of the previous
+    // `(symbolId, period)` price emits no tick, so reusing 101 would fire
+    // nothing and the reads below would be empty for the wrong reason. 102 is
+    // still `> 100`, so the rule fires.
     const tickTs = 1_700_000_600_000;
     wired.tickBridge.handleQuote({
       id: SYMBOL_ID,
       subscriptionId: 'sub-2',
-      quote: { symbolId: SYMBOL_ID, price: 101, bid: null, ask: null, time: tickTs },
+      quote: { symbolId: SYMBOL_ID, price: 102, bid: null, ask: null, time: tickTs },
     });
     await wired.drain();
     const windowQs = `from=${tickTs - 1}&to=${tickTs + 1}`;
