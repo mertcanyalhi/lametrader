@@ -239,8 +239,8 @@ describe('TriggerDispatcher — OncePerBar latch', () => {
   });
 });
 
-describe('TriggerDispatcher — Once auto-disable', () => {
-  it('saves the rule with enabled: false on first fire', async () => {
+describe('TriggerDispatcher — Once lifetime claim', () => {
+  it('claims the lifetime fire on first match, leaving the rule enabled: false', async () => {
     const r = rule({ trigger: { kind: TriggerKind.Once } });
     const { repo, dispatcher } = await setup({ rules: [r] });
     await dispatcher.dispatch(TICK_EVENT_AT(1_000));
@@ -254,6 +254,53 @@ describe('TriggerDispatcher — Once auto-disable', () => {
     await dispatcher.dispatch(TICK_EVENT_AT(1_000));
     const fires = await dispatcher.dispatch(TICK_EVENT_AT(2_000));
     expect(fires).toEqual([]);
+  });
+
+  it('fires an AllSymbols Once rule exactly once when a single symbol-less dispatch fans it out across multiple watched symbols', async () => {
+    // A GlobalStateChanged cascade fans an AllSymbols rule out to one
+    // (rule, firingSymbolId) pair per watched symbol in ONE dispatch. Before
+    // the atomic claim each pair fired; now the first firing symbol wins the
+    // claim and the rest are gate-blocked.
+    const r = rule({
+      trigger: { kind: TriggerKind.Once },
+      scope: { kind: RuleScopeKind.AllSymbols },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.State,
+          operator: StateOperator.Equals,
+          left: { kind: OperandKind.GlobalStateRef, key: 'mood', valueType: StateValueType.Bool },
+          right: { kind: OperandKind.Literal, value: { type: StateValueType.Bool, value: true } },
+        },
+      },
+    });
+    const { dispatcher } = await setup({
+      rules: [r],
+      buildContext: () => ({
+        symbolId: 'AAPL',
+        resolveLatest(operand) {
+          if (operand.kind === OperandKind.Literal) return operand.value;
+          if (operand.kind === OperandKind.GlobalStateRef)
+            return { type: StateValueType.Bool, value: true } as StateValue;
+          return null;
+        },
+        resolvePrev(operand) {
+          if (operand.kind === OperandKind.Literal) return operand.value;
+          return null;
+        },
+        resolveSeries: () => EMPTY_SERIES,
+      }),
+    });
+    const event: GlobalStateChangedEvent = {
+      kind: EvaluationTriggerKind.GlobalStateChanged,
+      ts: 1_000,
+      profileId: 'profile-1',
+      key: 'mood',
+      prev: null,
+      current: { type: StateValueType.Bool, value: true },
+    };
+    const fires = await dispatcher.dispatch(event, { watchedSymbolIds: ['AAPL', 'MSFT'] });
+    expect(fires).toEqual([{ ruleId: 'r1', firingSymbolId: 'AAPL', event }]);
   });
 });
 

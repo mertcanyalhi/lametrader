@@ -123,6 +123,31 @@ export function runRuleRepositoryContract(
     expect(await repo.get('missing')).toBeNull();
   });
 
+  it('claimOnceFire returns true on first claim and disables the rule', async () => {
+    const { repo } = await make();
+    await repo.save(rule({ id: 'a', order: 1, enabled: true }));
+    expect(await repo.claimOnceFire('a')).toBe(true);
+    expect((await repo.get('a'))?.enabled).toBe(false);
+  });
+
+  it('claimOnceFire returns false on the second claim for the same rule', async () => {
+    const { repo } = await make();
+    await repo.save(rule({ id: 'a', order: 1, enabled: true }));
+    await repo.claimOnceFire('a');
+    expect(await repo.claimOnceFire('a')).toBe(false);
+  });
+
+  it('claimOnceFire returns false for an already-disabled rule', async () => {
+    const { repo } = await make();
+    await repo.save(rule({ id: 'a', order: 1, enabled: false }));
+    expect(await repo.claimOnceFire('a')).toBe(false);
+  });
+
+  it('claimOnceFire returns false for an unknown id', async () => {
+    const { repo } = await make();
+    expect(await repo.claimOnceFire('missing')).toBe(false);
+  });
+
   it('save replaces an existing rule by id', async () => {
     const { repo } = await make();
     await repo.save(rule({ id: 'a', order: 1, name: 'first' }));

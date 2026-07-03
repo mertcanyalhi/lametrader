@@ -60,6 +60,16 @@ export class InMemoryRuleRepository implements RuleRepository {
     return rule ? normalizeRule(rule) : null;
   }
 
+  async claimOnceFire(ruleId: string): Promise<boolean> {
+    // Read-and-write with no `await` between them, so the transition is
+    // atomic w.r.t. the single-threaded event loop — concurrent per-symbol
+    // chains cannot both observe `enabled: true` here.
+    const rule = this.byId.get(ruleId);
+    if (rule === undefined || !rule.enabled) return false;
+    this.byId.set(ruleId, { ...rule, enabled: false });
+    return true;
+  }
+
   async save(rule: Rule): Promise<void> {
     this.byId.set(rule.id, rule);
   }

@@ -43,6 +43,22 @@ export interface RuleRepository {
   listEnabledForSymbol(symbolId: string | null, profileId?: string): Promise<Rule[]>;
   /** One rule by id, or `null` if none exists. */
   get(id: string): Promise<Rule | null>;
+  /**
+   * Atomically claim a `Once` rule's single lifetime fire.
+   *
+   * A single-document test-and-set: if the rule exists and is currently
+   * `enabled`, transition it to `enabled: false` and return `true` (this
+   * caller won the claim). Otherwise — the rule is absent or already
+   * disabled — leave it untouched and return `false`.
+   *
+   * This is the component that enforces the `Once` lifetime once-ever
+   * invariant (see `specs/once-trigger-gate.spec.md`). Because the read and
+   * the write are atomic per rule, exactly one caller wins even when several
+   * per-symbol chains (#307) evaluate the same `AllSymbols` rule
+   * concurrently. The dispatcher calls this before running a `Once` rule's
+   * actions; losers skip silently.
+   */
+  claimOnceFire(ruleId: string): Promise<boolean>;
   /** Upsert a rule, keyed by id (re-saving an id replaces it). */
   save(rule: Rule): Promise<void>;
   /**
