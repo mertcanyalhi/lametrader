@@ -115,6 +115,10 @@ export interface SymbolStateKey {
  * The endpoint is not partitioned by profile — `RuleEventEntry` carries no
  * `profileId` today, so the picker shows every key persisted on the symbol
  * regardless of which profile's rule wrote it (see issue #434 design notes).
+ *
+ * Disabled when `symbolId` is empty (e.g. the profile form opened away from a
+ * chart), so no bogus `GET /symbols//state-keys` fires and the caller simply
+ * seeds an empty suggestion list.
  */
 export function useSymbolStateKeys(symbolId: string): UseQueryResult<SymbolStateKey[], Error> {
   return useQuery({
@@ -122,6 +126,7 @@ export function useSymbolStateKeys(symbolId: string): UseQueryResult<SymbolState
     queryFn: () =>
       apiFetch<SymbolStateKey[]>(`/symbols/${encodeURIComponent(symbolId)}/state-keys`),
     refetchInterval: STATE_OVERLAY_REFETCH_MS,
+    enabled: symbolId !== '',
   });
 }
 

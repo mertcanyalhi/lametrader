@@ -215,7 +215,7 @@ function ChartLayout({
         role="group"
         aria-label="Chart actions"
       >
-        <ProfilePickerDialog />
+        <ProfilePickerDialog symbolId={id} />
         <SymbolPickerDialog currentId={id} watched={symbols} onSelect={selectSymbol} />
         <PeriodRangeDialog
           period={period}
