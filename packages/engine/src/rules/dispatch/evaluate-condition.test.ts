@@ -61,7 +61,7 @@ describe('evaluateCondition — tree walker', () => {
       new Map([[OperandKind.Price as string, { type: StateValueType.Number, value: 120 }]]),
     );
     const tree = leafGtLiteral({ kind: OperandKind.Price }, 100);
-    expect(evaluateCondition(tree, ctx)).toEqual(true);
+    expect(evaluateCondition(tree, ctx, 'r-1')).toEqual(true);
   });
 
   it('returns false on a single leaf whose operator returns false', () => {
@@ -69,7 +69,7 @@ describe('evaluateCondition — tree walker', () => {
       new Map([[OperandKind.Price as string, { type: StateValueType.Number, value: 80 }]]),
     );
     const tree = leafGtLiteral({ kind: OperandKind.Price }, 100);
-    expect(evaluateCondition(tree, ctx)).toEqual(false);
+    expect(evaluateCondition(tree, ctx, 'r-1')).toEqual(false);
   });
 
   it('returns true on an And of two true leaves', () => {
@@ -83,7 +83,7 @@ describe('evaluateCondition — tree walker', () => {
         leafGtLiteral({ kind: OperandKind.Price }, 110),
       ],
     };
-    expect(evaluateCondition(tree, ctx)).toEqual(true);
+    expect(evaluateCondition(tree, ctx, 'r-1')).toEqual(true);
   });
 
   it('returns false on an And short-circuiting on the first false leaf', () => {
@@ -97,7 +97,7 @@ describe('evaluateCondition — tree walker', () => {
         leafGtLiteral({ kind: OperandKind.Price }, 50),
       ],
     };
-    expect(evaluateCondition(tree, ctx)).toEqual(false);
+    expect(evaluateCondition(tree, ctx, 'r-1')).toEqual(false);
   });
 
   it('returns true on an Or short-circuiting on the first true leaf', () => {
@@ -111,7 +111,7 @@ describe('evaluateCondition — tree walker', () => {
         leafGtLiteral({ kind: OperandKind.Price }, 200),
       ],
     };
-    expect(evaluateCondition(tree, ctx)).toEqual(true);
+    expect(evaluateCondition(tree, ctx, 'r-1')).toEqual(true);
   });
 
   it('returns false on an Or of two false leaves', () => {
@@ -125,6 +125,6 @@ describe('evaluateCondition — tree walker', () => {
         leafGtLiteral({ kind: OperandKind.Price }, 200),
       ],
     };
-    expect(evaluateCondition(tree, ctx)).toEqual(false);
+    expect(evaluateCondition(tree, ctx, 'r-1')).toEqual(false);
   });
 });

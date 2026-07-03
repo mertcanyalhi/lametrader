@@ -79,7 +79,7 @@ describe('evaluateCondition trace', () => {
       },
     };
 
-    evaluateCondition(node, TRIVIAL_CTX);
+    evaluateCondition(node, TRIVIAL_CTX, 'r-1');
 
     expect(records).toEqual([
       {
@@ -87,6 +87,8 @@ describe('evaluateCondition trace', () => {
         time: expect.any(Number),
         app: 'engine',
         scope: 'engine.rules.operators',
+        ruleId: 'r-1',
+        symbolId: 'AAPL',
         family: LeafConditionFamily.Comparison,
         operator: ComparisonOperator.Gt,
         leftKind: OperandKind.Price,
@@ -126,7 +128,7 @@ describe('evaluateCondition trace', () => {
       },
     };
 
-    evaluateCondition(node, TRIVIAL_CTX);
+    evaluateCondition(node, TRIVIAL_CTX, 'r-1');
 
     expect(records).toEqual([
       {
@@ -134,6 +136,8 @@ describe('evaluateCondition trace', () => {
         time: expect.any(Number),
         app: 'engine',
         scope: 'engine.rules.operators',
+        ruleId: 'r-1',
+        symbolId: 'AAPL',
         family: LeafConditionFamily.State,
         operator: StateOperator.ChangesTo,
         leftKind: OperandKind.SymbolStateRef,
@@ -169,7 +173,7 @@ describe('evaluateCondition trace', () => {
       },
     };
 
-    evaluateCondition(node, TRIVIAL_CTX);
+    evaluateCondition(node, TRIVIAL_CTX, 'r-1');
 
     expect(records).toEqual([]);
   });

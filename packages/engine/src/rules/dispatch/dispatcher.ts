@@ -190,7 +190,7 @@ export class TriggerDispatcher {
     for (const { rule, firingSymbolId } of candidates) {
       candidateIds.push(rule.id);
       const ctx = this.deps.buildContext(event, firingSymbolId, rule.profileId);
-      if (!evaluateCondition(rule.condition, ctx)) {
+      if (!evaluateCondition(rule.condition, ctx, rule.id)) {
         droppedCandidates.push({ ruleId: rule.id, reason: 'condition-false' });
         continue;
       }

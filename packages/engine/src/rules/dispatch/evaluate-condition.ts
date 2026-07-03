@@ -25,27 +25,32 @@ const log = getLogger('engine.rules.operators');
  * first true child. Leaf nodes delegate to {@link evaluateLeaf} from #390.
  *
  * Each leaf evaluated emits a `leaf_decision` trace under
- * `engine.rules.operators` carrying `{ family, operator, leftKind,
- * leftValue, leftPrev, rightKind?, rightValue?, rightPrev?, result }` —
- * gated by the per-scope level (payload assembly only fires when the level
- * is enabled).
+ * `engine.rules.operators` carrying `{ ruleId, symbolId, family, operator,
+ * leftKind, leftValue, leftPrev, rightKind?, rightValue?, rightPrev?,
+ * result }` — the `ruleId`/`symbolId` identify which rule on which symbol
+ * produced the decision. Gated by the per-scope level (payload assembly
+ * only fires when the level is enabled).
  *
  * Pure — every read goes through `context`. Empty children produce the
  * identity element of the group (`And: true`, `Or: false`), matching the
  * usual short-circuit semantics.
  */
-export function evaluateCondition(node: ConditionNode, context: EvaluationContext): boolean {
+export function evaluateCondition(
+  node: ConditionNode,
+  context: EvaluationContext,
+  ruleId: string,
+): boolean {
   switch (node.kind) {
     case ConditionNodeKind.Leaf:
-      return evaluateAndTraceLeaf(node.leaf, context);
+      return evaluateAndTraceLeaf(node.leaf, context, ruleId);
     case ConditionNodeKind.And:
       for (const child of node.children) {
-        if (!evaluateCondition(child, context)) return false;
+        if (!evaluateCondition(child, context, ruleId)) return false;
       }
       return true;
     case ConditionNodeKind.Or:
       for (const child of node.children) {
-        if (evaluateCondition(child, context)) return true;
+        if (evaluateCondition(child, context, ruleId)) return true;
       }
       return false;
   }
@@ -55,6 +60,7 @@ export function evaluateCondition(node: ConditionNode, context: EvaluationContex
  * Evaluate one leaf and emit the per-leaf trace.
  *
  * The trace payload mirrors the issue #436 contract:
+ * - `ruleId`/`symbolId` — which rule on which symbol produced the decision.
  * - `family`/`operator` — the leaf's discriminators.
  * - `leftKind` — always present (every leaf has a `left` operand).
  * - `leftValue` / `leftPrev` — `resolveLatest` / `resolvePrev` reads on the
@@ -67,10 +73,14 @@ export function evaluateCondition(node: ConditionNode, context: EvaluationContex
  * Payload assembly is skipped when the operators-scope is not at `trace`,
  * so the hot path stays free.
  */
-function evaluateAndTraceLeaf(leaf: LeafCondition, ctx: EvaluationContext): boolean {
+function evaluateAndTraceLeaf(
+  leaf: LeafCondition,
+  ctx: EvaluationContext,
+  ruleId: string,
+): boolean {
   const result = evaluateLeaf(leaf, ctx);
   if (!log.isLevelEnabled('trace')) return result;
-  log.trace(leafTracePayload(leaf, ctx, result), 'leaf_decision');
+  log.trace(leafTracePayload(leaf, ctx, result, ruleId), 'leaf_decision');
   return result;
 }
 
@@ -80,6 +90,8 @@ function evaluateAndTraceLeaf(leaf: LeafCondition, ctx: EvaluationContext): bool
  * serialisable as-is).
  */
 interface LeafTracePayload {
+  ruleId: string;
+  symbolId: string;
   family: LeafConditionFamily;
   operator: string;
   leftKind: string;
@@ -96,8 +108,11 @@ function leafTracePayload(
   leaf: LeafCondition,
   ctx: EvaluationContext,
   result: boolean,
+  ruleId: string,
 ): LeafTracePayload {
   const base: LeafTracePayload = {
+    ruleId,
+    symbolId: ctx.symbolId,
     family: leaf.family,
     operator: leaf.operator,
     leftKind: leaf.left.kind,
