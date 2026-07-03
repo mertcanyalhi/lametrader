@@ -4,7 +4,6 @@ import {
   type IndicatorDefinition,
   type IndicatorInstance,
   Period,
-  type RuleEventType,
 } from '@lametrader/core';
 import { Callout, Flex, Link as RadixLink } from '@radix-ui/themes';
 import { useQueries } from '@tanstack/react-query';
@@ -31,7 +30,6 @@ import { CandleChart, type IndicatorOverlay } from './candle-chart.js';
 import { ChartLoading } from './chart-loading.js';
 import { CHART_RANGE_ORDER, type ChartRange } from './chart-range.js';
 import { ChartEmptyState } from './empty-state.js';
-import { EVENT_TYPES_ORDER, EventMarkersPickerDialog } from './event-markers-picker-dialog.js';
 import type { LegendOverlay } from './indicators/indicator-legend.js';
 import { IndicatorPanelDialog } from './indicators/indicator-panel-dialog.js';
 import { paletteColor } from './indicators/overlay-palette.js';
@@ -165,19 +163,6 @@ function ChartLayout({
   useEffect(() => {
     setSelectedStateKeys(profileId ? getStoredStateOverlays(profileId, id) : []);
   }, [profileId, id]);
-  // Per issue #435: every event type visible by default; the picker hides
-  // individual types.
-  const [visibleEventTypes, setVisibleEventTypes] = useState<ReadonlySet<RuleEventType>>(
-    () => new Set(EVENT_TYPES_ORDER),
-  );
-  const toggleEventType = useCallback((type: RuleEventType) => {
-    setVisibleEventTypes((current) => {
-      const next = new Set(current);
-      if (next.has(type)) next.delete(type);
-      else next.add(type);
-      return next;
-    });
-  }, []);
   // Open one live rule-event subscription per loaded chart symbol — every
   // inbound frame invalidates the windowed-range query so new entries land
   // in the visible window on the next refetch.
@@ -199,7 +184,6 @@ function ChartLayout({
             hidden={hidden}
             toggleVisible={toggleVisible}
             selectedStateKeys={selectedStateKeys}
-            visibleEventTypes={visibleEventTypes}
           />
         ) : (
           <>
@@ -231,7 +215,6 @@ function ChartLayout({
         <StatesPanelDialog symbolId={id} symbolType={symbol.type} onChange={setSelectedStateKeys} />
         <SymbolRulesDialog symbolId={id} />
         <SymbolRuleEventsDialog symbolId={id} />
-        <EventMarkersPickerDialog visibleTypes={visibleEventTypes} onToggleType={toggleEventType} />
       </Flex>
     </div>
   );
@@ -301,7 +284,6 @@ function ChartView({
   hidden,
   toggleVisible,
   selectedStateKeys,
-  visibleEventTypes,
 }: {
   id: string;
   period: Period;
@@ -310,7 +292,6 @@ function ChartView({
   hidden: Record<string, true>;
   toggleVisible: (instanceId: string) => void;
   selectedStateKeys: string[];
-  visibleEventTypes: ReadonlySet<RuleEventType>;
 }): ReactNode {
   const feed = usePagedCandles({ id, period });
   // The chart applies live bars itself; here the live bar only drives the tab
@@ -344,13 +325,14 @@ function ChartView({
     from: computeFrom,
     to: computeTo,
   });
-  // Read every rule event whose `ts` falls in the chart's visible candle window,
-  // then map to glyph markers via the settled per-type style.
-  const eventsQuery = useRuleEventsForRange(id, computeFrom, computeTo);
-  const eventMarkers = useMemo(
-    () => buildEventMarkers(eventsQuery.data ?? [], visibleEventTypes),
-    [eventsQuery.data, visibleEventTypes],
-  );
+  // Read the rule events whose `ts` falls in the chart's visible candle window,
+  // filtered server-side to the active profile's `chartStates` (empty ⇒ none),
+  // then map each to a glyph marker. A profile switch changes `chartStates`,
+  // which re-keys the query and refetches; the live stream invalidates the same
+  // query, so it honours the filter for free.
+  const chartStates = profile?.chartStates ?? [];
+  const eventsQuery = useRuleEventsForRange(id, computeFrom, computeTo, chartStates);
+  const eventMarkers = useMemo(() => buildEventMarkers(eventsQuery.data ?? []), [eventsQuery.data]);
   const body = feed.isPending ? (
     <ChartLoading />
   ) : feed.isError ? (

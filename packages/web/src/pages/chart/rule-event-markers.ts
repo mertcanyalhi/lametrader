@@ -68,7 +68,11 @@ export const EVENT_MARKER_STYLE: Readonly<Record<RuleEventType, EventMarkerStyle
 
 /**
  * Map a list of {@link RuleEventEntry} to `lightweight-charts` markers, one
- * per entry, filtered to the `visibleTypes` set.
+ * per entry.
+ *
+ * Renders whatever it is given — the server-side `chartStates` filter (per
+ * issue #475) is the single source of truth for which events reach here, so
+ * there is no per-type visibility gate.
  *
  * Returns markers sorted ascending by `time` — the `createSeriesMarkers`
  * plugin requires it.
@@ -76,13 +80,9 @@ export const EVENT_MARKER_STYLE: Readonly<Record<RuleEventType, EventMarkerStyle
  * Each entry's `ts` is in epoch ms; the chart's time scale is in seconds, so
  * we divide. Same convention as `buildMarkers` for indicator overlays.
  */
-export function buildEventMarkers(
-  entries: ReadonlyArray<RuleEventEntry>,
-  visibleTypes: ReadonlySet<RuleEventType>,
-): SeriesMarker<Time>[] {
+export function buildEventMarkers(entries: ReadonlyArray<RuleEventEntry>): SeriesMarker<Time>[] {
   const markers: SeriesMarker<Time>[] = [];
   for (const entry of entries) {
-    if (!visibleTypes.has(entry.type)) continue;
     const style = EVENT_MARKER_STYLE[entry.type];
     markers.push({
       time: (entry.ts / 1000) as Time,

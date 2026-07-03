@@ -42,6 +42,9 @@ Each applicable instance gets a deterministic palette colour, fetched once per `
 A legend below the canvas lists every overlay with its display name + summary, the value at the crosshair (or the latest non-null when no crosshair), a show/hide eye (chart-local view state), and a remove `x` that opens the same `AlertDialog` detach confirm the panel uses.
 Live updates land in a follow-up issue.
 
+Rule-event markers (`stateSet` / `stateRemoved`) render on the candle series for only the state keys the active profile lists in its **Chart states** — the chart threads that list into its windowed marker read, which filters server-side, so a profile with an empty `chartStates` renders no markers and a profile switch refetches with the new set.
+There is no per-type marker picker: the profile's `chartStates` is the single control over what renders.
+
 ### `/rules` — Rules
 
 The rule editor (sole rules surface per ADR 0016): a profile-scoped list of rules with full CRUD.
@@ -119,6 +122,7 @@ The mutations invalidate `['profiles']` so the profile's embedded `indicators[]`
 
 `src/lib/hooks/rules.ts` exposes the rules data layer (mounted under `/api/rules`) — `useRules(filters?)` (`GET /rules?profileId=&symbolId=&enabled=`), `useRule(id)`, `useCreateRule` (`POST /rules`), `usePatchRule` (`PATCH /rules/:id`), `useDeleteRule` (`DELETE /rules/:id`), and `useRuleEvents(id, { limit?, before? })` (`GET /rules/:id/events`).
 The chart's Events panel and the per-rule / per-symbol `EventsDialog` build on top of these via `useInfiniteQuery` for "Load more" pagination keyed by the oldest event's `ts`.
+The chart's markers use `useRuleEventsForRange(id, from, to, chartStates)` (`GET /symbols/:id/rule-events?from=&to=&limit=500&chartStates=`) — a windowed read filtered server-side to the active profile's `chartStates` and keyed on it, so a profile switch refetches; `useRuleEventStream(id)` invalidates that query per live frame, so the stream honours the same filter for free.
 
 `src/lib/hooks/telegram.ts` exposes the notification-destinations data layer behind the rule editor's destination dropdown and the settings page's destinations CRUD — `useTelegramDestinations` (`GET /config/notifications/telegram` → `{ name, chatId }[]`), `useUpsertTelegramDestination` (`POST` upsert; tokens are write-only), and `useDeleteTelegramDestination` (`DELETE /config/notifications/telegram/:name`).
 Token reads aren't possible: the API never returns `botToken` on a list, so there's no client-side bot-token handling beyond the Add form.

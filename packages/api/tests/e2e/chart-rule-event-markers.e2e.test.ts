@@ -43,8 +43,12 @@ const SYMBOL_ID = 'crypto:BTCUSDT';
 /**
  * A tick-cadence `EveryTime` `Price > 100` rule on `SYMBOL_ID` with a
  * `SetSymbolState` action.
+ *
+ * `overrides` swap in a different name / action set (e.g. multiple state keys).
  */
-function buildRuleInput(): Omit<Rule, 'id' | 'createdAt' | 'updatedAt'> {
+function buildRuleInput(
+  overrides: Partial<Omit<Rule, 'id' | 'createdAt' | 'updatedAt'>> = {},
+): Omit<Rule, 'id' | 'createdAt' | 'updatedAt'> {
   return {
     profileId: 'profile-e2e-markers',
     name: 'price > 100 marker',
@@ -72,6 +76,7 @@ function buildRuleInput(): Omit<Rule, 'id' | 'createdAt' | 'updatedAt'> {
     ],
     enabled: true,
     order: 1,
+    ...overrides,
   };
 }
 
@@ -250,6 +255,76 @@ describe('chart rule-event markers (e2e)', () => {
     const response = await app.inject({
       method: 'GET',
       url: `/symbols/${encodeURIComponent(SYMBOL_ID)}/rule-events?from=foo`,
+    });
+    expect(response.statusCode).toEqual(400);
+  });
+
+  it('filters the windowed read to the profile chartStates, dropping other keys and non-state events', async () => {
+    // A rule whose fire writes two state keys — the chart-states filter must
+    // keep only the configured one and drop the umbrella `Fired` entry.
+    const created = await app.inject({
+      method: 'POST',
+      url: '/rules',
+      payload: buildRuleInput({
+        name: 'two-state marker',
+        actions: [
+          {
+            kind: ActionKind.SetSymbolState,
+            key: 'fired',
+            value: { type: StateValueType.Bool, value: true },
+          },
+          {
+            kind: ActionKind.SetSymbolState,
+            key: 'trend',
+            value: { type: StateValueType.Bool, value: true },
+          },
+        ],
+      }),
+    });
+    expect(created.statusCode).toEqual(201);
+    const rule = created.json();
+
+    // A window distinct from the first test's tick, so its events don't leak in.
+    const tickTs = 1_700_000_600_000;
+    wired.tickBridge.handleQuote({
+      id: SYMBOL_ID,
+      subscriptionId: 'sub-2',
+      quote: { symbolId: SYMBOL_ID, price: 101, bid: null, ask: null, time: tickTs },
+    });
+    await wired.drain();
+    const windowQs = `from=${tickTs - 1}&to=${tickTs + 1}`;
+
+    // Filtered to `['trend']`: only the matching `StateSet` — the `fired`
+    // `StateSet` and the `Fired` umbrella are dropped.
+    const filtered = await app.inject({
+      method: 'GET',
+      url: `/symbols/${encodeURIComponent(SYMBOL_ID)}/rule-events?${windowQs}&chartStates=${encodeURIComponent(
+        JSON.stringify(['trend']),
+      )}`,
+    });
+    expect(filtered.statusCode).toEqual(200);
+    expect(
+      filtered
+        .json()
+        .map((entry: RuleEventEntry & { key?: string }) => ({ type: entry.type, key: entry.key })),
+    ).toEqual([{ type: RuleEventType.StateSet, key: 'trend' }]);
+
+    // An empty chartStates renders nothing.
+    const empty = await app.inject({
+      method: 'GET',
+      url: `/symbols/${encodeURIComponent(SYMBOL_ID)}/rule-events?${windowQs}&chartStates=${encodeURIComponent(
+        '[]',
+      )}`,
+    });
+    expect(empty.json()).toEqual([]);
+
+    await rules.remove(rule.id);
+  });
+
+  it('rejects a malformed chartStates on the symbol rule-events endpoint with 400', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/symbols/${encodeURIComponent(SYMBOL_ID)}/rule-events?chartStates=not-json`,
     });
     expect(response.statusCode).toEqual(400);
   });

@@ -1,5 +1,5 @@
 import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
-import type { RuleEventEntry } from '@lametrader/core';
+import { RuleError, type RuleEventEntry } from '@lametrader/core';
 import type { RuleCreateInput, RuleService } from '@lametrader/engine';
 import type { FastifyInstance } from 'fastify';
 
@@ -14,6 +14,7 @@ import {
   RulePatchSchema,
   RuleSchema,
   SymbolIdParamSchema,
+  SymbolRuleEventsQuerySchema,
 } from '../schemas/rule.schema.js';
 
 /**
@@ -141,12 +142,17 @@ export function rulesController(service: RuleService) {
           tags: ['rules'],
           summary: 'Read one symbol mirrored rule events log (newest-first)',
           params: SymbolIdParamSchema,
-          querystring: RuleEventsQuerySchema,
+          querystring: SymbolRuleEventsQuerySchema,
           response: { 200: Type.Array(RuleEventEntrySchema) },
         },
       },
-      async (request): Promise<RuleEventEntry[]> =>
-        service.listSymbolEvents(request.params.id, request.query),
+      async (request): Promise<RuleEventEntry[]> => {
+        const { chartStates, ...listOptions } = request.query;
+        return service.listSymbolEvents(request.params.id, {
+          ...listOptions,
+          chartStates: parseChartStatesFilter(chartStates),
+        });
+      },
     );
 
     app.get(
@@ -169,4 +175,30 @@ export function rulesController(service: RuleService) {
       }),
     );
   };
+}
+
+/**
+ * Parse the optional `chartStates` query param — a JSON-encoded array of state
+ * keys — into the service's `string[] | undefined` filter.
+ *
+ * Absent ⇒ `undefined` (the read stays unfiltered).
+ * Present ⇒ the decoded keys, with an empty array preserved so a blank profile
+ * renders no markers.
+ *
+ * @throws {@link RuleError} when the value is not a JSON array of strings; the
+ *   app's error handler maps it to HTTP 400 (the same envelope as a schema
+ *   failure).
+ */
+function parseChartStatesFilter(raw: string | undefined): string[] | undefined {
+  if (raw === undefined) return undefined;
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(raw);
+  } catch {
+    throw new RuleError('chartStates must be a JSON-encoded array of state keys');
+  }
+  if (!Array.isArray(decoded) || decoded.some((key) => typeof key !== 'string')) {
+    throw new RuleError('chartStates must be a JSON-encoded array of state keys');
+  }
+  return decoded as string[];
 }

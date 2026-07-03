@@ -8,16 +8,6 @@ import {
 import { describe, expect, it } from 'vitest';
 import { buildEventMarkers, EVENT_MARKER_STYLE } from './rule-event-markers.js';
 
-/** Every event type, marked visible — the dialog's default state. */
-const ALL_TYPES: ReadonlySet<RuleEventType> = new Set([
-  RuleEventType.Fired,
-  RuleEventType.NotificationSent,
-  RuleEventType.StateSet,
-  RuleEventType.StateRemoved,
-  RuleEventType.Error,
-  RuleEventType.CycleOverflow,
-]);
-
 /** A `Fired` umbrella entry at `ts`. */
 function firedAt(ts: number): RuleEventEntry {
   return {
@@ -73,15 +63,15 @@ function errorAt(ts: number): RuleEventEntry {
 
 describe('buildEventMarkers', () => {
   it('returns an empty array when no entries are passed', () => {
-    expect(buildEventMarkers([], ALL_TYPES)).toEqual([]);
+    expect(buildEventMarkers([])).toEqual([]);
   });
 
-  it('maps a Fired + StateSet + Error to one marker each with the settled style and second-resolution time', () => {
+  it('maps every entry to one marker with the settled style and second-resolution time — no type gate', () => {
     const fired = firedAt(1_000_000);
     const stateSet = stateSetAt(1_001_000);
     const error = errorAt(1_002_000);
 
-    expect(buildEventMarkers([fired, stateSet, error], ALL_TYPES)).toEqual([
+    expect(buildEventMarkers([fired, stateSet, error])).toEqual([
       {
         time: 1_000,
         position: EVENT_MARKER_STYLE[RuleEventType.Fired].position,
@@ -106,24 +96,9 @@ describe('buildEventMarkers', () => {
     ]);
   });
 
-  it('drops entries whose type is missing from visibleTypes', () => {
-    const visible: ReadonlySet<RuleEventType> = new Set([RuleEventType.StateSet]);
-    const stateSet = stateSetAt(2_000_000);
-
-    expect(buildEventMarkers([firedAt(1_000_000), stateSet, errorAt(3_000_000)], visible)).toEqual([
-      {
-        time: 2_000,
-        position: EVENT_MARKER_STYLE[RuleEventType.StateSet].position,
-        shape: EVENT_MARKER_STYLE[RuleEventType.StateSet].shape,
-        color: EVENT_MARKER_STYLE[RuleEventType.StateSet].color,
-        text: EVENT_MARKER_STYLE[RuleEventType.StateSet].label,
-      },
-    ]);
-  });
-
   it('returns markers sorted ascending by time even when entries arrive out of order', () => {
     expect(
-      buildEventMarkers([firedAt(3_000_000), stateSetAt(1_000_000), errorAt(2_000_000)], ALL_TYPES),
+      buildEventMarkers([firedAt(3_000_000), stateSetAt(1_000_000), errorAt(2_000_000)]),
     ).toEqual([
       {
         time: 1_000,

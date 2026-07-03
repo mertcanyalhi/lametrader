@@ -44,15 +44,19 @@ export function symbolRuleEventsCountKey(symbolId: string) {
 }
 
 /**
- * Stable key for one symbol's mirrored events query windowed by `[from, to)`.
- * Parameterized by both bounds so a window pan / zoom invalidates and refetches.
+ * Stable key for one symbol's mirrored events query windowed by `[from, to)`
+ * and filtered to the active profile's `chartStates`.
+ *
+ * Parameterized by both bounds AND the chart-state filter, so a window pan /
+ * zoom OR a profile switch invalidates and refetches cleanly.
  */
 export function symbolRuleEventsRangeKey(
   symbolId: string,
   from: number | undefined,
   to: number | undefined,
+  chartStates: readonly string[],
 ) {
-  return [...RULES_QUERY_KEY, 'symbol-events-range', symbolId, from, to] as const;
+  return [...RULES_QUERY_KEY, 'symbol-events-range', symbolId, from, to, chartStates] as const;
 }
 
 /**
@@ -223,26 +227,34 @@ export function useSymbolRuleEventsCount(symbolId: string): UseQueryResult<numbe
 export const RULE_EVENTS_RANGE_LIMIT = 500;
 
 /**
- * Read one symbol's mirrored events log windowed by `[from, to)`
- * (`GET /symbols/:id/rule-events?from=&to=&limit=500`).
+ * Read one symbol's mirrored events log windowed by `[from, to)` and filtered
+ * to the active profile's `chartStates`
+ * (`GET /symbols/:id/rule-events?from=&to=&limit=500&chartStates=`).
  *
  * Backs the chart's rule-event markers — the chart's visible window maps
- * directly onto `from` / `to`. Disabled when either bound is `undefined`
- * (the chart hasn't loaded enough candles to know its visible range yet),
- * so no stray request fires.
+ * directly onto `from` / `to`, and `chartStates` (a JSON-encoded array of
+ * state keys) keeps only the `stateSet` / `stateRemoved` markers the profile
+ * lists (an empty array renders nothing). Always sent, so the read filters
+ * even for a blank profile — unlike the Events list dialog / count, which omit
+ * it and stay unfiltered.
+ *
+ * Disabled when either bound is `undefined` (the chart hasn't loaded enough
+ * candles to know its visible range yet), so no stray request fires.
  */
 export function useRuleEventsForRange(
   symbolId: string,
   from: number | undefined,
   to: number | undefined,
+  chartStates: readonly string[],
 ): UseQueryResult<RuleEventEntry[], Error> {
   return useQuery({
-    queryKey: symbolRuleEventsRangeKey(symbolId, from, to),
+    queryKey: symbolRuleEventsRangeKey(symbolId, from, to, chartStates),
     queryFn: () => {
       const search = new URLSearchParams();
       search.set('from', String(from));
       search.set('to', String(to));
       search.set('limit', String(RULE_EVENTS_RANGE_LIMIT));
+      search.set('chartStates', JSON.stringify(chartStates));
       return apiFetch<RuleEventEntry[]>(
         `/symbols/${encodeURIComponent(symbolId)}/rule-events?${search}`,
       );
