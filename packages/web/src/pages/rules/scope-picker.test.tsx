@@ -115,6 +115,11 @@ describe('ScopePicker — Symbol combobox', () => {
     await user.click(screen.getByRole('option', { name: 'crypto:ETHUSDT' }));
     expect(snapshots).toEqual([{ kind: RuleScopeKind.Symbol, symbolId: 'crypto:ETHUSDT' }]);
   });
+
+  it('displays the selected symbol even when it is absent from the watchlist', () => {
+    render(<Harness initial={{ kind: RuleScopeKind.Symbol, symbolId: 'crypto:XRPUSDT' }} />);
+    expect(screen.getByText('crypto:XRPUSDT')).toBeDefined();
+  });
 });
 
 describe('ScopePicker — Symbols multi-combobox', () => {
@@ -143,5 +148,10 @@ describe('ScopePicker — Symbols multi-combobox', () => {
         symbolIds: ['crypto:BTCUSDT', 'crypto:SOLUSDT'],
       },
     ]);
+  });
+
+  it('displays a selected symbol even when it is absent from the watchlist', () => {
+    render(<Harness initial={{ kind: RuleScopeKind.Symbols, symbolIds: ['crypto:XRPUSDT'] }} />);
+    expect(screen.getByText('crypto:XRPUSDT')).toBeDefined();
   });
 });

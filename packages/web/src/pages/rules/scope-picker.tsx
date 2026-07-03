@@ -112,7 +112,13 @@ function SymbolCombobox({
   onChange: (ids: string[]) => void;
 }): ReactNode {
   const [setPortalRef, portalTarget] = useRadixPortalTarget();
-  const selectedOptions = options.filter((option) => selected.includes(option.value));
+  // Map each selected id to its watchlist option, synthesizing a bare
+  // `{ value, label }` for any id the list doesn't (yet) carry — the watchlist
+  // may still be loading, or the rule may bind a symbol since dropped from it.
+  // Filtering the value straight off `options` would render the field blank in
+  // those cases even though the underlying scope is intact.
+  const optionById = new Map(options.map((option) => [option.value, option]));
+  const selectedOptions = selected.map((id) => optionById.get(id) ?? { value: id, label: id });
 
   return (
     <div ref={setPortalRef}>
