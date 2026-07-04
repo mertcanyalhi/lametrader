@@ -1,4 +1,5 @@
-import { type Period, SymbolError, type SymbolType } from '@lametrader/core';
+import { type Period, type SymbolType } from '@lametrader/core';
+import { SymbolError } from '../domain/symbol.js';
 
 /**
  * The minimum a registered source must expose to be resolved by asset class —

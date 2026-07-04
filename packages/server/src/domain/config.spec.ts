@@ -1,6 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { defaultConfig, mergeConfig, parseConfig } from './config';
-import { type Config, Period } from './config.types';
+import { type Config, Period } from '@lametrader/core';
+import { defaultConfig, mergeConfig, parseConfig } from './config.js';
 
 describe('defaultConfig', () => {
   it('is [1h, 1d] with default 1d', () => {

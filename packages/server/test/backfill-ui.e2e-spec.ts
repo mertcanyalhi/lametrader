@@ -1,7 +1,6 @@
 import {
   type CryptoCandle,
   type Instrument,
-  MarketDataError,
   type MarketDataSource,
   Period,
   SymbolType,
@@ -14,6 +13,7 @@ import type { Model } from 'mongoose';
 import request from 'supertest';
 import { WebSocket } from 'ws';
 import { AppModule } from '../src/app.module.js';
+import { MarketDataError } from '../src/domain/symbol.js';
 import { InMemoryMarketDataSource } from '../src/market-data/in-memory-market-data-source.js';
 import { MARKET_DATA_SOURCES } from '../src/market-data/market-data-source.token.js';
 import { WatchlistEntry } from '../src/watchlist/watchlist-entry.schema.js';

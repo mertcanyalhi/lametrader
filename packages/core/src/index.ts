@@ -1,18 +1,13 @@
 /**
- * Public surface of `@lametrader/core` — the pure domain layer.
+ * Public surface of `@lametrader/core` — the shared types package.
  *
- * Holds entities and contracts (ports) only: no I/O, no outward imports.
+ * Holds the platform's type declarations (interfaces, type aliases,
+ * discriminated unions), enums, and the handful of runtime values shared with
+ * the browser (`periodMillis`, the input-limit constants). All domain logic and
+ * error classes live in `@lametrader/server`; nothing here performs I/O or
+ * imports outward.
  */
 
-export {
-  BackfillConflictError,
-  CandleError,
-  DEFAULT_CANDLE_LIMIT,
-  MAX_CANDLE_LIMIT,
-  parseBackfillRange,
-  parseCandleLimit,
-  periodMillis,
-} from './candle.js';
 export type {
   BackfillRange,
   BaseCandle,
@@ -24,17 +19,8 @@ export type {
   EquityCandle,
   FxCandle,
 } from './candle.types.js';
-export { ConfigError, defaultConfig, mergeConfig, parseConfig } from './config.js';
 export { type Config, ConfigKey, type ConfigRepository, Period } from './config.types.js';
-export { ExpirationError, validateExpiration } from './expiration.js';
 export type { Expiration } from './expiration.types.js';
-export {
-  IndicatorError,
-  IndicatorInstanceNotFoundError,
-  IndicatorNotFoundError,
-  resolveSource,
-  validateIndicatorInputs,
-} from './indicator.js';
 export {
   type EnumFieldDescriptor,
   type EnumOption,
@@ -70,15 +56,8 @@ export {
   SYMBOL_ID_MAX,
   TELEGRAM_TEMPLATE_MAX,
 } from './limits.js';
-export { type Notifier, UnknownDestinationError } from './notifier.types.js';
-export {
-  mergeProfileFields,
-  ProfileConflictError,
-  ProfileError,
-  ProfileNotFoundError,
-  parseProfileFields,
-  parseProfileScope,
-} from './profile.js';
+export type { Notifier } from './notifier.types.js';
+export { periodMillis } from './period.js';
 export {
   type AllScope,
   type IndicatorInstance,
@@ -89,19 +68,12 @@ export {
   type ProfileScopeSpec,
   type SymbolsScope,
 } from './profile.types.js';
-export { computeQuote } from './quote.js';
 export type {
   EnrichedSymbol,
   SymbolQuote,
   SymbolQuoteEvent,
   SymbolQuoteListener,
 } from './quote.types.js';
-export {
-  InvalidRuleConditionError,
-  RuleError,
-  RuleNotFoundError,
-  TickRuleNotEligibleError,
-} from './rule.js';
 export {
   type Action,
   ActionKind,
@@ -119,7 +91,6 @@ export {
   type CrossingLeafCondition,
   CrossingOperator,
   type CycleOverflowRuleEvent,
-  collectConditionIntervals,
   type DataUpdateEvent,
   DataUpdateKind,
   type ErrorRuleEvent,
@@ -136,14 +107,11 @@ export {
   type LeafCondition,
   LeafConditionFamily,
   type LowChangedEvent,
-  leafNeedsInterval,
-  leafOperands,
   type MovingLeafCondition,
   MovingOperator,
   type NotificationAction,
   NotificationChannel,
   type NotificationSentRuleEvent,
-  normalizeRule,
   type OncePerBarCloseTrigger,
   type OncePerBarOpenTrigger,
   type OncePerBarTrigger,
@@ -152,7 +120,6 @@ export {
   type OpenChangedEvent,
   OperandKind,
   type Operator,
-  operandNeedsInterval,
   type RemoveGlobalStateAction,
   type RemoveSymbolStateAction,
   type Rule,
@@ -178,9 +145,7 @@ export {
   type Trigger,
   TriggerKind,
   type VolumeChangedEvent,
-  validateRuleCondition,
 } from './rules/index.js';
-export { isBool, isNumber, isString } from './state.js';
 export { type StateValue, StateValueType } from './state.types.js';
 export {
   type GlobalStateScope,
@@ -192,15 +157,6 @@ export {
   type SymbolStateScope,
 } from './state-repository.types.js';
 export {
-  assertInstrumentTypeMatchesId,
-  MarketDataError,
-  parseSymbolPeriods,
-  SymbolConflictError,
-  SymbolError,
-  SymbolNotFoundError,
-  symbolType,
-} from './symbol.js';
-export {
   type CandleFeed,
   type Instrument,
   type MarketDataSource,
@@ -209,10 +165,8 @@ export {
   type WatchedSymbol,
   type WatchlistRepository,
 } from './symbol.types.js';
-export {
-  type TelegramDestination,
-  TelegramDestinationError,
-  type TelegramDestinationLookup,
-  TelegramDestinationNotFoundError,
-  type TelegramDestinationSummary,
+export type {
+  TelegramDestination,
+  TelegramDestinationLookup,
+  TelegramDestinationSummary,
 } from './telegram-destination.types.js';

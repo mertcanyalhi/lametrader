@@ -1,21 +1,25 @@
 import {
-  IndicatorError,
   type IndicatorInstance,
-  IndicatorInstanceNotFoundError,
-  mergeProfileFields,
   type Profile,
-  ProfileConflictError,
-  ProfileError,
-  ProfileNotFoundError,
   type ProfileRepository,
   ProfileScope,
   type ProfileScopeSpec,
-  parseProfileFields,
-  validateIndicatorInputs,
   type WatchlistRepository,
 } from '@lametrader/core';
 import { Injectable } from '@nestjs/common';
 import { nanoid } from 'nanoid';
+import {
+  IndicatorError,
+  IndicatorInstanceNotFoundError,
+  validateIndicatorInputs,
+} from '../domain/indicator.js';
+import {
+  mergeProfileFields,
+  ProfileConflictError,
+  ProfileError,
+  ProfileNotFoundError,
+  parseProfileFields,
+} from '../domain/profile.js';
 import { IndicatorRegistry } from '../indicators/indicator-registry.js';
 import type {
   IndicatorInstanceInput,

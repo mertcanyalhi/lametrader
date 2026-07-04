@@ -1,5 +1,4 @@
-import type { BaseCandle } from './candle.types.js';
-import type { SymbolQuote } from './quote.types.js';
+import type { BaseCandle, SymbolQuote } from '@lametrader/core';
 
 /**
  * Derive the period-agnostic part of a {@link SymbolQuote} from a symbol's two

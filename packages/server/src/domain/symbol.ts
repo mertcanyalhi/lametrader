@@ -1,6 +1,4 @@
-import { Period } from './config.types.js';
-import type { Instrument } from './symbol.types.js';
-import { SymbolType } from './symbol.types.js';
+import { type Instrument, Period, SymbolType } from '@lametrader/core';
 
 /**
  * Raised when a symbol input fails validation (bad id, bad periods, or no source

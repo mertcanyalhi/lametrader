@@ -1,9 +1,9 @@
+import { ConfigKey } from '@lametrader/core';
+import { InMemoryConfigRepository } from '../config/in-memory-config.repository.js';
 import {
-  ConfigKey,
   TelegramDestinationError,
   TelegramDestinationNotFoundError,
-} from '@lametrader/core';
-import { InMemoryConfigRepository } from '../config/in-memory-config.repository.js';
+} from '../domain/telegram-destination.js';
 import { TelegramDestinationsService } from './telegram-destinations.service.js';
 
 /** Build a fresh service over an empty in-memory config repo. */

@@ -1,5 +1,4 @@
-import { describe, expect, it } from 'vitest';
-import type { BaseCandle } from './candle.types.js';
+import type { BaseCandle } from '@lametrader/core';
 import { computeQuote } from './quote.js';
 
 /** Build a bare OHLC candle at `time` closing at `close`. */

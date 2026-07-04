@@ -1,11 +1,11 @@
 import {
-  normalizeRule,
   type ProfileRepository,
   type Rule,
   type RuleRepository,
   RuleScopeKind,
 } from '@lametrader/core';
 import type { Model, QueryFilter } from 'mongoose';
+import { normalizeRule } from '../domain/rules/condition-normalize.js';
 import type { RuleEntry } from './rule-entry.schema.js';
 
 /**

@@ -2,18 +2,17 @@ import {
   type BackfillRange,
   type Candle,
   type CandleBatch,
-  CandleError,
   type EquityCandle,
   type FxCandle,
   type Instrument,
-  MarketDataError,
   type MarketDataSource,
   Period,
   periodMillis,
   SymbolType,
-  symbolType,
 } from '@lametrader/core';
 import YahooFinance from 'yahoo-finance2';
+import { CandleError } from '../domain/candle.js';
+import { MarketDataError, symbolType } from '../domain/symbol.js';
 
 /**
  * Map Yahoo's `quoteType` to our {@link SymbolType} (others are skipped).

@@ -4,9 +4,6 @@ import {
   type Instrument,
   type MarketDataSource,
   Period,
-  SymbolConflictError,
-  SymbolError,
-  SymbolNotFoundError,
   SymbolType,
   type WatchedSymbol,
   type WatchlistRepository,
@@ -14,6 +11,7 @@ import {
 import { InMemoryCandleRepository } from '../candles/in-memory-candle.repository.js';
 import { ConfigService } from '../config/config.service.js';
 import { InMemoryConfigRepository } from '../config/in-memory-config.repository.js';
+import { SymbolConflictError, SymbolError, SymbolNotFoundError } from '../domain/symbol.js';
 import { SymbolService } from './symbol.service.js';
 
 /**

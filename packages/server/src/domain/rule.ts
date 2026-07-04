@@ -1,14 +1,14 @@
 /**
  * Errors that surface from the rules use-case.
  *
- * Kept in `core` as plain exception classes so the API's error handler can
- * `instanceof`-map them to HTTP status codes without importing the engine.
+ * Plain exception classes so the server's exception filter can `instanceof`-map
+ * them to HTTP status codes.
  */
 
 /**
  * Base error class for every rule-related domain failure.
  *
- * Subclassed by the specific kinds below; the API error handler maps it to a
+ * Subclassed by the specific kinds below; the exception filter maps it to a
  * generic 400 when none of the more specific subclasses matched first.
  */
 export class RuleError extends Error {
@@ -21,7 +21,7 @@ export class RuleError extends Error {
 /**
  * Thrown when a rule id has no matching persisted document.
  *
- * The API error handler maps this to 404.
+ * The exception filter maps this to 404.
  */
 export class RuleNotFoundError extends RuleError {
   constructor(message: string) {
@@ -36,7 +36,7 @@ export class RuleNotFoundError extends RuleError {
  * scoped symbols is not eligible for live quote streaming — i.e. not on the
  * watchlist or not subscribed (per ADR 0016, no synthesised ticks).
  *
- * The API error handler maps this to 400 with one `fields[]` entry per
+ * The exception filter maps this to 400 with one `fields[]` entry per
  * unwatched symbol id.
  */
 export class TickRuleNotEligibleError extends RuleError {
@@ -56,7 +56,7 @@ export class TickRuleNotEligibleError extends RuleError {
  * `IndicatorRef` operand but carries no `interval`, or names an `interval`
  * that isn't watched for the rule's scoped symbols.
  *
- * The API error handler maps {@link RuleError} to 400, so this surfaces as a
+ * The exception filter maps {@link RuleError} to 400, so this surfaces as a
  * bad-request without a dedicated branch.
  */
 export class InvalidRuleConditionError extends RuleError {

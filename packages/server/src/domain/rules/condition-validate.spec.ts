@@ -1,15 +1,13 @@
-import { describe, expect, it } from 'vitest';
-
 import {
   ComparisonOperator,
   type ConditionNode,
   ConditionNodeKind,
-  InvalidRuleConditionError,
   LeafConditionFamily,
   OperandKind,
   Period,
   StateValueType,
-} from '../index.js';
+} from '@lametrader/core';
+import { InvalidRuleConditionError } from '../rule.js';
 import {
   collectConditionIntervals,
   leafNeedsInterval,

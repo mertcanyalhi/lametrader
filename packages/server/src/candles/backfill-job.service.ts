@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { BackfillConflictError, type BackfillRange, type Period } from '@lametrader/core';
+import { type BackfillRange, type Period } from '@lametrader/core';
+import { BackfillConflictError } from '../domain/candle.js';
 import type { BackfillService } from './backfill.service.js';
 import type { BackfillJob, BackfillJobListener } from './backfill-job.types.js';
 import { BackfillJobStatus } from './backfill-job.types.js';

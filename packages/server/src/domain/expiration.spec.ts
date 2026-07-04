@@ -1,5 +1,3 @@
-import { describe, expect, it } from 'vitest';
-
 import { ExpirationError, validateExpiration } from './expiration.js';
 
 const NOW = 1_700_000_000_000;

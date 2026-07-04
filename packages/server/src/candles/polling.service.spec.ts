@@ -4,13 +4,13 @@ import {
   type CandleBatch,
   type CryptoCandle,
   type Instrument,
-  MarketDataError,
   type MarketDataSource,
   Period,
   SymbolType,
   type WatchedSymbol,
 } from '@lametrader/core';
 import { SchedulerRegistry } from '@nestjs/schedule';
+import { MarketDataError } from '../domain/symbol.js';
 import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
 import { InMemoryCandleRepository } from './in-memory-candle.repository.js';
 import { PollingService } from './polling.service.js';

@@ -1,14 +1,13 @@
 import {
   type BackfillRange,
-  CandleError,
   type CandleFeed,
   type CandlePage,
   type CandleRepository,
   type Period,
-  SymbolNotFoundError,
-  symbolType,
   type WatchlistRepository,
 } from '@lametrader/core';
+import { CandleError } from '../domain/candle.js';
+import { SymbolNotFoundError, symbolType } from '../domain/symbol.js';
 import { sourceForType } from '../market-data/source-registry.js';
 import type { BackfillProgressListener, BackfillSummary } from './backfill.service.types.js';
 

@@ -1,12 +1,6 @@
-import {
-  type Config,
-  ConfigKey,
-  type ConfigRepository,
-  defaultConfig,
-  mergeConfig,
-  parseConfig,
-} from '@lametrader/core';
+import { type Config, ConfigKey, type ConfigRepository } from '@lametrader/core';
 import { Inject, Injectable } from '@nestjs/common';
+import { defaultConfig, mergeConfig, parseConfig } from '../domain/config.js';
 import { CONFIG_REPOSITORY } from './config-repository.token.js';
 
 /**

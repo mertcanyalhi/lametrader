@@ -1,11 +1,6 @@
-import {
-  BackfillConflictError,
-  type CryptoCandle,
-  Period,
-  SymbolNotFoundError,
-  SymbolType,
-  type WatchedSymbol,
-} from '@lametrader/core';
+import { type CryptoCandle, Period, SymbolType, type WatchedSymbol } from '@lametrader/core';
+import { BackfillConflictError } from '../domain/candle.js';
+import { SymbolNotFoundError } from '../domain/symbol.js';
 import { InMemoryMarketDataSource } from '../market-data/in-memory-market-data-source.js';
 import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
 import { BackfillService } from './backfill.service.js';

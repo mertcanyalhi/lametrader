@@ -1,15 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import type { Candle } from './candle.types.js';
 import {
+  type Candle,
   FieldType,
-  IndicatorError,
   type NumberFieldDescriptor,
   PriceSource,
-  resolveSource,
   type SourceFieldDescriptor,
-  validateIndicatorInputs,
-} from './indicator.js';
-import { SymbolType } from './symbol.types.js';
+  SymbolType,
+} from '@lametrader/core';
+import { IndicatorError, resolveSource, validateIndicatorInputs } from './indicator.js';
 
 /** A reference set of input descriptors used across validation tests. */
 const lengthDescriptor: NumberFieldDescriptor = {

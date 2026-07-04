@@ -5,7 +5,6 @@ import {
   type CandleRepository,
   type CryptoCandle,
   type Instrument,
-  MarketDataError,
   type MarketDataSource,
   Period,
   SymbolType,
@@ -21,6 +20,7 @@ import { AppModule } from '../src/app.module.js';
 import { CandleEntry } from '../src/candles/candle-entry.schema.js';
 import { CANDLE_REPOSITORY } from '../src/candles/candle-repository.token.js';
 import { PollingService } from '../src/candles/polling.service.js';
+import { MarketDataError } from '../src/domain/symbol.js';
 import { MARKET_DATA_SOURCES } from '../src/market-data/market-data-source.token.js';
 import { WatchlistEntry } from '../src/watchlist/watchlist-entry.schema.js';
 import { WATCHLIST_REPOSITORY } from '../src/watchlist/watchlist-repository.token.js';

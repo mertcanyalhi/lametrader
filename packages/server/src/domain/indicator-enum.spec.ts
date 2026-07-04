@@ -1,10 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import {
-  type EnumFieldDescriptor,
-  FieldType,
-  IndicatorError,
-  validateIndicatorInputs,
-} from './indicator.js';
+import { type EnumFieldDescriptor, FieldType } from '@lametrader/core';
+import { IndicatorError, validateIndicatorInputs } from './indicator.js';
 
 /**
  * A reference enum input descriptor used across the validation tests below.

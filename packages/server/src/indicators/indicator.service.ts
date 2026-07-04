@@ -2,20 +2,22 @@ import {
   type BackfillRange,
   type CandleRepository,
   type IndicatorComputeResult,
-  IndicatorError,
   type IndicatorModule,
-  IndicatorNotFoundError,
   type IndicatorStateEvent,
   type IndicatorStateListener,
   type IndicatorStatePoint,
   type Period,
-  SymbolNotFoundError,
-  validateIndicatorInputs,
   type WatchedSymbol,
   type WatchlistRepository,
 } from '@lametrader/core';
 import { nanoid } from 'nanoid';
 import type { CandleEvent } from '../candles/polling.service.types.js';
+import {
+  IndicatorError,
+  IndicatorNotFoundError,
+  validateIndicatorInputs,
+} from '../domain/indicator.js';
+import { SymbolNotFoundError } from '../domain/symbol.js';
 import { IndicatorRegistry } from './indicator-registry.js';
 
 /**

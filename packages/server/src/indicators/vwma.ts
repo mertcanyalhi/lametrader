@@ -4,9 +4,9 @@ import {
   Pane,
   PriceSource,
   RenderKind,
-  resolveSource,
   SymbolType,
 } from '@lametrader/core';
+import { resolveSource } from '../domain/indicator.js';
 import { defineIndicator } from './define-indicator.js';
 
 /**

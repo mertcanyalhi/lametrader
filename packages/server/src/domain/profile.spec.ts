@@ -1,11 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { type ProfileFields, ProfileScope } from '@lametrader/core';
 import {
   mergeProfileFields,
   ProfileError,
   parseProfileFields,
   parseProfileScope,
 } from './profile.js';
-import { type ProfileFields, ProfileScope } from './profile.types.js';
 
 describe('parseProfileScope', () => {
   it('returns an explicit symbols scope unchanged', () => {

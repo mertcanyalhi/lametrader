@@ -1,4 +1,5 @@
-import { type Candle, IndicatorError, PriceSource, SymbolType } from '@lametrader/core';
+import { type Candle, PriceSource, SymbolType } from '@lametrader/core';
+import { IndicatorError } from '../domain/indicator.js';
 import { defaultIndicators } from './default-indicators.js';
 import { volumeWeightedMovingAverage } from './vwma.js';
 

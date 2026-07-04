@@ -1,15 +1,14 @@
 import {
   type BackfillRange,
   type CandleBatch,
-  CandleError,
   type CryptoCandle,
   type Instrument,
-  MarketDataError,
   type MarketDataSource,
   Period,
   SymbolType,
-  symbolType,
 } from '@lametrader/core';
+import { CandleError } from '../domain/candle.js';
+import { MarketDataError, symbolType } from '../domain/symbol.js';
 
 /**
  * Base URL for Binance's public REST API (keyless).

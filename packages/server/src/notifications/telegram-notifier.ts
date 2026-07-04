@@ -1,9 +1,6 @@
-import {
-  type Notifier,
-  type TelegramDestinationLookup,
-  UnknownDestinationError,
-} from '@lametrader/core';
+import { type Notifier, type TelegramDestinationLookup } from '@lametrader/core';
 import { Injectable } from '@nestjs/common';
+import { UnknownDestinationError } from '../domain/notifier.js';
 import { TelegramDestinationsService } from './telegram-destinations.service.js';
 
 /**

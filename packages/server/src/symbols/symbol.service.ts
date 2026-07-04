@@ -1,23 +1,25 @@
 import {
-  assertInstrumentTypeMatchesId,
   type CandleRepository,
-  computeQuote,
   type EnrichedSymbol,
   type Instrument,
   type Period,
-  parseSymbolPeriods,
   type StateRepository,
   type StateValue,
-  SymbolConflictError,
   type SymbolDiscovery,
-  SymbolNotFoundError,
   type SymbolQuote,
   type SymbolType,
-  symbolType,
   type WatchedSymbol,
   type WatchlistRepository,
 } from '@lametrader/core';
 import type { ConfigService } from '../config/config.service.js';
+import { computeQuote } from '../domain/quote.js';
+import {
+  assertInstrumentTypeMatchesId,
+  parseSymbolPeriods,
+  SymbolConflictError,
+  SymbolNotFoundError,
+  symbolType,
+} from '../domain/symbol.js';
 import { assertSourceSupportsPeriods, sourceForType } from '../market-data/source-registry.js';
 import type { SymbolProfilePruner } from './symbol.service.types.js';
 

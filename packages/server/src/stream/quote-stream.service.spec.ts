@@ -1,11 +1,8 @@
 import {
   type Candle,
   ConfigKey,
-  computeQuote,
   Period,
   type Period as PeriodType,
-  SymbolError,
-  SymbolNotFoundError,
   type SymbolQuoteEvent,
   SymbolType,
   type WatchedSymbol,
@@ -14,6 +11,8 @@ import { InMemoryCandleRepository } from '../candles/in-memory-candle.repository
 import type { CandleEvent } from '../candles/polling.service.types.js';
 import { ConfigService } from '../config/config.service.js';
 import { InMemoryConfigRepository } from '../config/in-memory-config.repository.js';
+import { computeQuote } from '../domain/quote.js';
+import { SymbolError, SymbolNotFoundError } from '../domain/symbol.js';
 import { InMemoryMarketDataSource } from '../market-data/in-memory-market-data-source.js';
 import { SymbolService } from '../symbols/symbol.service.js';
 import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';

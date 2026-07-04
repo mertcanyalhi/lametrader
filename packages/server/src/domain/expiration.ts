@@ -1,10 +1,10 @@
-import type { Expiration } from './expiration.types.js';
+import type { Expiration } from '@lametrader/core';
 
 /**
  * Thrown when an {@link Expiration} is invalid — currently, when `at` is not in
  * the future relative to the supplied `now`.
  *
- * Caught at the API/CLI boundary so user-facing errors surface as 400s.
+ * Caught at the API boundary so user-facing errors surface as 400s.
  */
 export class ExpirationError extends Error {
   /**

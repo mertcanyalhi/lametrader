@@ -1,5 +1,3 @@
-import { describe, expect, it } from 'vitest';
-
 import {
   ActionKind,
   ComparisonOperator,
@@ -14,7 +12,7 @@ import {
   StateOperator,
   StateValueType,
   TriggerKind,
-} from '../index.js';
+} from '@lametrader/core';
 import { normalizeRule } from './condition-normalize.js';
 
 /**

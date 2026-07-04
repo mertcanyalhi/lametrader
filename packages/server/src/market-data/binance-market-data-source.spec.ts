@@ -1,4 +1,6 @@
-import { CandleError, MarketDataError, Period } from '@lametrader/core';
+import { Period } from '@lametrader/core';
+import { CandleError } from '../domain/candle.js';
+import { MarketDataError } from '../domain/symbol.js';
 import { BinanceMarketDataSource } from './binance-market-data-source.js';
 
 /** A Binance kline row with the open time `t`; other fields are filler. */

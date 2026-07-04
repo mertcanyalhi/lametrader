@@ -1,24 +1,4 @@
 import {
-  BackfillConflictError,
-  CandleError,
-  ConfigError,
-  IndicatorError,
-  IndicatorInstanceNotFoundError,
-  IndicatorNotFoundError,
-  MarketDataError,
-  ProfileConflictError,
-  ProfileError,
-  ProfileNotFoundError,
-  RuleError,
-  RuleNotFoundError,
-  SymbolConflictError,
-  SymbolError,
-  SymbolNotFoundError,
-  TelegramDestinationError,
-  TelegramDestinationNotFoundError,
-  TickRuleNotEligibleError,
-} from '@lametrader/core';
-import {
   type ArgumentsHost,
   Catch,
   type ExceptionFilter,
@@ -26,6 +6,25 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { BackfillConflictError, CandleError } from '../domain/candle.js';
+import { ConfigError } from '../domain/config.js';
+import {
+  IndicatorError,
+  IndicatorInstanceNotFoundError,
+  IndicatorNotFoundError,
+} from '../domain/indicator.js';
+import { ProfileConflictError, ProfileError, ProfileNotFoundError } from '../domain/profile.js';
+import { RuleError, RuleNotFoundError, TickRuleNotEligibleError } from '../domain/rule.js';
+import {
+  MarketDataError,
+  SymbolConflictError,
+  SymbolError,
+  SymbolNotFoundError,
+} from '../domain/symbol.js';
+import {
+  TelegramDestinationError,
+  TelegramDestinationNotFoundError,
+} from '../domain/telegram-destination.js';
 import type { ErrorResponse, FieldError } from './error-response.types.js';
 
 /**

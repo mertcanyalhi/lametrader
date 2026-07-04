@@ -1,4 +1,4 @@
-import { type StateValue, StateValueType } from './state.types.js';
+import { type StateValue, StateValueType } from '@lametrader/core';
 
 /**
  * Type-guard: narrows `v` to the `String` variant of {@link StateValue}.

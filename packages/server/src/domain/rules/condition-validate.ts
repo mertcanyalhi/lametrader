@@ -1,9 +1,13 @@
-import type { Period } from '../config.types.js';
+import {
+  type ConditionNode,
+  ConditionNodeKind,
+  type ConditionOperand,
+  type LeafCondition,
+  LeafConditionFamily,
+  OperandKind,
+  type Period,
+} from '@lametrader/core';
 import { InvalidRuleConditionError } from '../rule.js';
-import type { ConditionNode, LeafCondition } from './condition.types.js';
-import { ConditionNodeKind, LeafConditionFamily } from './condition.types.js';
-import type { ConditionOperand } from './operand.types.js';
-import { OperandKind } from './operand.types.js';
 
 /**
  * Whether an operand resolves against a specific bar period and therefore

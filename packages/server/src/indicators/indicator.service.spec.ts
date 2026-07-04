@@ -1,16 +1,15 @@
 import {
   type Candle,
-  IndicatorError,
-  IndicatorNotFoundError,
   type IndicatorStateEvent,
   Period,
   periodMillis,
-  SymbolNotFoundError,
   SymbolType,
   type WatchedSymbol,
 } from '@lametrader/core';
 import { InMemoryCandleRepository } from '../candles/in-memory-candle.repository.js';
 import type { CandleEvent } from '../candles/polling.service.types.js';
+import { IndicatorError, IndicatorNotFoundError } from '../domain/indicator.js';
+import { SymbolNotFoundError } from '../domain/symbol.js';
 import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
 import { defaultIndicators } from './default-indicators.js';
 import { defineIndicator } from './define-indicator.js';

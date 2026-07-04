@@ -1,4 +1,4 @@
-import { type ProfileFields, ProfileScope, type ProfileScopeSpec } from './profile.types.js';
+import { type ProfileFields, ProfileScope, type ProfileScopeSpec } from '@lametrader/core';
 
 /**
  * Raised when a profile input fails validation (bad name, scope, or field type).

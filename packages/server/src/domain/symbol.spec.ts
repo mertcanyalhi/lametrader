@@ -1,13 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { type Instrument, Period, SymbolType } from '@lametrader/core';
 import {
   assertInstrumentTypeMatchesId,
-  type Instrument,
-  Period,
   parseSymbolPeriods,
   SymbolError,
-  SymbolType,
   symbolType,
-} from './index.js';
+} from './symbol.js';
 
 describe('symbolType', () => {
   it('returns the type for a canonical id', () => {

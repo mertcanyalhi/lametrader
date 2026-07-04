@@ -1,14 +1,13 @@
 import {
   type CandleRepository,
-  MarketDataError,
   type MarketDataSource,
   type Period,
   periodMillis,
-  symbolType,
   type WatchedSymbol,
   type WatchlistRepository,
 } from '@lametrader/core';
 import type { SchedulerRegistry } from '@nestjs/schedule';
+import { MarketDataError, symbolType } from '../domain/symbol.js';
 import { sourceForType } from '../market-data/source-registry.js';
 import type { CandleEvent, CandleListener, PollingOptions } from './polling.service.types.js';
 

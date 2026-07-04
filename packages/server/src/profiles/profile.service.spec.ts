@@ -1,15 +1,12 @@
 import {
-  IndicatorError,
-  IndicatorInstanceNotFoundError,
   Period,
   type Profile,
-  ProfileConflictError,
-  ProfileError,
-  ProfileNotFoundError,
   ProfileScope,
   SymbolType,
   type WatchedSymbol,
 } from '@lametrader/core';
+import { IndicatorError, IndicatorInstanceNotFoundError } from '../domain/indicator.js';
+import { ProfileConflictError, ProfileError, ProfileNotFoundError } from '../domain/profile.js';
 import { defaultIndicators } from '../indicators/default-indicators.js';
 import type { IndicatorRegistry } from '../indicators/indicator-registry.js';
 import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';

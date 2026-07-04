@@ -5,13 +5,15 @@ import {
   type ConfigRepository,
   DESTINATION_NAME_MAX,
   type TelegramDestination,
-  TelegramDestinationError,
   type TelegramDestinationLookup,
-  TelegramDestinationNotFoundError,
   type TelegramDestinationSummary,
 } from '@lametrader/core';
 import { Inject, Injectable } from '@nestjs/common';
 import { CONFIG_REPOSITORY } from '../config/config-repository.token.js';
+import {
+  TelegramDestinationError,
+  TelegramDestinationNotFoundError,
+} from '../domain/telegram-destination.js';
 
 /**
  * Use-case for reading and changing the configured Telegram destinations.

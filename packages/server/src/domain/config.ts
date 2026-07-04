@@ -1,4 +1,4 @@
-import { type Config, Period } from './config.types.js';
+import { type Config, Period } from '@lametrader/core';
 
 /**
  * Raised when a config fails validation. Distinct type so driving adapters can

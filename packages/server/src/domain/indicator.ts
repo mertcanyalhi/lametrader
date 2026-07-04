@@ -1,5 +1,5 @@
-import type { Candle } from './candle.types.js';
 import {
+  type Candle,
   type EnumFieldDescriptor,
   type FieldDescriptor,
   FieldType,
@@ -7,8 +7,8 @@ import {
   type NumberFieldDescriptor,
   PriceSource,
   type SourceFieldDescriptor,
-} from './indicator.types.js';
-import { SymbolType } from './symbol.types.js';
+  SymbolType,
+} from '@lametrader/core';
 
 /**
  * Raised when an indicator input fails validation, or when a price-source selector is unsupported on the given candle's asset class.
@@ -30,7 +30,7 @@ export class IndicatorError extends Error {
  *
  * Driving adapters map it to HTTP 404 (consistent with `SymbolNotFoundError` / `ProfileNotFoundError`).
  *
- * Thrown by driving adapters (controllers, CLI) on a lookup miss — the registry's `get(key)` still returns `null` so callers in the application layer can opt out of the exception.
+ * Thrown by driving adapters (controllers) on a lookup miss — the registry's `get(key)` still returns `null` so callers in the application layer can opt out of the exception.
  */
 export class IndicatorNotFoundError extends Error {
   /**
@@ -180,13 +180,3 @@ function validateEnumInput(descriptor: EnumFieldDescriptor, raw: unknown): strin
   }
   return value;
 }
-
-export {
-  type EnumFieldDescriptor,
-  type EnumOption,
-  type FieldDescriptor,
-  FieldType,
-  type NumberFieldDescriptor,
-  PriceSource,
-  type SourceFieldDescriptor,
-} from './indicator.types.js';

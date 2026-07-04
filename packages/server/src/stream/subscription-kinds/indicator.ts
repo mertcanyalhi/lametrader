@@ -1,11 +1,7 @@
-import {
-  IndicatorError,
-  IndicatorNotFoundError,
-  type IndicatorStateEvent,
-  type Period,
-  SymbolNotFoundError,
-} from '@lametrader/core';
+import { type IndicatorStateEvent, type Period } from '@lametrader/core';
 import type { StreamHub } from '../../candles/stream-hub.js';
+import { IndicatorError, IndicatorNotFoundError } from '../../domain/indicator.js';
+import { SymbolNotFoundError } from '../../domain/symbol.js';
 import type { IndicatorService } from '../../indicators/indicator.service.js';
 import type { SubscriptionKind } from '../subscription-registry.types.js';
 

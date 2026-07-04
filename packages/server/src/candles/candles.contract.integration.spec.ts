@@ -2,7 +2,6 @@ import {
   type CandleRepository,
   type CryptoCandle,
   type Instrument,
-  MarketDataError,
   type MarketDataSource,
   Period,
   SymbolType,
@@ -13,6 +12,7 @@ import request from 'supertest';
 import { WebSocket } from 'ws';
 import { DomainExceptionFilter } from '../common/domain-exception.filter.js';
 import { buildValidationPipe } from '../common/validation.pipe.js';
+import { MarketDataError } from '../domain/symbol.js';
 import { InMemoryMarketDataSource } from '../market-data/in-memory-market-data-source.js';
 import { MARKET_DATA_SOURCES } from '../market-data/market-data-source.token.js';
 import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';

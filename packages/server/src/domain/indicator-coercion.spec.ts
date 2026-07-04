@@ -1,10 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import {
-  FieldType,
-  IndicatorError,
-  type NumberFieldDescriptor,
-  validateIndicatorInputs,
-} from './indicator.js';
+import { FieldType, type NumberFieldDescriptor } from '@lametrader/core';
+import { IndicatorError, validateIndicatorInputs } from './indicator.js';
 
 const length: NumberFieldDescriptor = {
   type: FieldType.Number,
