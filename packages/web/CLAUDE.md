@@ -1,6 +1,6 @@
 # @lametrader/web
 
-Driving adapter — the browser app.
+The platform's browser frontend.
 Builds via Vite; type-checks via `tsc --noEmit`; not part of the project-refs graph.
 
 ## Stack (locked)
@@ -75,13 +75,13 @@ If a Tailwind class string repeats often enough to be worth a name, extract it a
 - Use `react-hook-form` with a **Yup** schema via `yupResolver` (`@hookform/resolvers/yup`).
   Schemas live in `lib/*-schema.ts` and use `.label(...)` so messages are label-aware and per-field (e.g. "Default period is required.").
   For `${label}` interpolation, use Yup's **function-message** form (`({ label }) => \`${label} is required.\``) — a real template literal — not a `'${label}'` string (which trips Biome's `noTemplateCurlyInString`).
-- The schema is the UI validation layer; the **server** re-validates every write via the domain validator (`@lametrader/core`), which stays the authority.
+- The schema is the UI validation layer; the **server** re-validates every write via its domain validator (in `@lametrader/server`), which stays the authority.
   This client/server split is intentional and scoped to user-facing schemas — see `docs/decisions/0011-web-form-validation-with-yup.md`.
-  Don't pull a schema library into `core`/`engine`/`api`.
+  Don't pull a schema library into `core`/`server`.
 
 ### Logging
 
-The web package uses [Pino](https://getpino.io) — same logger family as the backend (Fastify's built-in), per the root `CLAUDE.md` rule "log through a common log library."
+The web package uses [Pino](https://getpino.io) — same logger family as the backend (`nestjs-pino`), per the root `CLAUDE.md` rule "log through a common log library."
 
 - **Never** call `console.log` / `console.warn` / `console.error` directly in feature code.
   Use `getLogger(scope)` from `lib/log.ts`, which returns a Pino child logger with `{ scope }` baked into every entry.
