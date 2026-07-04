@@ -9,6 +9,7 @@ import { HealthModule } from './health/health.module.js';
 import { LoggingModule } from './logging/logging.module.js';
 import { MongoModule } from './mongo/mongo.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
+import { ProfilesModule } from './profiles/profiles.module.js';
 import { SymbolsModule } from './symbols/symbols.module.js';
 
 /**
@@ -22,8 +23,10 @@ import { SymbolsModule } from './symbols/symbols.module.js';
  * global `ValidationPipe` (DTO validation emitting the same envelope).
  *
  * Feature modules: {@link ConfigModule} (`/config`),
- * {@link NotificationsModule} (`/config/notifications/telegram`), and
- * {@link SymbolsModule} (`/instruments` + `/symbols`).
+ * {@link NotificationsModule} (`/config/notifications/telegram`),
+ * {@link ProfilesModule} (`/profiles` + attached indicators), and
+ * {@link SymbolsModule} (`/instruments` + `/symbols`; imports
+ * {@link ProfilesModule} for the symbol-removal → profile-prune cascade).
  */
 @Module({
   imports: [
@@ -37,6 +40,7 @@ import { SymbolsModule } from './symbols/symbols.module.js';
     HealthModule,
     ConfigModule,
     NotificationsModule,
+    ProfilesModule,
     SymbolsModule,
   ],
   providers: [

@@ -3,7 +3,7 @@
 The backend monolith — an idiomatic [NestJS](https://nestjs.com) application on the Express platform.
 
 This package is stage 3 of the NestJS migration (see `specs/nestjs-monolith-migration.spec.md` and ADR-0018).
-On top of the cross-cutting shell (validated configuration, structured logging, the root Mongo connection, a health endpoint) it serves the first ported resources — the **config + Telegram notifications** surface and the **symbols + instruments** surface — and establishes the app-wide HTTP contract every later resource reuses.
+On top of the cross-cutting shell (validated configuration, structured logging, the root Mongo connection, a health endpoint) it serves the first ported resources — the **config + Telegram notifications** surface, the **symbols + instruments** surface, and the **profiles** surface (with its attached-indicators sub-resource) — and establishes the app-wide HTTP contract every later resource reuses.
 It runs alongside the still-deployed `@lametrader/api`; the remaining resource controllers, repositories, and the polling loop are ported in later stages.
 
 ## What's here
@@ -14,6 +14,9 @@ It runs alongside the still-deployed `@lametrader/api`; the remaining resource c
 - **Config resource** (`src/config`) — the `ConfigModule`: `ConfigService` over a Mongoose-backed key-value store (`config` collection), behind the `/config` controller.
 - **Notifications** (`src/notifications`) — the `NotificationsModule`: `TelegramDestinationsService` (destinations CRUD, stored in the same config K/V store) and `TelegramNotifier` (Bot API sender), behind the `/config/notifications/telegram` controller.
 - **Symbols** (`src/symbols`) — the `SymbolsModule`: `SymbolService` over a Mongoose-backed watchlist (`watchlist` collection) and the market-data sources, behind the `/instruments` + `/symbols` controller.
+  It imports the `ProfilesModule` and injects its `ProfileService` as the symbol-removal → profile-prune cascade (ADR-0009): removing a symbol prunes it from every profile's `symbols` scope.
+- **Profiles** (`src/profiles`) — the `ProfilesModule`: `ProfileService` over a Mongoose-backed profile store (`profiles` collection), behind the `/profiles` controller (CRUD + the attached-indicators sub-resource). Validates a `symbols` scope against the watchlist and attached-indicator inputs against the indicator registry.
+- **Indicators** (`src/indicators`) — the `IndicatorsModule`: the shared, read-only `IndicatorRegistry` (catalog of the shipped `sma` / `vwma` modules, pure logic) built by `defaultIndicators` and exported for the profiles use-case to validate against. The indicators HTTP routes are added on top of this module in a later stage.
 - **Market data** (`src/market-data`) — the `MarketDataModule`: the registered discovery sources (Binance for crypto, Yahoo for stocks/funds/FX) bound to the `MARKET_DATA_SOURCES` token, fanned out by the symbols use-case (and, later, backfill/polling).
 - **HTTP contract** (`src/common`) — the keystone the whole API reuses: a global `DomainExceptionFilter` mapping domain errors to status codes with the uniform `{ error, fields? }` envelope, and a global `ValidationPipe` (class-validator DTOs) emitting the same envelope on validation failure.
 - **Logging** (`src/logging`) — [`nestjs-pino`](https://github.com/iamolegga/nestjs-pino) for request and application logging.
@@ -37,6 +40,17 @@ It runs alongside the still-deployed `@lametrader/api`; the remaining resource c
 | `POST`   | `/symbols`                                  | `{ id, periods? }`             | Add (validates existence). **201** / 400 / 404 / 409.   |
 | `PATCH`  | `/symbols/:id`                              | `{ periods }`                  | Change a symbol's periods. 200 / 400 / 404.             |
 | `DELETE` | `/symbols/:id`                              | —                              | Remove a symbol **and its stored candles**. **204**.    |
+| `GET`    | `/profiles`                                 | —                              | List profiles. 200.                                     |
+| `POST`   | `/profiles`                                 | `{ name, description?, enabled?, scope?, chartStates? }` | Create. **201** / 400 / 409.       |
+| `GET`    | `/profiles/:id`                             | —                              | Get one. 200 / 404.                                     |
+| `PUT`    | `/profiles/:id`                             | `{ name, description?, enabled?, scope?, chartStates? }` | Full replace. 200 / 400 / 404 / 409. |
+| `PATCH`  | `/profiles/:id`                             | `{ name?, description?, enabled?, scope?, chartStates? }` | Partial update. 200 / 400 / 404 / 409. |
+| `DELETE` | `/profiles/:id`                             | —                              | Delete. **204** / 404.                                  |
+| `GET`    | `/profiles/:id/indicators`                  | —                              | List the profile's attached indicators. 200 / 404.     |
+| `POST`   | `/profiles/:id/indicators`                  | `{ indicatorKey, inputs?, label? }` | Attach an indicator. **201** / 400 / 404.          |
+| `GET`    | `/profiles/:id/indicators/:instanceId`      | —                              | Get one attached instance. 200 / 404.                   |
+| `PUT`    | `/profiles/:id/indicators/:instanceId`      | `{ indicatorKey, inputs?, label? }` | Full-replace an instance. 200 / 400 / 404.         |
+| `DELETE` | `/profiles/:id/indicators/:instanceId`      | —                              | Detach an instance. **204** / 404.                      |
 
 ### Config resource
 
@@ -68,6 +82,30 @@ With `?enrich=true`, each item carries a `quote` computed server-side from the s
 Absent or `?enrich=false` returns the plain list.
 
 The nested sub-resources of a symbol (`/symbols/:id/candles`, `/state`, `/indicators`, `/rule-events`) are ported with their own feature modules in later stages.
+
+### Profiles resource
+
+A **profile** is a named, enable/disable-able template scoped to watched symbols — either all of them (the default) or an explicit subset.
+A profile is `{ id, name, description, enabled, scope, chartStates, createdAt, updatedAt, indicators }`, where `scope` is either `{ "type": "all" }` or `{ "type": "symbols", "symbolIds": [...] }`.
+Names are unique.
+Every id in a `symbols` scope must be currently watched, and an empty subset normalizes to `all`.
+`chartStates` is a `string[]` of symbol-state keys whose markers the chart renders for this profile; it defaults to `[]` and is preserved on a `PATCH` that omits it.
+
+- `POST /profiles` — create (**201**), **400** on invalid input or a scope referencing an unwatched symbol, **409** on a duplicate name.
+- `PUT /profiles/:id` — full replace; preserves `id`, `createdAt`, and the attached `indicators` (200 / 400 / 404 / 409).
+- `PATCH /profiles/:id` — partial update; omitted fields keep their current value (200 / 400 / 404 / 409).
+- `DELETE /profiles/:id` — delete (**204** / 404).
+
+Removing a watched symbol prunes it from every profile's subset.
+A profile left with an empty subset is **disabled** (kept symbols-scoped) rather than widened to `all`.
+
+**Attached indicators (sub-resource).**
+A profile holds zero or more attached indicator instances — a configured indicator from the catalog with validated inputs, addressed by a stable id.
+An instance is `{ id, indicatorKey, version, inputs, label?, summary? }`; `indicatorKey` refers to a catalog module (`sma` / `vwma`), `inputs` is validated against that module's descriptors, and `summary` is a derived display string added on read.
+
+- `POST /profiles/:id/indicators` — attach (**201**); **400** on an unknown key or invalid inputs, **404** on an unknown profile.
+- `PUT /profiles/:id/indicators/:instanceId` — full-replace (200 / 400 / 404).
+- `DELETE /profiles/:id/indicators/:instanceId` — detach (**204** / 404).
 
 ## API documentation
 
