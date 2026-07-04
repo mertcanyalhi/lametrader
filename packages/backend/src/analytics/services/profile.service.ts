@@ -12,14 +12,14 @@ import {
   IndicatorError,
   IndicatorInstanceNotFoundError,
   validateIndicatorInputs,
-} from '../../domain/indicator.js';
+} from '../../common/domain/indicator.js';
 import {
   mergeProfileFields,
   ProfileConflictError,
   ProfileError,
   ProfileNotFoundError,
   parseProfileFields,
-} from '../../domain/profile.js';
+} from '../../common/domain/profile.js';
 import { IndicatorRegistry } from '../indicators/indicator-registry.js';
 import type {
   IndicatorInstanceInput,

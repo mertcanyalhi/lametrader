@@ -1,8 +1,8 @@
 import { type IndicatorStateEvent, type Period } from '@lametrader/core';
 import type { IndicatorService } from '../../analytics/indicators/indicator.service.js';
+import { IndicatorError, IndicatorNotFoundError } from '../../common/domain/indicator.js';
+import { SymbolNotFoundError } from '../../common/domain/symbol.js';
 import type { StreamHub } from '../../common/services/stream-hub.js';
-import { IndicatorError, IndicatorNotFoundError } from '../../domain/indicator.js';
-import { SymbolNotFoundError } from '../../domain/symbol.js';
 import type { SubscriptionKind } from '../subscription-registry.types.js';
 
 /** Input parsed from a `subscribe-indicator` control frame. */

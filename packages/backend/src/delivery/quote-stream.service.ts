@@ -7,9 +7,9 @@ import {
   type WatchlistRepository,
 } from '@lametrader/core';
 import { nanoid } from 'nanoid';
+import { computeQuote } from '../common/domain/quote.js';
+import { SymbolError, SymbolNotFoundError } from '../common/domain/symbol.js';
 import type { ConfigService } from '../common/services/config.service.js';
-import { computeQuote } from '../domain/quote.js';
-import { SymbolError, SymbolNotFoundError } from '../domain/symbol.js';
 
 /**
  * The persisted shape of one live quote subscription.

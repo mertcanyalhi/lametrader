@@ -1,7 +1,7 @@
 import { type StateRepository, type StateValue, type WatchlistRepository } from '@lametrader/core';
 import { Controller, Get, Inject, Param, Query } from '@nestjs/common';
 import { ApiExtraModels, ApiOkResponse, ApiTags, getSchemaPath } from '@nestjs/swagger';
-import { SymbolNotFoundError } from '../../domain/symbol.js';
+import { SymbolNotFoundError } from '../../common/domain/symbol.js';
 import { SymbolIdParamDto } from '../../market/dto/symbol-id-param.dto.js';
 import { WATCHLIST_REPOSITORY } from '../../market/interfaces/watchlist-repository.token.js';
 import { ProfileStateParamDto } from '../dto/profile-state-param.dto.js';

@@ -6,8 +6,8 @@ import {
   type Period,
   type WatchlistRepository,
 } from '@lametrader/core';
-import { CandleError } from '../../domain/candle.js';
-import { SymbolNotFoundError, symbolType } from '../../domain/symbol.js';
+import { CandleError } from '../../common/domain/candle.js';
+import { SymbolNotFoundError, symbolType } from '../../common/domain/symbol.js';
 import { sourceForType } from '../market-data/source-registry.js';
 import type { BackfillProgressListener, BackfillSummary } from './backfill.service.types.js';
 

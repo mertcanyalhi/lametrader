@@ -1,5 +1,5 @@
 import { ConfigKey, Period } from '@lametrader/core';
-import { defaultConfig } from '../../domain/config.js';
+import { defaultConfig } from '../domain/config.js';
 import { InMemoryConfigRepository } from '../persistence/in-memory-config.repository.js';
 import { ConfigService } from './config.service.js';
 

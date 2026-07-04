@@ -1,6 +1,6 @@
 import type { ProfileRepository } from '@lametrader/core';
 import { type Rule, type RuleRepository, type RuleScope, RuleScopeKind } from '@lametrader/core';
-import { normalizeRule } from '../../domain/rules/condition-normalize.js';
+import { normalizeRule } from '../../common/domain/rules/condition-normalize.js';
 
 /**
  * In-memory backing store for {@link RuleRepository}.

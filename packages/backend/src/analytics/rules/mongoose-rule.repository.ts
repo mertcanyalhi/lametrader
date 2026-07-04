@@ -5,7 +5,7 @@ import {
   RuleScopeKind,
 } from '@lametrader/core';
 import type { Model, QueryFilter } from 'mongoose';
-import { normalizeRule } from '../../domain/rules/condition-normalize.js';
+import { normalizeRule } from '../../common/domain/rules/condition-normalize.js';
 import type { RuleEntry } from './rule-entry.schema.js';
 
 /**

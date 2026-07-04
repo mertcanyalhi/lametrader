@@ -6,7 +6,7 @@ import {
   RenderKind,
   SymbolType,
 } from '@lametrader/core';
-import { resolveSource } from '../../domain/indicator.js';
+import { resolveSource } from '../../common/domain/indicator.js';
 import { defineIndicator } from './define-indicator.js';
 
 /**

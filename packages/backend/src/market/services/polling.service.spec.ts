@@ -11,7 +11,7 @@ import {
   type WatchedSymbol,
 } from '@lametrader/core';
 import { SchedulerRegistry } from '@nestjs/schedule';
-import { MarketDataError } from '../../domain/symbol.js';
+import { MarketDataError } from '../../common/domain/symbol.js';
 import { InMemoryCandleRepository } from '../persistence/in-memory-candle.repository.js';
 import { InMemoryWatchlistRepository } from '../persistence/in-memory-watchlist.repository.js';
 import { PollingService } from './polling.service.js';

@@ -7,8 +7,8 @@ import {
   SymbolType,
   type WatchedSymbol,
 } from '@lametrader/core';
-import { IndicatorError, IndicatorNotFoundError } from '../../domain/indicator.js';
-import { SymbolNotFoundError } from '../../domain/symbol.js';
+import { IndicatorError, IndicatorNotFoundError } from '../../common/domain/indicator.js';
+import { SymbolNotFoundError } from '../../common/domain/symbol.js';
 import { InMemoryCandleRepository } from '../../market/persistence/in-memory-candle.repository.js';
 import { InMemoryWatchlistRepository } from '../../market/persistence/in-memory-watchlist.repository.js';
 import { defaultIndicators } from './default-indicators.js';

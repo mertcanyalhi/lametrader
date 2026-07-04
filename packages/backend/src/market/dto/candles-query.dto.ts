@@ -2,7 +2,7 @@ import { Period } from '@lametrader/core';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsNumber, IsOptional, Max, Min } from 'class-validator';
-import { DEFAULT_CANDLE_LIMIT, MAX_CANDLE_LIMIT } from '../../domain/candle.js';
+import { DEFAULT_CANDLE_LIMIT, MAX_CANDLE_LIMIT } from '../../common/domain/candle.js';
 
 /**
  * Query for `GET /symbols/:id/candles` — mirrors the old TypeBox

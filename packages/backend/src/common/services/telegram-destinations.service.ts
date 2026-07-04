@@ -12,7 +12,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   TelegramDestinationError,
   TelegramDestinationNotFoundError,
-} from '../../domain/telegram-destination.js';
+} from '../domain/telegram-destination.js';
 import { CONFIG_REPOSITORY } from '../interfaces/config-repository.token.js';
 
 /**

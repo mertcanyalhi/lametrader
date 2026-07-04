@@ -1,6 +1,6 @@
 import { type CryptoCandle, Period, SymbolType, type WatchedSymbol } from '@lametrader/core';
-import { BackfillConflictError } from '../../domain/candle.js';
-import { SymbolNotFoundError } from '../../domain/symbol.js';
+import { BackfillConflictError } from '../../common/domain/candle.js';
+import { SymbolNotFoundError } from '../../common/domain/symbol.js';
 import { InMemoryMarketDataSource } from '../market-data/in-memory-market-data-source.js';
 import { InMemoryCandleRepository } from '../persistence/in-memory-candle.repository.js';
 import { InMemoryWatchlistRepository } from '../persistence/in-memory-watchlist.repository.js';

@@ -17,11 +17,11 @@ import {
   InvalidRuleConditionError,
   RuleNotFoundError,
   TickRuleNotEligibleError,
-} from '../../domain/rule.js';
+} from '../../common/domain/rule.js';
 import {
   collectConditionIntervals,
   validateRuleCondition,
-} from '../../domain/rules/condition-validate.js';
+} from '../../common/domain/rules/condition-validate.js';
 
 /**
  * Options for {@link RuleService}: injectable id generator and clock so

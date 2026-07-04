@@ -1,5 +1,5 @@
 import { type Notifier } from '@lametrader/core';
-import { UnknownDestinationError } from '../../domain/notifier.js';
+import { UnknownDestinationError } from '../domain/notifier.js';
 
 /**
  * One delivered message captured by the {@link InMemoryNotifier}.

@@ -7,8 +7,8 @@ import {
   Period,
   SymbolType,
 } from '@lametrader/core';
-import { CandleError } from '../../domain/candle.js';
-import { MarketDataError, symbolType } from '../../domain/symbol.js';
+import { CandleError } from '../../common/domain/candle.js';
+import { MarketDataError, symbolType } from '../../common/domain/symbol.js';
 
 /**
  * Base URL for Binance's public REST API (keyless).

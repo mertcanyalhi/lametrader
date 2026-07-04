@@ -16,8 +16,8 @@ import {
   IndicatorError,
   IndicatorNotFoundError,
   validateIndicatorInputs,
-} from '../../domain/indicator.js';
-import { SymbolNotFoundError } from '../../domain/symbol.js';
+} from '../../common/domain/indicator.js';
+import { SymbolNotFoundError } from '../../common/domain/symbol.js';
 import { IndicatorRegistry } from './indicator-registry.js';
 
 /**

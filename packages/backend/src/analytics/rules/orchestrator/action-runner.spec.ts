@@ -18,7 +18,7 @@ import {
   type TickEvent,
   TriggerKind,
 } from '@lametrader/core';
-import { UnknownDestinationError } from '../../../domain/notifier.js';
+import { UnknownDestinationError } from '../../../common/domain/notifier.js';
 
 import { InMemoryStateRepository } from '../../persistence/in-memory-state.repository.js';
 import type { EvaluationLookups } from '../wire/live-evaluation-lookups.types.js';

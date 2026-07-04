@@ -1,7 +1,7 @@
 import { type IndicatorComputeResult, type IndicatorDefinition, Period } from '@lametrader/core';
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { IndicatorError, IndicatorNotFoundError } from '../../domain/indicator.js';
+import { IndicatorError, IndicatorNotFoundError } from '../../common/domain/indicator.js';
 import { IndicatorComputeResultDto } from './dto/indicator-compute-result.dto.js';
 import { IndicatorDefinitionDto } from './dto/indicator-definition.dto.js';
 import { IndicatorKeyParamDto } from './dto/indicator-key-param.dto.js';

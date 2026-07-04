@@ -11,15 +11,15 @@ import {
   type WatchedSymbol,
   type WatchlistRepository,
 } from '@lametrader/core';
-import type { ConfigService } from '../../common/services/config.service.js';
-import { computeQuote } from '../../domain/quote.js';
+import { computeQuote } from '../../common/domain/quote.js';
 import {
   assertInstrumentTypeMatchesId,
   parseSymbolPeriods,
   SymbolConflictError,
   SymbolNotFoundError,
   symbolType,
-} from '../../domain/symbol.js';
+} from '../../common/domain/symbol.js';
+import type { ConfigService } from '../../common/services/config.service.js';
 import type { SymbolProfilePruner } from '../interfaces/symbol.service.types.js';
 import { assertSourceSupportsPeriods, sourceForType } from '../market-data/source-registry.js';
 

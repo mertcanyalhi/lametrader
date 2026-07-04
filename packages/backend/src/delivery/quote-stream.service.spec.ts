@@ -8,10 +8,10 @@ import {
   SymbolType,
   type WatchedSymbol,
 } from '@lametrader/core';
+import { computeQuote } from '../common/domain/quote.js';
+import { SymbolError, SymbolNotFoundError } from '../common/domain/symbol.js';
 import { InMemoryConfigRepository } from '../common/persistence/in-memory-config.repository.js';
 import { ConfigService } from '../common/services/config.service.js';
-import { computeQuote } from '../domain/quote.js';
-import { SymbolError, SymbolNotFoundError } from '../domain/symbol.js';
 import { InMemoryMarketDataSource } from '../market/market-data/in-memory-market-data-source.js';
 import { InMemoryCandleRepository } from '../market/persistence/in-memory-candle.repository.js';
 import { InMemoryWatchlistRepository } from '../market/persistence/in-memory-watchlist.repository.js';

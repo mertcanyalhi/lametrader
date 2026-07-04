@@ -1,5 +1,5 @@
 import { type Candle, SymbolType } from '@lametrader/core';
-import { IndicatorError, validateIndicatorInputs } from '../../domain/indicator.js';
+import { IndicatorError, validateIndicatorInputs } from '../../common/domain/indicator.js';
 import { defaultIndicators } from './default-indicators.js';
 
 /** Build a minimal crypto candle. */

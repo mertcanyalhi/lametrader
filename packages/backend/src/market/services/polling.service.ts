@@ -9,7 +9,7 @@ import {
   type WatchlistRepository,
 } from '@lametrader/core';
 import type { SchedulerRegistry } from '@nestjs/schedule';
-import { MarketDataError, symbolType } from '../../domain/symbol.js';
+import { MarketDataError, symbolType } from '../../common/domain/symbol.js';
 import type { PollingOptions } from '../interfaces/polling.service.types.js';
 import { sourceForType } from '../market-data/source-registry.js';
 

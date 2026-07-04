@@ -5,8 +5,12 @@ import {
   SymbolType,
   type WatchedSymbol,
 } from '@lametrader/core';
-import { IndicatorError, IndicatorInstanceNotFoundError } from '../../domain/indicator.js';
-import { ProfileConflictError, ProfileError, ProfileNotFoundError } from '../../domain/profile.js';
+import { IndicatorError, IndicatorInstanceNotFoundError } from '../../common/domain/indicator.js';
+import {
+  ProfileConflictError,
+  ProfileError,
+  ProfileNotFoundError,
+} from '../../common/domain/profile.js';
 import { InMemoryWatchlistRepository } from '../../market/persistence/in-memory-watchlist.repository.js';
 import { defaultIndicators } from '../indicators/default-indicators.js';
 import type { IndicatorRegistry } from '../indicators/indicator-registry.js';

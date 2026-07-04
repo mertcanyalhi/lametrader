@@ -1,8 +1,8 @@
 import { type CandlePage } from '@lametrader/core';
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { ApiAcceptedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import { parseBackfillRange } from '../../domain/candle.js';
-import { SymbolNotFoundError } from '../../domain/symbol.js';
+import { parseBackfillRange } from '../../common/domain/candle.js';
+import { SymbolNotFoundError } from '../../common/domain/symbol.js';
 import { BackfillService } from '../backfill/backfill.service.js';
 import { BackfillJobService } from '../backfill/backfill-job.service.js';
 import type { BackfillJob } from '../backfill/backfill-job.types.js';

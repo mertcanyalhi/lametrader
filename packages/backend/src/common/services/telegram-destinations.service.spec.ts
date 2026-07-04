@@ -2,7 +2,7 @@ import { ConfigKey } from '@lametrader/core';
 import {
   TelegramDestinationError,
   TelegramDestinationNotFoundError,
-} from '../../domain/telegram-destination.js';
+} from '../domain/telegram-destination.js';
 import { InMemoryConfigRepository } from '../persistence/in-memory-config.repository.js';
 import { TelegramDestinationsService } from './telegram-destinations.service.js';
 

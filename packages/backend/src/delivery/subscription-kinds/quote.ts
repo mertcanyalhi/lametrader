@@ -1,6 +1,6 @@
 import { type SymbolQuoteEvent } from '@lametrader/core';
+import { SymbolError, SymbolNotFoundError } from '../../common/domain/symbol.js';
 import type { StreamHub } from '../../common/services/stream-hub.js';
-import { SymbolError, SymbolNotFoundError } from '../../domain/symbol.js';
 import type { QuoteStreamService } from '../quote-stream.service.js';
 import type { SubscriptionKind } from '../subscription-registry.types.js';
 
