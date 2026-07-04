@@ -5,9 +5,9 @@ import { Test } from '@nestjs/testing';
 import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
 import { AppModule } from '../src/app.module.js';
-import { runWatchlistRepositoryContract } from '../src/symbols/testing/watchlist-repository.contract.js';
-import { WatchlistEntry } from '../src/symbols/watchlist-entry.schema.js';
-import { WATCHLIST_REPOSITORY } from '../src/symbols/watchlist-repository.token.js';
+import { runWatchlistRepositoryContract } from '../src/watchlist/testing/watchlist-repository.contract.js';
+import { WatchlistEntry } from '../src/watchlist/watchlist-entry.schema.js';
+import { WATCHLIST_REPOSITORY } from '../src/watchlist/watchlist-repository.token.js';
 
 /**
  * Runs the shared {@link WatchlistRepository} contract against the Mongoose

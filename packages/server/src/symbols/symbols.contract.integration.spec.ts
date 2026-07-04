@@ -16,7 +16,7 @@ import { buildValidationPipe } from '../common/validation.pipe.js';
 import { ConfigService } from '../config/config.service.js';
 import { InMemoryConfigRepository } from '../config/in-memory-config.repository.js';
 import { InMemoryMarketDataSource } from '../market-data/in-memory-market-data-source.js';
-import { InMemoryWatchlistRepository } from './in-memory-watchlist.repository.js';
+import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
 import { SymbolService } from './symbol.service.js';
 import { SymbolsController } from './symbols.controller.js';
 

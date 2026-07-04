@@ -3,9 +3,8 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { IndicatorRegistry } from '../indicators/indicator-registry.js';
 import { IndicatorsModule } from '../indicators/indicators.module.js';
-import { MongooseWatchlistRepository } from '../symbols/mongoose-watchlist.repository.js';
-import { WatchlistEntry, WatchlistEntrySchema } from '../symbols/watchlist-entry.schema.js';
-import { WATCHLIST_REPOSITORY } from '../symbols/watchlist-repository.token.js';
+import { WatchlistModule } from '../watchlist/watchlist.module.js';
+import { WATCHLIST_REPOSITORY } from '../watchlist/watchlist-repository.token.js';
 import { MongooseProfileRepository } from './mongoose-profile.repository.js';
 import { ProfileService } from './profile.service.js';
 import { ProfileEntry, ProfileEntrySchema } from './profile-entry.schema.js';
@@ -25,13 +24,12 @@ import { ProfilesController } from './profiles.controller.js';
  * {@link import('../symbols/symbols.module.js').SymbolsModule} — which would
  * create a cycle, since {@link import('../symbols/symbols.module.js').SymbolsModule}
  * imports *this* module to wire the symbol-removal → profile-prune cascade
- * (ADR-0009) — this module registers the shared {@link WatchlistEntry} model and
- * binds its own {@link WATCHLIST_REPOSITORY} to the same Mongoose adapter. The
- * repository is stateless and both bindings resolve the one `watchlist`
- * collection (`@nestjs/mongoose` reuses the already-compiled model), so the two
- * feature modules read one watchlist while the module graph stays acyclic —
- * mirroring the single shared `watchlist` handle the old `connectServices`
- * composition root passed to both services.
+ * (ADR-0009) — this module imports the shared {@link WatchlistModule}, the single
+ * owner of the `watchlist` collection. Both features resolve the **one**
+ * exported {@link WATCHLIST_REPOSITORY} instance (no self-sourced duplicate), and
+ * since {@link WatchlistModule} depends on nothing else the module graph stays
+ * acyclic — mirroring the single shared `watchlist` handle the old
+ * `connectServices` composition root passed to both services.
  *
  * {@link ProfileService} is exported so
  * {@link import('../symbols/symbols.module.js').SymbolsModule} can inject it as
@@ -40,15 +38,12 @@ import { ProfilesController } from './profiles.controller.js';
 @Module({
   imports: [
     IndicatorsModule,
-    MongooseModule.forFeature([
-      { name: ProfileEntry.name, schema: ProfileEntrySchema },
-      { name: WatchlistEntry.name, schema: WatchlistEntrySchema },
-    ]),
+    WatchlistModule,
+    MongooseModule.forFeature([{ name: ProfileEntry.name, schema: ProfileEntrySchema }]),
   ],
   controllers: [ProfilesController],
   providers: [
     { provide: PROFILE_REPOSITORY, useClass: MongooseProfileRepository },
-    { provide: WATCHLIST_REPOSITORY, useClass: MongooseWatchlistRepository },
     {
       provide: ProfileService,
       useFactory: (

@@ -1,6 +1,5 @@
 import type { CandleRepository, SymbolDiscovery, WatchlistRepository } from '@lametrader/core';
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
 import { CANDLE_REPOSITORY } from '../candles/candle-repository.token.js';
 import { InMemoryCandleRepository } from '../candles/in-memory-candle-repository.js';
 import { ConfigModule } from '../config/config.module.js';
@@ -9,21 +8,19 @@ import { MarketDataModule } from '../market-data/market-data.module.js';
 import { MARKET_DATA_SOURCES } from '../market-data/market-data-source.token.js';
 import { ProfileService } from '../profiles/profile.service.js';
 import { ProfilesModule } from '../profiles/profiles.module.js';
-import { MongooseWatchlistRepository } from './mongoose-watchlist.repository.js';
+import { WatchlistModule } from '../watchlist/watchlist.module.js';
+import { WATCHLIST_REPOSITORY } from '../watchlist/watchlist-repository.token.js';
 import { SymbolService } from './symbol.service.js';
 import type { SymbolProfilePruner } from './symbol.service.types.js';
 import { SymbolsController } from './symbols.controller.js';
-import { WatchlistEntry, WatchlistEntrySchema } from './watchlist-entry.schema.js';
-import { WATCHLIST_REPOSITORY } from './watchlist-repository.token.js';
 
 /**
  * The `/instruments` + `/symbols` feature module.
  *
  * Imports {@link MarketDataModule} for the discovery sources and
- * {@link ConfigModule} for the supported/default periods, registers the
- * {@link WatchlistEntry} model, binds the {@link WATCHLIST_REPOSITORY} port to
- * its Mongoose adapter, and drives the {@link SymbolService} behind
- * {@link SymbolsController}.
+ * {@link ConfigModule} for the supported/default periods, imports the shared
+ * {@link WatchlistModule} for the {@link WATCHLIST_REPOSITORY} binding (read +
+ * write), and drives the {@link SymbolService} behind {@link SymbolsController}.
  *
  * {@link CANDLE_REPOSITORY} is bound to the in-memory adapter here: the candles
  * resource (backfill / reads / polling) is ported in a later stage (#485), which
@@ -36,19 +33,13 @@ import { WATCHLIST_REPOSITORY } from './watchlist-repository.token.js';
  * as the {@link SymbolProfilePruner}: removing a symbol prunes it from every
  * profile's `symbols` scope (ADR-0009), reproducing the old `connectServices`
  * wiring where `SymbolService` took the `ProfileService` as its profiles cascade.
- * The dependency is one-way (symbols → profiles); `ProfilesModule` self-sources
- * its watchlist read binding so the graph stays acyclic.
+ * The dependency is one-way (symbols → profiles); both features import the same
+ * {@link WatchlistModule} for their watchlist binding, so the graph stays acyclic.
  */
 @Module({
-  imports: [
-    ConfigModule,
-    MarketDataModule,
-    ProfilesModule,
-    MongooseModule.forFeature([{ name: WatchlistEntry.name, schema: WatchlistEntrySchema }]),
-  ],
+  imports: [ConfigModule, MarketDataModule, ProfilesModule, WatchlistModule],
   controllers: [SymbolsController],
   providers: [
-    { provide: WATCHLIST_REPOSITORY, useClass: MongooseWatchlistRepository },
     { provide: CANDLE_REPOSITORY, useClass: InMemoryCandleRepository },
     {
       provide: SymbolService,

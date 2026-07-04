@@ -12,7 +12,7 @@ import {
 } from '@lametrader/core';
 import { defaultIndicators } from '../indicators/default-indicators.js';
 import type { IndicatorRegistry } from '../indicators/indicator-registry.js';
-import { InMemoryWatchlistRepository } from '../symbols/in-memory-watchlist.repository.js';
+import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
 import { InMemoryProfileRepository } from './in-memory-profile.repository.js';
 import { ProfileService } from './profile.service.js';
 import type { ProfileCascadeRules } from './profile.service.types.js';

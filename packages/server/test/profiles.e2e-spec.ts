@@ -9,7 +9,7 @@ import { AppModule } from '../src/app.module.js';
 import { InMemoryMarketDataSource } from '../src/market-data/in-memory-market-data-source.js';
 import { MARKET_DATA_SOURCES } from '../src/market-data/market-data-source.token.js';
 import { ProfileEntry } from '../src/profiles/profile-entry.schema.js';
-import { WatchlistEntry } from '../src/symbols/watchlist-entry.schema.js';
+import { WatchlistEntry } from '../src/watchlist/watchlist-entry.schema.js';
 
 /**
  * E2E for the profiles feature from the API consumer's perspective: the real Nest
