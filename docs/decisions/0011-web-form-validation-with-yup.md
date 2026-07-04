@@ -15,7 +15,7 @@ Neither react-hook-form nor `parseConfig` has a native field-label/message facil
 ## Decision
 
 Use **Yup** (`yup` + `@hookform/resolvers/yup`) for the **web UI's** form validation, **only** in user-facing schemas.
-The schema (`packages/web/src/lib/config-schema.ts`) expresses the form's rules declaratively with `.label(...)`, so messages are per-field, label-aware, and per-rule.
+The schema (`packages/ui/src/lib/config-schema.ts`) expresses the form's rules declaratively with `.label(...)`, so messages are per-field, label-aware, and per-rule.
 
 `parseConfig` remains the **authoritative** validator: the API re-validates every write, so the Yup schema is a UX layer, not the source of truth.
 This is scoped to the web package — `core`, `engine`, and the API do **not** adopt a schema library.
@@ -25,4 +25,4 @@ This is scoped to the web package — `core`, `engine`, and the API do **not** a
 - The settings form gets clean, declarative, per-field messages with field labels, the standard react-hook-form pattern (`yupResolver`).
 - It reverses issue #34's "single source of truth" stance: the config rules now exist in two places — the Yup schema (client UX) and `parseConfig` (server authority) — and could drift. The server is the backstop: an out-of-date client schema can only be over- or under-eager about *messages*; an actually-invalid write is still rejected by `parseConfig` with a 400 the form surfaces.
 - The duplication is intentionally confined to **user-facing** schemas. Backend/domain validation stays single-sourced in `parseConfig`.
-- New web forms validate with Yup schemas (in `packages/web/src/lib/*`), not by reusing domain validators.
+- New web forms validate with Yup schemas (in `packages/ui/src/lib/*`), not by reusing domain validators.

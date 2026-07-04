@@ -1,7 +1,7 @@
 # Spec: indicator-compute scoped load window
 
 - Status: draft
-- Touches: `@lametrader/core` (`IndicatorModule.warmup`), `@lametrader/engine` (`defineIndicator`, `IndicatorComputeService.compute`, `sma` / `vwma` `warmup`), `@lametrader/web` (`useComputeIndicator` + `computeIndicatorQueryOptions` accept `from` / `to`, chart page passes the candle feed's bounds).
+- Touches: `@lametrader/core` (`IndicatorModule.warmup`), `@lametrader/engine` (`defineIndicator`, `IndicatorComputeService.compute`, `sma` / `vwma` `warmup`), `@lametrader/ui` (`useComputeIndicator` + `computeIndicatorQueryOptions` accept `from` / `to`, chart page passes the candle feed's bounds).
 
 ## Goal
 

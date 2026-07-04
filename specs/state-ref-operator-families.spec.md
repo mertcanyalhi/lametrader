@@ -1,7 +1,7 @@
 # state-ref-operator-families
 
 - Status: draft
-- Touches: `packages/web/src/pages/rules/operator-picker.tsx`
+- Touches: `packages/ui/src/pages/rules/operator-picker.tsx`
 
 ## Goal
 

@@ -1,40 +1,30 @@
 /**
- * Public surface of `@lametrader/core` — the pure domain layer.
+ * Public surface of `@lametrader/core` — the shared types package.
  *
- * Holds entities and contracts (ports) only: no I/O, no outward imports.
+ * Holds the platform's type declarations (interfaces, type aliases,
+ * discriminated unions), enums, and the handful of runtime values shared with
+ * the browser (`periodMillis`, the input-limit constants). All domain logic and
+ * error classes live in `@lametrader/backend`; nothing here performs I/O or
+ * imports outward.
  */
 
 export {
-  BackfillConflictError,
-  CandleError,
-  DEFAULT_CANDLE_LIMIT,
-  MAX_CANDLE_LIMIT,
-  parseBackfillRange,
-  parseCandleLimit,
-  periodMillis,
-} from './candle.js';
-export type {
-  BackfillRange,
-  BaseCandle,
-  Candle,
-  CandleBatch,
-  CandlePage,
-  CandleRepository,
-  CryptoCandle,
-  EquityCandle,
-  FxCandle,
-} from './candle.types.js';
-export { ConfigError, defaultConfig, mergeConfig, parseConfig } from './config.js';
-export { type Config, ConfigKey, type ConfigRepository, Period } from './config.types.js';
-export { ExpirationError, validateExpiration } from './expiration.js';
-export type { Expiration } from './expiration.types.js';
+  BOT_TOKEN_MAX,
+  CHAT_ID_MAX,
+  DESTINATION_NAME_MAX,
+  RULE_DESCRIPTION_MAX,
+  RULE_NAME_MAX,
+  STATE_KEY_MAX,
+  SYMBOL_ID_MAX,
+  TELEGRAM_TEMPLATE_MAX,
+} from './limits.js';
+export { periodMillis } from './period.js';
 export {
-  IndicatorError,
-  IndicatorInstanceNotFoundError,
-  IndicatorNotFoundError,
-  resolveSource,
-  validateIndicatorInputs,
-} from './indicator.js';
+  type Config,
+  ConfigKey,
+  type ConfigRepository,
+  Period,
+} from './types/config/config.types.js';
 export {
   type EnumFieldDescriptor,
   type EnumOption,
@@ -59,26 +49,41 @@ export {
   RenderKind,
   type SourceFieldDescriptor,
   type StateFieldDescriptor,
-} from './indicator.types.js';
+} from './types/indicators/indicator.types.js';
+export type {
+  BackfillRange,
+  BaseCandle,
+  Candle,
+  CandleBatch,
+  CandleEvent,
+  CandleListener,
+  CandlePage,
+  CandleRepository,
+  CryptoCandle,
+  EquityCandle,
+  FxCandle,
+} from './types/market-data/candle.types.js';
+export type {
+  EnrichedSymbol,
+  SymbolQuote,
+  SymbolQuoteEvent,
+  SymbolQuoteListener,
+} from './types/market-data/quote.types.js';
 export {
-  BOT_TOKEN_MAX,
-  CHAT_ID_MAX,
-  DESTINATION_NAME_MAX,
-  RULE_DESCRIPTION_MAX,
-  RULE_NAME_MAX,
-  STATE_KEY_MAX,
-  SYMBOL_ID_MAX,
-  TELEGRAM_TEMPLATE_MAX,
-} from './limits.js';
-export { type Notifier, UnknownDestinationError } from './notifier.types.js';
-export {
-  mergeProfileFields,
-  ProfileConflictError,
-  ProfileError,
-  ProfileNotFoundError,
-  parseProfileFields,
-  parseProfileScope,
-} from './profile.js';
+  type CandleFeed,
+  type Instrument,
+  type MarketDataSource,
+  type SymbolDiscovery,
+  SymbolType,
+  type WatchedSymbol,
+  type WatchlistRepository,
+} from './types/market-data/symbol.types.js';
+export type { Notifier } from './types/notifications/notifier.types.js';
+export type {
+  TelegramDestination,
+  TelegramDestinationLookup,
+  TelegramDestinationSummary,
+} from './types/notifications/telegram-destination.types.js';
 export {
   type AllScope,
   type IndicatorInstance,
@@ -88,20 +93,8 @@ export {
   ProfileScope,
   type ProfileScopeSpec,
   type SymbolsScope,
-} from './profile.types.js';
-export { computeQuote } from './quote.js';
-export type {
-  EnrichedSymbol,
-  SymbolQuote,
-  SymbolQuoteEvent,
-  SymbolQuoteListener,
-} from './quote.types.js';
-export {
-  InvalidRuleConditionError,
-  RuleError,
-  RuleNotFoundError,
-  TickRuleNotEligibleError,
-} from './rule.js';
+} from './types/profiles/profile.types.js';
+export type { Expiration } from './types/rules/expiration.types.js';
 export {
   type Action,
   ActionKind,
@@ -119,7 +112,6 @@ export {
   type CrossingLeafCondition,
   CrossingOperator,
   type CycleOverflowRuleEvent,
-  collectConditionIntervals,
   type DataUpdateEvent,
   DataUpdateKind,
   type ErrorRuleEvent,
@@ -136,14 +128,11 @@ export {
   type LeafCondition,
   LeafConditionFamily,
   type LowChangedEvent,
-  leafNeedsInterval,
-  leafOperands,
   type MovingLeafCondition,
   MovingOperator,
   type NotificationAction,
   NotificationChannel,
   type NotificationSentRuleEvent,
-  normalizeRule,
   type OncePerBarCloseTrigger,
   type OncePerBarOpenTrigger,
   type OncePerBarTrigger,
@@ -152,7 +141,6 @@ export {
   type OpenChangedEvent,
   OperandKind,
   type Operator,
-  operandNeedsInterval,
   type RemoveGlobalStateAction,
   type RemoveSymbolStateAction,
   type Rule,
@@ -178,10 +166,8 @@ export {
   type Trigger,
   TriggerKind,
   type VolumeChangedEvent,
-  validateRuleCondition,
-} from './rules/index.js';
-export { isBool, isNumber, isString } from './state.js';
-export { type StateValue, StateValueType } from './state.types.js';
+} from './types/rules/index.js';
+export { type StateValue, StateValueType } from './types/state/state.types.js';
 export {
   type GlobalStateScope,
   type StateChangedEvent,
@@ -190,29 +176,4 @@ export {
   StateScope,
   type StateScopeSpec,
   type SymbolStateScope,
-} from './state-repository.types.js';
-export {
-  assertInstrumentTypeMatchesId,
-  MarketDataError,
-  parseSymbolPeriods,
-  SymbolConflictError,
-  SymbolError,
-  SymbolNotFoundError,
-  symbolType,
-} from './symbol.js';
-export {
-  type CandleFeed,
-  type Instrument,
-  type MarketDataSource,
-  type SymbolDiscovery,
-  SymbolType,
-  type WatchedSymbol,
-  type WatchlistRepository,
-} from './symbol.types.js';
-export {
-  type TelegramDestination,
-  TelegramDestinationError,
-  type TelegramDestinationLookup,
-  TelegramDestinationNotFoundError,
-  type TelegramDestinationSummary,
-} from './telegram-destination.types.js';
+} from './types/state/state-repository.types.js';

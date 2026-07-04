@@ -14,9 +14,6 @@ const pkgSrc = (name: string): string =>
  */
 const alias = {
   '@lametrader/core': pkgSrc('core'),
-  '@lametrader/engine': pkgSrc('engine'),
-  '@lametrader/api': pkgSrc('api'),
-  '@lametrader/cli': pkgSrc('cli'),
 };
 
 /**
@@ -27,7 +24,14 @@ const alias = {
  * - `live` — raw adapter against a real external API (`*.live.test.ts`).
  *
  * `passWithNoTests` keeps the gates green while the tree is still being built out.
+ *
+ * `@lametrader/backend` is excluded from every project: it is a NestJS package run
+ * by Jest (its own `.spec.ts` / `.e2e-spec.ts` suites), orchestrated separately
+ * through the root `test:server` / `test:server:e2e` scripts. Each package sees
+ * exactly one runner.
  */
+const excludeServer = 'packages/backend/**';
+
 export default defineConfig({
   test: {
     passWithNoTests: true,
@@ -37,8 +41,13 @@ export default defineConfig({
         test: {
           name: 'unit',
           include: ['packages/**/src/**/*.test.{ts,tsx}'],
-          exclude: [...configDefaults.exclude, '**/*.e2e.test.ts', '**/*.live.test.ts'],
-          setupFiles: ['./packages/web/src/test-setup.ts'],
+          exclude: [
+            ...configDefaults.exclude,
+            excludeServer,
+            '**/*.e2e.test.ts',
+            '**/*.live.test.ts',
+          ],
+          setupFiles: ['./packages/ui/src/test-setup.ts'],
         },
       },
       {
@@ -46,6 +55,7 @@ export default defineConfig({
         test: {
           name: 'e2e',
           include: ['packages/*/tests/e2e/**/*.e2e.test.ts'],
+          exclude: [...configDefaults.exclude, excludeServer],
           testTimeout: 30_000,
           hookTimeout: 120_000,
         },
@@ -55,6 +65,7 @@ export default defineConfig({
         test: {
           name: 'live',
           include: ['packages/**/src/**/*.live.test.ts'],
+          exclude: [...configDefaults.exclude, excludeServer],
           testTimeout: 20_000,
         },
       },

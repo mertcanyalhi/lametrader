@@ -32,7 +32,7 @@ See `docs/decisions/0011-web-form-validation-with-yup.md` for the trade-off (UI-
 - **`useConfig` / `useUpdateConfig`** → live in `lib/hooks/use-config.ts`.
   `useUpdateConfig` invalidates the `['config']` query on success and writes the response straight into the cache (`setQueryData`).
 - **Pino logger scope** → `'settings-page'` for form/save lifecycle events; the existing `'api-fetch'` and `'query-client'` scopes still log the underlying HTTP/query events.
-- **No new shadcn-style wrappers under `src/components/ui/*`** — the rule from `packages/web/CLAUDE.md` (added in #45) holds: use Radix Themes / Radix Primitives directly with Tailwind classes inline.
+- **No new shadcn-style wrappers under `src/components/ui/*`** — the rule from `packages/ui/CLAUDE.md` (added in #45) holds: use Radix Themes / Radix Primitives directly with Tailwind classes inline.
 
 ## Acceptance criteria
 
@@ -86,6 +86,6 @@ There is no end-to-end test driving a real browser against the page — we don't
 - **Yup `${label}` interpolation trips Biome's `noTemplateCurlyInString`.** Use Yup's function-message form (`({ label }) => `${label} is required.``) — a real template literal — instead of the `'${label}'` string, so no ignore pragma is needed.
 - **React 19 + RTL + Vitest** needs `globalThis.IS_REACT_ACT_ENVIRONMENT = true` set before tests run.
   Without it, `userEvent.click` doesn't flush state updates synchronously and tests see stale form values.
-  Set in `packages/web/src/test-setup.ts` (loaded via the root `vitest.config.ts` setup file).
+  Set in `packages/ui/src/test-setup.ts` (loaded via the root `vitest.config.ts` setup file).
 - **Radix Themes' `Select` uses an internal `ScrollArea`** which reads `ResizeObserver`.
   jsdom doesn't ship one — a no-op polyfill in `test-setup.ts` lets the dropdown mount in component tests.

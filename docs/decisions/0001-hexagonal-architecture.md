@@ -1,6 +1,6 @@
 # Hexagonal architecture with SOLID, kept pragmatic
 
-- Status: accepted
+- Status: superseded by 0018
 
 ## Context
 

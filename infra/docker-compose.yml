@@ -2,11 +2,11 @@
 #
 #   docker compose -f infra/docker-compose.yml up -d           # MongoDB only
 #   docker compose -f infra/docker-compose.yml --profile tools up -d   # + mongo-express UI
-#   docker compose -f infra/docker-compose.yml --profile app   up -d   # + api + web
+#   docker compose -f infra/docker-compose.yml --profile app   up -d   # + server + web
 #
 # The default (no profile) brings up just MongoDB, keeping the unit-test +
-# `npm run api:dev` / `npm run web` loop unchanged. The `app` profile is the
-# full-stack one — api and web both built from the workspace Dockerfiles.
+# `npm run fe:start:dev` loop unchanged. The `app` profile is the full-stack one — the
+# NestJS server and web both built from the workspace Dockerfiles.
 #
 # All settings have sane defaults, so it runs without an .env file. Copy
 # .env.example to .env in this folder to override credentials/ports.
@@ -48,14 +48,16 @@ services:
       mongo:
         condition: service_healthy
 
-  # Fastify API. Opt-in via `--profile app`. Build context is the repo root so
-  # the Dockerfile can `npm ci` the full workspace.
-  api:
+  # NestJS backend. Opt-in via `--profile app`. Build context is the repo root so
+  # the Dockerfile can `npm ci` the full workspace. It runs the live poll loop +
+  # rule engine on boot, so the poll cadence, notification destinations, and
+  # logging are all env-driven (defaults apply when unset).
+  server:
     profiles: ["app"]
-    container_name: lametrader-api
+    container_name: lametrader-server
     build:
       context: ..
-      dockerfile: packages/api/Dockerfile
+      dockerfile: packages/backend/Dockerfile
     restart: unless-stopped
     ports:
       - "${API_PORT:-3000}:3000"
@@ -63,24 +65,38 @@ services:
       MONGODB_URI: mongodb://${MONGO_USER:-lametrader}:${MONGO_PASSWORD:-lametrader}@mongo:27017/${MONGO_DB:-lametrader}?authSource=admin
       PORT: "3000"
       NODE_ENV: production
+      POLL_INTERVALS: ${POLL_INTERVALS:-}
+      TELEGRAM_DESTINATIONS: ${TELEGRAM_DESTINATIONS:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_SCOPES: ${LOG_SCOPES:-}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://localhost:3000/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     depends_on:
       mongo:
         condition: service_healthy
 
-  # Web SPA served by nginx, with `/api/*` reverse-proxied to the api service —
+  # Web SPA served by nginx, with `/api/*` reverse-proxied to the server —
   # the browser sees one origin, so no CORS is needed. Opt-in via `--profile app`.
   web:
     profiles: ["app"]
     container_name: lametrader-web
     build:
       context: ..
-      dockerfile: packages/web/Dockerfile
+      dockerfile: packages/ui/Dockerfile
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-8080}:8080"
     depends_on:
-      - api
+      server:
+        condition: service_healthy
 
 volumes:
   mongo-data:

@@ -1,48 +1,67 @@
 # lametrader
 
-This is a TypeScript monorepo for a quant trading platform for asset tracking, technical indicator analysis, automated signal generation, and historical backtesting; ingest market data from multiple sources, persist it, and serve it over an API / CLI / web UI.
+This is a TypeScript monorepo for a quant trading platform for asset tracking, technical indicator analysis, automated signal generation, and historical backtesting; it ingests market data from multiple sources, persists it, and serves it over an HTTP + WebSocket API and a web UI.
 
 ## Architecture & principles
 
-Hexagonal (ports & adapters), kept pragmatic.
+Idiomatic NestJS, kept pragmatic.
 
-Rings (inner never imports outer):
+The backend is a single NestJS monolith (`@lametrader/backend`) on the Express platform.
+Structure follows Nest's grain, not a layered ring diagram: **four context modules**, each a set of controllers → injectable services → injected repositories/providers, wired by dependency injection.
+See `docs/decisions/0018-nestjs-monolith-replaces-hexagonal-architecture.md` for why the earlier hexagonal multi-package layout (`core` → `engine` → `api`/`cli`/`web`) was collapsed into a monolith (ADR-0018 supersedes ADR-0001), and `docs/decisions/0019-context-modules-replace-per-resource-modules.md` for why the initial per-resource modules were then consolidated into four bounded contexts (ADR-0019 amends ADR-0018).
 
-- **domain** — entities + pure logic (candle, indicator, signal, backtest). No I/O, no outward imports.
-- **ports** — interfaces the core needs (`MarketDataSource`, `CandleRepository`).
-- **application** — use-cases wiring ports together.
-- **adapters** — implement/drive ports: `binance`, `yahoo`, `mongo` (driven); `http`, `cli`, `web` (driving).
+- **Context modules** — four, grouped by what the code is *about*, not one per resource:
+  - **`CommonModule`** (`src/common/`) — the infra leaf every context depends on: the root Mongo connection, `nestjs-pino` logging, `/health`, the global HTTP contract (filter + pipe), the four shared stream hubs, the shared domain kernel (`common/domain/`), plus the shared *leaf* features that sit below more than one context — the `/config` settings feature, the `event-log` store, and telegram `notifications`.
+  - **`MarketModule`** (`src/market/`) — instruments and price data: symbols, market-data source adapters, the candle store, the watchlist store. Owns `CANDLE_REPOSITORY`, `WATCHLIST_REPOSITORY`, `MARKET_DATA_SOURCES`.
+  - **`AnalyticsModule`** (`src/analytics/`) — signals derived from market data: the indicator library, profiles, the rule engine + rule store, the state store. Owns `RULE_REPOSITORY`, `STATE_REPOSITORY`, `PROFILE_REPOSITORY`.
+  - **`DeliveryModule`** (`src/delivery/`) — the outbound surface: the multiplexed `/stream` WebSocket gateway.
+  The graph is `Delivery → Analytics → Market → Common`, with one accepted `forwardRef` between Market and Analytics (`symbols → profiles` prune cascade vs. analytics reading market data).
+  Internally each module groups flat files by technical role (`controllers/`, `services/`, `interfaces/`, `dto/`, `persistence/`, `testing/`) but keeps cohesive subsystems whole (`market/backfill/`, `market/market-data/`, `analytics/rules/`, `analytics/indicators/`).
+- **Dependency injection via provider tokens** — a service depends on an interface bound to a token (`CANDLE_REPOSITORY`, `WATCHLIST_REPOSITORY`, `STATE_REPOSITORY`, `RULE_REPOSITORY`, `EVENT_LOG`, `MARKET_DATA_SOURCES`, …), never on a concretion.
+  The owning context binds the token to its Mongoose adapter; a test overrides it with an in-memory fake through Nest's testing DI.
+- **Shared-store pattern** — a persistent store is bound + **exported** exactly once, by the context that owns it (a context may register several Mongoose models and bind several tokens — `MarketModule` owns candle + watchlist, `AnalyticsModule` owns rule + state + profile, `CommonModule` owns config + event-log).
+  Every other context `imports` the owner and resolves the one shared instance; a store consumed by more than one context (`event-log`, `config`) lives in the `CommonModule` leaf so the module graph stays acyclic.
+- **One global HTTP contract** — a global `DomainExceptionFilter` maps domain errors to status codes (`*NotFoundError` → 404, `*ConflictError` → 409, client-input `*Error` + DTO validation → 400, `MarketDataError` → 502, anything else → 500), and a global `ValidationPipe` validates every DTO at the boundary; both emit the uniform `{ error, fields? }` envelope.
+- **class-validator / class-transformer DTOs** — request/response shapes are DTO classes at the boundary; `@nestjs/swagger` generates the OpenAPI docs at `/docs` from the same classes.
+- **Nest batteries, not bespoke glue** — `@nestjs/config` (a validated env schema) for settings, `nestjs-pino` for structured logging, `@nestjs/schedule` for the polling loop, `@nestjs/mongoose` for persistence.
+- **WebSockets** — both the param'd per-job backfill-progress socket and the multiplexed `/stream` socket are served by raw `ws` servers on the HTTP `upgrade` (not socket.io, and not `@WebSocketGateway`'s path routing), each matching only its own URL so the two coexist on one server.
+- **Dormant producers, live only from `main.ts`** — the poll loop, rule engine, quote stream, and their producer→hub fan-out are constructed idle in their modules and started once, by `LiveCascadeService`, from `main.ts` **after** `app.listen()`.
+  The e2e suites build the app via `Test.createTestingModule` and never reach that call, so they touch no real market-data provider.
 
-**The one rule: adapters → application → domain, never the reverse.**
-
-- SOLID, applied: new source = new adapter, never edit existing (OCP); domain depends on ports, not concretions (DIP); narrow ports over fat ones (ISP); every adapter passes one shared contract test suite (LSP).
-- Anti-dogma: abstract on the *second* instance, not in anticipation. No port until a second adapter or a test fake needs one. Prefer small pure functions over tiny ceremonial classes. No indirection that doesn't pay for itself.
-
-See `docs/decisions/` for the why behind these (ADRs).
+`@lametrader/core` stays a pure shared-types package (types, enums, a handful of runtime constants) that both the server and the browser import; it performs no I/O and pulls no server dependency into the browser bundle.
 
 - Use RESTful API structure.
 - Use enums instead of stringed types.
 
+Anti-dogma, unchanged in spirit: abstract on the *second* instance, not in anticipation.
+No interface-behind-a-token until a second adapter or a test fake actually needs to substitute one.
+Prefer small pure functions over tiny ceremonial classes.
+No indirection that doesn't pay for itself.
+
 ## Project layout
 
-npm workspaces under `packages/*`: `core` (domain), `engine` (application + driven adapters), `cli` (driving adapter), `web` (driving adapter, React + Vite).
-More packages (sources, api, logger) join the same way.
+npm workspaces under `packages/*` — three packages:
 
-**Adding a Node package** (`core`/`engine`/`cli`-style):
+- **`core`** — the shared types/enums package: interfaces, enums, and a handful of runtime constants (`periodMillis`, the input-limit constants) both the backend and the browser agree on.
+  No I/O, no outward imports.
+- **`server`** — the NestJS monolith backend: the whole HTTP + WebSocket surface, the use-cases, the market-data adapters, persistence, and the polling / rule-engine runtime.
+- **`web`** — the browser app (React + Vite).
 
-1. `packages/<n>/package.json` — `@lametrader/<n>`, `"type": "module"`, `main`/`types` → `dist/index.js`/`dist/index.d.ts`, `"build": "tsc --build"`.
-   Internal deps pin the dependency's **current** `version` (e.g. `"@lametrader/<dep>": "0.4.0"`), so npm workspace linking resolves them — `npm ci` 404s on a spec the workspace version can't satisfy.
-   Bumping a package's version means updating its dependents' pins too.
-2. `packages/<n>/tsconfig.json` — extends `../../tsconfig.base.json`, `rootDir: src`, `outDir: dist`, `include: ["src"]`, `references` to each internal dep.
-3. Add `{ "path": "packages/<n>" }` to the root `tsconfig.json` `references`.
-4. `npm install` to link the workspace.
+**Adding to the backend** — the backend is one Nest app of four context modules (`common`, `market`, `analytics`, `delivery`), so a new resource joins the context it belongs to rather than getting its own module: add its controller/service/DTOs/schema under that context's role folders (`controllers/`, `services/`, `interfaces/`, `dto/`, `persistence/`), or a subsystem folder if it has real internal structure, and wire it into that context's `*.module.ts`.
+A new store is bound + exported once from its owning context (or from `CommonModule` if more than one context reads it — the shared-store pattern above).
+A genuinely new bounded context (rare) is a new context module imported into `AppModule`; respect the `Delivery → Analytics → Market → Common` direction.
+There is no new-package ceremony for backend features.
 
-**The `web` package is different** (browser, Vite-owned):
+**Adding a shared type** — put it in `core` under `src/types/<context>/` as a `*.types.ts` (or an enum), grouped with its context (`market-data`, `config`, `indicators`, `profiles`, `state`, `notifications`, `rules`), and re-export the public surface from `packages/core/src/index.ts`, so both `server` and `web` import it from the package root.
 
-- Its `tsconfig.json` extends base but overrides: `composite/declaration: false`, `noEmit: true`, `lib: [ES2022, DOM, DOM.Iterable]`, `module: ESNext`, `moduleResolution: Bundler`, `jsx: react-jsx`.
-- **Not** in the root project-refs graph — Vite builds it (`vite build`).
-  Its `typecheck` script (`tsc --noEmit`) is picked up by the root `typecheck`'s `--workspaces --if-present` pass.
-- Component tests run in `jsdom`: add `// @vitest-environment jsdom` at the top of the test file (keeps them in the default `unit` run without a node/DOM split).
+**Only `core` sits in the root project-references graph.**
+`server` and `web` are app-only packages compiled on their own, outside the root refs (`tsconfig.json` references just `packages/core`):
+
+- **`server`** — its `tsconfig.json` enables the decorator metadata Nest's DI needs (`experimentalDecorators` + `emitDecoratorMetadata`) and drops `composite`/`declaration` so it type-checks with `--noEmit`.
+  Its `typecheck` script is picked up by the root `typecheck`'s `--workspaces --if-present` pass.
+- **`web`** (Vite-owned, browser) — its `tsconfig.json` overrides `composite`/`declaration: false`, `noEmit: true`, `lib: [ES2022, DOM, DOM.Iterable]`, `module: ESNext`, `moduleResolution: Bundler`, `jsx: react-jsx`.
+  Vite builds it (`vite build`); its `typecheck` script (`tsc --noEmit`) is likewise picked up by the root `typecheck`.
+  Component tests run in `jsdom` via Vitest: add `// @vitest-environment jsdom` at the top of the test file.
 
 ## Development flow
 
@@ -51,9 +70,9 @@ Every change: **spec → red → green → refactor → check → commit**, one 
 1. **Spec** — write `specs/<name>.spec.md`; acceptance criteria as a bullet list.
    Each bullet = one test; code mapping to no bullet isn't written.
 2. **Red** — turn each criterion into a failing unit test (full-payload `toEqual`).
-3. **Green** — minimal code to pass; respect the dependency rule.
+3. **Green** — minimal code to pass; keep to the module conventions (a service over injected ports, not a controller reaching into Mongoose).
 4. **Refactor** — clean under green tests; abstract only on the second instance.
-5. **E2E** — every major feature gets a `*.e2e.test.ts` (poll → persist → process → assert) + its one critical failure mode.
+5. **E2E** — every major feature gets an e2e suite (poll → persist → process → assert) plus its one critical failure mode: `packages/backend/test/*.e2e-spec.ts` (Jest, over HTTP/WS) for the backend, `packages/ui/tests/e2e/*.e2e.test.ts` (Vitest) for the UI.
 6. **Check** — `npm run check:full` green.
 7. **Commit** — one logical concern, Conventional Commits message.
    Do **not** bump package `version`s here — versioning is a separate flow (`/release`), driven off the conventional-commit history.
@@ -76,38 +95,48 @@ Anything that adds, removes, or changes documented behaviour goes through the fu
 
 ### Test tiers
 
-- **unit** (default) — pure domain + application vs fake adapters.
-  Fast, deterministic.
-  The TDD tier; bulk of tests.
-  Co-located in `src` beside the code (`*.test.ts`).
-- **e2e** — validate a feature from the **end-user / spec perspective**, driving real surfaces (HTTP, CLI) against real infra.
-  Kept **separate** from `src`, in `packages/<pkg>/tests/e2e/*.e2e.test.ts` — one suite per major feature.
-  Run in `check:full` / CI.
-- **live** — raw adapter vs real external API (`*.live.test.ts`).
+Two runners, one per package family — **Jest** for `server` (Nest's default; SWC compiles the decorators and emits the DI metadata), **Vitest** for `web` and `core`.
+Each package sees exactly one runner; the root scripts orchestrate both.
+
+- **unit** (default) — pure logic + services against in-memory fakes.
+  Fast, deterministic; the TDD tier and the bulk of tests.
+  Co-located beside the code (`*.spec.ts` under `server/src`, `*.test.ts(x)` under `web` / `core` `src`).
+- **e2e** — validate a feature from the **end-user / spec perspective**, driving a real surface.
+  `server` e2e (`packages/backend/test/*.e2e-spec.ts`) boots the Nest app against a Testcontainers Mongo and drives it over HTTP / WS; `web` e2e (`packages/ui/tests/e2e/*.e2e.test.ts`) drives the UI.
+  One suite per major feature.
+- **live** — raw adapter against a real external API (`*.live.test.ts`).
   Flaky; manual only.
-- Port contracts = one shared suite, run against both the fake (unit) and the real adapter (live).
+- Contract suites = one shared spec run against **both** the in-memory fake and the Mongoose adapter (the net proving the two behave identically).
 
 ### Gates
 
-- `check` (typecheck + lint + unit) — native git pre-commit hook + CI on every push.
-- `check:full` (+ e2e) — CI on PRs.
+- `check` (typecheck + lint + unit) — run it locally before every commit; CI runs it on push to `main` (a cheap post-merge safety net).
+- `check:full` (+ e2e) — CI on every PR (the pre-merge gate).
+- Docs-only changes (`**.md`, `docs/**`, `specs/**`) skip CI.
 
 ## Commands
 
-All routine actions go through these scripts — don't invoke `tsc`/`vitest`/`biome` directly.
+All routine actions go through these scripts — don't invoke `tsc` / `vitest` / `jest` / `biome` directly.
 
-| Script                             | Does                                      |
-| ---------------------------------- | ----------------------------------------- |
-| `npm run build`                    | build all (project refs)                  |
-| `npm run typecheck`                | type-check via project refs               |
-| `npm run lint` / `lint:fix`        | Biome check / auto-fix                    |
-| `npm test` / `test:watch`          | unit tier                                 |
-| `npm run test:e2e`                 | e2e tier                                  |
-| `npm run test:live`                | live tier (real APIs)                     |
-| `npm run coverage`                 | unit + coverage                           |
-| `npm run check`                    | typecheck + lint + unit (pre-commit + CI) |
-| `npm run check:full`               | check + e2e (CI on PR)                    |
-| `npm run infra:up/down/logs/reset` | docker compose infra                      |
+| Script                             | Does                                                       |
+| ---------------------------------- | ---------------------------------------------------------- |
+| `npm run build`                    | build the project-refs graph (`core`)                      |
+| `npm run typecheck`                | type-check the refs graph + each workspace's `typecheck`   |
+| `npm run lint` / `lint:fix`        | Biome check / auto-fix                                     |
+| `npm run format`                   | Biome format (write)                                       |
+| `npm test` / `test:watch`          | Vitest unit tier (`web` + `core`)                          |
+| `npm run test:e2e` / `fe:test:e2e` | Vitest e2e tier (`web`)                                    |
+| `npm run test:live`                | Vitest live tier (real APIs)                               |
+| `npm run fe:test`                  | Vitest unit tier (`web` + `core`) — alias of `npm test`    |
+| `npm run be:test`                  | Jest unit tier (`server`)                                  |
+| `npm run be:test:e2e`              | Jest e2e tier (`server`, Testcontainers Mongo)             |
+| `npm run coverage`                 | Vitest unit + coverage                                     |
+| `npm run check`                    | typecheck + lint + Vitest unit + server Jest unit          |
+| `npm run check:full`               | check + both e2e tiers (CI on PR)                          |
+| `npm run be:start` / `be:start:dev`| start the backend built / in watch mode (`@lametrader/backend`) |
+| `npm run fe:start` / `fe:start:dev`| serve the built web app / start the Vite dev server        |
+| `npm run infra:up/down/logs/reset` | docker compose infra (Mongo)                               |
+| `npm run app:up/down/logs/build`   | docker compose full app profile (mongo + server + web)     |
 
 ## Conventions
 
@@ -117,10 +146,10 @@ Follow these by default, unprompted.
 
 - Assert the FULL payload: `expect(x).toEqual({...whole object})` — never `toMatchObject` or per-field.
 - Floats: `expect.closeTo(n, digits)` as an asymmetric matcher inside `toEqual`.
-- Two opt-in tiers beyond unit (`e2e`, `live`) via Vitest projects (`--project`).
+- The tiers beyond unit (`e2e`, `live`) are Jest / Vitest **projects**, selected with `--selectProjects` / `--project` by the root scripts.
   No env flags / `runIf`.
 - Unit tests sit beside the code in `src`.
-  E2e tests live in `packages/<pkg>/tests/e2e/` and assert a feature from the end-user/spec perspective.
+  E2e tests assert a feature from the end-user/spec perspective and live apart from `src` — `packages/backend/test/*.e2e-spec.ts` for the backend, `packages/ui/tests/e2e/*.e2e.test.ts` for the UI.
 - Never `.skip` a test to land a change.
 - **One action per test.**
   Arrange the setup, perform a single action, assert the full outcome.
@@ -132,7 +161,7 @@ Follow these by default, unprompted.
 - **No logic in test bodies** — no `if`/loops/ternaries/conditional assertions.
   Branching cases get separate tests.
 - **Prefer real implementations over mocks.**
-  Use a fake adapter (e.g. `InMemoryWatchlistRepository`) over a stub, a stub over a mock.
+  Use a fake adapter (e.g. `InMemoryWatchlistRepository`, bound over the repository token via a Nest DI override) over a stub, a stub over a mock.
   Only mock external systems we don't own.
 - **Each test is hermetic** — sets up everything it needs and runs in isolation.
   Never `sleep()` to wait for something; poll a condition or use an event hook.
@@ -143,7 +172,7 @@ Follow these by default, unprompted.
   Handle cases, don't weaken.
 - Multi-line JSDoc (`/**\n * ... */`) on every interface, property, type, function, class, method, notable constant.
 - Type declarations (interfaces, type aliases, enums) live in a sibling `*.types.ts` module, separate from logic.
-  Public ones are re-exported from the package `index.ts`.
+  Public ones are re-exported from the package `index.ts` (in `core`) or the DTO/schema they back (in `server`).
 - **Comments and prose break at sentence ends, not line-length wraps** — one sentence per line in JSDoc and in markdown (specs, ADRs, READMEs, this file).
   Each sentence on its own line; a blank line separates distinct thoughts.
   Markdown renders the same (lines within a paragraph are joined) but reads cleanly in source and gives single-line diffs on prose edits.
@@ -164,7 +193,7 @@ Follow these by default, unprompted.
 
 - When a decision the request didn't settle comes up — a design call, an architectural trade-off, a choice between sensible options, the interpretation of an ambiguous spec — **surface it and ask** before implementing.
   Reasoning to "the most plausible answer" and acting silently produces churn: the human reviews, pushes back, the work gets redone.
-- The bar isn't every micro-detail (variable names, file layout inside a package).
+- The bar isn't every micro-detail (variable names, file layout inside a module).
   It's every spot two readers might reasonably disagree, or where a wrong call would cost more than a clarifying question.
 - A clear question with two-to-four labeled options is faster than a wrong-turn refactor.
   Default to asking; the human will say "just go" when they want autonomy.
@@ -174,23 +203,29 @@ Follow these by default, unprompted.
 
 - Prefer well-established, non-commercial (open-source / freely licensed) industry-standard packages wherever they fit. Avoid commercial/paid or obscure unmaintained deps.
 
+### Shell commands
+
+- Prefer flat single-command calls (`grep -rnE ... file1 file2`, `rg`) over `for`-loops or `cd; …; done` chains.
+  The permission matcher can't statically decompose loops/compound scripts, so it prompts every time even when the underlying tools are allowlisted; a flat command matches the allowlist and runs unattended.
+
 ### Runtime config
 
-- Resolve environment-derived settings via the common settings layer (`loadSettings`, with defaults). Never read `process.env` directly in feature modules.
+- Resolve environment-derived settings through `@nestjs/config`: a `validate` hook (`validateEnv`) parses and validates the environment into a typed `AppConfig` at boot (same vars, defaults, and fail-fast behavior as the old settings layer), and feature code reads values from the injected `ConfigService`.
+  Never read `process.env` directly in feature modules.
 
 ### API
 
-- Always RESTful — resource-oriented routes, correct verbs, correct status codes (200/201/204, 400/404, 500).
-- Separate controllers per resource (`src/controllers/<resource>.controller.ts`).
-  `app.ts` only wires them.
-- Schema-based input validation at the boundary (Fastify JSON schema).
-  Cross-field/domain rules live in the domain and surface as 400.
-- Log through a common log library (Fastify's built-in Pino); never ad-hoc `console.log`.
+- Always RESTful — resource-oriented routes, correct verbs, correct status codes (200/201/204, 400/404/409, 500).
+- A controller per resource (`src/<resource>/<resource>.controller.ts`); the feature module wires the controller to its service, and `AppModule` only imports the modules.
+- Input validation at the boundary via class-validator DTO classes + the global `ValidationPipe` (unknown properties rejected, body hydrated into the DTO instance).
+- Cross-field / domain rules live in the domain and surface as **400** through the thrown domain error + the global `DomainExceptionFilter` — not as DTO constraints.
+- Every error is the uniform `{ error, fields? }` envelope; the filter maps domain errors to status (404 / 409 / 400 / 502 / 500).
+- Log through `nestjs-pino` (inject `PinoLogger`, `setContext(scope)`); never ad-hoc `console.log`.
 
 ### Docs
 
 - Every package exposing a surface keeps a `README.md`.
-  A change to a CLI command or API endpoint updates that package's README (usage + examples) in the same change.
+  A change to an API endpoint or WebSocket protocol updates the `server` `README.md` (the endpoint table + examples) in the same change.
 
 ### GitHub workflow
 
@@ -208,6 +243,8 @@ A change is done only when:
 - [ ] A major feature has an e2e test covering it end-to-end.
 - [ ] `npm run check:full` is green; nothing `.skip`-ped.
 - [ ] It's one logical concern with a Conventional Commits message.
-- [ ] CLI/API surface changes are reflected in the package `README.md`.
+- [ ] API / WebSocket surface changes are reflected in the `server` `README.md`.
 - [ ] An ADR is written if a non-obvious decision was made.
 - [ ] Prefer deleting code to adding it.
+</content>
+</invoke>

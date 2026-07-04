@@ -1,7 +1,7 @@
 # Spec: chart Rules button + symbol-scoped rules modal
 
 - Status: draft
-- Touches: `@lametrader/web` only — new `SymbolRulesDialog` component, wired into `ChartPage`'s bottom-bar Chart actions group.
+- Touches: `@lametrader/ui` only — new `SymbolRulesDialog` component, wired into `ChartPage`'s bottom-bar Chart actions group.
 - Issue: #427 (inherits #426).
 
 ## Goal
@@ -34,7 +34,7 @@ Each bullet maps to exactly one test.
 
 ## End-to-end expectation
 
-The existing web build e2e (`packages/web/tests/e2e/rules-ui.e2e.test.ts`) already asserts the rules-editor bundle ships; extend it (or add a sibling assertion) so the `Rules for ` modal title copy is present in the built bundle — same shape as the existing `New rule` assertion.
+The existing web build e2e (`packages/ui/tests/e2e/rules-ui.e2e.test.ts`) already asserts the rules-editor bundle ships; extend it (or add a sibling assertion) so the `Rules for ` modal title copy is present in the built bundle — same shape as the existing `New rule` assertion.
 
 ## Out of scope
 

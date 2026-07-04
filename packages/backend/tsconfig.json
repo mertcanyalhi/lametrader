@@ -1,0 +1,27 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+
+    // This package is compiled and type-checked on its own (`tsc` / `tsc --noEmit`),
+    // not through the root project-references graph — exactly like `web` is owned by
+    // Vite.  Nothing imports `@lametrader/backend` as a library, so it emits no
+    // declarations and is not `composite`; dropping `composite` is what lets the
+    // `typecheck` script pass `--noEmit` (a composite project may not disable emit).
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+
+    // NestJS is decorator-driven: `@Module`, `@Controller`, `@Injectable`, and the
+    // dependency-injection container read constructor parameter types at runtime via
+    // `reflect-metadata`.  That needs TypeScript's legacy (stage-2) decorators plus
+    // emitted design-type metadata.  These two flags are kept local to this package
+    // because no other package in the monorepo uses decorators or reflection.
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.spec.ts", "src/**/testing/**"],
+  "references": [{ "path": "../core" }]
+}

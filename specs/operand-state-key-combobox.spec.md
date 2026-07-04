@@ -1,7 +1,7 @@
 # Spec: operand-state-key-combobox
 
 - Status: implemented
-- Touches: `packages/web/src/pages/rules/operand-picker.tsx`, `packages/web/src/pages/rules/leaf-editor.tsx`, `packages/web/src/pages/rules/condition-tree-editor.tsx`, `packages/web/src/pages/rules/rule-editor-dialog.tsx`.
+- Touches: `packages/ui/src/pages/rules/operand-picker.tsx`, `packages/ui/src/pages/rules/leaf-editor.tsx`, `packages/ui/src/pages/rules/condition-tree-editor.tsx`, `packages/ui/src/pages/rules/rule-editor-dialog.tsx`.
 
 ## Goal
 

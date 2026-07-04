@@ -23,7 +23,7 @@ If a line of code maps to no bullet, it shouldn't be written.
 ## End-to-end expectation
 
 Not applicable — this is a UI-string rename with no HTTP-boundary behaviour.
-The `web` package has no browser e2e harness (page-level behaviour is covered by the unit tier, per `packages/web/README.md`), and the endpoints the picker reads are unchanged, so the existing `packages/api/tests/e2e/chart-state-overlays.e2e.test.ts` still pins the untouched state-keys/series contract.
+The `web` package has no browser e2e harness (page-level behaviour is covered by the unit tier, per `packages/ui/README.md`), and the endpoints the picker reads are unchanged, so the existing `packages/api/tests/e2e/chart-state-overlays.e2e.test.ts` still pins the untouched state-keys/series contract.
 
 ## Out of scope
 

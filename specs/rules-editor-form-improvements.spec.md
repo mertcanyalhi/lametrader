@@ -1,6 +1,6 @@
 # rules-editor-form-improvements
 
-UI-only improvements to the rule editor (`packages/web/src/pages/rules/*`).
+UI-only improvements to the rule editor (`packages/ui/src/pages/rules/*`).
 Eight independent gaps bundled because they touch the same form surface and share design overlap; see #428.
 
 ## Acceptance criteria

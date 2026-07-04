@@ -2,10 +2,10 @@
 
 - Status: draft
 - Touches:
-  - `packages/web/src/lib/stream/stream-client.{ts,types.ts}` — add an `Indicator` kind to the shared `/stream` client so the existing socket multiplexes `subscribe-indicator` alongside candle + quote subscriptions.
-  - `packages/web/src/lib/stream/use-stream-subscription.ts` — extend so the indicator kind threads through unchanged (or add a sibling `useIndicatorStreamSubscription` if the structured args don't fit).
-  - `packages/web/src/lib/hooks/indicators.ts` — new `useIndicatorStream({ id, period, key, inputs })` hook that returns the latest live state row + `final` flag for one `(id, period, key, inputs)` subscription.
-  - `packages/web/src/pages/chart/candle-chart.tsx` — for each rendered overlay, subscribe over the shared client and apply each `IndicatorStateEvent` to the line series' last point via `series.update(...)`.
+  - `packages/ui/src/lib/stream/stream-client.{ts,types.ts}` — add an `Indicator` kind to the shared `/stream` client so the existing socket multiplexes `subscribe-indicator` alongside candle + quote subscriptions.
+  - `packages/ui/src/lib/stream/use-stream-subscription.ts` — extend so the indicator kind threads through unchanged (or add a sibling `useIndicatorStreamSubscription` if the structured args don't fit).
+  - `packages/ui/src/lib/hooks/indicators.ts` — new `useIndicatorStream({ id, period, key, inputs })` hook that returns the latest live state row + `final` flag for one `(id, period, key, inputs)` subscription.
+  - `packages/ui/src/pages/chart/candle-chart.tsx` — for each rendered overlay, subscribe over the shared client and apply each `IndicatorStateEvent` to the line series' last point via `series.update(...)`.
 
 ## Goal
 
@@ -38,7 +38,7 @@ Each bullet maps to exactly one test.
 
 ## End-to-end expectation
 
-The web build (`packages/web/tests/e2e/build.e2e.test.ts`) stays clean — `npm run build -w @lametrader/web` is the only e2e gate the web package carries.
+The web build (`packages/ui/tests/e2e/build.e2e.test.ts`) stays clean — `npm run build -w @lametrader/ui` is the only e2e gate the web package carries.
 The component-level happy path lives in unit tests (jsdom + mocked WebSocket) per the issue's "Component test" criterion.
 
 ## Out of scope

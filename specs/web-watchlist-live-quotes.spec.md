@@ -121,7 +121,7 @@ Hooks + components:
 
 The server `/stream` `subscribe-quote` path already has its API e2e
 (`packages/api/tests/e2e/quote-stream.e2e.test.ts`, `#36`).
-The browser-side e2e is the web build (`packages/web/tests/e2e/build.e2e.test.ts`)
+The browser-side e2e is the web build (`packages/ui/tests/e2e/build.e2e.test.ts`)
 staying green with the live-quotes code compiled into the bundle.
 
 The end-user happy path — a watchlist row whose price ticks and flashes on a
