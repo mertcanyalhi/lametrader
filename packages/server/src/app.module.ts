@@ -8,6 +8,7 @@ import { buildValidationPipe } from './common/validation.pipe.js';
 import { ConfigModule } from './config/config.module.js';
 import { validateEnv } from './config/env.validation.js';
 import { HealthModule } from './health/health.module.js';
+import { IndicatorsModule } from './indicators/indicators.module.js';
 import { LoggingModule } from './logging/logging.module.js';
 import { MongoModule } from './mongo/mongo.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
@@ -31,9 +32,10 @@ import { SymbolsModule } from './symbols/symbols.module.js';
  * {@link CandlesModule} (`/symbols/:id/candles` + `/backfill`; owns the shared
  * candle store), {@link SymbolsModule} (`/instruments` + `/symbols`; imports
  * {@link ProfilesModule} for the symbol-removal → profile-prune cascade and
- * {@link CandlesModule} for the candle store), and {@link StateModule}
+ * {@link CandlesModule} for the candle store), {@link StateModule}
  * (`/profiles/:profileId/state/global` + `/symbols/:id/state` reads; owns the
- * shared state store).
+ * shared state store), and {@link IndicatorsModule} (`/indicators` catalog +
+ * `/symbols/:id/indicators/:key` compute; owns the shared indicator registry).
  */
 @Module({
   imports: [
@@ -54,6 +56,7 @@ import { SymbolsModule } from './symbols/symbols.module.js';
     CandlesModule,
     SymbolsModule,
     StateModule,
+    IndicatorsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: DomainExceptionFilter },
