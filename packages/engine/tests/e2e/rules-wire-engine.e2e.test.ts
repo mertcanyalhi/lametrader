@@ -1,6 +1,5 @@
 import {
   ActionKind,
-  ComparisonOperator,
   ConditionNodeKind,
   LeafConditionFamily,
   NotificationChannel,
