@@ -33,7 +33,9 @@ import { ProfilesController } from './profiles.controller.js';
  *
  * {@link ProfileService} is exported so
  * {@link import('../symbols/symbols.module.js').SymbolsModule} can inject it as
- * the `SymbolProfilePruner`.
+ * the `SymbolProfilePruner`. {@link PROFILE_REPOSITORY} is also exported so the
+ * rules resource's rule store can enforce the `profile.enabled` runtime
+ * kill-switch (ADR-0012 #5) its `listEnabledForSymbol` consults.
  */
 @Module({
   imports: [
@@ -54,6 +56,6 @@ import { ProfilesController } from './profiles.controller.js';
       inject: [PROFILE_REPOSITORY, WATCHLIST_REPOSITORY, IndicatorRegistry],
     },
   ],
-  exports: [ProfileService],
+  exports: [ProfileService, PROFILE_REPOSITORY],
 })
 export class ProfilesModule {}

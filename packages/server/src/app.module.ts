@@ -13,6 +13,7 @@ import { LoggingModule } from './logging/logging.module.js';
 import { MongoModule } from './mongo/mongo.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { ProfilesModule } from './profiles/profiles.module.js';
+import { RulesModule } from './rules/rules.module.js';
 import { StateModule } from './state/state.module.js';
 import { SymbolsModule } from './symbols/symbols.module.js';
 
@@ -57,6 +58,7 @@ import { SymbolsModule } from './symbols/symbols.module.js';
     SymbolsModule,
     StateModule,
     IndicatorsModule,
+    RulesModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: DomainExceptionFilter },
