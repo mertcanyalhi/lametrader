@@ -1,4 +1,5 @@
 import type {
+  CandleEvent,
   CandleFeed,
   CandleRepository,
   MarketDataSource,
@@ -13,10 +14,9 @@ import { AnalyticsModule } from '../analytics/analytics.module.js';
 import { ProfileService } from '../analytics/services/profile.service.js';
 import { CommonModule } from '../common/common.module.js';
 import type { AppConfig } from '../common/interfaces/app-config.types.js';
+import { CANDLE_STREAM } from '../common/interfaces/stream.tokens.js';
 import { ConfigService } from '../common/services/config.service.js';
 import { StreamHub } from '../common/services/stream-hub.js';
-import { CANDLE_STREAM } from '../stream/stream.tokens.js';
-import { StreamHubsModule } from '../stream/stream-hubs.module.js';
 import { BackfillService } from './backfill/backfill.service.js';
 import { BackfillJobService } from './backfill/backfill-job.service.js';
 import type { BackfillJob } from './backfill/backfill-job.types.js';
@@ -25,7 +25,6 @@ import { BackfillProgressGateway } from './backfill/backfill-progress.gateway.js
 import { CandlesController } from './controllers/candles.controller.js';
 import { SymbolsController } from './controllers/symbols.controller.js';
 import { CANDLE_REPOSITORY } from './interfaces/candle-repository.token.js';
-import type { CandleEvent } from './interfaces/polling.service.types.js';
 import type { SymbolProfilePruner } from './interfaces/symbol.service.types.js';
 import { WATCHLIST_REPOSITORY } from './interfaces/watchlist-repository.token.js';
 import { defaultMarketDataSources } from './market-data/default-sources.js';
@@ -59,7 +58,6 @@ import { SymbolService } from './services/symbol.service.js';
       { name: WatchlistEntry.name, schema: WatchlistEntrySchema },
     ]),
     CommonModule,
-    StreamHubsModule,
     forwardRef(() => AnalyticsModule),
   ],
   controllers: [CandlesController, SymbolsController],

@@ -1,3 +1,4 @@
+import type { CandleEvent } from '@lametrader/core';
 import {
   type BackfillRange,
   type Candle,
@@ -11,7 +12,6 @@ import {
 } from '@lametrader/core';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { MarketDataError } from '../../domain/symbol.js';
-import type { CandleEvent } from '../interfaces/polling.service.types.js';
 import { InMemoryCandleRepository } from '../persistence/in-memory-candle.repository.js';
 import { InMemoryWatchlistRepository } from '../persistence/in-memory-watchlist.repository.js';
 import { PollingService } from './polling.service.js';

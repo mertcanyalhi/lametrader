@@ -11,14 +11,13 @@ import { getModelToken, MongooseModule } from '@nestjs/mongoose';
 import type { Model } from 'mongoose';
 import { CommonModule } from '../common/common.module.js';
 import { EVENT_LOG } from '../common/interfaces/event-log.token.js';
+import { INDICATOR_STREAM } from '../common/interfaces/stream.tokens.js';
 import { SYMBOL_EVENT_LOG } from '../common/interfaces/symbol-event-log.token.js';
 import type { SymbolEventLog } from '../common/interfaces/symbol-event-log.types.js';
 import type { StreamHub } from '../common/services/stream-hub.js';
 import { CANDLE_REPOSITORY } from '../market/interfaces/candle-repository.token.js';
 import { WATCHLIST_REPOSITORY } from '../market/interfaces/watchlist-repository.token.js';
 import { MarketModule } from '../market/market.module.js';
-import { INDICATOR_STREAM } from '../stream/stream.tokens.js';
-import { StreamHubsModule } from '../stream/stream-hubs.module.js';
 import { ProfilesController } from './controllers/profiles.controller.js';
 import { StateController } from './controllers/state.controller.js';
 import { defaultIndicators } from './indicators/default-indicators.js';
@@ -65,7 +64,6 @@ import { StateHistoryService } from './services/state-history.service.js';
       { name: StateEntry.name, schema: StateEntrySchema },
     ]),
     CommonModule,
-    StreamHubsModule,
     forwardRef(() => MarketModule),
   ],
   controllers: [IndicatorsController, ProfilesController, RulesController, StateController],

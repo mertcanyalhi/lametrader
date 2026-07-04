@@ -1,3 +1,4 @@
+import type { CandleEvent } from '@lametrader/core';
 import {
   EvaluationTriggerKind,
   Period,
@@ -5,7 +6,6 @@ import {
   StateScope,
   StateValueType,
 } from '@lametrader/core';
-import type { CandleEvent } from '../../../market/interfaces/polling.service.types.js';
 import { _resetLogRoot, _resetLogScopes } from '../engine-log.js';
 import { BarLifecycleBridge } from './bar-lifecycle-bridge.js';
 import { IndicatorCascadeBridge } from './indicator-cascade-bridge.js';

@@ -55,6 +55,8 @@ export type {
   BaseCandle,
   Candle,
   CandleBatch,
+  CandleEvent,
+  CandleListener,
   CandlePage,
   CandleRepository,
   CryptoCandle,

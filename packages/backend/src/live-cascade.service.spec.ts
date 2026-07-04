@@ -1,3 +1,4 @@
+import type { CandleEvent } from '@lametrader/core';
 import {
   type CryptoCandle,
   type IndicatorStateEvent,
@@ -19,13 +20,12 @@ import { InMemoryConfigRepository } from './common/persistence/in-memory-config.
 import { InMemoryEventLog } from './common/persistence/in-memory-event-log.js';
 import { ConfigService } from './common/services/config.service.js';
 import { InMemoryNotifier } from './common/services/in-memory-notifier.js';
+import { QuoteStreamService } from './delivery/quote-stream.service.js';
 import { LiveCascadeService } from './live-cascade.service.js';
-import type { CandleEvent } from './market/interfaces/polling.service.types.js';
 import { InMemoryMarketDataSource } from './market/market-data/in-memory-market-data-source.js';
 import { InMemoryCandleRepository } from './market/persistence/in-memory-candle.repository.js';
 import { InMemoryWatchlistRepository } from './market/persistence/in-memory-watchlist.repository.js';
 import { PollingService } from './market/services/polling.service.js';
-import { QuoteStreamService } from './stream/quote-stream.service.js';
 
 /** A watched crypto symbol on the 1h period. */
 const BTC: WatchedSymbol = {

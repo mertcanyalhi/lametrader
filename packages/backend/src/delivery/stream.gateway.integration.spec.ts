@@ -1,3 +1,4 @@
+import type { CandleEvent } from '@lametrader/core';
 import {
   type Candle,
   ConfigKey,
@@ -14,21 +15,20 @@ import { Test } from '@nestjs/testing';
 import { WebSocket } from 'ws';
 import { defaultIndicators } from '../analytics/indicators/default-indicators.js';
 import { IndicatorService } from '../analytics/indicators/indicator.service.js';
-import { InMemoryConfigRepository } from '../common/persistence/in-memory-config.repository.js';
-import { ConfigService } from '../common/services/config.service.js';
-import type { StreamHub } from '../common/services/stream-hub.js';
-import type { CandleEvent } from '../market/interfaces/polling.service.types.js';
-import { InMemoryCandleRepository } from '../market/persistence/in-memory-candle.repository.js';
-import { InMemoryWatchlistRepository } from '../market/persistence/in-memory-watchlist.repository.js';
-import { QuoteStreamService } from './quote-stream.service.js';
-import { StreamGateway } from './stream.gateway.js';
 import {
   CANDLE_STREAM,
   INDICATOR_STREAM,
   QUOTE_STREAM,
   RULE_EVENT_STREAM,
-} from './stream.tokens.js';
-import { StreamHubsModule } from './stream-hubs.module.js';
+} from '../common/interfaces/stream.tokens.js';
+import { InMemoryConfigRepository } from '../common/persistence/in-memory-config.repository.js';
+import { ConfigService } from '../common/services/config.service.js';
+import type { StreamHub } from '../common/services/stream-hub.js';
+import { streamHubProviders } from '../common/services/stream-hubs.js';
+import { InMemoryCandleRepository } from '../market/persistence/in-memory-candle.repository.js';
+import { InMemoryWatchlistRepository } from '../market/persistence/in-memory-watchlist.repository.js';
+import { QuoteStreamService } from './quote-stream.service.js';
+import { StreamGateway } from './stream.gateway.js';
 
 /** One hour in ms — the watched (and default) period. */
 const HOUR = 3_600_000;
@@ -139,8 +139,8 @@ describe('StreamGateway multiplexed protocol (integration)', () => {
     const registry = defaultIndicators();
 
     const moduleRef = await Test.createTestingModule({
-      imports: [StreamHubsModule],
       providers: [
+        ...streamHubProviders,
         StreamGateway,
         { provide: IndicatorService, useValue: new IndicatorService(registry, watchlist, candles) },
         {

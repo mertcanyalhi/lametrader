@@ -11,6 +11,12 @@ import { DomainExceptionFilter } from './domain-exception.filter.js';
 import type { AppConfig } from './interfaces/app-config.types.js';
 import { CONFIG_REPOSITORY } from './interfaces/config-repository.token.js';
 import { EVENT_LOG } from './interfaces/event-log.token.js';
+import {
+  CANDLE_STREAM,
+  INDICATOR_STREAM,
+  QUOTE_STREAM,
+  RULE_EVENT_STREAM,
+} from './interfaces/stream.tokens.js';
 import { SYMBOL_EVENT_LOG } from './interfaces/symbol-event-log.token.js';
 import { ConfigEntry, ConfigEntrySchema } from './persistence/config-entry.schema.js';
 import { MongooseConfigRepository } from './persistence/mongoose-config.repository.js';
@@ -19,6 +25,7 @@ import { RuleEventDoc, RuleEventDocSchema } from './persistence/rule-event-doc.s
 import { SymbolEventDoc, SymbolEventDocSchema } from './persistence/symbol-event-doc.schema.js';
 import { ConfigService } from './services/config.service.js';
 import { HealthService } from './services/health.service.js';
+import { streamHubProviders } from './services/stream-hubs.js';
 import { TelegramDestinationsService } from './services/telegram-destinations.service.js';
 import { TelegramNotifier, telegramNotifierFactory } from './services/telegram-notifier.js';
 import { buildValidationPipe } from './validation.pipe.js';
@@ -92,6 +99,7 @@ import { buildValidationPipe } from './validation.pipe.js';
       useFactory: telegramNotifierFactory,
       inject: [TelegramDestinationsService],
     },
+    ...streamHubProviders,
   ],
   exports: [
     ConfigService,
@@ -100,6 +108,10 @@ import { buildValidationPipe } from './validation.pipe.js';
     SYMBOL_EVENT_LOG,
     TelegramDestinationsService,
     TelegramNotifier,
+    CANDLE_STREAM,
+    INDICATOR_STREAM,
+    QUOTE_STREAM,
+    RULE_EVENT_STREAM,
   ],
 })
 export class CommonModule {}

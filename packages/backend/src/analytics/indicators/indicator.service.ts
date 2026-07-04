@@ -1,3 +1,4 @@
+import type { CandleEvent } from '@lametrader/core';
 import {
   type BackfillRange,
   type CandleRepository,
@@ -17,7 +18,6 @@ import {
   validateIndicatorInputs,
 } from '../../domain/indicator.js';
 import { SymbolNotFoundError } from '../../domain/symbol.js';
-import type { CandleEvent } from '../../market/interfaces/polling.service.types.js';
 import { IndicatorRegistry } from './indicator-registry.js';
 
 /**

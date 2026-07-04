@@ -1,3 +1,4 @@
+import type { CandleEvent } from '@lametrader/core';
 import {
   type EquityCandle,
   type EvaluationTriggerEvent,
@@ -5,8 +6,6 @@ import {
   Period,
   SymbolType,
 } from '@lametrader/core';
-
-import type { CandleEvent } from '../../../market/interfaces/polling.service.types.js';
 import { BarLifecycleBridge } from './bar-lifecycle-bridge.js';
 
 /** Build a complete equity-candle `CandleEvent` from a few overrides. */

@@ -1,3 +1,4 @@
+import type { CandleEvent } from '@lametrader/core';
 import {
   type CandleRepository,
   type EvaluationTriggerEvent,
@@ -16,8 +17,6 @@ import {
   type TickEvent,
   type WatchlistRepository,
 } from '@lametrader/core';
-
-import type { CandleEvent } from '../../../market/interfaces/polling.service.types.js';
 import { BarLifecycleBridge, IndicatorCascadeBridge } from '../bridges/index.js';
 import { TriggerDispatcher } from '../dispatch/dispatcher.js';
 import { getLogger } from '../engine-log.js';

@@ -1,3 +1,4 @@
+import type { CandleEvent } from '@lametrader/core';
 import {
   type Candle,
   type CandleRepository,
@@ -9,7 +10,6 @@ import { nanoid } from 'nanoid';
 import type { ConfigService } from '../common/services/config.service.js';
 import { computeQuote } from '../domain/quote.js';
 import { SymbolError, SymbolNotFoundError } from '../domain/symbol.js';
-import type { CandleEvent } from '../market/interfaces/polling.service.types.js';
 
 /**
  * The persisted shape of one live quote subscription.

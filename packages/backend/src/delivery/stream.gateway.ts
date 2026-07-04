@@ -1,6 +1,11 @@
 import type { Server as HttpServer, IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
-import type { IndicatorStateEvent, RuleEventEntry, SymbolQuoteEvent } from '@lametrader/core';
+import type {
+  CandleEvent,
+  IndicatorStateEvent,
+  RuleEventEntry,
+  SymbolQuoteEvent,
+} from '@lametrader/core';
 import {
   Inject,
   Injectable,
@@ -11,15 +16,14 @@ import {
 import { HttpAdapterHost } from '@nestjs/core';
 import { type RawData, WebSocketServer, type WebSocket as WsSocket } from 'ws';
 import { IndicatorService } from '../analytics/indicators/indicator.service.js';
-import type { StreamHub } from '../common/services/stream-hub.js';
-import type { CandleEvent } from '../market/interfaces/polling.service.types.js';
-import { QuoteStreamService } from './quote-stream.service.js';
 import {
   CANDLE_STREAM,
   INDICATOR_STREAM,
   QUOTE_STREAM,
   RULE_EVENT_STREAM,
-} from './stream.tokens.js';
+} from '../common/interfaces/stream.tokens.js';
+import type { StreamHub } from '../common/services/stream-hub.js';
+import { QuoteStreamService } from './quote-stream.service.js';
 import { candleSubscriptionKind } from './subscription-kinds/candle.js';
 import { indicatorSubscriptionKind } from './subscription-kinds/indicator.js';
 import { quoteSubscriptionKind } from './subscription-kinds/quote.js';

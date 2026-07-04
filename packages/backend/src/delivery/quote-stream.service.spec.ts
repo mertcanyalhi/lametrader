@@ -1,3 +1,4 @@
+import type { CandleEvent } from '@lametrader/core';
 import {
   type Candle,
   ConfigKey,
@@ -11,7 +12,6 @@ import { InMemoryConfigRepository } from '../common/persistence/in-memory-config
 import { ConfigService } from '../common/services/config.service.js';
 import { computeQuote } from '../domain/quote.js';
 import { SymbolError, SymbolNotFoundError } from '../domain/symbol.js';
-import type { CandleEvent } from '../market/interfaces/polling.service.types.js';
 import { InMemoryMarketDataSource } from '../market/market-data/in-memory-market-data-source.js';
 import { InMemoryCandleRepository } from '../market/persistence/in-memory-candle.repository.js';
 import { InMemoryWatchlistRepository } from '../market/persistence/in-memory-watchlist.repository.js';

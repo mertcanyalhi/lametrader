@@ -6,8 +6,8 @@ import {
   type OnModuleDestroy,
 } from '@nestjs/common';
 import { EVENT_LOG } from '../common/interfaces/event-log.token.js';
+import { RULE_EVENT_STREAM } from '../common/interfaces/stream.tokens.js';
 import type { StreamHub } from '../common/services/stream-hub.js';
-import { RULE_EVENT_STREAM } from './stream.tokens.js';
 
 /**
  * Bridges the shared rule-event log to the rule-event `/stream` hub — the

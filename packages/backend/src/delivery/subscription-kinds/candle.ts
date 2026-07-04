@@ -1,5 +1,5 @@
+import type { CandleEvent } from '@lametrader/core';
 import type { StreamHub } from '../../common/services/stream-hub.js';
-import type { CandleEvent } from '../../market/interfaces/polling.service.types.js';
 import type { SubscriptionKind } from '../subscription-registry.types.js';
 
 /**

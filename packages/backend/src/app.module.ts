@@ -4,9 +4,9 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AnalyticsModule } from './analytics/analytics.module.js';
 import { CommonModule } from './common/common.module.js';
 import { validateEnv } from './common/env.validation.js';
+import { DeliveryModule } from './delivery/delivery.module.js';
 import { LiveCascadeService } from './live-cascade.service.js';
 import { MarketModule } from './market/market.module.js';
-import { StreamModule } from './stream/stream.module.js';
 
 /**
  * The application root module — the composition root of the Nest monolith.
@@ -55,7 +55,7 @@ import { StreamModule } from './stream/stream.module.js';
     CommonModule,
     AnalyticsModule,
     MarketModule,
-    StreamModule,
+    DeliveryModule,
   ],
   providers: [LiveCascadeService],
 })
