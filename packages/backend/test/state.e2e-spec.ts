@@ -3,8 +3,8 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import request from 'supertest';
+import { STATE_REPOSITORY } from '../src/analytics/interfaces/state-repository.token.js';
 import { AppModule } from '../src/app.module.js';
-import { STATE_REPOSITORY } from '../src/state/state-repository.token.js';
 
 /**
  * E2E for the read-side global-state route from the API consumer's perspective:

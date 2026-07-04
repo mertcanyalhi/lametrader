@@ -1,14 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule as NestConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { AnalyticsModule } from './analytics/analytics.module.js';
 import { CommonModule } from './common/common.module.js';
 import { validateEnv } from './common/env.validation.js';
-import { IndicatorsModule } from './indicators/indicators.module.js';
 import { LiveCascadeService } from './live-cascade.service.js';
 import { MarketModule } from './market/market.module.js';
-import { ProfilesModule } from './profiles/profiles.module.js';
-import { RulesModule } from './rules/rules.module.js';
-import { StateModule } from './state/state.module.js';
 import { StreamModule } from './stream/stream.module.js';
 
 /**
@@ -56,11 +53,8 @@ import { StreamModule } from './stream/stream.module.js';
     // `forRoot` registers the global SchedulerRegistry. No decorator-based jobs.
     ScheduleModule.forRoot(),
     CommonModule,
-    ProfilesModule,
+    AnalyticsModule,
     MarketModule,
-    StateModule,
-    IndicatorsModule,
-    RulesModule,
     StreamModule,
   ],
   providers: [LiveCascadeService],

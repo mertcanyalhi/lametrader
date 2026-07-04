@@ -4,10 +4,10 @@ import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
 import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
+import { STATE_REPOSITORY } from '../src/analytics/interfaces/state-repository.token.js';
+import { StateEntry } from '../src/analytics/persistence/state-entry.schema.js';
+import { runStateRepositoryContract } from '../src/analytics/testing/state-repository.contract.js';
 import { AppModule } from '../src/app.module.js';
-import { StateEntry } from '../src/state/state-entry.schema.js';
-import { STATE_REPOSITORY } from '../src/state/state-repository.token.js';
-import { runStateRepositoryContract } from '../src/state/testing/state-repository.contract.js';
 
 /**
  * Runs the shared {@link StateRepository} contract against the Mongoose adapter

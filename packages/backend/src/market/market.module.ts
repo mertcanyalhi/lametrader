@@ -9,12 +9,12 @@ import { forwardRef, Module } from '@nestjs/common';
 import { ConfigService as EnvConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { SchedulerRegistry } from '@nestjs/schedule';
+import { AnalyticsModule } from '../analytics/analytics.module.js';
+import { ProfileService } from '../analytics/services/profile.service.js';
 import { CommonModule } from '../common/common.module.js';
 import type { AppConfig } from '../common/interfaces/app-config.types.js';
 import { ConfigService } from '../common/services/config.service.js';
 import { StreamHub } from '../common/services/stream-hub.js';
-import { ProfileService } from '../profiles/profile.service.js';
-import { ProfilesModule } from '../profiles/profiles.module.js';
 import { CANDLE_STREAM } from '../stream/stream.tokens.js';
 import { StreamHubsModule } from '../stream/stream-hubs.module.js';
 import { BackfillService } from './backfill/backfill.service.js';
@@ -60,7 +60,7 @@ import { SymbolService } from './services/symbol.service.js';
     ]),
     CommonModule,
     StreamHubsModule,
-    forwardRef(() => ProfilesModule),
+    forwardRef(() => AnalyticsModule),
   ],
   controllers: [CandlesController, SymbolsController],
   providers: [

@@ -1,9 +1,9 @@
 import type { CandleRepository, SymbolQuoteEvent, WatchlistRepository } from '@lametrader/core';
 import { Module } from '@nestjs/common';
+import { AnalyticsModule } from '../analytics/analytics.module.js';
 import { CommonModule } from '../common/common.module.js';
 import { ConfigService } from '../common/services/config.service.js';
 import type { StreamHub } from '../common/services/stream-hub.js';
-import { IndicatorsModule } from '../indicators/indicators.module.js';
 import { CANDLE_REPOSITORY } from '../market/interfaces/candle-repository.token.js';
 import { WATCHLIST_REPOSITORY } from '../market/interfaces/watchlist-repository.token.js';
 import { MarketModule } from '../market/market.module.js';
@@ -43,7 +43,7 @@ import { StreamHubsModule } from './stream-hubs.module.js';
  * acyclic.
  */
 @Module({
-  imports: [StreamHubsModule, IndicatorsModule, MarketModule, CommonModule],
+  imports: [StreamHubsModule, AnalyticsModule, MarketModule, CommonModule],
   providers: [
     {
       provide: QuoteStreamService,

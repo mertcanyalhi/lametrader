@@ -1,9 +1,12 @@
 import { Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
-import { IndicatorService } from './indicators/indicator.service.js';
+import { IndicatorService } from './analytics/indicators/indicator.service.js';
+import { RuleEngineService } from './analytics/rules/rule-engine.service.js';
+import {
+  feedCandleIntoEngine,
+  type WiredRuleEngine,
+} from './analytics/rules/wire/wire-rule-engine.js';
 import type { CandleEvent } from './market/interfaces/polling.service.types.js';
 import { PollingService } from './market/services/polling.service.js';
-import { RuleEngineService } from './rules/rule-engine.service.js';
-import { feedCandleIntoEngine, type WiredRuleEngine } from './rules/wire/wire-rule-engine.js';
 import { QuoteStreamService } from './stream/quote-stream.service.js';
 
 /**

@@ -12,11 +12,11 @@ import {
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { WebSocket } from 'ws';
+import { defaultIndicators } from '../analytics/indicators/default-indicators.js';
+import { IndicatorService } from '../analytics/indicators/indicator.service.js';
 import { InMemoryConfigRepository } from '../common/persistence/in-memory-config.repository.js';
 import { ConfigService } from '../common/services/config.service.js';
 import type { StreamHub } from '../common/services/stream-hub.js';
-import { defaultIndicators } from '../indicators/default-indicators.js';
-import { IndicatorService } from '../indicators/indicator.service.js';
 import type { CandleEvent } from '../market/interfaces/polling.service.types.js';
 import { InMemoryCandleRepository } from '../market/persistence/in-memory-candle.repository.js';
 import { InMemoryWatchlistRepository } from '../market/persistence/in-memory-watchlist.repository.js';

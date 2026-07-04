@@ -9,6 +9,6 @@
  * so the state-history read use-case resolves the **one** shared event log
  * through its narrow slice — the full `EventLog` satisfies the narrow
  * `SymbolEventLog` (ISP). Consumed by the state resource's
- * {@link import('../state/state-history.service.js').StateHistoryService}.
+ * {@link import('../analytics/services/state-history.service.js').StateHistoryService}.
  */
 export const SYMBOL_EVENT_LOG = 'SYMBOL_EVENT_LOG';

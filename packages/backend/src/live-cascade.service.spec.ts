@@ -6,25 +6,25 @@ import {
   type WatchedSymbol,
 } from '@lametrader/core';
 import { SchedulerRegistry } from '@nestjs/schedule';
+import { defaultIndicators } from './analytics/indicators/default-indicators.js';
+import { IndicatorService } from './analytics/indicators/indicator.service.js';
+import { InMemoryStateRepository } from './analytics/persistence/in-memory-state.repository.js';
+import { BarLifecycleBridge } from './analytics/rules/bridges/bar-lifecycle-bridge.js';
+import { IndicatorCascadeBridge } from './analytics/rules/bridges/indicator-cascade-bridge.js';
+import { InMemoryRuleRepository } from './analytics/rules/in-memory-rule.repository.js';
+import { RuleEngineService } from './analytics/rules/rule-engine.service.js';
+import { LiveEvaluationLookups } from './analytics/rules/wire/live-evaluation-lookups.js';
+import type { WiredRuleEngine } from './analytics/rules/wire/wire-rule-engine.js';
 import { InMemoryConfigRepository } from './common/persistence/in-memory-config.repository.js';
 import { InMemoryEventLog } from './common/persistence/in-memory-event-log.js';
 import { ConfigService } from './common/services/config.service.js';
 import { InMemoryNotifier } from './common/services/in-memory-notifier.js';
-import { defaultIndicators } from './indicators/default-indicators.js';
-import { IndicatorService } from './indicators/indicator.service.js';
 import { LiveCascadeService } from './live-cascade.service.js';
 import type { CandleEvent } from './market/interfaces/polling.service.types.js';
 import { InMemoryMarketDataSource } from './market/market-data/in-memory-market-data-source.js';
 import { InMemoryCandleRepository } from './market/persistence/in-memory-candle.repository.js';
 import { InMemoryWatchlistRepository } from './market/persistence/in-memory-watchlist.repository.js';
 import { PollingService } from './market/services/polling.service.js';
-import { BarLifecycleBridge } from './rules/bridges/bar-lifecycle-bridge.js';
-import { IndicatorCascadeBridge } from './rules/bridges/indicator-cascade-bridge.js';
-import { InMemoryRuleRepository } from './rules/in-memory-rule.repository.js';
-import { RuleEngineService } from './rules/rule-engine.service.js';
-import { LiveEvaluationLookups } from './rules/wire/live-evaluation-lookups.js';
-import type { WiredRuleEngine } from './rules/wire/wire-rule-engine.js';
-import { InMemoryStateRepository } from './state/in-memory-state.repository.js';
 import { QuoteStreamService } from './stream/quote-stream.service.js';
 
 /** A watched crypto symbol on the 1h period. */

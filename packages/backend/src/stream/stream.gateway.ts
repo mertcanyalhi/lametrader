@@ -10,8 +10,8 @@ import {
 } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import { type RawData, WebSocketServer, type WebSocket as WsSocket } from 'ws';
+import { IndicatorService } from '../analytics/indicators/indicator.service.js';
 import type { StreamHub } from '../common/services/stream-hub.js';
-import { IndicatorService } from '../indicators/indicator.service.js';
 import type { CandleEvent } from '../market/interfaces/polling.service.types.js';
 import { QuoteStreamService } from './quote-stream.service.js';
 import {

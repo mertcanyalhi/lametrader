@@ -4,10 +4,10 @@ import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
 import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
+import { PROFILE_REPOSITORY } from '../src/analytics/interfaces/profile-repository.token.js';
+import { ProfileEntry } from '../src/analytics/persistence/profile-entry.schema.js';
+import { runProfileRepositoryContract } from '../src/analytics/testing/profile-repository.contract.js';
 import { AppModule } from '../src/app.module.js';
-import { ProfileEntry } from '../src/profiles/profile-entry.schema.js';
-import { PROFILE_REPOSITORY } from '../src/profiles/profile-repository.token.js';
-import { runProfileRepositoryContract } from '../src/profiles/testing/profile-repository.contract.js';
 
 /**
  * Runs the shared {@link ProfileRepository} contract against the Mongoose adapter

@@ -2,7 +2,7 @@ import type { RuleEventEntry } from '@lametrader/core';
 
 /**
  * The narrow read port the
- * {@link import('../state/state-history.service.js').StateHistoryService} needs
+ * {@link import('../analytics/services/state-history.service.js').StateHistoryService} needs
  * from the rule-engine event log: the mirrored events recorded against one
  * symbol.
  *
