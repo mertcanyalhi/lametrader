@@ -88,8 +88,18 @@ interface ValidatedRequest {
 export class IndicatorService {
   /** Active subscriptions keyed by subscription id. */
   private readonly subscriptions = new Map<string, Subscription>();
-  /** Where each emitted event is delivered. */
+  /** Where each emitted event is delivered (the constructor's base sink — the `/stream` indicator hub). */
   private readonly onState: IndicatorStateListener;
+  /**
+   * Additional per-state sinks registered on top of {@link onState}.
+   *
+   * The cutover stage (#490) registers the rule engine's indicator cascade here
+   * (`IndicatorCascadeBridge.handleIndicatorState`) so each recomputed state
+   * event fans out to both the live `/stream` indicator hub (base sink) and the
+   * rule engine, reproducing the old `connectServices` `onState` closure without
+   * the indicator owner (`IndicatorsModule`) importing the rules module.
+   */
+  private readonly extraStateListeners: IndicatorStateListener[] = [];
   /** Subscription id generator (injectable; defaults to nanoid). */
   private readonly newId: () => string;
 
@@ -181,6 +191,33 @@ export class IndicatorService {
   }
 
   /**
+   * Register an additional per-state sink, run after the constructor's base sink
+   * on every emitted event. Returns an unsubscribe that detaches it.
+   *
+   * The cutover stage wires the rule engine's indicator cascade through here so
+   * a recomputed state feeds both the `/stream` hub and the rule engine.
+   */
+  addStateListener(listener: IndicatorStateListener): () => void {
+    this.extraStateListeners.push(listener);
+    return () => {
+      const index = this.extraStateListeners.indexOf(listener);
+      if (index !== -1) this.extraStateListeners.splice(index, 1);
+    };
+  }
+
+  /**
+   * Deliver one state event to the base sink and every registered extra sink, in
+   * registration order (base first) — the single fan-out point every emission
+   * routes through.
+   */
+  private emitState(event: IndicatorStateEvent): void {
+    this.onState(event);
+    for (const listener of this.extraStateListeners) {
+      listener(event);
+    }
+  }
+
+  /**
    * React to a candle event from the polling loop. For each subscription
    * matching `(event.id, event.period)`, recompute via
    * {@link recomputeForBar} and emit one event.
@@ -190,7 +227,7 @@ export class IndicatorService {
       if (subscription.symbolId !== event.id || subscription.period !== event.period) continue;
       const stateEvent = await this.recomputeForBar(subscription, event.candle.time, event.final);
       if (stateEvent) {
-        this.onState(stateEvent);
+        this.emitState(stateEvent);
       }
     }
   }

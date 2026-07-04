@@ -175,6 +175,50 @@ describe('PollingService.poll', () => {
     expect(await repo.range(BTC.id, Period.OneHour, 0, Number.MAX_SAFE_INTEGER)).toEqual([]);
   });
 
+  it('fans each polled candle to an added listener alongside the base sink', async () => {
+    await repo.save(BTC.id, Period.OneHour, [candle(0)]);
+    const source = new RecordingSource({ [BTC.id]: [candle(0), candle(HOUR)] });
+    const base: CandleEvent[] = [];
+    const cascaded: CandleEvent[] = [];
+    const service = new PollingService(
+      [source],
+      repo,
+      new InMemoryWatchlistRepository([BTC]),
+      registry,
+      { onCandle: (e) => base.push(e), intervals: allIntervals(1000), now: () => NOW },
+    );
+    service.addCandleListener((e) => cascaded.push(e));
+
+    await service.poll();
+
+    const expected: CandleEvent[] = [
+      { id: BTC.id, period: Period.OneHour, candle: candle(0), final: true },
+      { id: BTC.id, period: Period.OneHour, candle: candle(HOUR), final: true },
+    ];
+    // Base sink (the `/stream` candle hub) and the added cascade sink both fire, in order.
+    expect(base).toEqual(expected);
+    expect(cascaded).toEqual(expected);
+  });
+
+  it('stops delivering to a candle listener once its unsubscribe is called', async () => {
+    await repo.save(BTC.id, Period.OneHour, [candle(0)]);
+    const source = new RecordingSource({ [BTC.id]: [candle(0), candle(HOUR)] });
+    const cascaded: CandleEvent[] = [];
+    const service = new PollingService(
+      [source],
+      repo,
+      new InMemoryWatchlistRepository([BTC]),
+      registry,
+      { onCandle: () => {}, intervals: allIntervals(1000), now: () => NOW },
+    );
+    const detach = service.addCandleListener((e) => cascaded.push(e));
+    detach();
+
+    await service.poll();
+
+    expect(cascaded).toEqual([]);
+  });
+
   it('catches a MarketDataError on one symbol and still polls the others', async () => {
     await repo.save(BTC.id, Period.OneHour, [candle(0)]);
     await repo.save(ETH.id, Period.OneHour, [candle(0)]);

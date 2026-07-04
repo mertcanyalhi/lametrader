@@ -118,6 +118,6 @@ import { StreamHub } from './stream-hub.js';
       ],
     },
   ],
-  exports: [CANDLE_REPOSITORY],
+  exports: [CANDLE_REPOSITORY, PollingService],
 })
 export class CandlesModule {}

@@ -70,5 +70,6 @@ import { StreamHubsModule } from './stream-hubs.module.js';
     RuleEventStreamBridge,
     StreamGateway,
   ],
+  exports: [QuoteStreamService],
 })
 export class StreamModule {}

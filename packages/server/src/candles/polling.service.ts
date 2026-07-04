@@ -10,7 +10,7 @@ import {
 } from '@lametrader/core';
 import type { SchedulerRegistry } from '@nestjs/schedule';
 import { sourceForType } from '../market-data/source-registry.js';
-import type { PollingOptions } from './polling.service.types.js';
+import type { CandleEvent, CandleListener, PollingOptions } from './polling.service.types.js';
 
 /**
  * Fraction of a period's interval added as random jitter on top of the floor, so
@@ -50,6 +50,18 @@ export class PollingService {
   private readonly random: () => number;
   /** Whether the loop is active (gates rescheduling after `stop`). */
   private running = false;
+  /**
+   * Additional per-candle sinks registered on top of the constructor's
+   * `options.onCandle` base sink (the live `/stream` candle hub).
+   *
+   * The cutover stage (#490) registers the live cascade here — it fans each
+   * polled candle into the indicator, quote, and rule-engine producers — so the
+   * base hub-publish and the cascade run off the one poll, reproducing the old
+   * `connectServices` single `onCandle` closure without the candle owner
+   * (`CandlesModule`) importing the downstream producer modules (which would
+   * cycle).
+   */
+  private readonly extraListeners: CandleListener[] = [];
 
   /**
    * @param sources - market-data providers, one or more per asset class.
@@ -82,6 +94,23 @@ export class PollingService {
     for (const period of Object.keys(this.options.intervals) as Period[]) {
       this.schedule(period);
     }
+  }
+
+  /**
+   * Register an additional per-candle sink, run after the constructor's base sink
+   * on every emitted candle. Returns an unsubscribe that detaches it.
+   *
+   * The cutover stage wires the live cascade through here so each polled candle
+   * feeds the indicator, quote, and rule-engine producers alongside the base
+   * `/stream` candle hub — reproducing the old `connectServices` `onCandle`
+   * closure.
+   */
+  addCandleListener(listener: CandleListener): () => void {
+    this.extraListeners.push(listener);
+    return () => {
+      const index = this.extraListeners.indexOf(listener);
+      if (index !== -1) this.extraListeners.splice(index, 1);
+    };
   }
 
   /**
@@ -167,11 +196,24 @@ export class PollingService {
       await this.candles.save(symbol.id, period, candles);
       const span = periodMillis(period);
       for (const candle of candles) {
-        this.options.onCandle({ id: symbol.id, period, candle, final: candle.time + span <= now });
+        this.emit({ id: symbol.id, period, candle, final: candle.time + span <= now });
       }
     } catch (error) {
       if (error instanceof MarketDataError) return;
       throw error;
+    }
+  }
+
+  /**
+   * Deliver one candle to the base sink and every registered extra sink, in
+   * registration order (base first) — the single fan-out point every poll routes
+   * through, so the live-`/stream` publish and the cutover cascade run off the
+   * one observed candle.
+   */
+  private emit(event: CandleEvent): void {
+    this.options.onCandle(event);
+    for (const listener of this.extraListeners) {
+      listener(event);
     }
   }
 }

@@ -6,6 +6,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module.js';
 import type { AppConfig } from './config/app-config.types.js';
+import { LiveCascadeService } from './runtime/live-cascade.service.js';
 import { setupSwagger } from './swagger.js';
 
 /**
@@ -22,8 +23,15 @@ const { version: SERVER_VERSION } = createRequire(import.meta.url)('../package.j
  * `bufferLogs` holds early framework logs until `nestjs-pino`'s logger is
  * installed, so bootstrap logs go through the same structured sink as everything
  * else.
- * No polling, scheduler, or background loop is started here — this stage only
- * stands the app up; runtime loops arrive with their feature modules.
+ *
+ * Live activation mirrors the old `api/main.ts` order exactly: stand the app up,
+ * enable shutdown hooks, `listen`, then start the producers. The
+ * {@link LiveCascadeService} start happens **only here**, after `listen`, so the
+ * e2e suites — which build the app via `Test.createTestingModule` and never reach
+ * this function — stay dormant and touch no real market-data provider. Shutdown
+ * hooks (`enableShutdownHooks`) turn a SIGINT/SIGTERM into `app.close()`, which
+ * fires {@link LiveCascadeService.onApplicationShutdown} (stop polling, detach the
+ * cascade) and the Mongoose shutdown hook (close the connection).
  */
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
@@ -34,8 +42,16 @@ async function bootstrap(): Promise<void> {
   // alike; only the OpenAPI docs (an app-level, non-DI concern) are mounted here.
   setupSwagger(app, SERVER_VERSION);
 
+  // Route OS termination signals through `app.close()` so the cascade stops and
+  // Mongo closes cleanly (parity with the old main.ts SIGINT/SIGTERM handler).
+  app.enableShutdownHooks();
+
   const config = app.get(ConfigService<AppConfig, true>);
   await app.listen(config.get('port', { infer: true }), '0.0.0.0');
+
+  // Go live only after the server is listening — start the poll loop, rule
+  // engine, and the poll→producers + indicator→rule cascades.
+  await app.get(LiveCascadeService).start();
 }
 
 void bootstrap();

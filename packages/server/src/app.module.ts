@@ -14,6 +14,7 @@ import { MongoModule } from './mongo/mongo.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { ProfilesModule } from './profiles/profiles.module.js';
 import { RulesModule } from './rules/rules.module.js';
+import { RuntimeModule } from './runtime/runtime.module.js';
 import { StateModule } from './state/state.module.js';
 import { StreamModule } from './stream/stream.module.js';
 import { SymbolsModule } from './symbols/symbols.module.js';
@@ -43,6 +44,12 @@ import { SymbolsModule } from './symbols/symbols.module.js';
  * relocated rule engine as a dormant provider), and {@link StreamModule} (the
  * multiplexed `GET (WS) /stream` gateway carrying candle / indicator / quote /
  * rule-event subscriptions, with the producer→hub topology wired but dormant).
+ *
+ * {@link RuntimeModule} sits above the producer modules: it hosts the
+ * {@link import('./runtime/live-cascade.service.js').LiveCascadeService} that
+ * `main.ts` starts once the server is listening, wiring the poll→producers +
+ * indicator→rule cascades and starting the loop. The module starts nothing on
+ * import, so this graph stays dormant when the e2e suites build it.
  */
 @Module({
   imports: [
@@ -66,6 +73,7 @@ import { SymbolsModule } from './symbols/symbols.module.js';
     IndicatorsModule,
     RulesModule,
     StreamModule,
+    RuntimeModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: DomainExceptionFilter },

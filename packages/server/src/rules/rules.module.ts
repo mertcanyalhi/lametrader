@@ -90,6 +90,6 @@ import { RulesController } from './rules.controller.js';
     },
     RuleEngineService,
   ],
-  exports: [RULE_REPOSITORY],
+  exports: [RULE_REPOSITORY, RuleEngineService],
 })
 export class RulesModule {}

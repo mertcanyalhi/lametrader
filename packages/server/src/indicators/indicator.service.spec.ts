@@ -311,6 +311,71 @@ describe('IndicatorService.subscribe + handleCandle — live path', () => {
     expect(events[0]?.final).toEqual(false);
   });
 
+  it('fans each recomputed state to an added listener alongside the base sink', async () => {
+    const { service, events, candles } = await build();
+    await candles.save(
+      BTC.id,
+      Period.OneHour,
+      [10, 20, 30, 40, 50].map((c, i) => candle(i, c)),
+    );
+    const subscriptionId = await service.subscribe({
+      id: BTC.id,
+      period: Period.OneHour,
+      indicatorKey: 'sma',
+      inputs: { length: 3 },
+    });
+    const cascaded: IndicatorStateEvent[] = [];
+    service.addStateListener((event) => cascaded.push(event));
+
+    await service.handleCandle({
+      id: BTC.id,
+      period: Period.OneHour,
+      candle: candle(4, 50),
+      final: true,
+    });
+
+    const expected: IndicatorStateEvent[] = [
+      {
+        subscriptionId,
+        id: BTC.id,
+        period: Period.OneHour,
+        indicatorKey: 'sma',
+        state: { time: 4, value: expect.closeTo(40, 6) },
+        final: true,
+      },
+    ];
+    // Base sink (the `/stream` hub) and the added cascade sink both fire, in order.
+    expect(events).toEqual(expected);
+    expect(cascaded).toEqual(expected);
+  });
+
+  it('stops delivering to a state listener once its unsubscribe is called', async () => {
+    const { service, candles } = await build();
+    await candles.save(
+      BTC.id,
+      Period.OneHour,
+      [10, 20, 30, 40, 50].map((c, i) => candle(i, c)),
+    );
+    await service.subscribe({
+      id: BTC.id,
+      period: Period.OneHour,
+      indicatorKey: 'sma',
+      inputs: { length: 3 },
+    });
+    const cascaded: IndicatorStateEvent[] = [];
+    const detach = service.addStateListener((event) => cascaded.push(event));
+    detach();
+
+    await service.handleCandle({
+      id: BTC.id,
+      period: Period.OneHour,
+      candle: candle(4, 50),
+      final: true,
+    });
+
+    expect(cascaded).toEqual([]);
+  });
+
   it('emits nothing when no subscription matches (id, period)', async () => {
     const { service, events, candles } = await build();
     await candles.save(
