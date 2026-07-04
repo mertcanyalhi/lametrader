@@ -23,7 +23,7 @@ updates:
   - package-ecosystem: docker
     directories:
       - /packages/web
-      - /packages/api
+      - /packages/server
     schedule:
       interval: weekly
     cooldown:
