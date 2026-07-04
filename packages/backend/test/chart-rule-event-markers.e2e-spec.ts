@@ -17,7 +17,6 @@ import {
 } from '@lametrader/core';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import request from 'supertest';
 import { PROFILE_REPOSITORY } from '../src/analytics/interfaces/profile-repository.token.js';
 import { RuleEngineService } from '../src/analytics/rules/rule-engine.service.js';
@@ -77,13 +76,10 @@ function buildRuleInput(
  * fire's events in their own window.
  */
 describe('chart rule-event markers (e2e)', () => {
-  let container: StartedMongoDBContainer;
   let app: INestApplication;
   let wired: WiredRuleEngine;
 
   beforeAll(async () => {
-    container = await new MongoDBContainer('mongo:8').start();
-    process.env.MONGODB_URI = `${container.getConnectionString()}/?directConnection=true`;
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     await app.init();
@@ -115,7 +111,6 @@ describe('chart rule-event markers (e2e)', () => {
 
   afterAll(async () => {
     await app?.close();
-    await container?.stop();
   });
 
   it('windows the symbol mirrored events log on [from, to) for a tick-driven fire', async () => {

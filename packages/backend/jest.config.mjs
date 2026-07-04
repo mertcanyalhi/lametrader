@@ -66,6 +66,13 @@ export default {
       displayName: 'e2e',
       testMatch: ['<rootDir>/test/**/*.e2e-spec.ts'],
       testTimeout: 120_000,
+      // One shared Testcontainers Mongo for the whole tier: `globalSetup` starts
+      // it and exports `MONGODB_URI` before any spec is imported (early enough
+      // for `@nestjs/config`'s import-time `validate`); `reset-db` drops the
+      // database before each file; `globalTeardown` stops the container.
+      globalSetup: '<rootDir>/test/global-setup.ts',
+      globalTeardown: '<rootDir>/test/global-teardown.ts',
+      setupFilesAfterEnv: ['<rootDir>/test/reset-db.ts'],
     },
   ],
 };

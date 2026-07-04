@@ -8,7 +8,6 @@ import {
 import type { INestApplication } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
-import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
 import request from 'supertest';
 import { WebSocket } from 'ws';
@@ -54,7 +53,6 @@ const SERIES: CryptoCandle[] = [candle(1000), candle(2000), candle(3000)];
  * cascade over HTTP. Mirrors the old Fastify `backfill.e2e.test.ts`.
  */
 describe('backfill API (e2e)', () => {
-  let container: StartedMongoDBContainer;
   let app: INestApplication;
   let baseUrl: string;
   let watchlistModel: Model<WatchlistEntry>;
@@ -96,8 +94,6 @@ describe('backfill API (e2e)', () => {
   }
 
   beforeAll(async () => {
-    container = await new MongoDBContainer('mongo:8').start();
-    process.env.MONGODB_URI = `${container.getConnectionString()}/?directConnection=true`;
     const stub = new InMemoryMarketDataSource(
       [BTC],
       [SymbolType.Crypto],
@@ -116,7 +112,6 @@ describe('backfill API (e2e)', () => {
 
   afterAll(async () => {
     await app?.close();
-    await container?.stop();
   });
 
   beforeEach(async () => {

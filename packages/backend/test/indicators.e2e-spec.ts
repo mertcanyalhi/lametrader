@@ -11,7 +11,6 @@ import {
 import type { INestApplication } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
-import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
 import request from 'supertest';
 import { movingAverage } from '../src/analytics/indicators/sma.js';
@@ -70,14 +69,11 @@ const cryptoCandle = (time: number, close: number, volume = 10): Candle => ({
  * the old Fastify `indicators.e2e.test.ts`.
  */
 describe('indicators API (e2e)', () => {
-  let container: StartedMongoDBContainer;
   let app: INestApplication;
   let watchlistModel: Model<WatchlistEntry>;
   let candleModel: Model<CandleEntry>;
 
   beforeAll(async () => {
-    container = await new MongoDBContainer('mongo:8').start();
-    process.env.MONGODB_URI = `${container.getConnectionString()}/?directConnection=true`;
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(MARKET_DATA_SOURCES)
       .useValue([new InMemoryMarketDataSource([BTC_INSTRUMENT])])
@@ -90,7 +86,6 @@ describe('indicators API (e2e)', () => {
 
   afterAll(async () => {
     await app?.close();
-    await container?.stop();
   });
 
   beforeEach(async () => {

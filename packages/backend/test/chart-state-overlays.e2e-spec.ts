@@ -2,7 +2,6 @@ import { type RuleEventEntry, RuleEventType, StateScope, StateValueType } from '
 import type { INestApplication } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
-import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
@@ -21,7 +20,6 @@ import { WatchlistEntry } from '../src/market/persistence/watchlist-entry.schema
 describe('chart state overlays API (e2e)', () => {
   const symbolId = 'crypto:BTCUSDT';
 
-  let container: StartedMongoDBContainer;
   let app: INestApplication;
   let watchlist: Model<WatchlistEntry>;
   let events: Model<SymbolEventDoc>;
@@ -44,8 +42,6 @@ describe('chart state overlays API (e2e)', () => {
   }
 
   beforeAll(async () => {
-    container = await new MongoDBContainer('mongo:8').start();
-    process.env.MONGODB_URI = `${container.getConnectionString()}/?directConnection=true`;
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     await app.init();
@@ -55,7 +51,6 @@ describe('chart state overlays API (e2e)', () => {
 
   afterAll(async () => {
     await app?.close();
-    await container?.stop();
   });
 
   beforeEach(async () => {

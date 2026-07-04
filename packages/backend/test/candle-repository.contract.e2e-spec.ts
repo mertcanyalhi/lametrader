@@ -2,7 +2,6 @@ import type { CandleRepository } from '@lametrader/core';
 import type { INestApplication } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
-import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
 import { AppModule } from '../src/app.module.js';
 import { CANDLE_REPOSITORY } from '../src/market/interfaces/candle-repository.token.js';
@@ -18,14 +17,11 @@ import { runCandleRepositoryContract } from '../src/market/testing/candle-reposi
  * discriminated crypto / equity / FX candle round-trip.
  */
 describe('MongooseCandleRepository (contract, e2e)', () => {
-  let container: StartedMongoDBContainer;
   let app: INestApplication;
   let repo: CandleRepository;
   let model: Model<CandleEntry>;
 
   beforeAll(async () => {
-    container = await new MongoDBContainer('mongo:8').start();
-    process.env.MONGODB_URI = `${container.getConnectionString()}/?directConnection=true`;
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     await app.init();
@@ -35,7 +31,6 @@ describe('MongooseCandleRepository (contract, e2e)', () => {
 
   afterAll(async () => {
     await app?.close();
-    await container?.stop();
   });
 
   // Each contract case gets a freshly-emptied `candles` collection.

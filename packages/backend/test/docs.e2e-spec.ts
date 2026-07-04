@@ -1,6 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { setupSwagger } from '../src/swagger.js';
@@ -10,12 +9,9 @@ import { setupSwagger } from '../src/swagger.js';
  * at `/docs/json`, matching the old Fastify entry points.
  */
 describe('OpenAPI docs (e2e)', () => {
-  let container: StartedMongoDBContainer;
   let app: INestApplication;
 
   beforeAll(async () => {
-    container = await new MongoDBContainer('mongo:8').start();
-    process.env.MONGODB_URI = `${container.getConnectionString()}/?directConnection=true`;
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     setupSwagger(app);
@@ -24,7 +20,6 @@ describe('OpenAPI docs (e2e)', () => {
 
   afterAll(async () => {
     await app?.close();
-    await container?.stop();
   });
 
   it('serves the Swagger UI at /docs', async () => {

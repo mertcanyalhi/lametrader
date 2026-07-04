@@ -18,7 +18,6 @@ import {
 import type { INestApplication } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
-import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
 import { WebSocket } from 'ws';
 import { IndicatorService } from '../src/analytics/indicators/indicator.service.js';
@@ -103,7 +102,6 @@ type Frame = Record<string, unknown>;
  * `/stream` connection also proves they coexist.
  */
 describe('live stream (e2e)', () => {
-  let container: StartedMongoDBContainer;
   let app: INestApplication;
   let baseUrl: string;
   let polling: PollingService;
@@ -152,8 +150,6 @@ describe('live stream (e2e)', () => {
   }
 
   beforeAll(async () => {
-    container = await new MongoDBContainer('mongo:8').start();
-    process.env.MONGODB_URI = `${container.getConnectionString()}/?directConnection=true`;
     const stub = new StubSource({
       [BTC.id]: [
         candle(0, 10),
@@ -188,7 +184,6 @@ describe('live stream (e2e)', () => {
   afterAll(async () => {
     for (const socket of openSockets) socket.close();
     await app?.close();
-    await container?.stop();
   });
 
   beforeEach(async () => {

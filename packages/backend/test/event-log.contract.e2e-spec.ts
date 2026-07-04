@@ -1,7 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
-import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
 import { AppModule } from '../src/app.module.js';
 import { MongooseEventLog } from '../src/common/persistence/mongoose-event-log.js';
@@ -23,14 +22,11 @@ import { FIXED_FIRED_AT, runEventLogContract } from '../src/common/testing/event
  * DI-bound {@link EVENT_LOG} uses the default `Date.now`.
  */
 describe('MongooseEventLog (contract, e2e)', () => {
-  let container: StartedMongoDBContainer;
   let app: INestApplication;
   let ruleModel: Model<RuleEventDoc>;
   let symbolModel: Model<SymbolEventDoc>;
 
   beforeAll(async () => {
-    container = await new MongoDBContainer('mongo:8').start();
-    process.env.MONGODB_URI = `${container.getConnectionString()}/?directConnection=true`;
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     await app.init();
@@ -40,7 +36,6 @@ describe('MongooseEventLog (contract, e2e)', () => {
 
   afterAll(async () => {
     await app?.close();
-    await container?.stop();
   });
 
   // Each contract case gets freshly-emptied `rules` + `watchlist` collections.

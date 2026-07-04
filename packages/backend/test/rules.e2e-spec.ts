@@ -16,7 +16,6 @@ import {
 } from '@lametrader/core';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import request from 'supertest';
 import { PROFILE_REPOSITORY } from '../src/analytics/interfaces/profile-repository.token.js';
 import { RuleEngineService } from '../src/analytics/rules/rule-engine.service.js';
@@ -67,13 +66,10 @@ function buildRuleInput(): Omit<Rule, 'id' | 'createdAt' | 'updatedAt'> {
  * Fastify `rules.e2e.test.ts`.
  */
 describe('/rules (e2e)', () => {
-  let container: StartedMongoDBContainer;
   let app: INestApplication;
   let ruleEngine: RuleEngineService;
 
   beforeAll(async () => {
-    container = await new MongoDBContainer('mongo:8').start();
-    process.env.MONGODB_URI = `${container.getConnectionString()}/?directConnection=true`;
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     await app.init();
@@ -107,7 +103,6 @@ describe('/rules (e2e)', () => {
 
   afterAll(async () => {
     await app?.close();
-    await container?.stop();
   });
 
   it('rejects a tick-cadence rule on an unwatched symbol with fields[] and does not persist it', async () => {

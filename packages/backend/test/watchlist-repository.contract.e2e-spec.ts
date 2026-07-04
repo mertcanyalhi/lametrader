@@ -2,7 +2,6 @@ import type { WatchlistRepository } from '@lametrader/core';
 import type { INestApplication } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
-import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
 import { AppModule } from '../src/app.module.js';
 import { WATCHLIST_REPOSITORY } from '../src/market/interfaces/watchlist-repository.token.js';
@@ -16,14 +15,11 @@ import { runWatchlistRepositoryContract } from '../src/market/testing/watchlist-
  * rewrite is behaviour-identical to the old native-driver repository.
  */
 describe('MongooseWatchlistRepository (contract, e2e)', () => {
-  let container: StartedMongoDBContainer;
   let app: INestApplication;
   let repo: WatchlistRepository;
   let model: Model<WatchlistEntry>;
 
   beforeAll(async () => {
-    container = await new MongoDBContainer('mongo:8').start();
-    process.env.MONGODB_URI = `${container.getConnectionString()}/?directConnection=true`;
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     await app.init();
@@ -33,7 +29,6 @@ describe('MongooseWatchlistRepository (contract, e2e)', () => {
 
   afterAll(async () => {
     await app?.close();
-    await container?.stop();
   });
 
   // Each contract case gets a freshly-emptied `watchlist` collection.

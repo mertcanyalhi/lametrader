@@ -1,6 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 
@@ -11,7 +10,6 @@ import { AppModule } from '../src/app.module.js';
  * payloads.
  */
 describe('config API (e2e)', () => {
-  let container: StartedMongoDBContainer;
   let app: INestApplication;
 
   /** Boot a fresh Nest app against the shared container (a "new connection"). */
@@ -23,14 +21,11 @@ describe('config API (e2e)', () => {
   }
 
   beforeAll(async () => {
-    container = await new MongoDBContainer('mongo:8').start();
-    process.env.MONGODB_URI = `${container.getConnectionString()}/?directConnection=true`;
     app = await bootApp();
   }, 120_000);
 
   afterAll(async () => {
     await app?.close();
-    await container?.stop();
   });
 
   it('GET /config returns the default config when nothing is stored', async () => {

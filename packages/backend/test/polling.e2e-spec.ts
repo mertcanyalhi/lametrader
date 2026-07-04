@@ -14,7 +14,6 @@ import type { INestApplication } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { Test } from '@nestjs/testing';
-import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
 import { AppModule } from '../src/app.module.js';
 import { MarketDataError } from '../src/common/domain/symbol.js';
@@ -88,7 +87,6 @@ class GrowingStubSource implements MarketDataSource {
  * `polling.e2e.test.ts`.
  */
 describe('polling loop (e2e)', () => {
-  let container: StartedMongoDBContainer;
   let app: INestApplication;
   let candleRepo: CandleRepository;
   let watchlist: WatchlistRepository;
@@ -98,8 +96,6 @@ describe('polling loop (e2e)', () => {
   let watchlistModel: Model<WatchlistEntry>;
 
   beforeAll(async () => {
-    container = await new MongoDBContainer('mongo:8').start();
-    process.env.MONGODB_URI = `${container.getConnectionString()}/?directConnection=true`;
     const stub = new GrowingStubSource({ [BTC.id]: [candle(0), candle(HOUR), candle(2 * HOUR)] }, [
       ETH.id,
     ]);
@@ -119,7 +115,6 @@ describe('polling loop (e2e)', () => {
 
   afterAll(async () => {
     await app?.close();
-    await container?.stop();
   });
 
   beforeEach(async () => {

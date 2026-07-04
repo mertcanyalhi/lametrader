@@ -1,7 +1,6 @@
 import { type StateRepository, StateValueType } from '@lametrader/core';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import request from 'supertest';
 import { STATE_REPOSITORY } from '../src/analytics/interfaces/state-repository.token.js';
 import { AppModule } from '../src/app.module.js';
@@ -15,13 +14,10 @@ import { AppModule } from '../src/app.module.js';
  * `state.e2e.test.ts`.
  */
 describe('state API (e2e)', () => {
-  let container: StartedMongoDBContainer;
   let app: INestApplication;
   let state: StateRepository;
 
   beforeAll(async () => {
-    container = await new MongoDBContainer('mongo:8').start();
-    process.env.MONGODB_URI = `${container.getConnectionString()}/?directConnection=true`;
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     await app.init();
@@ -30,7 +26,6 @@ describe('state API (e2e)', () => {
 
   afterAll(async () => {
     await app?.close();
-    await container?.stop();
   });
 
   it('GET /profiles/:profileId/state/global returns {} when no keys have been set', async () => {

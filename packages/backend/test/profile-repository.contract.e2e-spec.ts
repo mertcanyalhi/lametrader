@@ -2,7 +2,6 @@ import type { ProfileRepository } from '@lametrader/core';
 import type { INestApplication } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
-import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
 import { PROFILE_REPOSITORY } from '../src/analytics/interfaces/profile-repository.token.js';
 import { ProfileEntry } from '../src/analytics/persistence/profile-entry.schema.js';
@@ -16,14 +15,11 @@ import { AppModule } from '../src/app.module.js';
  * behaviour-identical to the old native-driver repository.
  */
 describe('MongooseProfileRepository (contract, e2e)', () => {
-  let container: StartedMongoDBContainer;
   let app: INestApplication;
   let repo: ProfileRepository;
   let model: Model<ProfileEntry>;
 
   beforeAll(async () => {
-    container = await new MongoDBContainer('mongo:8').start();
-    process.env.MONGODB_URI = `${container.getConnectionString()}/?directConnection=true`;
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     await app.init();
@@ -33,7 +29,6 @@ describe('MongooseProfileRepository (contract, e2e)', () => {
 
   afterAll(async () => {
     await app?.close();
-    await container?.stop();
   });
 
   // Each contract case gets a freshly-emptied `profiles` collection.

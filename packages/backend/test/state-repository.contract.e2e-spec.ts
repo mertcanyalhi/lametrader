@@ -2,7 +2,6 @@ import type { StateRepository } from '@lametrader/core';
 import type { INestApplication } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
-import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
 import { STATE_REPOSITORY } from '../src/analytics/interfaces/state-repository.token.js';
 import { StateEntry } from '../src/analytics/persistence/state-entry.schema.js';
@@ -18,14 +17,11 @@ import { AppModule } from '../src/app.module.js';
  * {@link import('@lametrader/core').StateValue} round-trip (ADR-0013).
  */
 describe('MongooseStateRepository (contract, e2e)', () => {
-  let container: StartedMongoDBContainer;
   let app: INestApplication;
   let repo: StateRepository;
   let model: Model<StateEntry>;
 
   beforeAll(async () => {
-    container = await new MongoDBContainer('mongo:8').start();
-    process.env.MONGODB_URI = `${container.getConnectionString()}/?directConnection=true`;
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     await app.init();
@@ -35,7 +31,6 @@ describe('MongooseStateRepository (contract, e2e)', () => {
 
   afterAll(async () => {
     await app?.close();
-    await container?.stop();
   });
 
   // Each contract case gets a freshly-emptied `state` collection.

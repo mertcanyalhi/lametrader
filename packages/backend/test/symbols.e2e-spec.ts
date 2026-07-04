@@ -2,7 +2,6 @@ import { type Instrument, SymbolType } from '@lametrader/core';
 import type { INestApplication } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
-import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
@@ -27,13 +26,10 @@ describe('symbols API (e2e)', () => {
     currency: 'USDT',
   };
 
-  let container: StartedMongoDBContainer;
   let app: INestApplication;
   let model: Model<WatchlistEntry>;
 
   beforeAll(async () => {
-    container = await new MongoDBContainer('mongo:8').start();
-    process.env.MONGODB_URI = `${container.getConnectionString()}/?directConnection=true`;
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(MARKET_DATA_SOURCES)
       .useValue([new InMemoryMarketDataSource([BTC])])
@@ -45,7 +41,6 @@ describe('symbols API (e2e)', () => {
 
   afterAll(async () => {
     await app?.close();
-    await container?.stop();
   });
 
   beforeEach(async () => {
