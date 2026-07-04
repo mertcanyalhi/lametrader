@@ -18,7 +18,7 @@ It runs alongside the still-deployed `@lametrader/api`; the remaining resource c
 - **Profiles** (`src/profiles`) — the `ProfilesModule`: `ProfileService` over a Mongoose-backed profile store (`profiles` collection), behind the `/profiles` controller (CRUD + the attached-indicators sub-resource). Validates a `symbols` scope against the watchlist and attached-indicator inputs against the indicator registry.
 - **Candles** (`src/candles`) — the `CandlesModule`: the single owner of the Mongoose-backed candle store (`candles` collection), binding and exporting the `CANDLE_REPOSITORY` token (the shared-persistence pattern; the symbols use-case imports it for quote enrichment + the remove cascade). It drives the `BackfillService` (reads) and `BackfillJobService` (async jobs) behind the `/symbols/:id/candles` + `/backfill` controller, and serves the per-job progress WebSocket via the `BackfillProgressGateway` (a raw `ws` server on the HTTP upgrade, matching the param'd URL).
 - **State** (`src/state`) — the `StateModule`: the single owner of the Mongoose-backed rule-engine state store (`state` collection), binding and exporting the `STATE_REPOSITORY` token (the shared-persistence pattern; per-`profileId` partitioning + the tagged-union `StateValue` round-trip preserved). It drives the read-side state controller (`GET /profiles/:profileId/state/global`, `GET /symbols/:id/state`) and the chart state-overlay routes (`GET /symbols/:id/state-keys`, `GET /symbols/:id/state/:key/series`) via the relocated `StateHistoryService`, which reads a symbol's mirrored rule events off the `watchlist` document's embedded `events` array. It imports the shared `WatchlistModule` for the watched-symbol 404 guard.
-- **Indicators** (`src/indicators`) — the `IndicatorsModule`: the shared, read-only `IndicatorRegistry` (catalog of the shipped `sma` / `vwma` modules, pure logic) built by `defaultIndicators` and exported for the profiles use-case to validate against. The indicators HTTP routes are added on top of this module in a later stage.
+- **Indicators** (`src/indicators`) — the `IndicatorsModule`: the shared, read-only `IndicatorRegistry` (catalog of the shipped `sma` / `vwma` modules, pure logic) built by `defaultIndicators` and exported for the profiles use-case to validate against. It drives the indicators controller — the read-only catalog (`GET /indicators`, `GET /indicators/:key`) straight off the registry, and the ad-hoc compute route (`GET /symbols/:id/indicators/:key`) over the relocated `IndicatorService` (explicit-composition contract kept as-is, ADR-0010). Compute reads a symbol's stored candles and guards on the watchlist, so this module imports the shared `CandlesModule` (`CANDLE_REPOSITORY`) and `WatchlistModule` (`WATCHLIST_REPOSITORY`).
 - **Market data** (`src/market-data`) — the `MarketDataModule`: the registered discovery sources (Binance for crypto, Yahoo for stocks/funds/FX) bound to the `MARKET_DATA_SOURCES` token, fanned out by the symbols use-case (and, later, backfill/polling).
 - **HTTP contract** (`src/common`) — the keystone the whole API reuses: a global `DomainExceptionFilter` mapping domain errors to status codes with the uniform `{ error, fields? }` envelope, and a global `ValidationPipe` (class-validator DTOs) emitting the same envelope on validation failure.
 - **Logging** (`src/logging`) — [`nestjs-pino`](https://github.com/iamolegga/nestjs-pino) for request and application logging.
@@ -61,6 +61,9 @@ It runs alongside the still-deployed `@lametrader/api`; the remaining resource c
 | `GET`    | `/symbols/:id/state?profileId=`             | —                              | The symbol's current state map for a profile. 200 / 400 / 404. |
 | `GET`    | `/symbols/:id/state-keys`                   | —                              | Alphabetical `[{ key, valueType }]` of every state key the symbol has been written under. 200 / 404. |
 | `GET`    | `/symbols/:id/state/:key/series?from=&to=`  | —                              | One key's `[{ ts, value }]` time-series for the symbol (ascending by `ts`). 200 / 404. |
+| `GET`    | `/indicators`                               | —                              | List every registered indicator definition (descriptors only). 200. |
+| `GET`    | `/indicators/:key`                          | —                              | Get one definition by key. 200 / 404.                   |
+| `GET`    | `/symbols/:id/indicators/:key?period=&…`    | —                              | Compute the indicator over the symbol's stored candles. 200 / 400 / 404. |
 
 ### Config resource
 
@@ -91,7 +94,7 @@ With `?enrich=true`, each item carries a `quote` computed server-side from the s
 `quote` is **`null`** when the symbol does not watch `defaultPeriod` or has fewer than two candles stored there.
 Absent or `?enrich=false` returns the plain list.
 
-The remaining nested sub-resources of a symbol (`/indicators`, `/rule-events`) are ported with their own feature modules in later stages; `/candles` + `/backfill` are served by the candles module below, and `/state` + `/state-keys` + `/state/:key/series` by the state module below.
+The remaining nested sub-resource of a symbol (`/rule-events`) is ported with its own feature module in a later stage; `/candles` + `/backfill` are served by the candles module below, `/state` + `/state-keys` + `/state/:key/series` by the state module below, and `/indicators/:key` (compute) by the indicators module below.
 
 ### Candles & backfill resource
 
@@ -154,6 +157,27 @@ Both are watchlist-scoped (**404** on an unknown symbol id) and, unlike the maps
 
 - `GET /symbols/:id/state-keys` — the alphabetical `[{ key, valueType }]` catalog of every state key the symbol has been written under.
 - `GET /symbols/:id/state/:key/series?from=&to=` — one key's time-series: one `{ ts, value }` per `StateSet`, one `{ ts, value: null }` per `StateRemoved`, ascending by `ts`. `from` is inclusive, `to` is exclusive (both epoch ms; omit either side for an open bound).
+
+### Indicators resource
+
+The **indicator catalog** plus an ad-hoc **compute** route.
+The catalog is every registered indicator module's serialized `IndicatorDefinition` — the input/state schema a UI form renderer or action condition-builder reads (never the `compute` function).
+
+- `GET /indicators` — list every registered definition.
+- `GET /indicators/:key` — get one definition by key (**404** with `{ error }` on an unknown key).
+- `GET /symbols/:id/indicators/:key?period=…&…` — compute the indicator over the symbol's stored candles.
+
+The compute route takes the indicator's scalar inputs as query parameters alongside the required `period`, optional `from` (epoch ms), and optional `to` (epoch ms):
+
+- `curl 'http://localhost:3000/symbols/crypto:BTCUSDT/indicators/sma?period=1h&length=3'`
+- `curl 'http://localhost:3000/symbols/crypto:BTCUSDT/indicators/sma?period=1h&length=3&from=1704153600000'`
+- `curl 'http://localhost:3000/symbols/crypto:BTCUSDT/indicators/vwma?period=1h&length=14&multiplier=1&direction=both'`
+
+Numeric inputs like `length` come in as query strings; the service coerces them to numbers before validating against the indicator's descriptors.
+The response is `{ indicatorKey, version, period, state }`, where `state` is the aligned per-bar series (leading rows `null` during warm-up).
+
+- **404** when the symbol isn't on the watchlist or the indicator key is unknown.
+- **400** on invalid inputs (out-of-range, wrong type) or an asset-class mismatch (e.g. an FX symbol with a volume-based indicator).
 
 ## API documentation
 
