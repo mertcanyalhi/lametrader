@@ -1,7 +1,10 @@
-import type { CandleRepository, WatchlistRepository } from '@lametrader/core';
+import type { CandleRepository, IndicatorStateEvent, WatchlistRepository } from '@lametrader/core';
 import { Module } from '@nestjs/common';
 import { CANDLE_REPOSITORY } from '../candles/candle-repository.token.js';
 import { CandlesModule } from '../candles/candles.module.js';
+import type { StreamHub } from '../candles/stream-hub.js';
+import { INDICATOR_STREAM } from '../stream/stream.tokens.js';
+import { StreamHubsModule } from '../stream/stream-hubs.module.js';
 import { WatchlistModule } from '../watchlist/watchlist.module.js';
 import { WATCHLIST_REPOSITORY } from '../watchlist/watchlist-repository.token.js';
 import { defaultIndicators } from './default-indicators.js';
@@ -27,11 +30,18 @@ import { IndicatorsController } from './indicators.controller.js';
  * watchlist, so this module imports the shared {@link CandlesModule} (for the
  * exported {@link CANDLE_REPOSITORY}) and {@link WatchlistModule} (for
  * {@link WATCHLIST_REPOSITORY}). Both are single-owner shared-persistence
- * modules that depend on nothing that depends back on the indicators module, so
- * the graph stays acyclic (indicators → {candles, watchlist, mongo}).
+ * modules that depend on nothing that depends back on the indicators module.
+ *
+ * The service's live-streaming `onState` sink is wired to publish each
+ * recomputed state event to the shared `/stream` indicator hub
+ * ({@link import('../stream/stream.tokens.js').INDICATOR_STREAM}, from the
+ * imported dependency-free {@link StreamHubsModule}) — the producer→hub topology
+ * is complete but idle until the polling cutover feeds candles into
+ * `handleCandle`. The graph stays acyclic (indicators → {candles, watchlist,
+ * stream-hubs, mongo}).
  */
 @Module({
-  imports: [CandlesModule, WatchlistModule],
+  imports: [CandlesModule, WatchlistModule, StreamHubsModule],
   controllers: [IndicatorsController],
   providers: [
     { provide: IndicatorRegistry, useFactory: () => defaultIndicators() },
@@ -41,8 +51,16 @@ import { IndicatorsController } from './indicators.controller.js';
         indicators: IndicatorRegistry,
         watchlist: WatchlistRepository,
         candles: CandleRepository,
-      ) => new IndicatorService(indicators, watchlist, candles),
-      inject: [IndicatorRegistry, WATCHLIST_REPOSITORY, CANDLE_REPOSITORY],
+        indicatorStream: StreamHub<IndicatorStateEvent>,
+      ) =>
+        // `onState` publishes each recomputed indicator-state event to the live
+        // `/stream` indicator hub (keyed by subscription id) — the producer→hub
+        // sink is wired now (#489) but idle until the polling cutover (#490)
+        // fans candles into `handleCandle`.
+        new IndicatorService(indicators, watchlist, candles, {
+          onState: (event) => indicatorStream.publish(event.subscriptionId, event),
+        }),
+      inject: [IndicatorRegistry, WATCHLIST_REPOSITORY, CANDLE_REPOSITORY, INDICATOR_STREAM],
     },
   ],
   exports: [IndicatorRegistry, IndicatorService],

@@ -15,6 +15,7 @@ import { NotificationsModule } from './notifications/notifications.module.js';
 import { ProfilesModule } from './profiles/profiles.module.js';
 import { RulesModule } from './rules/rules.module.js';
 import { StateModule } from './state/state.module.js';
+import { StreamModule } from './stream/stream.module.js';
 import { SymbolsModule } from './symbols/symbols.module.js';
 
 /**
@@ -37,9 +38,11 @@ import { SymbolsModule } from './symbols/symbols.module.js';
  * (`/profiles/:profileId/state/global` + `/symbols/:id/state` reads; owns the
  * shared state store), {@link IndicatorsModule} (`/indicators` catalog +
  * `/symbols/:id/indicators/:key` compute; owns the shared indicator registry),
- * and {@link RulesModule} (`/rules` CRUD + `/rules/:id/events` +
+ * {@link RulesModule} (`/rules` CRUD + `/rules/:id/events` +
  * `/symbols/:id/rule-events[/count]`; owns the shared rule store and hosts the
- * relocated rule engine as a dormant provider).
+ * relocated rule engine as a dormant provider), and {@link StreamModule} (the
+ * multiplexed `GET (WS) /stream` gateway carrying candle / indicator / quote /
+ * rule-event subscriptions, with the producer→hub topology wired but dormant).
  */
 @Module({
   imports: [
@@ -62,6 +65,7 @@ import { SymbolsModule } from './symbols/symbols.module.js';
     StateModule,
     IndicatorsModule,
     RulesModule,
+    StreamModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: DomainExceptionFilter },

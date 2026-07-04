@@ -11,6 +11,8 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import type { AppConfig } from '../config/app-config.types.js';
 import { MarketDataModule } from '../market-data/market-data.module.js';
 import { MARKET_DATA_SOURCES } from '../market-data/market-data-source.token.js';
+import { CANDLE_STREAM } from '../stream/stream.tokens.js';
+import { StreamHubsModule } from '../stream/stream-hubs.module.js';
 import { WatchlistModule } from '../watchlist/watchlist.module.js';
 import { WATCHLIST_REPOSITORY } from '../watchlist/watchlist-repository.token.js';
 import { BackfillService } from './backfill.service.js';
@@ -23,6 +25,7 @@ import { CANDLE_REPOSITORY } from './candle-repository.token.js';
 import { CandlesController } from './candles.controller.js';
 import { MongooseCandleRepository } from './mongoose-candle.repository.js';
 import { PollingService } from './polling.service.js';
+import type { CandleEvent } from './polling.service.types.js';
 import { StreamHub } from './stream-hub.js';
 
 /**
@@ -48,17 +51,24 @@ import { StreamHub } from './stream-hub.js';
  * `SchedulerRegistry`) as a provider — but **dormant**: nothing calls `start()`
  * at boot; the cutover stage (#490) drives it via a lifecycle hook. The
  * `SchedulerRegistry` comes from the global `ScheduleModule.forRoot()` in
- * `AppModule`; the per-period cadence is read from the validated config.
+ * `AppModule`; the per-period cadence is read from the validated config. Its
+ * `onCandle` sink publishes each observed candle to the shared live-`/stream`
+ * candle hub ({@link import('../stream/stream.tokens.js').CANDLE_STREAM}, from
+ * the imported {@link StreamHubsModule}) — the producer→hub topology is complete
+ * but idle until polling starts at cutover.
  *
- * Imports {@link MarketDataModule} (the candle-feed sources) and the shared
- * {@link WatchlistModule} (a backfill targets a watched symbol); it depends on
- * nothing that depends back on it, so the graph stays acyclic.
+ * Imports {@link MarketDataModule} (the candle-feed sources), the shared
+ * {@link WatchlistModule} (a backfill targets a watched symbol), and the
+ * dependency-free {@link StreamHubsModule} (the candle hub the polling sink
+ * publishes to); it depends on nothing that depends back on it, so the graph
+ * stays acyclic.
  */
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: CandleEntry.name, schema: CandleEntrySchema }]),
     MarketDataModule,
     WatchlistModule,
+    StreamHubsModule,
   ],
   controllers: [CandlesController],
   providers: [
@@ -88,12 +98,14 @@ import { StreamHub } from './stream-hub.js';
         watchlist: WatchlistRepository,
         registry: SchedulerRegistry,
         config: ConfigService<AppConfig, true>,
+        candleStream: StreamHub<CandleEvent>,
       ) =>
         // Relocated but DORMANT: constructed, never `start()`ed at boot. The
-        // cutover stage starts it. `onCandle` is a no-op until the live `/stream`
-        // WebSocket is ported to render it.
+        // cutover stage (#490) starts it. `onCandle` publishes each observed
+        // candle to the live `/stream` candle hub (keyed by symbol id) — the
+        // producer→hub sink is wired now (#489) but idle until polling starts.
         new PollingService(sources, candles, watchlist, registry, {
-          onCandle: () => {},
+          onCandle: (event) => candleStream.publish(event.id, event),
           intervals: config.get('pollIntervals', { infer: true }),
         }),
       inject: [
@@ -102,6 +114,7 @@ import { StreamHub } from './stream-hub.js';
         WATCHLIST_REPOSITORY,
         SchedulerRegistry,
         ConfigService,
+        CANDLE_STREAM,
       ],
     },
   ],
