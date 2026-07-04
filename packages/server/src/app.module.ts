@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule as NestConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
+import { CandlesModule } from './candles/candles.module.js';
 import { DomainExceptionFilter } from './common/domain-exception.filter.js';
 import { buildValidationPipe } from './common/validation.pipe.js';
 import { ConfigModule } from './config/config.module.js';
@@ -24,9 +25,11 @@ import { SymbolsModule } from './symbols/symbols.module.js';
  *
  * Feature modules: {@link ConfigModule} (`/config`),
  * {@link NotificationsModule} (`/config/notifications/telegram`),
- * {@link ProfilesModule} (`/profiles` + attached indicators), and
- * {@link SymbolsModule} (`/instruments` + `/symbols`; imports
- * {@link ProfilesModule} for the symbol-removal → profile-prune cascade).
+ * {@link ProfilesModule} (`/profiles` + attached indicators),
+ * {@link CandlesModule} (`/symbols/:id/candles` + `/backfill`; owns the shared
+ * candle store), and {@link SymbolsModule} (`/instruments` + `/symbols`; imports
+ * {@link ProfilesModule} for the symbol-removal → profile-prune cascade and
+ * {@link CandlesModule} for the candle store).
  */
 @Module({
   imports: [
@@ -41,6 +44,7 @@ import { SymbolsModule } from './symbols/symbols.module.js';
     ConfigModule,
     NotificationsModule,
     ProfilesModule,
+    CandlesModule,
     SymbolsModule,
   ],
   providers: [

@@ -11,7 +11,7 @@ import {
   type WatchedSymbol,
   type WatchlistRepository,
 } from '@lametrader/core';
-import { InMemoryCandleRepository } from '../candles/in-memory-candle-repository.js';
+import { InMemoryCandleRepository } from '../candles/in-memory-candle.repository.js';
 import { ConfigService } from '../config/config.service.js';
 import { InMemoryConfigRepository } from '../config/in-memory-config.repository.js';
 import { SymbolService } from './symbol.service.js';

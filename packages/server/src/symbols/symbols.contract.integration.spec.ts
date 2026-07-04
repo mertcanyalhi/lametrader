@@ -10,7 +10,7 @@ import {
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { InMemoryCandleRepository } from '../candles/in-memory-candle-repository.js';
+import { InMemoryCandleRepository } from '../candles/in-memory-candle.repository.js';
 import { DomainExceptionFilter } from '../common/domain-exception.filter.js';
 import { buildValidationPipe } from '../common/validation.pipe.js';
 import { ConfigService } from '../config/config.service.js';

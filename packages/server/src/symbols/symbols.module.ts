@@ -1,7 +1,7 @@
 import type { CandleRepository, SymbolDiscovery, WatchlistRepository } from '@lametrader/core';
 import { Module } from '@nestjs/common';
 import { CANDLE_REPOSITORY } from '../candles/candle-repository.token.js';
-import { InMemoryCandleRepository } from '../candles/in-memory-candle-repository.js';
+import { CandlesModule } from '../candles/candles.module.js';
 import { ConfigModule } from '../config/config.module.js';
 import { ConfigService } from '../config/config.service.js';
 import { MarketDataModule } from '../market-data/market-data.module.js';
@@ -22,25 +22,23 @@ import { SymbolsController } from './symbols.controller.js';
  * {@link WatchlistModule} for the {@link WATCHLIST_REPOSITORY} binding (read +
  * write), and drives the {@link SymbolService} behind {@link SymbolsController}.
  *
- * {@link CANDLE_REPOSITORY} is bound to the in-memory adapter here: the candles
- * resource (backfill / reads / polling) is ported in a later stage (#485), which
- * brings the Mongoose-backed candle store and rebinds the token. Until then no
- * route persists candles into this server, so `enrich` yields null quotes and
- * the remove-symbol candle cascade is a no-op — behaviour-consistent with a
- * server that has no candle persistence yet.
+ * Imports the shared {@link CandlesModule} for the {@link CANDLE_REPOSITORY}
+ * binding — the real Mongoose-backed candle store (#485 rebind, replacing the
+ * earlier in-memory placeholder), so `GET /symbols?enrich=true` now computes
+ * quotes from persisted candles and the remove-symbol cascade deletes them.
  *
  * Imports {@link ProfilesModule} and injects its exported {@link ProfileService}
  * as the {@link SymbolProfilePruner}: removing a symbol prunes it from every
  * profile's `symbols` scope (ADR-0009), reproducing the old `connectServices`
  * wiring where `SymbolService` took the `ProfileService` as its profiles cascade.
- * The dependency is one-way (symbols → profiles); both features import the same
- * {@link WatchlistModule} for their watchlist binding, so the graph stays acyclic.
+ * The dependency is one-way (symbols → profiles / candles); every feature imports
+ * the same shared {@link WatchlistModule} / {@link CandlesModule} for its bindings,
+ * so the graph stays acyclic.
  */
 @Module({
-  imports: [ConfigModule, MarketDataModule, ProfilesModule, WatchlistModule],
+  imports: [ConfigModule, MarketDataModule, ProfilesModule, WatchlistModule, CandlesModule],
   controllers: [SymbolsController],
   providers: [
-    { provide: CANDLE_REPOSITORY, useClass: InMemoryCandleRepository },
     {
       provide: SymbolService,
       useFactory: (
