@@ -2,26 +2,56 @@
 
 The backend monolith — an idiomatic [NestJS](https://nestjs.com) application on the Express platform.
 
-This package is stage 2 of the NestJS migration (see `specs/nestjs-monolith-migration.spec.md` and ADR-0018).
-Today it is the cross-cutting shell that every later resource module plugs into: validated configuration, structured logging, the root Mongo connection, and a health endpoint.
-It runs alongside the still-deployed `@lametrader/api`; the resource controllers, repositories, and the polling loop are ported in later stages.
+This package is stage 3 of the NestJS migration (see `specs/nestjs-monolith-migration.spec.md` and ADR-0018).
+On top of the cross-cutting shell (validated configuration, structured logging, the root Mongo connection, a health endpoint) it now serves its first ported resource — the **config + Telegram notifications** surface — and establishes the app-wide HTTP contract every later resource reuses.
+It runs alongside the still-deployed `@lametrader/api`; the remaining resource controllers, repositories, and the polling loop are ported in later stages.
 
 ## What's here
 
-- **Bootstrap** (`src/main.ts`, `src/app.module.ts`) — boots a Nest app on Express and serves `GET /health`.
-- **Config** (`src/config`) — `@nestjs/config` with a `validate` hook (`validateEnv`) that resolves and validates the environment into a typed `AppConfig`.
+- **Bootstrap** (`src/main.ts`, `src/app.module.ts`) — boots a Nest app on Express, mounts the OpenAPI docs, and wires the global error filter + validation pipe.
+- **Env config** (`src/config/env.validation.ts`, `app-config.types.ts`) — `@nestjs/config` with a `validate` hook (`validateEnv`) that resolves and validates the environment into a typed `AppConfig`.
   Same variables, defaults, and fail-fast behavior as the previous `packages/engine/src/settings.ts` (`loadSettings`).
+- **Config resource** (`src/config`) — the `ConfigModule`: `ConfigService` over a Mongoose-backed key-value store (`config` collection), behind the `/config` controller.
+- **Notifications** (`src/notifications`) — the `NotificationsModule`: `TelegramDestinationsService` (destinations CRUD, stored in the same config K/V store) and `TelegramNotifier` (Bot API sender), behind the `/config/notifications/telegram` controller.
+- **HTTP contract** (`src/common`) — the keystone the whole API reuses: a global `DomainExceptionFilter` mapping domain errors to status codes with the uniform `{ error, fields? }` envelope, and a global `ValidationPipe` (class-validator DTOs) emitting the same envelope on validation failure.
 - **Logging** (`src/logging`) — [`nestjs-pino`](https://github.com/iamolegga/nestjs-pino) for request and application logging.
   The root level comes from `LOG_LEVEL`; records carry an `{ app: 'server' }` base field; modules take a scoped child logger by injecting `PinoLogger` and calling `setContext(scope)` (the pino twin of the engine's `getLogger(scope)`).
-- **Mongo** (`src/mongo`) — `@nestjs/mongoose` opening the root connection from `MONGODB_URI`.
-  Connection only — no schemas or repositories yet.
+- **Mongo** (`src/mongo`) — `@nestjs/mongoose` opening the root connection from `MONGODB_URI`; feature modules register their own schemas with `MongooseModule.forFeature`.
 - **Health** (`src/health`) — `GET /health` → `200 { "status": "ok" }`.
 
 ## Endpoints
 
-| Method | Path      | Response                    |
-| ------ | --------- | --------------------------- |
-| `GET`  | `/health` | `200 { "status": "ok" }`    |
+| Method   | Path                                        | Body                           | Description                                              |
+| -------- | ------------------------------------------- | ------------------------------ | ------------------------------------------------------- |
+| `GET`    | `/health`                                   | —                              | Liveness. `200 { "status": "ok" }`.                     |
+| `GET`    | `/config`                                   | —                              | Return the current config.                              |
+| `PUT`    | `/config`                                   | `{ periods, defaultPeriod }`   | Full replace (both required). 200 / 400.                |
+| `PATCH`  | `/config`                                   | `{ periods?, defaultPeriod? }` | Partial merge over the current. 200 / 400.              |
+| `GET`    | `/config/notifications/telegram`            | —                              | List destinations (name + chat id; no bot tokens). 200. |
+| `POST`   | `/config/notifications/telegram`            | `{ name, botToken, chatId }`   | Upsert by `name`; returns the summary. **200** / 400.   |
+| `DELETE` | `/config/notifications/telegram/:name`      | —                              | Remove by name. **204** / 404.                          |
+
+### Config resource
+
+- **`periods`** — the supported periods; each one of `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`, `1w`.
+- **`defaultPeriod`** — the period shown by default; must be one of `periods`.
+
+Defaults, when nothing is stored: `periods` = `1h`, `1d`; `defaultPeriod` = `1d`.
+
+### Notification destinations
+
+Telegram is the only channel today (the `/config/notifications` prefix leaves room for siblings).
+`botToken` is write-only — never listed or echoed back; reads return `{ name, chatId }` only.
+`POST` upserts by `name` (a repeat name replaces its token + chat id in place) and returns **200**; `DELETE` returns **204**, or **404** when the name is unknown.
+
+## API documentation
+
+Interactive OpenAPI docs (Swagger UI) are served at `/docs`; the raw spec is at `/docs/json`.
+
+## Error contract
+
+Every error surfaces as the uniform `{ "error": "<reason>" }` body (with an additive `fields: [{ path, message }]` array on validation-style failures).
+Domain errors map to status by a single global filter: `*NotFoundError` → **404**, `*ConflictError` → **409**, client-input `*Error` (and DTO validation) → **400**, `MarketDataError` → **502**, anything else → **500**.
 
 ## Configuration
 
