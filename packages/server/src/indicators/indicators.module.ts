@@ -45,6 +45,6 @@ import { IndicatorsController } from './indicators.controller.js';
       inject: [IndicatorRegistry, WATCHLIST_REPOSITORY, CANDLE_REPOSITORY],
     },
   ],
-  exports: [IndicatorRegistry],
+  exports: [IndicatorRegistry, IndicatorService],
 })
 export class IndicatorsModule {}
