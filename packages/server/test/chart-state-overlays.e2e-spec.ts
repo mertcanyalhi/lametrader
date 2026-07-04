@@ -6,7 +6,7 @@ import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/
 import type { Model } from 'mongoose';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
-import { SymbolEventDoc } from '../src/state/symbol-event-doc.schema.js';
+import { SymbolEventDoc } from '../src/event-log/symbol-event-doc.schema.js';
 import { WatchlistEntry } from '../src/watchlist/watchlist-entry.schema.js';
 
 /**

@@ -6,7 +6,7 @@ import {
   type StateValue,
   StateValueType,
 } from '@lametrader/core';
-import { InMemorySymbolEventLog } from './in-memory-symbol-event-log.js';
+import { InMemoryEventLog } from '../event-log/in-memory-event-log.js';
 import { StateHistoryService } from './state-history.service.js';
 
 /**
@@ -83,9 +83,9 @@ function fired(args: { ruleId: string; symbolId: string; ts: number }): RuleEven
 
 describe('StateHistoryService.listKeys', () => {
   it('returns distinct (key, valueType) pairs from symbol-scoped StateSet entries, alphabetical by key', async () => {
-    const eventLog = new InMemorySymbolEventLog();
+    const eventLog = new InMemoryEventLog();
     const symbolId = 'crypto:BTCUSDT';
-    eventLog.append(
+    await eventLog.appendSymbolEvent(
       symbolId,
       stateSet({
         ruleId: 'rule-a',
@@ -95,7 +95,7 @@ describe('StateHistoryService.listKeys', () => {
         value: { type: StateValueType.String, value: 'buy' },
       }),
     );
-    eventLog.append(
+    await eventLog.appendSymbolEvent(
       symbolId,
       stateSet({
         ruleId: 'rule-b',
@@ -106,7 +106,7 @@ describe('StateHistoryService.listKeys', () => {
       }),
     );
     // A second `StateSet` on the same key must not duplicate the descriptor.
-    eventLog.append(
+    await eventLog.appendSymbolEvent(
       symbolId,
       stateSet({
         ruleId: 'rule-a',
@@ -127,9 +127,9 @@ describe('StateHistoryService.listKeys', () => {
   });
 
   it('drops StateSet entries on StateScope.Global because global state is not symbol-keyed', async () => {
-    const eventLog = new InMemorySymbolEventLog();
+    const eventLog = new InMemoryEventLog();
     const symbolId = 'crypto:BTCUSDT';
-    eventLog.append(
+    await eventLog.appendSymbolEvent(
       symbolId,
       stateSet({
         ruleId: 'rule-a',
@@ -140,7 +140,7 @@ describe('StateHistoryService.listKeys', () => {
         value: { type: StateValueType.Bool, value: true },
       }),
     );
-    eventLog.append(
+    await eventLog.appendSymbolEvent(
       symbolId,
       stateSet({
         ruleId: 'rule-b',
@@ -158,7 +158,7 @@ describe('StateHistoryService.listKeys', () => {
   });
 
   it('returns [] when the symbol has no events', async () => {
-    const eventLog = new InMemorySymbolEventLog();
+    const eventLog = new InMemoryEventLog();
     const service = new StateHistoryService(eventLog);
 
     const keys = await service.listKeys('crypto:NOPE');
@@ -169,9 +169,9 @@ describe('StateHistoryService.listKeys', () => {
 
 describe('StateHistoryService.series', () => {
   it('returns one entry per StateSet and one per StateRemoved for the key, ascending by ts', async () => {
-    const eventLog = new InMemorySymbolEventLog();
+    const eventLog = new InMemoryEventLog();
     const symbolId = 'crypto:BTCUSDT';
-    eventLog.append(
+    await eventLog.appendSymbolEvent(
       symbolId,
       stateSet({
         ruleId: 'rule-a',
@@ -181,7 +181,7 @@ describe('StateHistoryService.series', () => {
         value: { type: StateValueType.String, value: 'sell' },
       }),
     );
-    eventLog.append(
+    await eventLog.appendSymbolEvent(
       symbolId,
       stateSet({
         ruleId: 'rule-a',
@@ -191,7 +191,7 @@ describe('StateHistoryService.series', () => {
         value: { type: StateValueType.String, value: 'buy' },
       }),
     );
-    eventLog.append(
+    await eventLog.appendSymbolEvent(
       symbolId,
       stateRemoved({
         ruleId: 'rule-a',
@@ -212,9 +212,9 @@ describe('StateHistoryService.series', () => {
   });
 
   it('filters by key exactly — entries for a different key are dropped', async () => {
-    const eventLog = new InMemorySymbolEventLog();
+    const eventLog = new InMemoryEventLog();
     const symbolId = 'crypto:BTCUSDT';
-    eventLog.append(
+    await eventLog.appendSymbolEvent(
       symbolId,
       stateSet({
         ruleId: 'rule-a',
@@ -224,7 +224,7 @@ describe('StateHistoryService.series', () => {
         value: { type: StateValueType.Number, value: 5 },
       }),
     );
-    eventLog.append(
+    await eventLog.appendSymbolEvent(
       symbolId,
       stateSet({
         ruleId: 'rule-a',
@@ -242,9 +242,9 @@ describe('StateHistoryService.series', () => {
   });
 
   it('honors `from` (inclusive) by dropping entries with ts < from', async () => {
-    const eventLog = new InMemorySymbolEventLog();
+    const eventLog = new InMemoryEventLog();
     const symbolId = 'crypto:BTCUSDT';
-    eventLog.append(
+    await eventLog.appendSymbolEvent(
       symbolId,
       stateSet({
         ruleId: 'rule-a',
@@ -254,7 +254,7 @@ describe('StateHistoryService.series', () => {
         value: { type: StateValueType.Number, value: 1 },
       }),
     );
-    eventLog.append(
+    await eventLog.appendSymbolEvent(
       symbolId,
       stateSet({
         ruleId: 'rule-a',
@@ -272,9 +272,9 @@ describe('StateHistoryService.series', () => {
   });
 
   it('honors `to` (exclusive) by dropping entries with ts >= to', async () => {
-    const eventLog = new InMemorySymbolEventLog();
+    const eventLog = new InMemoryEventLog();
     const symbolId = 'crypto:BTCUSDT';
-    eventLog.append(
+    await eventLog.appendSymbolEvent(
       symbolId,
       stateSet({
         ruleId: 'rule-a',
@@ -284,7 +284,7 @@ describe('StateHistoryService.series', () => {
         value: { type: StateValueType.Number, value: 1 },
       }),
     );
-    eventLog.append(
+    await eventLog.appendSymbolEvent(
       symbolId,
       stateSet({
         ruleId: 'rule-a',
@@ -302,9 +302,9 @@ describe('StateHistoryService.series', () => {
   });
 
   it('returns [] when no StateSet/StateRemoved matches the key', async () => {
-    const eventLog = new InMemorySymbolEventLog();
+    const eventLog = new InMemoryEventLog();
     const symbolId = 'crypto:BTCUSDT';
-    eventLog.append(symbolId, fired({ ruleId: 'rule-a', symbolId, ts: 1 }));
+    await eventLog.appendSymbolEvent(symbolId, fired({ ruleId: 'rule-a', symbolId, ts: 1 }));
     const service = new StateHistoryService(eventLog);
 
     const series = await service.series(symbolId, 'never_set', {});

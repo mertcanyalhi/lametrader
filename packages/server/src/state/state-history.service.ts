@@ -1,10 +1,10 @@
 import { RuleEventType, StateScope } from '@lametrader/core';
+import type { SymbolEventLog } from '../event-log/symbol-event-log.types.js';
 import type {
   StateHistoryEntry,
   StateHistoryWindow,
   StateKeyDescriptor,
 } from './state-history.service.types.js';
-import type { SymbolEventLog } from './symbol-event-log.types.js';
 
 /**
  * Read use-case for chart-side state overlays (#434).

@@ -10,10 +10,10 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { DomainExceptionFilter } from '../common/domain-exception.filter.js';
 import { buildValidationPipe } from '../common/validation.pipe.js';
+import { InMemoryEventLog } from '../event-log/in-memory-event-log.js';
 import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
 import { WATCHLIST_REPOSITORY } from '../watchlist/watchlist-repository.token.js';
 import { InMemoryStateRepository } from './in-memory-state.repository.js';
-import { InMemorySymbolEventLog } from './in-memory-symbol-event-log.js';
 import { StateController } from './state.controller.js';
 import { StateHistoryService } from './state-history.service.js';
 import { STATE_REPOSITORY } from './state-repository.token.js';
@@ -40,14 +40,14 @@ describe('state HTTP contract (integration)', () => {
 
   let app: INestApplication;
   let state: InMemoryStateRepository;
-  let events: InMemorySymbolEventLog;
+  let events: InMemoryEventLog;
 
   /** Build the app over in-memory stores, seeded with `BTC` on the watchlist. */
   async function buildApp(
     opts: { watchlistSeed?: WatchedSymbol[] } = {},
   ): Promise<INestApplication> {
     state = new InMemoryStateRepository();
-    events = new InMemorySymbolEventLog();
+    events = new InMemoryEventLog();
     const watchlist = new InMemoryWatchlistRepository(opts.watchlistSeed ?? [BTC]);
     const moduleRef = await Test.createTestingModule({
       controllers: [StateController],
@@ -161,7 +161,7 @@ describe('state HTTP contract (integration)', () => {
 
   it('GET /symbols/:id/state-keys returns the alphabetical catalog of state keys', async () => {
     app = await buildApp();
-    events.append(symbolId, {
+    await events.appendSymbolEvent(symbolId, {
       type: RuleEventType.StateSet,
       ruleId: 'rule-a',
       symbolId,
@@ -170,7 +170,7 @@ describe('state HTTP contract (integration)', () => {
       key: 'last_signal',
       value: { type: StateValueType.String, value: 'buy' },
     });
-    events.append(symbolId, {
+    await events.appendSymbolEvent(symbolId, {
       type: RuleEventType.StateSet,
       ruleId: 'rule-b',
       symbolId,
@@ -204,7 +204,7 @@ describe('state HTTP contract (integration)', () => {
 
   it('GET /symbols/:id/state/:key/series returns the StateSet-then-StateRemoved series ordered by ts', async () => {
     app = await buildApp();
-    events.append(symbolId, {
+    await events.appendSymbolEvent(symbolId, {
       type: RuleEventType.StateSet,
       ruleId: 'rule-a',
       symbolId,
@@ -213,7 +213,7 @@ describe('state HTTP contract (integration)', () => {
       key: 'last_signal',
       value: { type: StateValueType.String, value: 'buy' },
     });
-    events.append(symbolId, {
+    await events.appendSymbolEvent(symbolId, {
       type: RuleEventType.StateRemoved,
       ruleId: 'rule-a',
       symbolId,
@@ -235,7 +235,7 @@ describe('state HTTP contract (integration)', () => {
 
   it('GET /symbols/:id/state/:key/series honors the [from, to) window', async () => {
     app = await buildApp();
-    events.append(symbolId, {
+    await events.appendSymbolEvent(symbolId, {
       type: RuleEventType.StateSet,
       ruleId: 'rule-a',
       symbolId,
@@ -244,7 +244,7 @@ describe('state HTTP contract (integration)', () => {
       key: 'count',
       value: { type: StateValueType.Number, value: 1 },
     });
-    events.append(symbolId, {
+    await events.appendSymbolEvent(symbolId, {
       type: RuleEventType.StateSet,
       ruleId: 'rule-a',
       symbolId,
