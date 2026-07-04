@@ -8,19 +8,23 @@
  * imports outward.
  */
 
-export type {
-  BackfillRange,
-  BaseCandle,
-  Candle,
-  CandleBatch,
-  CandlePage,
-  CandleRepository,
-  CryptoCandle,
-  EquityCandle,
-  FxCandle,
-} from './candle.types.js';
-export { type Config, ConfigKey, type ConfigRepository, Period } from './config.types.js';
-export type { Expiration } from './expiration.types.js';
+export {
+  BOT_TOKEN_MAX,
+  CHAT_ID_MAX,
+  DESTINATION_NAME_MAX,
+  RULE_DESCRIPTION_MAX,
+  RULE_NAME_MAX,
+  STATE_KEY_MAX,
+  SYMBOL_ID_MAX,
+  TELEGRAM_TEMPLATE_MAX,
+} from './limits.js';
+export { periodMillis } from './period.js';
+export {
+  type Config,
+  ConfigKey,
+  type ConfigRepository,
+  Period,
+} from './types/config/config.types.js';
 export {
   type EnumFieldDescriptor,
   type EnumOption,
@@ -45,19 +49,39 @@ export {
   RenderKind,
   type SourceFieldDescriptor,
   type StateFieldDescriptor,
-} from './indicator.types.js';
+} from './types/indicators/indicator.types.js';
+export type {
+  BackfillRange,
+  BaseCandle,
+  Candle,
+  CandleBatch,
+  CandlePage,
+  CandleRepository,
+  CryptoCandle,
+  EquityCandle,
+  FxCandle,
+} from './types/market-data/candle.types.js';
+export type {
+  EnrichedSymbol,
+  SymbolQuote,
+  SymbolQuoteEvent,
+  SymbolQuoteListener,
+} from './types/market-data/quote.types.js';
 export {
-  BOT_TOKEN_MAX,
-  CHAT_ID_MAX,
-  DESTINATION_NAME_MAX,
-  RULE_DESCRIPTION_MAX,
-  RULE_NAME_MAX,
-  STATE_KEY_MAX,
-  SYMBOL_ID_MAX,
-  TELEGRAM_TEMPLATE_MAX,
-} from './limits.js';
-export type { Notifier } from './notifier.types.js';
-export { periodMillis } from './period.js';
+  type CandleFeed,
+  type Instrument,
+  type MarketDataSource,
+  type SymbolDiscovery,
+  SymbolType,
+  type WatchedSymbol,
+  type WatchlistRepository,
+} from './types/market-data/symbol.types.js';
+export type { Notifier } from './types/notifications/notifier.types.js';
+export type {
+  TelegramDestination,
+  TelegramDestinationLookup,
+  TelegramDestinationSummary,
+} from './types/notifications/telegram-destination.types.js';
 export {
   type AllScope,
   type IndicatorInstance,
@@ -67,13 +91,8 @@ export {
   ProfileScope,
   type ProfileScopeSpec,
   type SymbolsScope,
-} from './profile.types.js';
-export type {
-  EnrichedSymbol,
-  SymbolQuote,
-  SymbolQuoteEvent,
-  SymbolQuoteListener,
-} from './quote.types.js';
+} from './types/profiles/profile.types.js';
+export type { Expiration } from './types/rules/expiration.types.js';
 export {
   type Action,
   ActionKind,
@@ -145,8 +164,8 @@ export {
   type Trigger,
   TriggerKind,
   type VolumeChangedEvent,
-} from './rules/index.js';
-export { type StateValue, StateValueType } from './state.types.js';
+} from './types/rules/index.js';
+export { type StateValue, StateValueType } from './types/state/state.types.js';
 export {
   type GlobalStateScope,
   type StateChangedEvent,
@@ -155,18 +174,4 @@ export {
   StateScope,
   type StateScopeSpec,
   type SymbolStateScope,
-} from './state-repository.types.js';
-export {
-  type CandleFeed,
-  type Instrument,
-  type MarketDataSource,
-  type SymbolDiscovery,
-  SymbolType,
-  type WatchedSymbol,
-  type WatchlistRepository,
-} from './symbol.types.js';
-export type {
-  TelegramDestination,
-  TelegramDestinationLookup,
-  TelegramDestinationSummary,
-} from './telegram-destination.types.js';
+} from './types/state/state-repository.types.js';

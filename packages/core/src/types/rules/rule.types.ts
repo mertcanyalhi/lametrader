@@ -1,6 +1,6 @@
-import type { Expiration } from '../expiration.types.js';
 import type { Action } from './action.types.js';
 import type { ConditionNode } from './condition.types.js';
+import type { Expiration } from './expiration.types.js';
 import type { RuleScope } from './scope.types.js';
 import type { Trigger } from './trigger.types.js';
 

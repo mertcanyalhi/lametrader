@@ -1,4 +1,4 @@
-import type { Period } from '../config.types.js';
+import type { Period } from '../config/config.types.js';
 
 /**
  * The kind of a {@link Trigger} — which evaluation cadence drives the rule and

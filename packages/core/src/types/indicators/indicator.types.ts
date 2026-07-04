@@ -1,6 +1,6 @@
-import type { Candle } from './candle.types.js';
-import type { Period } from './config.types.js';
-import type { SymbolType } from './symbol.types.js';
+import type { Period } from '../config/config.types.js';
+import type { Candle } from '../market-data/candle.types.js';
+import type { SymbolType } from '../market-data/symbol.types.js';
 
 /**
  * The vocabulary of input/state field types an indicator can declare.

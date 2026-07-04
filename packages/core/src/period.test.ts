@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Period } from './config.types.js';
 import { periodMillis } from './period.js';
+import { Period } from './types/config/config.types.js';
 
 describe('periodMillis', () => {
   it('returns the fixed duration of each period in milliseconds', () => {

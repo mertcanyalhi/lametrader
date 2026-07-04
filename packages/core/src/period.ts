@@ -1,4 +1,4 @@
-import { Period } from './config.types.js';
+import { Period } from './types/config/config.types.js';
 
 /**
  * The fixed duration of each {@link Period}, in milliseconds. Lets callers

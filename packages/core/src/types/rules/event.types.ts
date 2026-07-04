@@ -1,5 +1,5 @@
-import type { Period } from '../config.types.js';
-import type { StateValue } from '../state.types.js';
+import type { Period } from '../config/config.types.js';
+import type { StateValue } from '../state/state.types.js';
 
 /**
  * The kind of an {@link EvaluationTriggerEvent} — an event that drives a rule

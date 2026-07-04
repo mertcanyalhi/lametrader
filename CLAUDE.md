@@ -46,7 +46,7 @@ npm workspaces under `packages/*` — three packages:
 A new shared store follows the shared-persistence-module pattern above (own the model + a repository token in one module, export it, import it where needed).
 There is no new-package ceremony for backend features.
 
-**Adding a shared type** — put it in `core` as a sibling `*.types.ts` (or an enum), and re-export the public surface from `packages/core/src/index.ts`, so both `server` and `web` import it from the package root.
+**Adding a shared type** — put it in `core` under `src/types/<context>/` as a `*.types.ts` (or an enum), grouped with its context (`market-data`, `config`, `indicators`, `profiles`, `state`, `notifications`, `rules`), and re-export the public surface from `packages/core/src/index.ts`, so both `server` and `web` import it from the package root.
 
 **Only `core` sits in the root project-references graph.**
 `server` and `web` are app-only packages compiled on their own, outside the root refs (`tsconfig.json` references just `packages/core`):

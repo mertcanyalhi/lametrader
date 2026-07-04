@@ -1,5 +1,6 @@
-import type { Period } from '../config.types.js';
-import type { StateScope, StateValue } from '../index.js';
+import type { Period } from '../config/config.types.js';
+import type { StateValue } from '../state/state.types.js';
+import type { StateScope } from '../state/state-repository.types.js';
 import type { EvaluationTriggerEvent } from './event.types.js';
 
 /**

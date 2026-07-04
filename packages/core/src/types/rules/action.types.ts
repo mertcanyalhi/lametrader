@@ -1,4 +1,4 @@
-import type { StateValue } from '../state.types.js';
+import type { StateValue } from '../state/state.types.js';
 
 /**
  * The kind of an {@link Action} — what side-effect a rule's `then` clause

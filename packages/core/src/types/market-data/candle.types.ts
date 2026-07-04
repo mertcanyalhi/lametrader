@@ -1,4 +1,4 @@
-import type { Period } from './config.types.js';
+import type { Period } from '../config/config.types.js';
 import type { SymbolType } from './symbol.types.js';
 
 /**

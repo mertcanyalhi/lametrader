@@ -1,5 +1,5 @@
+import type { Period } from '../config/config.types.js';
 import type { BackfillRange, CandleBatch } from './candle.types.js';
-import type { Period } from './config.types.js';
 
 /**
  * The asset classes the platform can track. The value is the prefix of a

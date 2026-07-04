@@ -1,4 +1,4 @@
-import type { StateValue, StateValueType } from '../state.types.js';
+import type { StateValue, StateValueType } from '../state/state.types.js';
 
 /**
  * The kind of a {@link ConditionOperand} — what the operand reads from when

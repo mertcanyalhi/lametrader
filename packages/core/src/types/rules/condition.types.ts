@@ -1,4 +1,4 @@
-import type { Period } from '../config.types.js';
+import type { Period } from '../config/config.types.js';
 import type { ConditionOperand } from './operand.types.js';
 import type {
   ChannelOperator,

@@ -7,7 +7,7 @@ It performs no I/O and imports nothing outward — importing it never pulls doma
 
 ## What lives here
 
-- **Type declarations** — interfaces, type aliases, and discriminated unions in sibling `*.types.ts` modules (candles, indicators, profiles, rules, state, symbols, quotes, config, telegram destinations, the repository/port shapes, …).
+- **Type declarations** — interfaces, type aliases, and discriminated unions in `*.types.ts` modules grouped by context under `src/types/<context>/` (`market-data`, `config`, `indicators`, `profiles`, `state`, `notifications`, `rules`).
 - **Enums** — every shared enum, e.g. `Period`, `SymbolType`, `StateValueType`, `ProfileScope`, `TriggerKind`, `RuleEventType`, `PriceSource`, `FieldType`, `RuleScopeKind`, `NotificationChannel`, `ActionKind`.
 - **Shared runtime values** — the input-limit constants in `limits.ts` (`DESTINATION_NAME_MAX`, `CHAT_ID_MAX`, `BOT_TOKEN_MAX`, `RULE_NAME_MAX`, …) and the pure `periodMillis` helper.
 
