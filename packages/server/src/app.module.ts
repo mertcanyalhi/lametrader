@@ -12,6 +12,7 @@ import { LoggingModule } from './logging/logging.module.js';
 import { MongoModule } from './mongo/mongo.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { ProfilesModule } from './profiles/profiles.module.js';
+import { StateModule } from './state/state.module.js';
 import { SymbolsModule } from './symbols/symbols.module.js';
 
 /**
@@ -28,9 +29,11 @@ import { SymbolsModule } from './symbols/symbols.module.js';
  * {@link NotificationsModule} (`/config/notifications/telegram`),
  * {@link ProfilesModule} (`/profiles` + attached indicators),
  * {@link CandlesModule} (`/symbols/:id/candles` + `/backfill`; owns the shared
- * candle store), and {@link SymbolsModule} (`/instruments` + `/symbols`; imports
+ * candle store), {@link SymbolsModule} (`/instruments` + `/symbols`; imports
  * {@link ProfilesModule} for the symbol-removal → profile-prune cascade and
- * {@link CandlesModule} for the candle store).
+ * {@link CandlesModule} for the candle store), and {@link StateModule}
+ * (`/profiles/:profileId/state/global` + `/symbols/:id/state` reads; owns the
+ * shared state store).
  */
 @Module({
   imports: [
@@ -50,6 +53,7 @@ import { SymbolsModule } from './symbols/symbols.module.js';
     ProfilesModule,
     CandlesModule,
     SymbolsModule,
+    StateModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: DomainExceptionFilter },

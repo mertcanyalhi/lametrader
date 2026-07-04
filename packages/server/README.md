@@ -17,6 +17,7 @@ It runs alongside the still-deployed `@lametrader/api`; the remaining resource c
   It imports the `ProfilesModule` and injects its `ProfileService` as the symbol-removal → profile-prune cascade (ADR-0009): removing a symbol prunes it from every profile's `symbols` scope.
 - **Profiles** (`src/profiles`) — the `ProfilesModule`: `ProfileService` over a Mongoose-backed profile store (`profiles` collection), behind the `/profiles` controller (CRUD + the attached-indicators sub-resource). Validates a `symbols` scope against the watchlist and attached-indicator inputs against the indicator registry.
 - **Candles** (`src/candles`) — the `CandlesModule`: the single owner of the Mongoose-backed candle store (`candles` collection), binding and exporting the `CANDLE_REPOSITORY` token (the shared-persistence pattern; the symbols use-case imports it for quote enrichment + the remove cascade). It drives the `BackfillService` (reads) and `BackfillJobService` (async jobs) behind the `/symbols/:id/candles` + `/backfill` controller, and serves the per-job progress WebSocket via the `BackfillProgressGateway` (a raw `ws` server on the HTTP upgrade, matching the param'd URL).
+- **State** (`src/state`) — the `StateModule`: the single owner of the Mongoose-backed rule-engine state store (`state` collection), binding and exporting the `STATE_REPOSITORY` token (the shared-persistence pattern; per-`profileId` partitioning + the tagged-union `StateValue` round-trip preserved). It drives the read-side state controller (`GET /profiles/:profileId/state/global`, `GET /symbols/:id/state`) and the chart state-overlay routes (`GET /symbols/:id/state-keys`, `GET /symbols/:id/state/:key/series`) via the relocated `StateHistoryService`, which reads a symbol's mirrored rule events off the `watchlist` document's embedded `events` array. It imports the shared `WatchlistModule` for the watched-symbol 404 guard.
 - **Indicators** (`src/indicators`) — the `IndicatorsModule`: the shared, read-only `IndicatorRegistry` (catalog of the shipped `sma` / `vwma` modules, pure logic) built by `defaultIndicators` and exported for the profiles use-case to validate against. The indicators HTTP routes are added on top of this module in a later stage.
 - **Market data** (`src/market-data`) — the `MarketDataModule`: the registered discovery sources (Binance for crypto, Yahoo for stocks/funds/FX) bound to the `MARKET_DATA_SOURCES` token, fanned out by the symbols use-case (and, later, backfill/polling).
 - **HTTP contract** (`src/common`) — the keystone the whole API reuses: a global `DomainExceptionFilter` mapping domain errors to status codes with the uniform `{ error, fields? }` envelope, and a global `ValidationPipe` (class-validator DTOs) emitting the same envelope on validation failure.
@@ -56,6 +57,10 @@ It runs alongside the still-deployed `@lametrader/api`; the remaining resource c
 | `GET`    | `/profiles/:id/indicators/:instanceId`      | —                              | Get one attached instance. 200 / 404.                   |
 | `PUT`    | `/profiles/:id/indicators/:instanceId`      | `{ indicatorKey, inputs?, label? }` | Full-replace an instance. 200 / 400 / 404.         |
 | `DELETE` | `/profiles/:id/indicators/:instanceId`      | —                              | Detach an instance. **204** / 404.                      |
+| `GET`    | `/profiles/:profileId/state/global`         | —                              | The profile's current global state map (`{ [key]: StateValue }`; `{}` when empty). 200. |
+| `GET`    | `/symbols/:id/state?profileId=`             | —                              | The symbol's current state map for a profile. 200 / 400 / 404. |
+| `GET`    | `/symbols/:id/state-keys`                   | —                              | Alphabetical `[{ key, valueType }]` of every state key the symbol has been written under. 200 / 404. |
+| `GET`    | `/symbols/:id/state/:key/series?from=&to=`  | —                              | One key's `[{ ts, value }]` time-series for the symbol (ascending by `ts`). 200 / 404. |
 
 ### Config resource
 
@@ -86,7 +91,7 @@ With `?enrich=true`, each item carries a `quote` computed server-side from the s
 `quote` is **`null`** when the symbol does not watch `defaultPeriod` or has fewer than two candles stored there.
 Absent or `?enrich=false` returns the plain list.
 
-The remaining nested sub-resources of a symbol (`/state`, `/indicators`, `/rule-events`) are ported with their own feature modules in later stages; `/candles` + `/backfill` are served by the candles module below.
+The remaining nested sub-resources of a symbol (`/indicators`, `/rule-events`) are ported with their own feature modules in later stages; `/candles` + `/backfill` are served by the candles module below, and `/state` + `/state-keys` + `/state/:key/series` by the state module below.
 
 ### Candles & backfill resource
 
@@ -133,6 +138,22 @@ An instance is `{ id, indicatorKey, version, inputs, label?, summary? }`; `indic
 - `POST /profiles/:id/indicators` — attach (**201**); **400** on an unknown key or invalid inputs, **404** on an unknown profile.
 - `PUT /profiles/:id/indicators/:instanceId` — full-replace (200 / 400 / 404).
 - `DELETE /profiles/:id/indicators/:instanceId` — detach (**204** / 404).
+
+### State resource
+
+Read-side views of the rule-engine state — the per-profile global key/value store and the per-profile per-symbol state maps (the engine itself writes state through the orchestrator; these routes only read it back).
+State is **partitioned by profile** (#281): two profiles operating on the same symbol see isolated `state.*` namespaces, so every state read takes a `profileId`.
+A `StateValue` is a tagged scalar: `{ "type": "string" | "number" | "bool", "value": ... }` (ADR-0013).
+
+- `GET /profiles/:profileId/state/global` — the profile's current global state map (`{ [key]: StateValue }`; `{}` when empty). The profile need not exist — an unknown `profileId` returns `{}`.
+- `GET /symbols/:id/state?profileId=` — the symbol's current state map for a profile (`{}` when empty). Requires the symbol to be watched (**404** otherwise) and a `profileId` query (**400** when missing).
+
+**State history (chart overlays — #434).**
+Two read-only routes reconstruct a per-symbol state-key catalog and a per-key time-series from the already-persisted rule-event log (`StateSet` / `StateRemoved` entries on the watchlist document's `events` array).
+Both are watchlist-scoped (**404** on an unknown symbol id) and, unlike the maps above, are **not** partitioned by profile — `RuleEventEntry` carries no `profileId`, so every key written against the symbol is returned regardless of which profile's rule wrote it.
+
+- `GET /symbols/:id/state-keys` — the alphabetical `[{ key, valueType }]` catalog of every state key the symbol has been written under.
+- `GET /symbols/:id/state/:key/series?from=&to=` — one key's time-series: one `{ ts, value }` per `StateSet`, one `{ ts, value: null }` per `StateRemoved`, ascending by `ts`. `from` is inclusive, `to` is exclusive (both epoch ms; omit either side for an open bound).
 
 ## API documentation
 
