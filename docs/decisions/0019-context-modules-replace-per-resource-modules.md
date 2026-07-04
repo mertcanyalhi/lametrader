@@ -41,17 +41,24 @@ Two ADR-0018 conventions are amended to make this legal:
    A context module registers every Mongoose model its context owns via `MongooseModule.forFeature([...])` and binds every repository token its context owns (`CANDLE_REPOSITORY` + `WATCHLIST_REPOSITORY` in `MarketModule`; `RULE_REPOSITORY` + `STATE_REPOSITORY` in `AnalyticsModule`; `EVENT_LOG` and the config store in `CommonModule`).
    The shared-store discipline is unchanged in substance — one binding per store, exported once — only the module that hosts it is now the context, not the resource.
 
-2. **Internal files are grouped by technical role, not by resource.**
-   Within each module: `controllers/`, `services/`, `interfaces/` (repository/provider token interfaces + types migrated from the old `domain/`), `dto/`, `persistence/` (Mongoose schema + its repository adapter), and `domain/` for the pure functions migrated from the old top-level `domain/`.
-   The old top-level `src/domain/` is dissolved into the owning context's `interfaces/` and `domain/` folders — no file lands in two contexts.
+2. **Internal files are grouped by technical role, with cohesive subsystems preserved (a hybrid).**
+   The flat files in each module use role folders — `controllers/`, `services/`, `interfaces/` (repository/provider token interfaces + types), `dto/`, `persistence/` (Mongoose schema + its repository adapter), `testing/` (contract helpers).
+   But subsystems with real internal structure stay whole rather than being scattered across role folders: `market/backfill/` and `market/market-data/`, and — the decisive case — `analytics/rules/` (the 91-file rule engine: `operators/`, `bridges/`, `wire/`, `orchestrator/`, `dispatch/`) and `analytics/indicators/` (the indicator computation library).
+   `AnalyticsModule` therefore mixes role folders (from the role-split `profiles`/`state`) with subsystem folders (`rules/`, `indicators/`); this is deliberate — strict role-flattening would dump 60+ engine files into one `services/` and clash `rules`' and `state`'s identically-named `state-value.dto.ts`.
+
+The old top-level `src/domain/` — a backend-only kernel of domain error classes and pure functions — relocates whole to `src/common/domain/` rather than splitting across contexts.
+The global `DomainExceptionFilter` (in `CommonModule`) maps *every* context's errors, so it needs the full set; splitting the kernel across the feature contexts would force `Common → feature` reverse edges.
+Hosting it under the infra leaf keeps the `→ Common` direction intact, since every context already depends on `CommonModule`.
+Relatedly, the `CandleEvent` streaming contract moves to `@lametrader/core` (joining its sibling hub events `SymbolQuoteEvent` / `IndicatorStateEvent` / `RuleEventEntry`) so the shared stream hubs — now hosted by `CommonModule` — depend on no feature context.
 
 ## Considered Options
 
 - **Keep per-resource modules, flatten nothing** — the status quo; rejected because the boundaries the modules assert are not the boundaries the code has.
-- **Group internal files by sub-feature** (`market/candles/`, `market/symbols/`) — keeps each resource as a unit but reproduces the per-resource split one level down, defeating the consolidation; rejected in favor of role-based grouping.
+- **Group internal files by sub-feature throughout** (`market/candles/`, `market/symbols/`) — keeps each resource as a unit but reproduces the per-resource split one level down; rejected in favor of role-based grouping, except where a subsystem's own structure earns keeping it whole (the hybrid above).
+- **Strict role-flatten everything** — dumps the 91-file rule engine into one `services/` bucket and clashes the two `state-value.dto.ts` files; rejected once the rule engine's structure was visible.
 - **Three modules** (merge Market + Analytics into one `DomainModule`) — the honest response to the `symbols↔profiles` cycle, since it becomes intra-module DI with no `forwardRef`; rejected to keep the two domains legible as separate contexts, accepting one `forwardRef` as the price.
 - **Keep `config`/`notifications` as their own thin feature modules** — cleaner semantics (a controllered feature is not "common"), but adds two modules over the minimum and re-introduces the cross-context fan-in that folding them into the leaf removes; rejected for the lower count.
-- **Group internal files by sub-feature** — reproduces the per-resource split one level down; rejected in favor of role-based grouping.
+- **Split the domain kernel across contexts / move it to `core`** — purest, but the errors are backend-only (so `core` is wrong) and the global filter needs them all (so a per-context split cycles); rejected for hosting the kernel under the `CommonModule` leaf.
 
 ## Consequences
 

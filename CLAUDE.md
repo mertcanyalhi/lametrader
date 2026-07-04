@@ -7,15 +7,20 @@ This is a TypeScript monorepo for a quant trading platform for asset tracking, t
 Idiomatic NestJS, kept pragmatic.
 
 The backend is a single NestJS monolith (`@lametrader/backend`) on the Express platform.
-Structure follows Nest's grain, not a layered ring diagram: **feature modules**, each a controller → injectable service → injected repositories/providers, wired by dependency injection.
-See `docs/decisions/0018-nestjs-monolith-replaces-hexagonal-architecture.md` for why the earlier hexagonal multi-package layout (`core` → `engine` → `api`/`cli`/`web`) was collapsed into this — ADR-0018 supersedes ADR-0001.
+Structure follows Nest's grain, not a layered ring diagram: **four context modules**, each a set of controllers → injectable services → injected repositories/providers, wired by dependency injection.
+See `docs/decisions/0018-nestjs-monolith-replaces-hexagonal-architecture.md` for why the earlier hexagonal multi-package layout (`core` → `engine` → `api`/`cli`/`web`) was collapsed into a monolith (ADR-0018 supersedes ADR-0001), and `docs/decisions/0019-context-modules-replace-per-resource-modules.md` for why the initial per-resource modules were then consolidated into four bounded contexts (ADR-0019 amends ADR-0018).
 
-- **Feature modules** — one per resource (`ConfigModule`, `NotificationsModule`, `SymbolsModule`, `ProfilesModule`, `CandlesModule`, `StateModule`, `IndicatorsModule`, `RulesModule`, `StreamModule`, `MarketDataModule`, …).
-  A module owns its controller, its service, its DTOs, and its persistence, and imports the other modules it needs.
+- **Context modules** — four, grouped by what the code is *about*, not one per resource:
+  - **`CommonModule`** (`src/common/`) — the infra leaf every context depends on: the root Mongo connection, `nestjs-pino` logging, `/health`, the global HTTP contract (filter + pipe), the four shared stream hubs, the shared domain kernel (`common/domain/`), plus the shared *leaf* features that sit below more than one context — the `/config` settings feature, the `event-log` store, and telegram `notifications`.
+  - **`MarketModule`** (`src/market/`) — instruments and price data: symbols, market-data source adapters, the candle store, the watchlist store. Owns `CANDLE_REPOSITORY`, `WATCHLIST_REPOSITORY`, `MARKET_DATA_SOURCES`.
+  - **`AnalyticsModule`** (`src/analytics/`) — signals derived from market data: the indicator library, profiles, the rule engine + rule store, the state store. Owns `RULE_REPOSITORY`, `STATE_REPOSITORY`, `PROFILE_REPOSITORY`.
+  - **`DeliveryModule`** (`src/delivery/`) — the outbound surface: the multiplexed `/stream` WebSocket gateway.
+  The graph is `Delivery → Analytics → Market → Common`, with one accepted `forwardRef` between Market and Analytics (`symbols → profiles` prune cascade vs. analytics reading market data).
+  Internally each module groups flat files by technical role (`controllers/`, `services/`, `interfaces/`, `dto/`, `persistence/`, `testing/`) but keeps cohesive subsystems whole (`market/backfill/`, `market/market-data/`, `analytics/rules/`, `analytics/indicators/`).
 - **Dependency injection via provider tokens** — a service depends on an interface bound to a token (`CANDLE_REPOSITORY`, `WATCHLIST_REPOSITORY`, `STATE_REPOSITORY`, `RULE_REPOSITORY`, `EVENT_LOG`, `MARKET_DATA_SOURCES`, …), never on a concretion.
-  The owning module binds the token to its Mongoose adapter; a test overrides it with an in-memory fake through Nest's testing DI.
-- **Shared-persistence-module pattern** — a store used by more than one feature is owned by exactly one module that registers ONE Mongoose model and binds + **exports** ONE repository token (`WatchlistModule`, `CandlesModule`, `StateModule`, `EventLogModule`).
-  Every other module `imports` it and resolves the one shared instance; the owning module depends only on the root Mongo connection, so the module graph stays acyclic.
+  The owning context binds the token to its Mongoose adapter; a test overrides it with an in-memory fake through Nest's testing DI.
+- **Shared-store pattern** — a persistent store is bound + **exported** exactly once, by the context that owns it (a context may register several Mongoose models and bind several tokens — `MarketModule` owns candle + watchlist, `AnalyticsModule` owns rule + state + profile, `CommonModule` owns config + event-log).
+  Every other context `imports` the owner and resolves the one shared instance; a store consumed by more than one context (`event-log`, `config`) lives in the `CommonModule` leaf so the module graph stays acyclic.
 - **One global HTTP contract** — a global `DomainExceptionFilter` maps domain errors to status codes (`*NotFoundError` → 404, `*ConflictError` → 409, client-input `*Error` + DTO validation → 400, `MarketDataError` → 502, anything else → 500), and a global `ValidationPipe` validates every DTO at the boundary; both emit the uniform `{ error, fields? }` envelope.
 - **class-validator / class-transformer DTOs** — request/response shapes are DTO classes at the boundary; `@nestjs/swagger` generates the OpenAPI docs at `/docs` from the same classes.
 - **Nest batteries, not bespoke glue** — `@nestjs/config` (a validated env schema) for settings, `nestjs-pino` for structured logging, `@nestjs/schedule` for the polling loop, `@nestjs/mongoose` for persistence.
@@ -42,8 +47,9 @@ npm workspaces under `packages/*` — three packages:
 - **`server`** — the NestJS monolith backend: the whole HTTP + WebSocket surface, the use-cases, the market-data adapters, persistence, and the polling / rule-engine runtime.
 - **`web`** — the browser app (React + Vite).
 
-**Adding to the backend** — the server is one Nest app, so a new resource is a new **feature module** under `packages/backend/src/<resource>/` (controller, service, DTOs, Mongoose schema + repository), imported into `AppModule`.
-A new shared store follows the shared-persistence-module pattern above (own the model + a repository token in one module, export it, import it where needed).
+**Adding to the backend** — the backend is one Nest app of four context modules (`common`, `market`, `analytics`, `delivery`), so a new resource joins the context it belongs to rather than getting its own module: add its controller/service/DTOs/schema under that context's role folders (`controllers/`, `services/`, `interfaces/`, `dto/`, `persistence/`), or a subsystem folder if it has real internal structure, and wire it into that context's `*.module.ts`.
+A new store is bound + exported once from its owning context (or from `CommonModule` if more than one context reads it — the shared-store pattern above).
+A genuinely new bounded context (rare) is a new context module imported into `AppModule`; respect the `Delivery → Analytics → Market → Common` direction.
 There is no new-package ceremony for backend features.
 
 **Adding a shared type** — put it in `core` under `src/types/<context>/` as a `*.types.ts` (or an enum), grouped with its context (`market-data`, `config`, `indicators`, `profiles`, `state`, `notifications`, `rules`), and re-export the public surface from `packages/core/src/index.ts`, so both `server` and `web` import it from the package root.
