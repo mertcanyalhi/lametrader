@@ -10,8 +10,8 @@ import { WatchlistEntry } from './watchlist-entry.schema.js';
  *
  * Replaces the native-driver `MongoWatchlistRepository`; the shared
  * `runWatchlistRepositoryContract` suite proves the swap is behaviour-identical.
- * `add` uses a full document replacement (upsert) — the same whole-document
- * semantics as the old `replaceOne`.
+ * `add` upserts the symbol's own fields with `$set`/`$unset` (not a whole-document
+ * `replaceOne`) so it leaves the event log's co-located `events` array intact.
  */
 @Injectable()
 export class MongooseWatchlistRepository implements WatchlistRepository {
@@ -31,7 +31,17 @@ export class MongooseWatchlistRepository implements WatchlistRepository {
   }
 
   async add(symbol: WatchedSymbol): Promise<void> {
-    await this.model.replaceOne({ _id: symbol.id }, toDocument(symbol), { upsert: true }).exec();
+    // `$set` the symbol's own fields rather than `replaceOne`-ing the whole
+    // document: the event log stores its mirrored `events` array on this *same*
+    // `watchlist` document (a second model on the collection — ADR-0014), so a
+    // full replace clobbers a symbol's mirrored rule events. `$unset` the
+    // optional `currency` when absent so its removal still round-trips (matching
+    // the old whole-document replace); `events` is left untouched.
+    const { _id, ...fields } = toDocument(symbol);
+    const update = symbol.currency
+      ? { $set: fields }
+      : { $set: fields, $unset: { currency: 1 as const } };
+    await this.model.updateOne({ _id }, update, { upsert: true }).exec();
   }
 
   async remove(id: string): Promise<void> {

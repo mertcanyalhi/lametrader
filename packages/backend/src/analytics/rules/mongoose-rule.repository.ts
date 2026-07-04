@@ -79,7 +79,15 @@ export class MongooseRuleRepository implements RuleRepository {
   }
 
   async save(rule: Rule): Promise<void> {
-    await this.model.replaceOne({ _id: rule.id }, toDocument(rule), { upsert: true }).exec();
+    // `$set` the rule's own fields rather than `replaceOne`-ing the whole
+    // document: the event log stores its mirrored `events` array on this *same*
+    // `rules` document (a second model on the collection — ADR-0014), so a full
+    // replace clobbers the events a fire just pushed (the orchestrator saves the
+    // rule to stamp `lastFiredAt` right after appending its fire events). `$set`
+    // updates the rule fields and leaves `events` untouched; rule shapes are
+    // uniform (every field always present), so it stays a full field overwrite.
+    const { _id, ...fields } = toDocument(rule);
+    await this.model.updateOne({ _id }, { $set: fields }, { upsert: true }).exec();
   }
 
   async remove(id: string): Promise<void> {

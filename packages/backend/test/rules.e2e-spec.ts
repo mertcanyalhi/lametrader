@@ -18,7 +18,6 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { PROFILE_REPOSITORY } from '../src/analytics/interfaces/profile-repository.token.js';
-import { _setLogLevel } from '../src/analytics/rules/engine-log.js';
 import { RuleEngineService } from '../src/analytics/rules/rule-engine.service.js';
 import { AppModule } from '../src/app.module.js';
 import { WATCHLIST_REPOSITORY } from '../src/market/interfaces/watchlist-repository.token.js';
@@ -149,7 +148,6 @@ describe('/rules (e2e)', () => {
     // 4) Compose the dormant engine and drive a tick via a poll — the candle's
     // close is the tick price.
     const wired = await ruleEngine.start();
-    _setLogLevel('trace'); // DIAG(temporary): surface the dispatcher_decision trace in CI
     wired.barBridge.handleCandle({
       id: SYMBOL_ID,
       period: '1m',
@@ -157,7 +155,6 @@ describe('/rules (e2e)', () => {
       final: false,
     });
     await wired.drain();
-    _setLogLevel('info'); // DIAG(temporary)
 
     // 5) Event logs read — a Fired umbrella + the StateSet action, newest-first.
     const ruleEvents = await request(app.getHttpServer()).get(`/rules/${ruleId}/events`);
