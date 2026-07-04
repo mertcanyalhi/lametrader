@@ -1,20 +1,15 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule as NestConfigModule } from '@nestjs/config';
-import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CandlesModule } from './candles/candles.module.js';
-import { DomainExceptionFilter } from './common/domain-exception.filter.js';
-import { buildValidationPipe } from './common/validation.pipe.js';
+import { CommonModule } from './common/common.module.js';
 import { ConfigModule } from './config/config.module.js';
 import { validateEnv } from './config/env.validation.js';
-import { HealthModule } from './health/health.module.js';
 import { IndicatorsModule } from './indicators/indicators.module.js';
-import { LoggingModule } from './logging/logging.module.js';
-import { MongoModule } from './mongo/mongo.module.js';
+import { LiveCascadeService } from './live-cascade.service.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { ProfilesModule } from './profiles/profiles.module.js';
 import { RulesModule } from './rules/rules.module.js';
-import { RuntimeModule } from './runtime/runtime.module.js';
 import { StateModule } from './state/state.module.js';
 import { StreamModule } from './stream/stream.module.js';
 import { SymbolsModule } from './symbols/symbols.module.js';
@@ -45,11 +40,13 @@ import { SymbolsModule } from './symbols/symbols.module.js';
  * multiplexed `GET (WS) /stream` gateway carrying candle / indicator / quote /
  * rule-event subscriptions, with the producer→hub topology wired but dormant).
  *
- * {@link RuntimeModule} sits above the producer modules: it hosts the
- * {@link import('./runtime/live-cascade.service.js').LiveCascadeService} that
- * `main.ts` starts once the server is listening, wiring the poll→producers +
- * indicator→rule cascades and starting the loop. The module starts nothing on
- * import, so this graph stays dormant when the e2e suites build it.
+ * The {@link LiveCascadeService} is provided here at the composition root — not
+ * in a context module — because it injects producers from every context, so it
+ * cannot sit in the leaf {@link CommonModule} without reversing the module
+ * graph. `main.ts` resolves it and starts it once the server is listening,
+ * wiring the poll→producers + indicator→rule cascades and starting the loop.
+ * Nothing starts on import, so this graph stays dormant when the e2e suites
+ * build it.
  */
 @Module({
   imports: [
@@ -61,9 +58,7 @@ import { SymbolsModule } from './symbols/symbols.module.js';
     // The dynamic-timeout registry the (dormant) candle PollingService drives;
     // `forRoot` registers the global SchedulerRegistry. No decorator-based jobs.
     ScheduleModule.forRoot(),
-    LoggingModule,
-    MongoModule,
-    HealthModule,
+    CommonModule,
     ConfigModule,
     NotificationsModule,
     ProfilesModule,
@@ -73,11 +68,7 @@ import { SymbolsModule } from './symbols/symbols.module.js';
     IndicatorsModule,
     RulesModule,
     StreamModule,
-    RuntimeModule,
   ],
-  providers: [
-    { provide: APP_FILTER, useClass: DomainExceptionFilter },
-    { provide: APP_PIPE, useFactory: buildValidationPipe },
-  ],
+  providers: [LiveCascadeService],
 })
 export class AppModule {}

@@ -25,7 +25,7 @@ import {
   TelegramDestinationError,
   TelegramDestinationNotFoundError,
 } from '../domain/telegram-destination.js';
-import type { ErrorResponse, FieldError } from './error-response.types.js';
+import type { ErrorResponse, FieldError } from './interfaces/error-response.types.js';
 
 /**
  * The narrow slice of the platform HTTP response this filter drives — just

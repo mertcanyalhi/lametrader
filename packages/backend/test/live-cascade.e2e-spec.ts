@@ -23,8 +23,8 @@ import { CANDLE_REPOSITORY } from '../src/candles/candle-repository.token.js';
 import { PollingService } from '../src/candles/polling.service.js';
 import { ConfigService } from '../src/config/config.service.js';
 import { ConfigEntry } from '../src/config/config-entry.schema.js';
+import { LiveCascadeService } from '../src/live-cascade.service.js';
 import { MARKET_DATA_SOURCES } from '../src/market-data/market-data-source.token.js';
-import { LiveCascadeService } from '../src/runtime/live-cascade.service.js';
 import { WatchlistEntry } from '../src/watchlist/watchlist-entry.schema.js';
 import { WATCHLIST_REPOSITORY } from '../src/watchlist/watchlist-repository.token.js';
 

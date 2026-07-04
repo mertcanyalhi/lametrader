@@ -1,10 +1,10 @@
 import { Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
-import { PollingService } from '../candles/polling.service.js';
-import type { CandleEvent } from '../candles/polling.service.types.js';
-import { IndicatorService } from '../indicators/indicator.service.js';
-import { RuleEngineService } from '../rules/rule-engine.service.js';
-import { feedCandleIntoEngine, type WiredRuleEngine } from '../rules/wire/wire-rule-engine.js';
-import { QuoteStreamService } from '../stream/quote-stream.service.js';
+import { PollingService } from './candles/polling.service.js';
+import type { CandleEvent } from './candles/polling.service.types.js';
+import { IndicatorService } from './indicators/indicator.service.js';
+import { RuleEngineService } from './rules/rule-engine.service.js';
+import { feedCandleIntoEngine, type WiredRuleEngine } from './rules/wire/wire-rule-engine.js';
+import { QuoteStreamService } from './stream/quote-stream.service.js';
 
 /**
  * Activates the live producers at cutover and reproduces the old

@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
-import { HealthService } from './health.service.js';
-import type { HealthStatus } from './health.types.js';
+import type { HealthStatus } from '../interfaces/health.types.js';
+import { HealthService } from '../services/health.service.js';
 
 /**
  * Serves `GET /health` — the platform's liveness probe.

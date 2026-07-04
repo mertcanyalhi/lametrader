@@ -6,26 +6,26 @@ import {
   type WatchedSymbol,
 } from '@lametrader/core';
 import { SchedulerRegistry } from '@nestjs/schedule';
-import { InMemoryCandleRepository } from '../candles/in-memory-candle.repository.js';
-import { PollingService } from '../candles/polling.service.js';
-import type { CandleEvent } from '../candles/polling.service.types.js';
-import { ConfigService } from '../config/config.service.js';
-import { InMemoryConfigRepository } from '../config/in-memory-config.repository.js';
-import { InMemoryEventLog } from '../event-log/in-memory-event-log.js';
-import { defaultIndicators } from '../indicators/default-indicators.js';
-import { IndicatorService } from '../indicators/indicator.service.js';
-import { InMemoryMarketDataSource } from '../market-data/in-memory-market-data-source.js';
-import { InMemoryNotifier } from '../notifications/in-memory-notifier.js';
-import { BarLifecycleBridge } from '../rules/bridges/bar-lifecycle-bridge.js';
-import { IndicatorCascadeBridge } from '../rules/bridges/indicator-cascade-bridge.js';
-import { InMemoryRuleRepository } from '../rules/in-memory-rule.repository.js';
-import { RuleEngineService } from '../rules/rule-engine.service.js';
-import { LiveEvaluationLookups } from '../rules/wire/live-evaluation-lookups.js';
-import type { WiredRuleEngine } from '../rules/wire/wire-rule-engine.js';
-import { InMemoryStateRepository } from '../state/in-memory-state.repository.js';
-import { QuoteStreamService } from '../stream/quote-stream.service.js';
-import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
+import { InMemoryCandleRepository } from './candles/in-memory-candle.repository.js';
+import { PollingService } from './candles/polling.service.js';
+import type { CandleEvent } from './candles/polling.service.types.js';
+import { ConfigService } from './config/config.service.js';
+import { InMemoryConfigRepository } from './config/in-memory-config.repository.js';
+import { InMemoryEventLog } from './event-log/in-memory-event-log.js';
+import { defaultIndicators } from './indicators/default-indicators.js';
+import { IndicatorService } from './indicators/indicator.service.js';
 import { LiveCascadeService } from './live-cascade.service.js';
+import { InMemoryMarketDataSource } from './market-data/in-memory-market-data-source.js';
+import { InMemoryNotifier } from './notifications/in-memory-notifier.js';
+import { BarLifecycleBridge } from './rules/bridges/bar-lifecycle-bridge.js';
+import { IndicatorCascadeBridge } from './rules/bridges/indicator-cascade-bridge.js';
+import { InMemoryRuleRepository } from './rules/in-memory-rule.repository.js';
+import { RuleEngineService } from './rules/rule-engine.service.js';
+import { LiveEvaluationLookups } from './rules/wire/live-evaluation-lookups.js';
+import type { WiredRuleEngine } from './rules/wire/wire-rule-engine.js';
+import { InMemoryStateRepository } from './state/in-memory-state.repository.js';
+import { QuoteStreamService } from './stream/quote-stream.service.js';
+import { InMemoryWatchlistRepository } from './watchlist/in-memory-watchlist.repository.js';
 
 /** A watched crypto symbol on the 1h period. */
 const BTC: WatchedSymbol = {

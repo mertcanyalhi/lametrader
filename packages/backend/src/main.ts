@@ -6,7 +6,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module.js';
 import type { AppConfig } from './config/app-config.types.js';
-import { LiveCascadeService } from './runtime/live-cascade.service.js';
+import { LiveCascadeService } from './live-cascade.service.js';
 import { setupSwagger } from './swagger.js';
 
 /**

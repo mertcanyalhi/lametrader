@@ -1,6 +1,6 @@
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import type { ValidationError } from 'class-validator';
-import type { FieldError } from './error-response.types.js';
+import type { FieldError } from './interfaces/error-response.types.js';
 
 /**
  * Build the global {@link ValidationPipe} that validates every DTO at the

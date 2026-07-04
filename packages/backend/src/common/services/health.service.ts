@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { type HealthStatus, ServiceStatus } from './health.types.js';
+import { type HealthStatus, ServiceStatus } from '../interfaces/health.types.js';
 
 /**
  * Produces the liveness payload served by {@link HealthController}.
