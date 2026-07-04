@@ -19,6 +19,8 @@ It runs alongside the still-deployed `@lametrader/api`; the remaining resource c
 - **Candles** (`src/candles`) — the `CandlesModule`: the single owner of the Mongoose-backed candle store (`candles` collection), binding and exporting the `CANDLE_REPOSITORY` token (the shared-persistence pattern; the symbols use-case imports it for quote enrichment + the remove cascade). It drives the `BackfillService` (reads) and `BackfillJobService` (async jobs) behind the `/symbols/:id/candles` + `/backfill` controller, and serves the per-job progress WebSocket via the `BackfillProgressGateway` (a raw `ws` server on the HTTP upgrade, matching the param'd URL).
 - **State** (`src/state`) — the `StateModule`: the single owner of the Mongoose-backed rule-engine state store (`state` collection), binding and exporting the `STATE_REPOSITORY` token (the shared-persistence pattern; per-`profileId` partitioning + the tagged-union `StateValue` round-trip preserved). It drives the read-side state controller (`GET /profiles/:profileId/state/global`, `GET /symbols/:id/state`) and the chart state-overlay routes (`GET /symbols/:id/state-keys`, `GET /symbols/:id/state/:key/series`) via the relocated `StateHistoryService`, which reads a symbol's mirrored rule events off the `watchlist` document's embedded `events` array. It imports the shared `WatchlistModule` for the watched-symbol 404 guard.
 - **Indicators** (`src/indicators`) — the `IndicatorsModule`: the shared, read-only `IndicatorRegistry` (catalog of the shipped `sma` / `vwma` modules, pure logic) built by `defaultIndicators` and exported for the profiles use-case to validate against. It drives the indicators controller — the read-only catalog (`GET /indicators`, `GET /indicators/:key`) straight off the registry, and the ad-hoc compute route (`GET /symbols/:id/indicators/:key`) over the relocated `IndicatorService` (explicit-composition contract kept as-is, ADR-0010). Compute reads a symbol's stored candles and guards on the watchlist, so this module imports the shared `CandlesModule` (`CANDLE_REPOSITORY`) and `WatchlistModule` (`WATCHLIST_REPOSITORY`).
+- **Event log** (`src/event-log`) — the `EventLogModule`: the single owner of the mirrored rule-event log (ADR-0014), binding and exporting the full `EVENT_LOG` port (a Mongoose adapter over the `rules` and `watchlist` documents' embedded `events` arrays) and the narrow `SYMBOL_EVENT_LOG` read port aliased onto it. The state resource's `StateHistoryService` consumes the narrow port; the rules resource appends and reads through the full one.
+- **Rules** (`src/rules`) — the `RulesModule`: the single owner of the Mongoose-backed rule store (`rules` collection), binding and exporting the `RULE_REPOSITORY` token (the greenfield v2 rule-shape round-trip preserved, ADR-0016). It drives the `/rules` CRUD controller plus the chart-facing event reads (`/rules/:id/events`, `/symbols/:id/rule-events[/count]`) over the relocated `RuleService`, and hosts the whole relocated rule engine (orchestrator, dispatcher, action runner, bridges, operators, evaluation context) behind a **dormant** `RuleEngineService` — constructed with every collaborator injected but never started at boot (like the polling loop); the cutover stage (#490) drives `start()` via a lifecycle hook.
 - **Market data** (`src/market-data`) — the `MarketDataModule`: the registered discovery sources (Binance for crypto, Yahoo for stocks/funds/FX) bound to the `MARKET_DATA_SOURCES` token, fanned out by the symbols use-case (and, later, backfill/polling).
 - **HTTP contract** (`src/common`) — the keystone the whole API reuses: a global `DomainExceptionFilter` mapping domain errors to status codes with the uniform `{ error, fields? }` envelope, and a global `ValidationPipe` (class-validator DTOs) emitting the same envelope on validation failure.
 - **Logging** (`src/logging`) — [`nestjs-pino`](https://github.com/iamolegga/nestjs-pino) for request and application logging.
@@ -64,6 +66,14 @@ It runs alongside the still-deployed `@lametrader/api`; the remaining resource c
 | `GET`    | `/indicators`                               | —                              | List every registered indicator definition (descriptors only). 200. |
 | `GET`    | `/indicators/:key`                          | —                              | Get one definition by key. 200 / 404.                   |
 | `GET`    | `/symbols/:id/indicators/:key?period=&…`    | —                              | Compute the indicator over the symbol's stored candles. 200 / 400 / 404. |
+| `GET`    | `/rules?profileId=&symbolId=&enabled=`      | —                              | List rules, filterable; sorted by `order`. 200.         |
+| `POST`   | `/rules`                                    | Rule input                     | Create a rule. **201** / 400 (incl. tick-eligibility `fields[]`). |
+| `GET`    | `/rules/:id`                                | —                              | Get one rule by id. 200 / 404.                          |
+| `PATCH`  | `/rules/:id`                                | Partial rule input             | Partial merge; re-validates the merged rule. 200 / 400 / 404. |
+| `DELETE` | `/rules/:id`                                | —                              | Delete a rule. **204** / 404.                           |
+| `GET`    | `/rules/:id/events?limit=&before=&from=&to=` | —                             | One rule's mirrored events log (newest-first). 200 / 404. |
+| `GET`    | `/symbols/:id/rule-events?limit=&before=&from=&to=&chartStates=` | —          | One symbol's mirrored events log (newest-first), optionally `chartStates`-filtered. 200 / 400. |
+| `GET`    | `/symbols/:id/rule-events/count`            | —                              | `{ count }` of the symbol's mirrored events. 200.       |
 
 ### Config resource
 
@@ -178,6 +188,24 @@ The response is `{ indicatorKey, version, period, state }`, where `state` is the
 
 - **404** when the symbol isn't on the watchlist or the indicator key is unknown.
 - **400** on invalid inputs (out-of-range, wrong type) or an asset-class mismatch (e.g. an FX symbol with a volume-based indicator).
+
+### Rules resource
+
+CRUD over the greenfield v2 rules (ADR-0016) plus the chart-facing read of each rule's / symbol's mirrored event log.
+A rule pairs a `scope` (`Symbol` / `Symbols` / `AllSymbols`), a `condition` tree, a `trigger` cadence, and one or more `actions` (notification / state writes); the server stamps `id`, `createdAt`, `updatedAt`.
+
+- `GET /rules?profileId=&symbolId=&enabled=` — list, each filter independent (all AND together), sorted by `order`.
+- `POST /rules` — create. **201** with the stamped rule. A tick-cadence trigger (`EveryTime` / `Once` / `OncePerBar`) on a scope whose symbol isn't watched is rejected **400** with a `fields[]` entry per unwatched symbol (`{ path: "scope.symbolId", message: "symbol not on watchlist: <id>" }`); an invalid condition or an unwatched condition interval is a **400** `{ error }`.
+- `GET /rules/:id` — get one (**404** on an unknown id).
+- `PATCH /rules/:id` — partial merge, re-validated against the same boundary (**200** / 400 / 404).
+- `DELETE /rules/:id` — delete (**204** / 404).
+
+**Event logs (chart markers — ADR-0014).**
+Each fire mirrors its entries onto both the rule and the affected symbol; reads are newest-first and paginated.
+
+- `GET /rules/:id/events?limit=&before=&from=&to=` — one rule's events log (**404** on an unknown rule). `limit` defaults to 50 (max 500); `from` is inclusive and `to` / `before` are exclusive bounds on the entry's source `ts` (epoch ms).
+- `GET /symbols/:id/rule-events?limit=&before=&from=&to=&chartStates=` — one symbol's mirrored events log. `chartStates` is a JSON-encoded array of state keys (e.g. `["price:trend"]`): when present the read keeps only `stateSet` / `stateRemoved` entries whose `key` is in the list (`[]` ⇒ none); when absent the read is unfiltered. A malformed `chartStates` or a non-numeric `from` / `to` is a **400**.
+- `GET /symbols/:id/rule-events/count` — `{ count }` of the symbol's mirrored events (backs the chart's Events badge).
 
 ## API documentation
 
