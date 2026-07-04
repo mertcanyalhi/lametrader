@@ -126,8 +126,8 @@ All routine actions go through these scripts — don't invoke `tsc` / `vitest` /
 | `npm run coverage`                 | Vitest unit + coverage                                     |
 | `npm run check`                    | typecheck + lint + Vitest unit + server Jest unit          |
 | `npm run check:full`               | check + both e2e tiers (CI on PR)                          |
-| `npm run server`                   | start the server (`@lametrader/server`)                    |
-| `npm run web`                      | start the web dev server (Vite)                            |
+| `npm run be:start` / `be:start:dev`| start the backend built / in watch mode (`@lametrader/server`) |
+| `npm run fe:start` / `fe:start:dev`| serve the built web app / start the Vite dev server        |
 | `npm run infra:up/down/logs/reset` | docker compose infra (Mongo)                               |
 | `npm run app:up/down/logs/build`   | docker compose full app profile (mongo + server + web)     |
 

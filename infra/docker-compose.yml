@@ -5,7 +5,7 @@
 #   docker compose -f infra/docker-compose.yml --profile app   up -d   # + server + web
 #
 # The default (no profile) brings up just MongoDB, keeping the unit-test +
-# `npm run web` loop unchanged. The `app` profile is the full-stack one — the
+# `npm run fe:start:dev` loop unchanged. The `app` profile is the full-stack one — the
 # NestJS server and web both built from the workspace Dockerfiles.
 #
 # All settings have sane defaults, so it runs without an .env file. Copy

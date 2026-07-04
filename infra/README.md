@@ -23,7 +23,7 @@ Two modes from the repo root:
 
 ```bash
 # --- infra only (the TDD loop) -----------------------------------------------
-npm run infra:up        # MongoDB only, detached. Use with `npm run server` etc.
+npm run infra:up        # MongoDB only, detached. Use with `npm run be:start:dev` etc.
 npm run infra:logs
 npm run infra:down      # stop (keeps data)
 npm run infra:reset     # stop AND delete the data volume
