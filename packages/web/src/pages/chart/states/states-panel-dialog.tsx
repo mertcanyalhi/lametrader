@@ -44,7 +44,7 @@ export interface StatesPanelDialogProps {
 }
 
 /**
- * The chart's bottom-bar State changes panel — mirrors the Indicators button + dialog.
+ * The chart's bottom-bar States panel — mirrors the Indicators button + dialog.
  *
  * Trigger renders with the count of currently overlaid keys; clicking opens a
  * dialog whose body is a search input and a scrollable list of one checkbox per
@@ -72,7 +72,7 @@ export function StatesPanelDialog({
     setSelected(profileId ? getStoredStateOverlays(profileId, symbolId) : []);
   }, [profileId, symbolId]);
 
-  const triggerAriaLabel = profileId ? `State changes (${selected.length})` : 'State changes';
+  const triggerAriaLabel = profileId ? `States (${selected.length})` : 'States';
 
   function applySelection(next: string[]): void {
     setSelected(next);
@@ -90,7 +90,7 @@ export function StatesPanelDialog({
           aria-label={triggerAriaLabel}
         >
           <Layers size={14} aria-hidden="true" />
-          State changes
+          States
           {profileId ? (
             <Badge variant="soft" color="gray" radius="full">
               {selected.length}

@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Debug the API, running engine/core from source via tsx + tsconfig.dev.json
+      // (breakpoints work in packages/api, packages/engine, packages/core).
+      "type": "node",
+      "request": "launch",
+      "name": "Debug API",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/tsx",
+      "runtimeArgs": ["--tsconfig", "tsconfig.dev.json"],
+      "program": "${workspaceFolder}/packages/api/src/main.ts",
+      "cwd": "${workspaceFolder}/packages/api",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        // Uncomment to watch the poll trace: "LOG_SCOPES": "connect:trace"
+      }
+    }
+  ]
+}

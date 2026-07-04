@@ -154,7 +154,7 @@ export function CandleChart({
   hasMore: boolean;
   overlays?: ReadonlyArray<IndicatorOverlay>;
   /**
-   * One row per state key currently selected on the chart's State changes panel —
+   * One row per state key currently selected on the chart's States panel —
    * rendered as a step-line (numeric) or markers (bool/string/enum) on the
    * candle pane.
    */

@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@lametrader/core": ["../core/src/index.ts"],
+      "@lametrader/engine": ["../engine/src/index.ts"]
+    }
+  }
+}

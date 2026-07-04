@@ -113,24 +113,24 @@ describe('StatesPanelDialog', () => {
     );
   }
 
-  it('exposes "State changes" as both the trigger accessible name and visible label when no profile is selected', async () => {
+  it('exposes "States" as both the trigger accessible name and visible label when no profile is selected', async () => {
     profiles = [];
     renderPanel();
 
-    const button = await screen.findByRole('button', { name: 'State changes' });
+    const button = await screen.findByRole('button', { name: 'States' });
     expect({
       accessibleName: button.getAttribute('aria-label'),
       visibleLabel: button.textContent,
-    }).toEqual({ accessibleName: 'State changes', visibleLabel: 'State changes' });
+    }).toEqual({ accessibleName: 'States', visibleLabel: 'States' });
   });
 
-  it('labels the trigger "State changes (N)" with the count of currently overlaid keys for (profileId, symbolId)', async () => {
+  it('labels the trigger "States (N)" with the count of currently overlaid keys for (profileId, symbolId)', async () => {
     setStoredProfileId(PROFILE.id);
     setStoredStateOverlays(PROFILE.id, SYMBOL_ID, ['cooldown', 'last_signal']);
     renderPanel();
 
     await waitFor(() =>
-      expect(screen.queryByRole('button', { name: 'State changes (2)' })).not.toBeNull(),
+      expect(screen.queryByRole('button', { name: 'States (2)' })).not.toBeNull(),
     );
   });
 
@@ -138,7 +138,7 @@ describe('StatesPanelDialog', () => {
     setStoredProfileId(PROFILE.id);
     renderPanel();
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'State changes (0)' }));
+    await user.click(await screen.findByRole('button', { name: 'States (0)' }));
 
     const dialog = await screen.findByRole('dialog');
     expect({
@@ -150,7 +150,7 @@ describe('StatesPanelDialog', () => {
     profiles = [];
     renderPanel();
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'State changes' }));
+    await user.click(await screen.findByRole('button', { name: 'States' }));
 
     const dialog = await screen.findByRole('dialog');
     expect({
@@ -164,7 +164,7 @@ describe('StatesPanelDialog', () => {
     setStoredProfileId(PROFILE.id);
     renderPanel();
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'State changes (0)' }));
+    await user.click(await screen.findByRole('button', { name: 'States (0)' }));
 
     const dialog = await screen.findByRole('dialog');
     await within(dialog).findByRole('textbox', { name: 'Search state keys' });
@@ -180,7 +180,7 @@ describe('StatesPanelDialog', () => {
     setStoredProfileId(PROFILE.id);
     renderPanel();
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'State changes (0)' }));
+    await user.click(await screen.findByRole('button', { name: 'States (0)' }));
 
     const dialog = await screen.findByRole('dialog');
     await within(dialog).findByRole('checkbox', { name: 'cooldown' });
@@ -195,7 +195,7 @@ describe('StatesPanelDialog', () => {
     const onChange = vi.fn<(next: string[]) => void>();
     renderPanel(SymbolType.Crypto, { onChange });
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'State changes (0)' }));
+    await user.click(await screen.findByRole('button', { name: 'States (0)' }));
 
     const dialog = await screen.findByRole('dialog');
     await user.click(await within(dialog).findByRole('checkbox', { name: 'cooldown' }));
