@@ -2,9 +2,9 @@
 
 The backend monolith — an idiomatic [NestJS](https://nestjs.com) application on the Express platform.
 
-This package is stage 3 of the NestJS migration (see `specs/nestjs-monolith-migration.spec.md` and ADR-0018).
-On top of the cross-cutting shell (validated configuration, structured logging, the root Mongo connection, a health endpoint) it serves the first ported resources — the **config + Telegram notifications** surface, the **symbols + instruments** surface, the **profiles** surface (with its attached-indicators sub-resource), and the **candles + backfill** surface (reads, the async backfill job, and its per-job progress WebSocket) — and establishes the app-wide HTTP contract every later resource reuses.
-It runs alongside the still-deployed `@lametrader/api`; the remaining resource controllers and the cutover that starts the polling loop are done in later stages.
+This package is **the platform's backend** — the product of the NestJS migration (see `specs/nestjs-monolith-migration.spec.md` and ADR-0018), and the only deployed API since the cutover retired the old Fastify `api` package.
+On top of the cross-cutting shell (validated configuration, structured logging, the root Mongo connection, a health endpoint) it serves the whole HTTP + WebSocket surface — **config + Telegram notifications**, **symbols + instruments**, **profiles** (with attached indicators), **candles + backfill** (reads, the async backfill job, and its per-job progress WebSocket), **state + state history**, **indicators**, **rules + the live rule engine**, and the multiplexed **`/stream`** live WebSocket — all behind one app-wide HTTP contract.
+On boot it also runs the continuous market-data **poll loop** that drives the live streams and rule evaluation: `main.ts` starts the runtime activation once the server is listening (see **Runtime** below), the parity of the old `api/main.ts` `polling.start()` after `listen`.
 
 ## What's here
 
@@ -20,9 +20,10 @@ It runs alongside the still-deployed `@lametrader/api`; the remaining resource c
 - **State** (`src/state`) — the `StateModule`: the single owner of the Mongoose-backed rule-engine state store (`state` collection), binding and exporting the `STATE_REPOSITORY` token (the shared-persistence pattern; per-`profileId` partitioning + the tagged-union `StateValue` round-trip preserved). It drives the read-side state controller (`GET /profiles/:profileId/state/global`, `GET /symbols/:id/state`) and the chart state-overlay routes (`GET /symbols/:id/state-keys`, `GET /symbols/:id/state/:key/series`) via the relocated `StateHistoryService`, which reads a symbol's mirrored rule events off the `watchlist` document's embedded `events` array. It imports the shared `WatchlistModule` for the watched-symbol 404 guard.
 - **Indicators** (`src/indicators`) — the `IndicatorsModule`: the shared, read-only `IndicatorRegistry` (catalog of the shipped `sma` / `vwma` modules, pure logic) built by `defaultIndicators` and exported for the profiles use-case to validate against. It drives the indicators controller — the read-only catalog (`GET /indicators`, `GET /indicators/:key`) straight off the registry, and the ad-hoc compute route (`GET /symbols/:id/indicators/:key`) over the relocated `IndicatorService` (explicit-composition contract kept as-is, ADR-0010). Compute reads a symbol's stored candles and guards on the watchlist, so this module imports the shared `CandlesModule` (`CANDLE_REPOSITORY`) and `WatchlistModule` (`WATCHLIST_REPOSITORY`).
 - **Event log** (`src/event-log`) — the `EventLogModule`: the single owner of the mirrored rule-event log (ADR-0014), binding and exporting the full `EVENT_LOG` port (a Mongoose adapter over the `rules` and `watchlist` documents' embedded `events` arrays) and the narrow `SYMBOL_EVENT_LOG` read port aliased onto it. The state resource's `StateHistoryService` consumes the narrow port; the rules resource appends and reads through the full one.
-- **Rules** (`src/rules`) — the `RulesModule`: the single owner of the Mongoose-backed rule store (`rules` collection), binding and exporting the `RULE_REPOSITORY` token (the greenfield v2 rule-shape round-trip preserved, ADR-0016). It drives the `/rules` CRUD controller plus the chart-facing event reads (`/rules/:id/events`, `/symbols/:id/rule-events[/count]`) over the relocated `RuleService`, and hosts the whole relocated rule engine (orchestrator, dispatcher, action runner, bridges, operators, evaluation context) behind a **dormant** `RuleEngineService` — constructed with every collaborator injected but never started at boot (like the polling loop); the cutover stage (#490) drives `start()` via a lifecycle hook.
-- **Stream** (`src/stream`) — the `StreamModule`: the multiplexed `GET (WS) /stream` gateway carrying candle / indicator / quote / rule-event subscriptions on one socket. Like the backfill-progress gateway it drives a raw `ws` server on the HTTP `upgrade`, matching **only** `/stream` (ignoring every other upgrade) so both raw-`ws` gateways coexist on the one server. It hosts the relocated `SubscriptionRegistry` + the four subscription kinds + the relocated `QuoteStreamService`, and completes the producer→hub topology — `PollingService.onCandle`, `IndicatorService.onState`, `QuoteStreamService.onQuote`, and the event log's symbol-side `onAppend` (via a `RuleEventStreamBridge`) publish to four shared `StreamHub`s in a dependency-free `StreamHubsModule` that the gateway subscribes to. Every producer stays **dormant** at boot (nothing polls, computes, or appends); the cutover stage (#490) starts them.
-- **Market data** (`src/market-data`) — the `MarketDataModule`: the registered discovery sources (Binance for crypto, Yahoo for stocks/funds/FX) bound to the `MARKET_DATA_SOURCES` token, fanned out by the symbols use-case (and, later, backfill/polling).
+- **Rules** (`src/rules`) — the `RulesModule`: the single owner of the Mongoose-backed rule store (`rules` collection), binding and exporting the `RULE_REPOSITORY` token (the greenfield v2 rule-shape round-trip preserved, ADR-0016). It drives the `/rules` CRUD controller plus the chart-facing event reads (`/rules/:id/events`, `/symbols/:id/rule-events[/count]`) over the relocated `RuleService`, and hosts the whole relocated rule engine (orchestrator, dispatcher, action runner, bridges, operators, evaluation context) behind a `RuleEngineService` — constructed idle in the module (every collaborator injected, nothing composed), then composed + started by the runtime activation (`LiveCascadeService`, from `main.ts` after `listen`), which also feeds it each polled candle and indicator-state event.
+- **Stream** (`src/stream`) — the `StreamModule`: the multiplexed `GET (WS) /stream` gateway carrying candle / indicator / quote / rule-event subscriptions on one socket. Like the backfill-progress gateway it drives a raw `ws` server on the HTTP `upgrade`, matching **only** `/stream` (ignoring every other upgrade) so both raw-`ws` gateways coexist on the one server. It hosts the relocated `SubscriptionRegistry` + the four subscription kinds + the relocated `QuoteStreamService`, and completes the producer→hub topology — `PollingService.onCandle`, `IndicatorService.onState`, `QuoteStreamService.onQuote`, and the event log's symbol-side `onAppend` (via a `RuleEventStreamBridge`) publish to four shared `StreamHub`s in a dependency-free `StreamHubsModule` that the gateway subscribes to. The runtime activation (`LiveCascadeService`) drives every producer: the poll loop fans each candle into the indicator, quote, and rule-engine producers, which publish onto their hubs.
+- **Market data** (`src/market-data`) — the `MarketDataModule`: the registered discovery sources (Binance for crypto, Yahoo for stocks/funds/FX) bound to the `MARKET_DATA_SOURCES` token, fanned out by the symbols use-case, backfill, and the poll loop.
+- **Runtime** (`src/runtime`) — the `RuntimeModule` + `LiveCascadeService`: the activation seam that turns the relocated-but-idle producers live. Sitting above every producer module, it injects the `PollingService`, `IndicatorService`, `QuoteStreamService`, and `RuleEngineService`, and on `start()` composes the rule engine and wires the fan-out the old engine `connectServices` did — each polled candle feeds `IndicatorService.handleCandle` (→ indicator hub), `QuoteStreamService.handleCandle` (→ quote hub), and the rule engine (→ rule-event hub + notifications) on top of the candle hub, and each recomputed indicator state feeds the rule engine's indicator bridge. `main.ts` calls `start()` only **after** the server is listening, so the app the e2e suites build via `Test.createTestingModule` never starts a live loop; `enableShutdownHooks()` routes SIGINT/SIGTERM through `app.close()`, which stops the loop and closes Mongo.
 - **HTTP contract** (`src/common`) — the keystone the whole API reuses: a global `DomainExceptionFilter` mapping domain errors to status codes with the uniform `{ error, fields? }` envelope, and a global `ValidationPipe` (class-validator DTOs) emitting the same envelope on validation failure.
 - **Logging** (`src/logging`) — [`nestjs-pino`](https://github.com/iamolegga/nestjs-pino) for request and application logging.
   The root level comes from `LOG_LEVEL`; records carry an `{ app: 'server' }` base field; modules take a scoped child logger by injecting `PinoLogger` and calling `setContext(scope)` (the pino twin of the engine's `getLogger(scope)`).
@@ -106,7 +107,7 @@ With `?enrich=true`, each item carries a `quote` computed server-side from the s
 `quote` is **`null`** when the symbol does not watch `defaultPeriod` or has fewer than two candles stored there.
 Absent or `?enrich=false` returns the plain list.
 
-The remaining nested sub-resource of a symbol (`/rule-events`) is ported with its own feature module in a later stage; `/candles` + `/backfill` are served by the candles module below, `/state` + `/state-keys` + `/state/:key/series` by the state module below, and `/indicators/:key` (compute) by the indicators module below.
+A symbol's nested sub-resources are served by their owning modules: `/candles` + `/backfill` by the candles module, `/state` + `/state-keys` + `/state/:key/series` by the state module, `/indicators/:key` (compute) by the indicators module, and `/rule-events[/count]` by the rules module.
 
 ### Candles & backfill resource
 
@@ -211,7 +212,7 @@ Each fire mirrors its entries onto both the rule and the affected symbol; reads 
 
 ### Live stream
 
-Once the polling loop is running (started at cutover, #490), the service pushes new candles — plus any subscribed indicator's recomputed state, any subscribed symbol's recomputed quote, and any subscribed symbol's mirrored rule events — to clients over one **multiplexed** WebSocket.
+With the poll loop running (started on boot by the runtime activation), the service pushes new candles — plus any subscribed indicator's recomputed state, any subscribed symbol's recomputed quote, and any subscribed symbol's mirrored rule events — to clients over one **multiplexed** WebSocket.
 A single socket can watch many symbols and hold many indicator / quote subscriptions in parallel.
 
 | Method | Path      | Description                                                                                  |
@@ -285,6 +286,20 @@ npm run start -w @lametrader/server
 # Type-check only.
 npm run typecheck -w @lametrader/server
 ```
+
+## Deploy
+
+The server ships as a container built from `packages/server/Dockerfile` (a multi-stage build over the repo root: `npm ci`, build `@lametrader/core` then the server, prune dev deps, then `node packages/server/dist/main.js`).
+It is the `server` service of the `app` compose profile, behind the web SPA's nginx `/api/*` reverse proxy (single-origin, no CORS; the `Upgrade` headers carry the backfill-progress and `/stream` WebSockets through):
+
+```sh
+# Build + run the full stack (mongo + server + web) from the repo root.
+npm run app:up          # docker compose --profile app up -d --build
+npm run app:logs:server # tail the server's structured logs
+npm run app:down        # tear it down
+```
+
+The compose `server` service passes `MONGODB_URI`, `PORT`, `POLL_INTERVALS`, `TELEGRAM_DESTINATIONS`, `LOG_LEVEL`, and `LOG_SCOPES` (all with sane defaults) and has a `GET /health` healthcheck the web service waits on.
 
 ## Test
 
