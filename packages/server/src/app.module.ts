@@ -35,8 +35,11 @@ import { SymbolsModule } from './symbols/symbols.module.js';
  * {@link ProfilesModule} for the symbol-removal → profile-prune cascade and
  * {@link CandlesModule} for the candle store), {@link StateModule}
  * (`/profiles/:profileId/state/global` + `/symbols/:id/state` reads; owns the
- * shared state store), and {@link IndicatorsModule} (`/indicators` catalog +
- * `/symbols/:id/indicators/:key` compute; owns the shared indicator registry).
+ * shared state store), {@link IndicatorsModule} (`/indicators` catalog +
+ * `/symbols/:id/indicators/:key` compute; owns the shared indicator registry),
+ * and {@link RulesModule} (`/rules` CRUD + `/rules/:id/events` +
+ * `/symbols/:id/rule-events[/count]`; owns the shared rule store and hosts the
+ * relocated rule engine as a dormant provider).
  */
 @Module({
   imports: [
