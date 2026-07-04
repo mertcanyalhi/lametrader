@@ -9,6 +9,7 @@ import { HealthModule } from './health/health.module.js';
 import { LoggingModule } from './logging/logging.module.js';
 import { MongoModule } from './mongo/mongo.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
+import { SymbolsModule } from './symbols/symbols.module.js';
 
 /**
  * The application root module — the composition root of the Nest monolith.
@@ -20,8 +21,9 @@ import { NotificationsModule } from './notifications/notifications.module.js';
  * (domain error → status mapping + uniform `{ error, fields }` envelope) and a
  * global `ValidationPipe` (DTO validation emitting the same envelope).
  *
- * Feature modules: {@link ConfigModule} (`/config`) and
- * {@link NotificationsModule} (`/config/notifications/telegram`).
+ * Feature modules: {@link ConfigModule} (`/config`),
+ * {@link NotificationsModule} (`/config/notifications/telegram`), and
+ * {@link SymbolsModule} (`/instruments` + `/symbols`).
  */
 @Module({
   imports: [
@@ -35,6 +37,7 @@ import { NotificationsModule } from './notifications/notifications.module.js';
     HealthModule,
     ConfigModule,
     NotificationsModule,
+    SymbolsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: DomainExceptionFilter },

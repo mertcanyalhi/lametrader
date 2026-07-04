@@ -3,7 +3,7 @@
 The backend monolith — an idiomatic [NestJS](https://nestjs.com) application on the Express platform.
 
 This package is stage 3 of the NestJS migration (see `specs/nestjs-monolith-migration.spec.md` and ADR-0018).
-On top of the cross-cutting shell (validated configuration, structured logging, the root Mongo connection, a health endpoint) it now serves its first ported resource — the **config + Telegram notifications** surface — and establishes the app-wide HTTP contract every later resource reuses.
+On top of the cross-cutting shell (validated configuration, structured logging, the root Mongo connection, a health endpoint) it serves the first ported resources — the **config + Telegram notifications** surface and the **symbols + instruments** surface — and establishes the app-wide HTTP contract every later resource reuses.
 It runs alongside the still-deployed `@lametrader/api`; the remaining resource controllers, repositories, and the polling loop are ported in later stages.
 
 ## What's here
@@ -13,6 +13,8 @@ It runs alongside the still-deployed `@lametrader/api`; the remaining resource c
   Same variables, defaults, and fail-fast behavior as the previous `packages/engine/src/settings.ts` (`loadSettings`).
 - **Config resource** (`src/config`) — the `ConfigModule`: `ConfigService` over a Mongoose-backed key-value store (`config` collection), behind the `/config` controller.
 - **Notifications** (`src/notifications`) — the `NotificationsModule`: `TelegramDestinationsService` (destinations CRUD, stored in the same config K/V store) and `TelegramNotifier` (Bot API sender), behind the `/config/notifications/telegram` controller.
+- **Symbols** (`src/symbols`) — the `SymbolsModule`: `SymbolService` over a Mongoose-backed watchlist (`watchlist` collection) and the market-data sources, behind the `/instruments` + `/symbols` controller.
+- **Market data** (`src/market-data`) — the `MarketDataModule`: the registered discovery sources (Binance for crypto, Yahoo for stocks/funds/FX) bound to the `MARKET_DATA_SOURCES` token, fanned out by the symbols use-case (and, later, backfill/polling).
 - **HTTP contract** (`src/common`) — the keystone the whole API reuses: a global `DomainExceptionFilter` mapping domain errors to status codes with the uniform `{ error, fields? }` envelope, and a global `ValidationPipe` (class-validator DTOs) emitting the same envelope on validation failure.
 - **Logging** (`src/logging`) — [`nestjs-pino`](https://github.com/iamolegga/nestjs-pino) for request and application logging.
   The root level comes from `LOG_LEVEL`; records carry an `{ app: 'server' }` base field; modules take a scoped child logger by injecting `PinoLogger` and calling `setContext(scope)` (the pino twin of the engine's `getLogger(scope)`).
@@ -30,6 +32,11 @@ It runs alongside the still-deployed `@lametrader/api`; the remaining resource c
 | `GET`    | `/config/notifications/telegram`            | —                              | List destinations (name + chat id; no bot tokens). 200. |
 | `POST`   | `/config/notifications/telegram`            | `{ name, botToken, chatId }`   | Upsert by `name`; returns the summary. **200** / 400.   |
 | `DELETE` | `/config/notifications/telegram/:name`      | —                              | Remove by name. **204** / 404.                          |
+| `GET`    | `/instruments?q=&type=`                     | —                              | Discover instruments (optionally filtered by type). 200 / 400. |
+| `GET`    | `/symbols?enrich=`                          | —                              | List the watchlist; `?enrich=true` attaches a `quote` per symbol. 200. |
+| `POST`   | `/symbols`                                  | `{ id, periods? }`             | Add (validates existence). **201** / 400 / 404 / 409.   |
+| `PATCH`  | `/symbols/:id`                              | `{ periods }`                  | Change a symbol's periods. 200 / 400 / 404.             |
+| `DELETE` | `/symbols/:id`                              | —                              | Remove a symbol **and its stored candles**. **204**.    |
 
 ### Config resource
 
@@ -43,6 +50,24 @@ Defaults, when nothing is stored: `periods` = `1h`, `1d`; `defaultPeriod` = `1d`
 Telegram is the only channel today (the `/config/notifications` prefix leaves room for siblings).
 `botToken` is write-only — never listed or echoed back; reads return `{ name, chatId }` only.
 `POST` upserts by `name` (a repeat name replaces its token + chat id in place) and returns **200**; `DELETE` returns **204**, or **404** when the name is unknown.
+
+### Symbols resource
+
+Discover instruments and manage the watchlist.
+Canonical ids are `<type>:<ticker>` (`crypto`, `stock`, `fund`, `fx`), e.g. `crypto:BTCUSDT` — crypto is served by Binance, stocks/funds/FX by Yahoo.
+An instrument carries `{ id, type, description, exchange, currency? }`; `currency` is present from Binance and a Yahoo lookup, but absent from Yahoo *search* results (so a discovery hit may omit it; a watched symbol always has it).
+A watched symbol's `periods` default to the config's `periods` and must be a subset of them.
+
+- `GET /instruments?q=&type=` — free-text discovery across the sources; `type` narrows to one asset class.
+- `POST /symbols` — add (validates existence at the source): **201**, or **404** when the id doesn't exist at its source, **409** when re-adding an already-watched symbol (re-adding never changes its periods; use `PATCH`), **400** on an invalid period or one the source can't serve.
+- `PATCH /symbols/:id` — change the watched periods (200 / 400 / 404).
+- `DELETE /symbols/:id` — remove the symbol and its stored candles (**204**).
+
+With `?enrich=true`, each item carries a `quote` computed server-side from the symbol's stored candles on the config's `defaultPeriod` (strictly — no fallback): `{ price, change, changePct, period, time }`, where `change` is period-over-period (`latestClose − previousClose`) and `changePct` is `change / previousClose`.
+`quote` is **`null`** when the symbol does not watch `defaultPeriod` or has fewer than two candles stored there.
+Absent or `?enrich=false` returns the plain list.
+
+The nested sub-resources of a symbol (`/symbols/:id/candles`, `/state`, `/indicators`, `/rule-events`) are ported with their own feature modules in later stages.
 
 ## API documentation
 
