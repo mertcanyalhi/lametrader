@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule as NestConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { CandlesModule } from './candles/candles.module.js';
 import { DomainExceptionFilter } from './common/domain-exception.filter.js';
 import { buildValidationPipe } from './common/validation.pipe.js';
@@ -38,6 +39,9 @@ import { SymbolsModule } from './symbols/symbols.module.js';
       cache: true,
       validate: validateEnv,
     }),
+    // The dynamic-timeout registry the (dormant) candle PollingService drives;
+    // `forRoot` registers the global SchedulerRegistry. No decorator-based jobs.
+    ScheduleModule.forRoot(),
     LoggingModule,
     MongoModule,
     HealthModule,

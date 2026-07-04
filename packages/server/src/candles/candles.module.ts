@@ -1,6 +1,14 @@
-import type { CandleFeed, CandleRepository, WatchlistRepository } from '@lametrader/core';
+import type {
+  CandleFeed,
+  CandleRepository,
+  MarketDataSource,
+  WatchlistRepository,
+} from '@lametrader/core';
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { SchedulerRegistry } from '@nestjs/schedule';
+import type { AppConfig } from '../config/app-config.types.js';
 import { MarketDataModule } from '../market-data/market-data.module.js';
 import { MARKET_DATA_SOURCES } from '../market-data/market-data-source.token.js';
 import { WatchlistModule } from '../watchlist/watchlist.module.js';
@@ -14,6 +22,7 @@ import { CandleEntry, CandleEntrySchema } from './candle-entry.schema.js';
 import { CANDLE_REPOSITORY } from './candle-repository.token.js';
 import { CandlesController } from './candles.controller.js';
 import { MongooseCandleRepository } from './mongoose-candle.repository.js';
+import { PollingService } from './polling.service.js';
 import { StreamHub } from './stream-hub.js';
 
 /**
@@ -34,6 +43,12 @@ import { StreamHub } from './stream-hub.js';
  * snapshot to the {@link BACKFILL_JOB_STREAM} hub (keyed by job id), which the
  * gateway fans out — the application stays transport-agnostic (ADR-0005 /
  * ADR-0008).
+ *
+ * Relocates the {@link PollingService} (rewritten onto `@nestjs/schedule`'s
+ * `SchedulerRegistry`) as a provider — but **dormant**: nothing calls `start()`
+ * at boot; the cutover stage (#490) drives it via a lifecycle hook. The
+ * `SchedulerRegistry` comes from the global `ScheduleModule.forRoot()` in
+ * `AppModule`; the per-period cadence is read from the validated config.
  *
  * Imports {@link MarketDataModule} (the candle-feed sources) and the shared
  * {@link WatchlistModule} (a backfill targets a watched symbol); it depends on
@@ -65,6 +80,30 @@ import { StreamHub } from './stream-hub.js';
       inject: [BackfillService, BACKFILL_JOB_STREAM],
     },
     BackfillProgressGateway,
+    {
+      provide: PollingService,
+      useFactory: (
+        sources: MarketDataSource[],
+        candles: CandleRepository,
+        watchlist: WatchlistRepository,
+        registry: SchedulerRegistry,
+        config: ConfigService<AppConfig, true>,
+      ) =>
+        // Relocated but DORMANT: constructed, never `start()`ed at boot. The
+        // cutover stage starts it. `onCandle` is a no-op until the live `/stream`
+        // WebSocket is ported to render it.
+        new PollingService(sources, candles, watchlist, registry, {
+          onCandle: () => {},
+          intervals: config.get('pollIntervals', { infer: true }),
+        }),
+      inject: [
+        MARKET_DATA_SOURCES,
+        CANDLE_REPOSITORY,
+        WATCHLIST_REPOSITORY,
+        SchedulerRegistry,
+        ConfigService,
+      ],
+    },
   ],
   exports: [CANDLE_REPOSITORY],
 })
