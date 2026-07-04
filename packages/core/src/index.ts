@@ -4,7 +4,7 @@
  * Holds the platform's type declarations (interfaces, type aliases,
  * discriminated unions), enums, and the handful of runtime values shared with
  * the browser (`periodMillis`, the input-limit constants). All domain logic and
- * error classes live in `@lametrader/server`; nothing here performs I/O or
+ * error classes live in `@lametrader/backend`; nothing here performs I/O or
  * imports outward.
  */
 

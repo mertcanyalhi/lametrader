@@ -1,7 +1,7 @@
 # Spec: Web watchlist page (static)
 
 - Status: draft
-- Touches: `packages/web` (driving adapter) — new `pages/watchlist/*`, `lib/hooks/symbols.ts`; consumes the existing `@lametrader/api` symbols REST surface.
+- Touches: `packages/ui` (driving adapter) — new `pages/watchlist/*`, `lib/hooks/symbols.ts`; consumes the existing `@lametrader/api` symbols REST surface.
 
 ## Goal
 

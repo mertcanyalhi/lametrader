@@ -88,7 +88,7 @@ Each bullet maps to exactly one test (jsdom; mocked socket / mocked
 
 The server candle `/stream` path already has its API e2e
 (`packages/api/tests/e2e/polling.e2e.test.ts`).
-The browser-side e2e is the web build (`packages/web/tests/e2e/build.e2e.test.ts`)
+The browser-side e2e is the web build (`packages/ui/tests/e2e/build.e2e.test.ts`)
 staying green with the live-chart code compiled in.
 The end-user happy path — the forming bar moving on a streamed candle — is
 asserted by the jsdom component tests above (mocked socket + mocked chart),

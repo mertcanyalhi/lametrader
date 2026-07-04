@@ -1,7 +1,7 @@
 # Spec: web profile picker (chart bottom-bar)
 
 - Status: draft
-- Touches: `@lametrader/web` driving adapter — new `lib/selected-profile.ts` (localStorage), new `lib/selected-profile-context.tsx` (React Context), new `lib/hooks/profiles.ts` (TanStack Query over `GET/POST/PUT/DELETE /profiles`), new `pages/chart/profile-picker-dialog.tsx`, modifications to `pages/chart/chart-page.tsx` to mount the picker, and `components/layout/app-shell.tsx` to provide the Context.
+- Touches: `@lametrader/ui` driving adapter — new `lib/selected-profile.ts` (localStorage), new `lib/selected-profile-context.tsx` (React Context), new `lib/hooks/profiles.ts` (TanStack Query over `GET/POST/PUT/DELETE /profiles`), new `pages/chart/profile-picker-dialog.tsx`, modifications to `pages/chart/chart-page.tsx` to mount the picker, and `components/layout/app-shell.tsx` to provide the Context.
   Reads the existing REST surface (`/profiles`, `/profiles/:id` from `profile-crud`).
   No backend change.
 
@@ -23,7 +23,7 @@ A `409` (duplicate name) is surfaced inline under the name field.
 ## Persistence model
 
 - Storage key: `lametrader.selectedProfileId` (string id, or absent when nothing is selected).
-- All access is wrapped in `lib/selected-profile.ts` (`getStoredProfileId() / setStoredProfileId(id | null)`) per `packages/web/CLAUDE.md`'s "never read/write `localStorage` directly in a component" rule.
+- All access is wrapped in `lib/selected-profile.ts` (`getStoredProfileId() / setStoredProfileId(id | null)`) per `packages/ui/CLAUDE.md`'s "never read/write `localStorage` directly in a component" rule.
 - `SelectedProfileProvider` hydrates the initial value from `getStoredProfileId()` once at mount; every `setProfileId` writes through synchronously.
 - Passing `null` to `setProfileId` removes the key (don't store an empty string).
 - A stored id that no longer exists in `GET /profiles` is treated as "No profile" — the picker does **not** auto-pick a fallback and does **not** wipe the stale value. It's overwritten the next time the user makes a selection (or stays as-is if the missing profile reappears later, e.g. recreated from another tab).
@@ -74,7 +74,7 @@ Tests mock `apiFetch` via the global `fetch` (same pattern as `symbol-picker-dia
 ## End-to-end expectation
 
 Per the chart-page spec's note, page-level behaviour for the web package is covered by the jsdom component tier (no browser e2e harness).
-The existing `packages/web/tests/e2e/build.e2e.test.ts` is the only `*.e2e.test.ts` for the package; it asserts `vite build` produces an artifact whose JS bundle contains a rendered marker string.
+The existing `packages/ui/tests/e2e/build.e2e.test.ts` is the only `*.e2e.test.ts` for the package; it asserts `vite build` produces an artifact whose JS bundle contains a rendered marker string.
 
 For this feature, the e2e tier adds **one bundle-marker assertion**: the built JS bundle contains the string `"Manage profiles"` (or `"No profile"` — whichever lands in the picker's static copy), confirming the profile-picker module is wired into the route tree and ships with the deployable artifact.
 The build is shared with the existing markers via the same `beforeAll`.

@@ -57,7 +57,7 @@ services:
     container_name: lametrader-server
     build:
       context: ..
-      dockerfile: packages/server/Dockerfile
+      dockerfile: packages/backend/Dockerfile
     restart: unless-stopped
     ports:
       - "${API_PORT:-3000}:3000"
@@ -90,7 +90,7 @@ services:
     container_name: lametrader-web
     build:
       context: ..
-      dockerfile: packages/web/Dockerfile
+      dockerfile: packages/ui/Dockerfile
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-8080}:8080"

@@ -1,6 +1,6 @@
-# @lametrader/web
+# @lametrader/ui
 
-Browser app for the lametrader platform — a Vite/React/TypeScript driving adapter that talks to the `@lametrader/server` REST + WebSocket surfaces behind an nginx `/api/*` proxy.
+Browser app for the lametrader platform — a Vite/React/TypeScript driving adapter that talks to the `@lametrader/backend` REST + WebSocket surfaces behind an nginx `/api/*` proxy.
 
 The shell (sidebar + topbar + theme + Radix Themes), the routing, the TanStack Query + `apiFetch` data layer, and the logging conventions are documented in [`CLAUDE.md`](./CLAUDE.md) — read that first if you are extending the UI.
 
@@ -146,13 +146,13 @@ It hides the protocol's asymmetry — candle subscriptions are keyed by the clie
 
 ```bash
 # Dev server (Vite, port 5173, proxies /api → :3000)
-npm run dev -w @lametrader/web
+npm run dev -w @lametrader/ui
 
-# Production build → packages/web/dist
-npm run build -w @lametrader/web
+# Production build → packages/ui/dist
+npm run build -w @lametrader/ui
 
 # Type-check only (picked up by the root `npm run typecheck`)
-npm run typecheck -w @lametrader/web
+npm run typecheck -w @lametrader/ui
 
 # Unit tests (component + hook tests in jsdom)
 npm test
@@ -163,6 +163,6 @@ npm test
 - **Unit** — co-located `*.test.{ts,tsx}` next to the source. jsdom environment via the file-level `// @vitest-environment jsdom` directive.
   RTL `cleanup()` + `vi.restoreAllMocks()` in `afterEach`.
   Mock at the `fetch` boundary so the real `apiFetch` + `QueryClient` + RHF resolver are exercised.
-- **E2E** — at the HTTP boundary against the backend, in `packages/server/test/*.e2e-spec.ts` (Jest + Testcontainers Mongo).
+- **E2E** — at the HTTP boundary against the backend, in `packages/backend/test/*.e2e-spec.ts` (Jest + Testcontainers Mongo).
   The settings page's contract is pinned by `config.e2e-spec.ts` (happy path + the 400 critical failure); the watchlist page's by `symbols.e2e-spec.ts` (the discover → add → enriched-list → edit → remove round-trip + the 404 failure); the chart page's by `backfill.e2e-spec.ts` + the Docker-free `candles.contract.integration.spec.ts` (the backfill → windowed candle read + the empty-window re-anchor state).
   No browser harness — page-level behaviour is covered by the unit tier.

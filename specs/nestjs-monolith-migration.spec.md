@@ -7,7 +7,7 @@
 ## Goal
 
 The platform has outgrown its five-package hexagonal layout in the wrong direction: the packages, project references, version pins, and hand-rolled wiring cost more than the flexibility they bought.
-Collapse the backend into a single idiomatic NestJS monolith (`@lametrader/server`), delete the CLI surface, and keep `@lametrader/core` only as a slim shared-types package so `web` keeps compiling unchanged.
+Collapse the backend into a single idiomatic NestJS monolith (`@lametrader/backend`), delete the CLI surface, and keep `@lametrader/core` only as a slim shared-types package so `web` keeps compiling unchanged.
 
 Non-goals: no behavior change, no API redesign, no web changes.
 The HTTP/WS contract is preserved byte-for-byte; the ported e2e suite is the proof.
@@ -44,7 +44,7 @@ Each stage is one PR (branch per CLAUDE.md naming), lands green, and is independ
 - `packages/cli` is deleted; the root `cli` script and the `@lametrader/cli` Vitest alias are removed.
 - `npm run check:full` passes; no remaining reference to `@lametrader/cli` outside `package-lock.json` history and archived specs.
 
-### Stage 2 — scaffold `@lametrader/server`
+### Stage 2 — scaffold `@lametrader/backend`
 
 - New Nest app package (Express platform) with `@nestjs/config` (env schema covering `MONGODB_URI`, `PORT`, `POLL_INTERVALS`, `TELEGRAM_DESTINATIONS`, `LOG_LEVEL`, `LOG_SCOPES`), `nestjs-pino`, `MongoModule` (Mongoose root connection), Jest wiring (unit + e2e projects, Testcontainers), and a `GET /health` endpoint.
 - The existing `api` package is untouched and still the deployed backend.

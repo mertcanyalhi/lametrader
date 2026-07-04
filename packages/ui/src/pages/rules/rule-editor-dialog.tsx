@@ -50,7 +50,7 @@ import { TRIGGER_KIND_EXPLANATIONS, TRIGGER_KIND_LABELS, TriggerPicker } from '.
  *
  * Owns the modal frame, the create/edit mode toggle, the save/cancel wiring,
  * and the per-section forms (basic fields, scope, trigger, condition tree,
- * actions). Validated via Yup per `packages/web/CLAUDE.md` (the API re-validates
+ * actions). Validated via Yup per `packages/ui/CLAUDE.md` (the API re-validates
  * on save via the domain schema validator).
  *
  * @param open         - Controlled open state.

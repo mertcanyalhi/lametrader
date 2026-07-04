@@ -6,7 +6,7 @@
 
     // This package is compiled and type-checked on its own (`tsc` / `tsc --noEmit`),
     // not through the root project-references graph — exactly like `web` is owned by
-    // Vite.  Nothing imports `@lametrader/server` as a library, so it emits no
+    // Vite.  Nothing imports `@lametrader/backend` as a library, so it emits no
     // declarations and is not `composite`; dropping `composite` is what lets the
     // `typecheck` script pass `--noEmit` (a composite project may not disable emit).
     "composite": false,

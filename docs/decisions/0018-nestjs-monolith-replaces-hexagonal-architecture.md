@@ -11,7 +11,7 @@ The CLI carried no unique capability — every command has an HTTP equivalent, n
 
 ## Decision
 
-Collapse the backend into a single idiomatic NestJS application, `@lametrader/server`, and delete the CLI.
+Collapse the backend into a single idiomatic NestJS application, `@lametrader/backend`, and delete the CLI.
 
 - Three packages remain: `server` (Nest monolith — HTTP, WS, use-cases, adapters, scheduling), `core` (slimmed to a types-only package so `web`'s imports survive unchanged), and `web`.
 - The hexagonal rules are dropped; NestJS conventions replace them: feature modules, controllers → injectable services → injected models, Express platform, class-validator DTOs, `@nestjs/config`, `nestjs-pino`, `@nestjs/schedule`, `@nestjs/mongoose`.

@@ -1,7 +1,7 @@
 # Spec: rules — drop the remaining `v2` references
 
 - Status: draft
-- Touches: `@lametrader/engine` (rules persistence + event-log adapters, watchlist repo doc comment, profile-service docs, evaluation-context + lookups docs, orchestrator + bridges docs, dispatch docs, indicator-series-store, tick-ring, wire); `@lametrader/core` (rules type JSDoc); `@lametrader/web` (rule editor HTML element IDs + every rules-page JSDoc + lib/hooks/api-fetch JSDoc, README); `@lametrader/api` (controllers + schemas comments + e2e wording); specs / docs prose; `CONTEXT.md`; a new operator-controlled Mongo migration script.
+- Touches: `@lametrader/engine` (rules persistence + event-log adapters, watchlist repo doc comment, profile-service docs, evaluation-context + lookups docs, orchestrator + bridges docs, dispatch docs, indicator-series-store, tick-ring, wire); `@lametrader/core` (rules type JSDoc); `@lametrader/ui` (rule editor HTML element IDs + every rules-page JSDoc + lib/hooks/api-fetch JSDoc, README); `@lametrader/api` (controllers + schemas comments + e2e wording); specs / docs prose; `CONTEXT.md`; a new operator-controlled Mongo migration script.
 
 ## Goal
 
@@ -56,7 +56,7 @@ Each bullet maps to exactly one test (where tests are required) or one concrete 
 - `CONTEXT.md` — the cross-symbol-operand line that read "no cross-symbol operand references in v2" is rewritten in present tense without `v2`; the historical-cleanup paragraph mentioning issue #422 is updated to fold issue #437 in as the second / final cleanup pass.
 - The closed-chapter rules specs (`rules-persistence`, `rules-rest-api`, `rules-cutover`, `rules-core-types`, `rules-web-ui`, `rules-orchestrator-action-runner`, `rules-series-store-eval-context`, `rules-rename-drop-v2-suffix`) move under `specs/_archive/` with a short `README.md` noting the exemption — they document the original greenfield build that has shipped, and the live source-of-truth is now ADR 0016, `CONTEXT.md`, and the per-package READMEs.
 - The active chart-side specs (`chart-symbol-rule-events.spec.md`, `chart-symbol-rules-modal.spec.md`, `chart-state-overlays.spec.md`) have their `v2` mentions rewritten in present tense in-place.
-- `packages/web/README.md:45` and `packages/api/README.md` references to `events_v2` are rewritten.
+- `packages/ui/README.md:45` and `packages/api/README.md` references to `events_v2` are rewritten.
 
 ### Build / test gates
 

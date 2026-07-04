@@ -24,7 +24,7 @@ Page bodies are intentionally placeholder — subsequent issues fill in real con
   Hydrated via an inline `<head>` script so there is no light-flash before React mounts.
 - **Icon-only theme toggle a11y**: visible label rendered through `<Tooltip>` on hover/focus; accessible name supplied by `aria-label="Toggle theme"`.
   Never `title=`.
-- **CLAUDE.md location**: `packages/web/CLAUDE.md` (scoped to the package; not appended to the root).
+- **CLAUDE.md location**: `packages/ui/CLAUDE.md` (scoped to the package; not appended to the root).
 - **Sidebar collapsibility**: a hamburger button on the topbar's left edge toggles the sidebar between expanded (label + icon) and collapsed (icon rail) at ≥ 1024 px.
   Default state: expanded.
   The choice is persisted to `localStorage.sidebar-collapsed` (`'true'` | `'false'`).
@@ -67,14 +67,14 @@ Theme module (unit, jsdom — `applyInitialTheme` / `setTheme` over `document.do
 
 Documentation:
 
-- [ ] `packages/web/CLAUDE.md` exists and documents the UI/UX rules (popover/dialog/etc. over native, dark default + light toggle, server-state via TanStack Query, no `new WebSocket(...)` in components, conventions for forms / tests / layout / naming).
+- [ ] `packages/ui/CLAUDE.md` exists and documents the UI/UX rules (popover/dialog/etc. over native, dark default + light toggle, server-state via TanStack Query, no `new WebSocket(...)` in components, conventions for forms / tests / layout / naming).
 
 ## End-to-end expectation
 
 E2E for a web feature is a real `vite build` against the package, asserting the deployable artifact is what we ship.
 No browser harness (Playwright) is in scope for this issue.
 
-- Happy path: `vite build` over `packages/web` exits 0; `packages/web/dist/index.html` exists and references at least one JS bundle under `assets/`; that bundle file exists on disk; the bundle contents include the rendered string "Watchlist" (a sidebar nav label — proves the shell rendered into the bundle).
+- Happy path: `vite build` over `packages/ui` exits 0; `packages/ui/dist/index.html` exists and references at least one JS bundle under `assets/`; that bundle file exists on disk; the bundle contents include the rendered string "Watchlist" (a sidebar nav label — proves the shell rendered into the bundle).
 
 There is no orthogonal failure mode worth a second test here — the build either produces a clean artifact or fails on import, which the happy path already detects.
 

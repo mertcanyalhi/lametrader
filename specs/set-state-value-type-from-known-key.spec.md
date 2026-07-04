@@ -1,7 +1,7 @@
 # Spec: set-state-value-type-from-known-key
 
 - Status: implemented
-- Touches: `packages/web/src/pages/rules/actions-picker.tsx`, `packages/web/src/pages/rules/leaf-editor.tsx`, `packages/web/src/pages/rules/rule-editor-dialog.tsx`.
+- Touches: `packages/ui/src/pages/rules/actions-picker.tsx`, `packages/ui/src/pages/rules/leaf-editor.tsx`, `packages/ui/src/pages/rules/rule-editor-dialog.tsx`.
 
 ## Goal
 

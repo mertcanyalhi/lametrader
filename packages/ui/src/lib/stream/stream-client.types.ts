@@ -28,7 +28,7 @@ export enum StreamKind {
 /**
  * The web's transport mirror of the backend's `CandleEvent` — one observed candle
  * for a watched symbol+period. The backend's `CandleEvent` lives in the
- * server-only `@lametrader/server` (which the browser must not import), so the
+ * server-only `@lametrader/backend` (which the browser must not import), so the
  * contract is restated here over `core`'s {@link Candle} / {@link Period}.
  */
 export interface CandleEvent {

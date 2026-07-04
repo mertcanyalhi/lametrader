@@ -1,7 +1,7 @@
 # Spec: rules table columns
 
 - Status: draft
-- Touches: `@lametrader/core` (Rule schema), `@lametrader/engine` (orchestrator stamping), `@lametrader/api` (response schema), `@lametrader/web` (RulesTable + RulesPage).
+- Touches: `@lametrader/core` (Rule schema), `@lametrader/engine` (orchestrator stamping), `@lametrader/api` (response schema), `@lametrader/ui` (RulesTable + RulesPage).
 
 ## Goal
 
@@ -21,7 +21,7 @@ Each bullet maps to exactly one test.
 - [ ] After `RuleOrchestrator.process` fires a rule, the persisted rule has `lastFiredAt` equal to the inbound event's `ts`.
 - [ ] When `RuleOrchestrator.process` runs an event but no rule fires, `lastFiredAt` is left unchanged.
 
-### Web (`@lametrader/web`)
+### Web (`@lametrader/ui`)
 
 - [ ] `RulesTable` renders six column headers in the default config: `(empty)`, `Name`, `Scope`, `Trigger`, `Last fired`, `Actions`.
 - [ ] `RulesTable` with `columns={{ scope: false }}` omits the `Scope` header and cell.

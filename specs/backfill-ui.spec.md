@@ -1,7 +1,7 @@
 # Spec: Backfill UI (per-symbol trigger modal + live WS progress)
 
 - Status: draft
-- Touches: `packages/web` (driving adapter) — new `lib/ws/` (per-job WebSocket base), `lib/hooks/backfill.ts`, `pages/watchlist/backfill-dialog.tsx`; wires into `watchlist-row.tsx` and `add-symbol-dialog.tsx`. Drives the existing backfill job API (no backend change).
+- Touches: `packages/ui` (driving adapter) — new `lib/ws/` (per-job WebSocket base), `lib/hooks/backfill.ts`, `pages/watchlist/backfill-dialog.tsx`; wires into `watchlist-row.tsx` and `add-symbol-dialog.tsx`. Drives the existing backfill job API (no backend change).
 
 ## Goal
 

@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../../..');
 
 /** Web package's `dist/` directory — populated by `vite build`. */
-const distDir = join(repoRoot, 'packages/web/dist');
+const distDir = join(repoRoot, 'packages/ui/dist');
 
 /**
  * Read every JS bundle inside `dist/assets`.
@@ -33,7 +33,7 @@ function readBundles(): string {
 describe('rules web UI bundle (e2e)', () => {
   beforeAll(() => {
     rmSync(distDir, { recursive: true, force: true });
-    execSync('npm run build -w @lametrader/web', {
+    execSync('npm run build -w @lametrader/ui', {
       cwd: repoRoot,
       stdio: 'inherit',
       env: { ...process.env, CI: '1' },

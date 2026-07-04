@@ -1,4 +1,4 @@
-# Multi-stage build for @lametrader/web.
+# Multi-stage build for @lametrader/ui.
 #
 # Stage 1 installs the workspace, builds `@lametrader/core`, then runs
 # `vite build`. The core build must come first: Vite and the web's
@@ -19,9 +19,9 @@ COPY packages ./packages
 
 RUN npm ci
 RUN npm run build -w @lametrader/core
-RUN npm run build -w @lametrader/web
+RUN npm run build -w @lametrader/ui
 
 FROM nginx:1.31.2-alpine AS run
-COPY packages/web/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/packages/web/dist /usr/share/nginx/html
+COPY packages/ui/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/packages/ui/dist /usr/share/nginx/html
 EXPOSE 8080

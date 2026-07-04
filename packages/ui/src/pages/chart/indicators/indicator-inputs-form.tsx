@@ -51,7 +51,7 @@ function initialFor(descriptor: FieldDescriptor, initialValues: Record<string, u
  *
  * Validation uses react-hook-form + a Yup schema built at render time from the
  * `inputs[]` descriptors (`buildIndicatorInputsSchema`) — same convention as
- * the static schemas under `lib/*-schema.ts`, see ADR 0011 + `packages/web/CLAUDE.md`
+ * the static schemas under `lib/*-schema.ts`, see ADR 0011 + `packages/ui/CLAUDE.md`
  * Forms section. Field errors render inline; `errorMessage` carries the parent's
  * server-side failure above the footer.
  */

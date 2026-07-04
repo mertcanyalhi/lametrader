@@ -1,4 +1,4 @@
-# Multi-stage build for @lametrader/server (the NestJS backend).
+# Multi-stage build for @lametrader/backend (the NestJS backend).
 #
 # Stage 1 ("build") installs the full workspace, builds @lametrader/core (the
 # server's only internal dependency — shared types + enums + pure helpers) and
@@ -21,7 +21,7 @@ COPY packages ./packages
 
 RUN npm ci
 RUN npm run build -w @lametrader/core
-RUN npm run build -w @lametrader/server
+RUN npm run build -w @lametrader/backend
 RUN npm prune --omit=dev --workspaces --include-workspace-root
 
 FROM node:26-alpine AS run
@@ -35,8 +35,8 @@ COPY --from=build /app/node_modules ./node_modules
 # Only the runtime artefacts of the server and the core package it imports.
 COPY --from=build /app/packages/core/package.json ./packages/core/package.json
 COPY --from=build /app/packages/core/dist ./packages/core/dist
-COPY --from=build /app/packages/server/package.json ./packages/server/package.json
-COPY --from=build /app/packages/server/dist ./packages/server/dist
+COPY --from=build /app/packages/backend/package.json ./packages/backend/package.json
+COPY --from=build /app/packages/backend/dist ./packages/backend/dist
 
 EXPOSE 3000
-CMD ["node", "packages/server/dist/main.js"]
+CMD ["node", "packages/backend/dist/main.js"]

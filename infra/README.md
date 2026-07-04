@@ -8,8 +8,8 @@ Local development infrastructure, run via Docker Compose.
 | --------------- | ------------------------------------ | --------- | ------- | --------------------------------------------------------------------------- |
 | `mongo`         | `mongo:8`                            | (default) | `27017` | Primary datastore. Data persists in the `lametrader-mongo-data` volume.     |
 | `mongo-express` | `mongo-express:1.0.2`                | `tools`   | `8081`  | Web admin UI.                                                               |
-| `server`        | built from `packages/server/Dockerfile` | `app`  | `3000`  | NestJS backend. Wired to the `mongo` service over the compose network; `GET /health` healthcheck. |
-| `web`           | built from `packages/web/Dockerfile` | `app`     | `8080`  | Vite build served by nginx, with `/api/*` reverse-proxied to `server:3000`. |
+| `server`        | built from `packages/backend/Dockerfile` | `app`  | `3000`  | NestJS backend. Wired to the `mongo` service over the compose network; `GET /health` healthcheck. |
+| `web`           | built from `packages/ui/Dockerfile` | `app`     | `8080`  | Vite build served by nginx, with `/api/*` reverse-proxied to `server:3000`. |
 
 Host bindings use each service's standard port. If one is already taken
 by another local stack, override it in `infra/.env` (`MONGO_PORT`,

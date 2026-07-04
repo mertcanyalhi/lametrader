@@ -1,4 +1,4 @@
-# @lametrader/web
+# @lametrader/ui
 
 The platform's browser frontend.
 Builds via Vite; type-checks via `tsc --noEmit`; not part of the project-refs graph.
@@ -75,7 +75,7 @@ If a Tailwind class string repeats often enough to be worth a name, extract it a
 - Use `react-hook-form` with a **Yup** schema via `yupResolver` (`@hookform/resolvers/yup`).
   Schemas live in `lib/*-schema.ts` and use `.label(...)` so messages are label-aware and per-field (e.g. "Default period is required.").
   For `${label}` interpolation, use Yup's **function-message** form (`({ label }) => \`${label} is required.\``) — a real template literal — not a `'${label}'` string (which trips Biome's `noTemplateCurlyInString`).
-- The schema is the UI validation layer; the **server** re-validates every write via its domain validator (in `@lametrader/server`), which stays the authority.
+- The schema is the UI validation layer; the **server** re-validates every write via its domain validator (in `@lametrader/backend`), which stays the authority.
   This client/server split is intentional and scoped to user-facing schemas — see `docs/decisions/0011-web-form-validation-with-yup.md`.
   Don't pull a schema library into `core`/`server`.
 
@@ -136,9 +136,9 @@ Do **not** generalize the exception — every other surface has Pino available.
 
 ## Build & dev
 
-- `npm run dev -w @lametrader/web` — Vite dev server.
-- `npm run build -w @lametrader/web` — production build into `packages/web/dist`.
-- `npm run typecheck -w @lametrader/web` — `tsc --noEmit` (picked up by the root `typecheck`).
+- `npm run dev -w @lametrader/ui` — Vite dev server.
+- `npm run build -w @lametrader/ui` — production build into `packages/ui/dist`.
+- `npm run typecheck -w @lametrader/ui` — `tsc --noEmit` (picked up by the root `typecheck`).
 - Unit tests run under the root `npm test` because vitest's unit project includes `packages/**/src/**/*.test.{ts,tsx}`.
 
 ## Out of scope (for now)

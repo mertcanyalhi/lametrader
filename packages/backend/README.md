@@ -1,4 +1,4 @@
-# @lametrader/server
+# @lametrader/backend
 
 The backend monolith — an idiomatic [NestJS](https://nestjs.com) application on the Express platform.
 
@@ -280,16 +280,16 @@ Feature code takes values from `ConfigService`, never from `process.env` directl
 
 ```sh
 # Build to dist/, then start (needs a reachable MONGODB_URI).
-npm run build -w @lametrader/server
-npm run start -w @lametrader/server
+npm run build -w @lametrader/backend
+npm run start -w @lametrader/backend
 
 # Type-check only.
-npm run typecheck -w @lametrader/server
+npm run typecheck -w @lametrader/backend
 ```
 
 ## Deploy
 
-The server ships as a container built from `packages/server/Dockerfile` (a multi-stage build over the repo root: `npm ci`, build `@lametrader/core` then the server, prune dev deps, then `node packages/server/dist/main.js`).
+The server ships as a container built from `packages/backend/Dockerfile` (a multi-stage build over the repo root: `npm ci`, build `@lametrader/core` then the server, prune dev deps, then `node packages/backend/dist/main.js`).
 It is the `server` service of the `app` compose profile, behind the web SPA's nginx `/api/*` reverse proxy (single-origin, no CORS; the `Upgrade` headers carry the backfill-progress and `/stream` WebSockets through):
 
 ```sh
@@ -310,8 +310,8 @@ SWC transforms the decorator-driven sources and emits the DI metadata Nest reads
 - **e2e** — `.e2e-spec.ts` files under `test`, booting the app against a [Testcontainers](https://testcontainers.com) Mongo and hitting it over HTTP (requires Docker).
 
 ```sh
-npm run test -w @lametrader/server        # unit tier
-npm run test:e2e -w @lametrader/server    # e2e tier (Docker required)
+npm run test -w @lametrader/backend        # unit tier
+npm run test:e2e -w @lametrader/backend    # e2e tier (Docker required)
 ```
 
 Both runners are orchestrated from the repo root: `npm run check` runs Vitest (other packages) plus this package's Jest unit tier; `npm run check:full` adds both e2e tiers.

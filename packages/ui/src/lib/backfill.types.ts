@@ -3,7 +3,7 @@ import type { Period } from '@lametrader/core';
 /**
  * Wire types for the backfill job resource the web app drives over HTTP + the
  * per-job WebSocket. These mirror the API's JSON shape (the backend's domain
- * types live in the server-only `@lametrader/server`, which must not enter the
+ * types live in the server-only `@lametrader/backend`, which must not enter the
  * browser bundle), so the web owns its own transport DTOs.
  */
 

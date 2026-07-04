@@ -1,7 +1,7 @@
 # Spec: web chart indicator overlays (historical)
 
 - Status: draft
-- Touches: `@lametrader/web` driving adapter — extends `lib/hooks/indicators.ts` with `useComputeIndicator` (`GET /symbols/:id/indicators/:key`); new `pages/chart/indicators/overlay-palette.ts` (deterministic theme-aware color assignment); new `pages/chart/indicators/indicator-legend.tsx` (per-overlay row with label + crosshair value + show/hide eye + remove); extends `pages/chart/candle-chart.tsx` to mirror an `overlays[]` prop into `lightweight-charts` series (line / markers / separate sub-pane); extends `pages/chart/chart-page.tsx` to assemble the applicable overlays from the selected profile and wire them into the canvas + legend.
+- Touches: `@lametrader/ui` driving adapter — extends `lib/hooks/indicators.ts` with `useComputeIndicator` (`GET /symbols/:id/indicators/:key`); new `pages/chart/indicators/overlay-palette.ts` (deterministic theme-aware color assignment); new `pages/chart/indicators/indicator-legend.tsx` (per-overlay row with label + crosshair value + show/hide eye + remove); extends `pages/chart/candle-chart.tsx` to mirror an `overlays[]` prop into `lightweight-charts` series (line / markers / separate sub-pane); extends `pages/chart/chart-page.tsx` to assemble the applicable overlays from the selected profile and wire them into the canvas + legend.
   Reuses the existing detach mutation (`useDetachIndicator` + the panel's `AlertDialog` confirm) for the legend's remove.
   No backend change — the compute endpoint already exists.
 
@@ -108,7 +108,7 @@ Tests render with `<QueryClientProvider>` + `<Theme>` and fixture overlay rows (
 ## End-to-end expectation
 
 Per the chart-page spec's convention, page-level behaviour for the web package is covered by the jsdom component tier (no browser e2e harness).
-The existing `packages/web/tests/e2e/build.e2e.test.ts` is the only `*.e2e.test.ts` for the package; it asserts `vite build` produces an artifact whose JS bundle contains rendered marker strings.
+The existing `packages/ui/tests/e2e/build.e2e.test.ts` is the only `*.e2e.test.ts` for the package; it asserts `vite build` produces an artifact whose JS bundle contains rendered marker strings.
 
 For this feature, the e2e tier adds **one bundle-marker assertion**: the built JS bundle contains the static copy `"Hide overlay"` (the legend's eye-toggle accessible name), confirming the indicator-overlay module is wired into the live route tree and ships with the deployable artifact.
 The build is shared with the existing markers via the same `beforeAll`.

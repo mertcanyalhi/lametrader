@@ -6,7 +6,7 @@ This is a TypeScript monorepo for a quant trading platform for asset tracking, t
 
 Idiomatic NestJS, kept pragmatic.
 
-The backend is a single NestJS monolith (`@lametrader/server`) on the Express platform.
+The backend is a single NestJS monolith (`@lametrader/backend`) on the Express platform.
 Structure follows Nest's grain, not a layered ring diagram: **feature modules**, each a controller → injectable service → injected repositories/providers, wired by dependency injection.
 See `docs/decisions/0018-nestjs-monolith-replaces-hexagonal-architecture.md` for why the earlier hexagonal multi-package layout (`core` → `engine` → `api`/`cli`/`web`) was collapsed into this — ADR-0018 supersedes ADR-0001.
 
@@ -42,7 +42,7 @@ npm workspaces under `packages/*` — three packages:
 - **`server`** — the NestJS monolith backend: the whole HTTP + WebSocket surface, the use-cases, the market-data adapters, persistence, and the polling / rule-engine runtime.
 - **`web`** — the browser app (React + Vite).
 
-**Adding to the backend** — the server is one Nest app, so a new resource is a new **feature module** under `packages/server/src/<resource>/` (controller, service, DTOs, Mongoose schema + repository), imported into `AppModule`.
+**Adding to the backend** — the server is one Nest app, so a new resource is a new **feature module** under `packages/backend/src/<resource>/` (controller, service, DTOs, Mongoose schema + repository), imported into `AppModule`.
 A new shared store follows the shared-persistence-module pattern above (own the model + a repository token in one module, export it, import it where needed).
 There is no new-package ceremony for backend features.
 
@@ -66,7 +66,7 @@ Every change: **spec → red → green → refactor → check → commit**, one 
 2. **Red** — turn each criterion into a failing unit test (full-payload `toEqual`).
 3. **Green** — minimal code to pass; keep to the module conventions (a service over injected ports, not a controller reaching into Mongoose).
 4. **Refactor** — clean under green tests; abstract only on the second instance.
-5. **E2E** — every major feature gets an e2e suite (poll → persist → process → assert) plus its one critical failure mode: `packages/server/test/*.e2e-spec.ts` (Jest, over HTTP/WS) for the backend, `packages/web/tests/e2e/*.e2e.test.ts` (Vitest) for the UI.
+5. **E2E** — every major feature gets an e2e suite (poll → persist → process → assert) plus its one critical failure mode: `packages/backend/test/*.e2e-spec.ts` (Jest, over HTTP/WS) for the backend, `packages/ui/tests/e2e/*.e2e.test.ts` (Vitest) for the UI.
 6. **Check** — `npm run check:full` green.
 7. **Commit** — one logical concern, Conventional Commits message.
    Do **not** bump package `version`s here — versioning is a separate flow (`/release`), driven off the conventional-commit history.
@@ -96,7 +96,7 @@ Each package sees exactly one runner; the root scripts orchestrate both.
   Fast, deterministic; the TDD tier and the bulk of tests.
   Co-located beside the code (`*.spec.ts` under `server/src`, `*.test.ts(x)` under `web` / `core` `src`).
 - **e2e** — validate a feature from the **end-user / spec perspective**, driving a real surface.
-  `server` e2e (`packages/server/test/*.e2e-spec.ts`) boots the Nest app against a Testcontainers Mongo and drives it over HTTP / WS; `web` e2e (`packages/web/tests/e2e/*.e2e.test.ts`) drives the UI.
+  `server` e2e (`packages/backend/test/*.e2e-spec.ts`) boots the Nest app against a Testcontainers Mongo and drives it over HTTP / WS; `web` e2e (`packages/ui/tests/e2e/*.e2e.test.ts`) drives the UI.
   One suite per major feature.
 - **live** — raw adapter against a real external API (`*.live.test.ts`).
   Flaky; manual only.
@@ -126,7 +126,7 @@ All routine actions go through these scripts — don't invoke `tsc` / `vitest` /
 | `npm run coverage`                 | Vitest unit + coverage                                     |
 | `npm run check`                    | typecheck + lint + Vitest unit + server Jest unit          |
 | `npm run check:full`               | check + both e2e tiers (CI on PR)                          |
-| `npm run be:start` / `be:start:dev`| start the backend built / in watch mode (`@lametrader/server`) |
+| `npm run be:start` / `be:start:dev`| start the backend built / in watch mode (`@lametrader/backend`) |
 | `npm run fe:start` / `fe:start:dev`| serve the built web app / start the Vite dev server        |
 | `npm run infra:up/down/logs/reset` | docker compose infra (Mongo)                               |
 | `npm run app:up/down/logs/build`   | docker compose full app profile (mongo + server + web)     |
@@ -142,7 +142,7 @@ Follow these by default, unprompted.
 - The tiers beyond unit (`e2e`, `live`) are Jest / Vitest **projects**, selected with `--selectProjects` / `--project` by the root scripts.
   No env flags / `runIf`.
 - Unit tests sit beside the code in `src`.
-  E2e tests assert a feature from the end-user/spec perspective and live apart from `src` — `packages/server/test/*.e2e-spec.ts` for the backend, `packages/web/tests/e2e/*.e2e.test.ts` for the UI.
+  E2e tests assert a feature from the end-user/spec perspective and live apart from `src` — `packages/backend/test/*.e2e-spec.ts` for the backend, `packages/ui/tests/e2e/*.e2e.test.ts` for the UI.
 - Never `.skip` a test to land a change.
 - **One action per test.**
   Arrange the setup, perform a single action, assert the full outcome.

@@ -1,7 +1,7 @@
 # Spec: web chart page (static)
 
 - Status: implemented
-- Touches: `@lametrader/web` driving adapter (new `/chart` page + `usePagedCandles` hook); reads the existing `GET /symbols/:id/candles`, `GET /symbols?enrich=true`, `GET /config` REST surfaces.
+- Touches: `@lametrader/ui` driving adapter (new `/chart` page + `usePagedCandles` hook); reads the existing `GET /symbols/:id/candles`, `GET /symbols?enrich=true`, `GET /config` REST surfaces.
   No backend change.
 
 ## Goal

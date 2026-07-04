@@ -1,11 +1,11 @@
 ## Spec: web form validation convention (chart dialogs)
 
 - Status: draft
-- Touches: `packages/web/src/pages/chart/profile-picker-dialog.tsx`, `packages/web/src/pages/chart/indicators/indicator-inputs-form.tsx`, `packages/web/src/lib/profile-schema.ts` (new), `packages/web/src/lib/indicator-inputs-schema.ts` (new).
+- Touches: `packages/ui/src/pages/chart/profile-picker-dialog.tsx`, `packages/ui/src/pages/chart/indicators/indicator-inputs-form.tsx`, `packages/ui/src/lib/profile-schema.ts` (new), `packages/ui/src/lib/indicator-inputs-schema.ts` (new).
 
 ## Goal
 
-Bring the chart's profile form and indicator-inputs form onto the project's react-hook-form + Yup convention (per `packages/web/CLAUDE.md` Forms section and ADR 0011), replacing the ad-hoc `name.trim() === ''` guard and the silent `NaN`-on-empty number with per-field, label-aware Yup messages surfaced inline before the request reaches the server.
+Bring the chart's profile form and indicator-inputs form onto the project's react-hook-form + Yup convention (per `packages/ui/CLAUDE.md` Forms section and ADR 0011), replacing the ad-hoc `name.trim() === ''` guard and the silent `NaN`-on-empty number with per-field, label-aware Yup messages surfaced inline before the request reaches the server.
 
 The descriptor-driven indicator-inputs form uses a Yup schema **built at render time from its `FieldDescriptor[]`** — same convention surface (`yupResolver` + `lib/*-schema.ts`), schema construction kept dynamic because the field set is dynamic.
 

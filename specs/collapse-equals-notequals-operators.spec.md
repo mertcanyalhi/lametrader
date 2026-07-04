@@ -1,7 +1,7 @@
 # Spec: collapse Equals/NotEquals operator vocabulary
 
 - Status: draft
-- Touches: `packages/web/src/pages/rules/operator-picker.tsx`, `packages/web/src/pages/rules/leaf-editor.tsx`, `packages/core/src/rules/condition-normalize.ts` (new), `packages/engine/src/rules/dispatch/in-memory-rule-repository.ts`, `packages/engine/src/rules/dispatch/mongo-rule-repository.ts`.
+- Touches: `packages/ui/src/pages/rules/operator-picker.tsx`, `packages/ui/src/pages/rules/leaf-editor.tsx`, `packages/core/src/rules/condition-normalize.ts` (new), `packages/engine/src/rules/dispatch/in-memory-rule-repository.ts`, `packages/engine/src/rules/dispatch/mongo-rule-repository.ts`.
 
 ## Goal
 

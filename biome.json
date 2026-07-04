@@ -33,7 +33,7 @@
   },
   "overrides": [
     {
-      "includes": ["packages/server/**"],
+      "includes": ["packages/backend/**"],
       "javascript": {
         "parser": {
           "unsafeParameterDecoratorsEnabled": true

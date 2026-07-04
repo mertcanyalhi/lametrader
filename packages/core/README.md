@@ -2,7 +2,7 @@
 
 The platform's shared **types** package.
 
-`core` holds the type declarations, enums, and the handful of runtime constants that both the backend (`@lametrader/server`) and the browser app (`@lametrader/web`) need to agree on.
+`core` holds the type declarations, enums, and the handful of runtime constants that both the backend (`@lametrader/backend`) and the browser app (`@lametrader/ui`) need to agree on.
 It performs no I/O and imports nothing outward — importing it never pulls domain logic or a server dependency into the browser bundle.
 
 ## What lives here
@@ -13,7 +13,7 @@ It performs no I/O and imports nothing outward — importing it never pulls doma
 
 ## What does not live here
 
-All domain **logic** and every domain **error class** live in `@lametrader/server` (`packages/server/src/domain/`).
+All domain **logic** and every domain **error class** live in `@lametrader/backend` (`packages/backend/src/domain/`).
 Input validation/coercion (`parseConfig`, `validateIndicatorInputs`, `parseSymbolPeriods`, the rule condition normalize/validate helpers, …) and the error types the HTTP layer maps to status codes (`SymbolNotFoundError`, `MarketDataError`, `RuleError`, …) moved there when the hexagonal `engine` package was dissolved (ADR-0018).
 
 ## Usage

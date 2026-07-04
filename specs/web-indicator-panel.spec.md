@@ -1,7 +1,7 @@
 # Spec: web chart indicator panel (manage selected profile's indicators)
 
 - Status: draft
-- Touches: `@lametrader/web` driving adapter — new `lib/hooks/indicators.ts` (TanStack Query over `GET /indicators`, `POST /profiles/:id/indicators`, `PUT/DELETE /profiles/:id/indicators/:instanceId`), new `pages/chart/indicators/indicator-panel-dialog.tsx` (the bottom-bar trigger + Dialog shell), `pages/chart/indicators/indicator-panel.tsx` (the list/empty body), `pages/chart/indicators/add-indicator-dialog.tsx` (two-step catalog → inputs nested dialog, also reused for edit), `pages/chart/indicators/indicator-inputs-form.tsx` (descriptor-driven form), `pages/chart/indicators/detach-indicator-dialog.tsx` (confirmation `AlertDialog`).
+- Touches: `@lametrader/ui` driving adapter — new `lib/hooks/indicators.ts` (TanStack Query over `GET /indicators`, `POST /profiles/:id/indicators`, `PUT/DELETE /profiles/:id/indicators/:instanceId`), new `pages/chart/indicators/indicator-panel-dialog.tsx` (the bottom-bar trigger + Dialog shell), `pages/chart/indicators/indicator-panel.tsx` (the list/empty body), `pages/chart/indicators/add-indicator-dialog.tsx` (two-step catalog → inputs nested dialog, also reused for edit), `pages/chart/indicators/indicator-inputs-form.tsx` (descriptor-driven form), `pages/chart/indicators/detach-indicator-dialog.tsx` (confirmation `AlertDialog`).
   Modifies `pages/chart/chart-page.tsx` to mount the trigger in the bottom-bar `Flex` and pass the current symbol's `type` for the n/a check.
   Reads the existing REST surface (`/indicators`, `/profiles/:id/indicators` sub-resource).
   No backend change.
@@ -96,7 +96,7 @@ Tests render with `<SelectedProfileProvider>` + `<QueryClientProvider>` + `<Them
 ## End-to-end expectation
 
 Per the chart-page spec's convention, page-level behaviour for the web package is covered by the jsdom component tier (no browser e2e harness).
-The existing `packages/web/tests/e2e/build.e2e.test.ts` is the only `*.e2e.test.ts` for the package; it asserts `vite build` produces an artifact whose JS bundle contains rendered marker strings.
+The existing `packages/ui/tests/e2e/build.e2e.test.ts` is the only `*.e2e.test.ts` for the package; it asserts `vite build` produces an artifact whose JS bundle contains rendered marker strings.
 
 For this feature, the e2e tier adds **one bundle-marker assertion**: the built JS bundle contains the static copy `"Select or create a profile to add indicators"`, confirming the indicator-panel module is wired into the live route tree and ships with the deployable artifact.
 The build is shared with the existing markers via the same `beforeAll`.

@@ -1,7 +1,7 @@
 # Spec: per-event context capture + info modal
 
 - Status: draft
-- Touches: `packages/core/src/rule.types.ts`, `packages/engine/src/rules/rule-orchestrator.ts`, `packages/web/src/pages/rules/events-dialog.tsx`
+- Touches: `packages/core/src/rule.types.ts`, `packages/engine/src/rules/rule-orchestrator.ts`, `packages/ui/src/pages/rules/events-dialog.tsx`
 
 ## Goal
 

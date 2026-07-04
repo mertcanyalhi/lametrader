@@ -14,11 +14,11 @@ const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../../..');
  * Absolute path to the web package's `dist/` directory — populated by
  * `vite build`, asserted on as the deployable artifact.
  */
-const distDir = join(repoRoot, 'packages/web/dist');
+const distDir = join(repoRoot, 'packages/ui/dist');
 
 /**
  * E2E for the web UI boilerplate, from the end-user/spec perspective: running
- * `vite build` against `@lametrader/web` produces a deployable artifact whose
+ * `vite build` against `@lametrader/ui` produces a deployable artifact whose
  * HTML references a JS bundle, that bundle file exists, and the bundle text
  * contains the brand string the React shell renders.
  *
@@ -27,7 +27,7 @@ const distDir = join(repoRoot, 'packages/web/dist');
 describe('web boilerplate build (e2e)', () => {
   beforeAll(() => {
     rmSync(distDir, { recursive: true, force: true });
-    execSync('npm run build -w @lametrader/web', {
+    execSync('npm run build -w @lametrader/ui', {
       cwd: repoRoot,
       stdio: 'inherit',
       env: { ...process.env, CI: '1' },

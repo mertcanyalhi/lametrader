@@ -25,12 +25,12 @@ const alias = {
  *
  * `passWithNoTests` keeps the gates green while the tree is still being built out.
  *
- * `@lametrader/server` is excluded from every project: it is a NestJS package run
+ * `@lametrader/backend` is excluded from every project: it is a NestJS package run
  * by Jest (its own `.spec.ts` / `.e2e-spec.ts` suites), orchestrated separately
  * through the root `test:server` / `test:server:e2e` scripts. Each package sees
  * exactly one runner.
  */
-const excludeServer = 'packages/server/**';
+const excludeServer = 'packages/backend/**';
 
 export default defineConfig({
   test: {
@@ -47,7 +47,7 @@ export default defineConfig({
             '**/*.e2e.test.ts',
             '**/*.live.test.ts',
           ],
-          setupFiles: ['./packages/web/src/test-setup.ts'],
+          setupFiles: ['./packages/ui/src/test-setup.ts'],
         },
       },
       {
