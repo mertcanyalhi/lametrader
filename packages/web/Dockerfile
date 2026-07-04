@@ -6,7 +6,8 @@
 # package is bundler-owned, not part of the root project-refs graph), so the
 # dependency has to exist before the web build runs.
 # Stage 2 serves the static `dist/` through nginx on port 8080, with a
-# reverse-proxy hop for `/api/*` so the browser stays same-origin (no CORS).
+# reverse-proxy hop for `/api/*` to the NestJS server so the browser stays
+# same-origin (no CORS).
 #
 # Build context is the repo root (see infra/docker-compose.yml).
 

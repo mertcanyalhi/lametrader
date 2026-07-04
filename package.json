@@ -32,7 +32,7 @@
     "app:up": "docker compose -f infra/docker-compose.yml --profile app up -d --build",
     "app:down": "docker compose -f infra/docker-compose.yml --profile app down",
     "app:logs": "docker compose -f infra/docker-compose.yml --profile app logs -f",
-    "app:logs:api": "docker compose -f infra/docker-compose.yml --profile app logs -f --no-log-prefix api | pino-pretty -i pid,hostname",
+    "app:logs:server": "docker compose -f infra/docker-compose.yml --profile app logs -f --no-log-prefix server | pino-pretty -i pid,hostname",
     "app:build": "docker compose -f infra/docker-compose.yml --profile app build"
   },
   "engines": {
