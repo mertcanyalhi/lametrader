@@ -203,7 +203,7 @@ describe('backfill API (e2e)', () => {
   it('records an upstream failure as a failed job carrying the reason', async () => {
     const failing: MarketDataSource = {
       types: [SymbolType.Crypto],
-      periods: [Period.OneHour],
+      periods: [Period.OneHour, Period.OneDay],
       search: async () => [],
       lookup: async () => BTC,
       fetchCandles: async () => {

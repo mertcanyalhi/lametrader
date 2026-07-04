@@ -134,7 +134,7 @@ describe('backfill UI contract (e2e)', () => {
   it('streams a failed frame carrying the upstream error (the modal retry path)', async () => {
     const failing: MarketDataSource = {
       types: [SymbolType.Crypto],
-      periods: [Period.OneHour],
+      periods: [Period.OneHour, Period.OneDay],
       search: async () => [],
       lookup: async () => BTC,
       fetchCandles: async () => {
