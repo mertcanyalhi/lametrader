@@ -1,6 +1,6 @@
 import type { TelegramDestination } from '@lametrader/core';
-import { InMemoryConfigRepository } from '../config/in-memory-config.repository.js';
-import { UnknownDestinationError } from '../domain/notifier.js';
+import { UnknownDestinationError } from '../../domain/notifier.js';
+import { InMemoryConfigRepository } from '../persistence/in-memory-config.repository.js';
 import { TelegramDestinationsService } from './telegram-destinations.service.js';
 import { TelegramNotifier, TelegramSendError } from './telegram-notifier.js';
 

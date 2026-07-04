@@ -1,9 +1,9 @@
 import type { Config } from '@lametrader/core';
 import { Body, Controller, Get, Patch, Put } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import { ConfigService } from './config.service.js';
-import { ConfigDto } from './dto/config.dto.js';
-import { ConfigPatchDto } from './dto/config-patch.dto.js';
+import { ConfigDto } from '../dto/config.dto.js';
+import { ConfigPatchDto } from '../dto/config-patch.dto.js';
+import { ConfigService } from '../services/config.service.js';
 
 /**
  * The RESTful `/config` resource over the {@link ConfigService}.

@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { EventLogModule } from '../event-log/event-log.module.js';
-import { SYMBOL_EVENT_LOG } from '../event-log/symbol-event-log.token.js';
-import type { SymbolEventLog } from '../event-log/symbol-event-log.types.js';
+import { CommonModule } from '../common/common.module.js';
+import { SYMBOL_EVENT_LOG } from '../common/interfaces/symbol-event-log.token.js';
+import type { SymbolEventLog } from '../common/interfaces/symbol-event-log.types.js';
 import { WatchlistModule } from '../watchlist/watchlist.module.js';
 import { MongooseStateRepository } from './mongoose-state.repository.js';
 import { StateController } from './state.controller.js';
@@ -39,7 +39,7 @@ import { STATE_REPOSITORY } from './state-repository.token.js';
   imports: [
     MongooseModule.forFeature([{ name: StateEntry.name, schema: StateEntrySchema }]),
     WatchlistModule,
-    EventLogModule,
+    CommonModule,
   ],
   controllers: [StateController],
   providers: [

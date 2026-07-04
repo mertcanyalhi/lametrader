@@ -3,9 +3,8 @@ import { Module } from '@nestjs/common';
 import { CANDLE_REPOSITORY } from '../candles/candle-repository.token.js';
 import { CandlesModule } from '../candles/candles.module.js';
 import type { StreamHub } from '../candles/stream-hub.js';
-import { ConfigModule } from '../config/config.module.js';
-import { ConfigService } from '../config/config.service.js';
-import { EventLogModule } from '../event-log/event-log.module.js';
+import { CommonModule } from '../common/common.module.js';
+import { ConfigService } from '../common/services/config.service.js';
 import { IndicatorsModule } from '../indicators/indicators.module.js';
 import { WatchlistModule } from '../watchlist/watchlist.module.js';
 import { WATCHLIST_REPOSITORY } from '../watchlist/watchlist-repository.token.js';
@@ -45,14 +44,7 @@ import { StreamHubsModule } from './stream-hubs.module.js';
  * acyclic.
  */
 @Module({
-  imports: [
-    StreamHubsModule,
-    IndicatorsModule,
-    CandlesModule,
-    WatchlistModule,
-    ConfigModule,
-    EventLogModule,
-  ],
+  imports: [StreamHubsModule, IndicatorsModule, CandlesModule, WatchlistModule, CommonModule],
   providers: [
     {
       provide: QuoteStreamService,

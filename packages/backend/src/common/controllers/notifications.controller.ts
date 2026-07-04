@@ -1,9 +1,9 @@
 import type { TelegramDestinationSummary } from '@lametrader/core';
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 import { ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import { TelegramDestinationInputDto } from './dto/telegram-destination-input.dto.js';
-import { TelegramDestinationSummaryDto } from './dto/telegram-destination-summary.dto.js';
-import { TelegramDestinationsService } from './telegram-destinations.service.js';
+import { TelegramDestinationInputDto } from '../dto/telegram-destination-input.dto.js';
+import { TelegramDestinationSummaryDto } from '../dto/telegram-destination-summary.dto.js';
+import { TelegramDestinationsService } from '../services/telegram-destinations.service.js';
 
 /**
  * The Telegram notification destinations, a sub-resource of `/config`.

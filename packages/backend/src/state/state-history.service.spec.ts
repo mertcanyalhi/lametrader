@@ -6,7 +6,7 @@ import {
   type StateValue,
   StateValueType,
 } from '@lametrader/core';
-import { InMemoryEventLog } from '../event-log/in-memory-event-log.js';
+import { InMemoryEventLog } from '../common/persistence/in-memory-event-log.js';
 import { StateHistoryService } from './state-history.service.js';
 
 /**

@@ -3,11 +3,9 @@ import { ConfigModule as NestConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CandlesModule } from './candles/candles.module.js';
 import { CommonModule } from './common/common.module.js';
-import { ConfigModule } from './config/config.module.js';
-import { validateEnv } from './config/env.validation.js';
+import { validateEnv } from './common/env.validation.js';
 import { IndicatorsModule } from './indicators/indicators.module.js';
 import { LiveCascadeService } from './live-cascade.service.js';
-import { NotificationsModule } from './notifications/notifications.module.js';
 import { ProfilesModule } from './profiles/profiles.module.js';
 import { RulesModule } from './rules/rules.module.js';
 import { StateModule } from './state/state.module.js';
@@ -59,8 +57,6 @@ import { SymbolsModule } from './symbols/symbols.module.js';
     // `forRoot` registers the global SchedulerRegistry. No decorator-based jobs.
     ScheduleModule.forRoot(),
     CommonModule,
-    ConfigModule,
-    NotificationsModule,
     ProfilesModule,
     CandlesModule,
     SymbolsModule,

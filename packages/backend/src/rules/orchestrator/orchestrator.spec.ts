@@ -24,7 +24,7 @@ import {
   type WatchlistRepository,
 } from '@lametrader/core';
 
-import { InMemoryNotifier } from '../../notifications/in-memory-notifier.js';
+import { InMemoryNotifier } from '../../common/services/in-memory-notifier.js';
 import { InMemoryStateRepository } from '../../state/in-memory-state.repository.js';
 import { InMemoryWatchlistRepository } from '../../watchlist/in-memory-watchlist.repository.js';
 import { TriggerDispatcher } from '../dispatch/dispatcher.js';
@@ -45,7 +45,7 @@ function closeSeriesAt(close: number): Map<string, SeriesView> {
   ]);
 }
 
-import { InMemoryEventLog } from '../../event-log/in-memory-event-log.js';
+import { InMemoryEventLog } from '../../common/persistence/in-memory-event-log.js';
 import { ActionRunner } from './action-runner.js';
 import { RuleOrchestrator } from './orchestrator.js';
 

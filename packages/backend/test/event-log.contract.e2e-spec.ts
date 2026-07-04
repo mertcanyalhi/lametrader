@@ -4,13 +4,10 @@ import { Test } from '@nestjs/testing';
 import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
 import { AppModule } from '../src/app.module.js';
-import { MongooseEventLog } from '../src/event-log/mongoose-event-log.js';
-import { RuleEventDoc } from '../src/event-log/rule-event-doc.schema.js';
-import { SymbolEventDoc } from '../src/event-log/symbol-event-doc.schema.js';
-import {
-  FIXED_FIRED_AT,
-  runEventLogContract,
-} from '../src/event-log/testing/event-log.contract.js';
+import { MongooseEventLog } from '../src/common/persistence/mongoose-event-log.js';
+import { RuleEventDoc } from '../src/common/persistence/rule-event-doc.schema.js';
+import { SymbolEventDoc } from '../src/common/persistence/symbol-event-doc.schema.js';
+import { FIXED_FIRED_AT, runEventLogContract } from '../src/common/testing/event-log.contract.js';
 
 /**
  * Runs the shared {@link import('@lametrader/core').EventLog} contract against the Mongoose adapter over a

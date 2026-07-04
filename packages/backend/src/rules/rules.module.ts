@@ -8,10 +8,9 @@ import { Module } from '@nestjs/common';
 import { getModelToken, MongooseModule } from '@nestjs/mongoose';
 import type { Model } from 'mongoose';
 import { CandlesModule } from '../candles/candles.module.js';
-import { EventLogModule } from '../event-log/event-log.module.js';
-import { EVENT_LOG } from '../event-log/event-log.token.js';
+import { CommonModule } from '../common/common.module.js';
+import { EVENT_LOG } from '../common/interfaces/event-log.token.js';
 import { IndicatorsModule } from '../indicators/indicators.module.js';
-import { NotificationsModule } from '../notifications/notifications.module.js';
 import { PROFILE_REPOSITORY } from '../profiles/profile-repository.token.js';
 import { ProfilesModule } from '../profiles/profiles.module.js';
 import { StateModule } from '../state/state.module.js';
@@ -68,10 +67,9 @@ import { RulesController } from './rules.controller.js';
     MongooseModule.forFeature([{ name: RuleEntry.name, schema: RuleEntrySchema }]),
     ProfilesModule,
     StateModule,
-    EventLogModule,
+    CommonModule,
     CandlesModule,
     WatchlistModule,
-    NotificationsModule,
     IndicatorsModule,
   ],
   controllers: [RulesController],

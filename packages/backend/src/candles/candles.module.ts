@@ -8,7 +8,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { SchedulerRegistry } from '@nestjs/schedule';
-import type { AppConfig } from '../config/app-config.types.js';
+import type { AppConfig } from '../common/interfaces/app-config.types.js';
 import { MarketDataModule } from '../market-data/market-data.module.js';
 import { MARKET_DATA_SOURCES } from '../market-data/market-data-source.token.js';
 import { CANDLE_STREAM } from '../stream/stream.tokens.js';

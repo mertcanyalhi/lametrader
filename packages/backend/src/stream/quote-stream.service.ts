@@ -7,7 +7,7 @@ import {
 } from '@lametrader/core';
 import { nanoid } from 'nanoid';
 import type { CandleEvent } from '../candles/polling.service.types.js';
-import type { ConfigService } from '../config/config.service.js';
+import type { ConfigService } from '../common/services/config.service.js';
 import { computeQuote } from '../domain/quote.js';
 import { SymbolError, SymbolNotFoundError } from '../domain/symbol.js';
 

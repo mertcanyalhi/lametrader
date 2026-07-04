@@ -1,5 +1,5 @@
 import { RuleEventType, StateScope } from '@lametrader/core';
-import type { SymbolEventLog } from '../event-log/symbol-event-log.types.js';
+import type { SymbolEventLog } from '../common/interfaces/symbol-event-log.types.js';
 import type {
   StateHistoryEntry,
   StateHistoryWindow,

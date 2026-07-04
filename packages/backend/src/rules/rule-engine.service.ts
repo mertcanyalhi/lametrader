@@ -8,9 +8,9 @@ import type {
 } from '@lametrader/core';
 import { Inject, Injectable } from '@nestjs/common';
 import { CANDLE_REPOSITORY } from '../candles/candle-repository.token.js';
-import { EVENT_LOG } from '../event-log/event-log.token.js';
+import { EVENT_LOG } from '../common/interfaces/event-log.token.js';
+import { TelegramNotifier } from '../common/services/telegram-notifier.js';
 import { IndicatorService } from '../indicators/indicator.service.js';
-import { TelegramNotifier } from '../notifications/telegram-notifier.js';
 import { STATE_REPOSITORY } from '../state/state-repository.token.js';
 import { WATCHLIST_REPOSITORY } from '../watchlist/watchlist-repository.token.js';
 import { IndicatorSeriesStore } from './indicator-series-store.js';

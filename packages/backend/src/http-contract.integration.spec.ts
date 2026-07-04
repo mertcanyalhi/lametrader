@@ -1,14 +1,14 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import { ConfigController } from './common/controllers/config.controller.js';
+import { NotificationsController } from './common/controllers/notifications.controller.js';
 import { DomainExceptionFilter } from './common/domain-exception.filter.js';
+import { CONFIG_REPOSITORY } from './common/interfaces/config-repository.token.js';
+import { InMemoryConfigRepository } from './common/persistence/in-memory-config.repository.js';
+import { ConfigService } from './common/services/config.service.js';
+import { TelegramDestinationsService } from './common/services/telegram-destinations.service.js';
 import { buildValidationPipe } from './common/validation.pipe.js';
-import { ConfigController } from './config/config.controller.js';
-import { ConfigService } from './config/config.service.js';
-import { CONFIG_REPOSITORY } from './config/config-repository.token.js';
-import { InMemoryConfigRepository } from './config/in-memory-config.repository.js';
-import { NotificationsController } from './notifications/notifications.controller.js';
-import { TelegramDestinationsService } from './notifications/telegram-destinations.service.js';
 
 /**
  * Local (Docker-free) integration proof of the app-wide HTTP contract: the

@@ -14,12 +14,12 @@ import {
   StateValueType,
   TriggerKind,
 } from '@lametrader/core';
+import { InMemoryEventLog } from '../common/persistence/in-memory-event-log.js';
 import {
   InvalidRuleConditionError,
   RuleNotFoundError,
   TickRuleNotEligibleError,
 } from '../domain/rule.js';
-import { InMemoryEventLog } from '../event-log/in-memory-event-log.js';
 import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
 import { InMemoryRuleRepository } from './in-memory-rule.repository.js';
 import { RuleService } from './rule.service.js';

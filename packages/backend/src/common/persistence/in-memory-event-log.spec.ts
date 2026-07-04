@@ -1,5 +1,5 @@
+import { FIXED_FIRED_AT, runEventLogContract } from '../testing/event-log.contract.js';
 import { InMemoryEventLog } from './in-memory-event-log.js';
-import { FIXED_FIRED_AT, runEventLogContract } from './testing/event-log.contract.js';
 
 /**
  * Runs the shared {@link import('@lametrader/core').EventLog} contract against the

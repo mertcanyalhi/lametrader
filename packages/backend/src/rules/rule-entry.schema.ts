@@ -16,7 +16,7 @@ import { Schema as MongooseSchema } from 'mongoose';
  * so the store does not re-model the union types.
  *
  * This model is distinct from the event log's second model on the same collection
- * ({@link import('../event-log/rule-event-doc.schema.js').RuleEventDoc}, which
+ * ({@link import('../common/persistence/rule-event-doc.schema.js').RuleEventDoc}, which
  * projects only `_id` + `events[]`); the two never overlap because this schema
  * deliberately omits `events`.
  */

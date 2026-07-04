@@ -5,9 +5,9 @@ import { Test } from '@nestjs/testing';
 import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
 import { AppModule } from '../src/app.module.js';
-import { ConfigEntry } from '../src/config/config-entry.schema.js';
-import { CONFIG_REPOSITORY } from '../src/config/config-repository.token.js';
-import { runConfigRepositoryContract } from '../src/config/testing/config-repository.contract.js';
+import { CONFIG_REPOSITORY } from '../src/common/interfaces/config-repository.token.js';
+import { ConfigEntry } from '../src/common/persistence/config-entry.schema.js';
+import { runConfigRepositoryContract } from '../src/common/testing/config-repository.contract.js';
 
 /**
  * Runs the shared {@link ConfigRepository} contract against the Mongoose adapter

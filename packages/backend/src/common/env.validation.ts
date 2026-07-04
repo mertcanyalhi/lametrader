@@ -4,7 +4,7 @@ import type {
   LogLevel,
   LogScopeOverride,
   TelegramDestination,
-} from './app-config.types.js';
+} from './interfaces/app-config.types.js';
 
 /**
  * Default MongoDB connection string (local dev infra in

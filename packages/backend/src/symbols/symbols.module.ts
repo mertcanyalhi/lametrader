@@ -2,8 +2,8 @@ import type { CandleRepository, SymbolDiscovery, WatchlistRepository } from '@la
 import { Module } from '@nestjs/common';
 import { CANDLE_REPOSITORY } from '../candles/candle-repository.token.js';
 import { CandlesModule } from '../candles/candles.module.js';
-import { ConfigModule } from '../config/config.module.js';
-import { ConfigService } from '../config/config.service.js';
+import { CommonModule } from '../common/common.module.js';
+import { ConfigService } from '../common/services/config.service.js';
 import { MarketDataModule } from '../market-data/market-data.module.js';
 import { MARKET_DATA_SOURCES } from '../market-data/market-data-source.token.js';
 import { ProfileService } from '../profiles/profile.service.js';
@@ -36,7 +36,7 @@ import { SymbolsController } from './symbols.controller.js';
  * so the graph stays acyclic.
  */
 @Module({
-  imports: [ConfigModule, MarketDataModule, ProfilesModule, WatchlistModule, CandlesModule],
+  imports: [CommonModule, MarketDataModule, ProfilesModule, WatchlistModule, CandlesModule],
   controllers: [SymbolsController],
   providers: [
     {

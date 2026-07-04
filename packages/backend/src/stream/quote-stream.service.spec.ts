@@ -9,8 +9,8 @@ import {
 } from '@lametrader/core';
 import { InMemoryCandleRepository } from '../candles/in-memory-candle.repository.js';
 import type { CandleEvent } from '../candles/polling.service.types.js';
-import { ConfigService } from '../config/config.service.js';
-import { InMemoryConfigRepository } from '../config/in-memory-config.repository.js';
+import { InMemoryConfigRepository } from '../common/persistence/in-memory-config.repository.js';
+import { ConfigService } from '../common/services/config.service.js';
 import { computeQuote } from '../domain/quote.js';
 import { SymbolError, SymbolNotFoundError } from '../domain/symbol.js';
 import { InMemoryMarketDataSource } from '../market-data/in-memory-market-data-source.js';
