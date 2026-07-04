@@ -27,6 +27,7 @@
     "pino-http": "^11.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
+    "ws": "^8.21.0",
     "yahoo-finance2": "^3.15.3"
   },
   "devDependencies": {
@@ -36,6 +37,7 @@
     "@testcontainers/mongodb": "^12.0.4",
     "@types/jest": "^30.0.0",
     "@types/supertest": "^7.2.0",
+    "@types/ws": "^8.18.1",
     "jest": "^30.4.2",
     "supertest": "^7.2.2"
   }

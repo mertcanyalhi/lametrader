@@ -3,8 +3,8 @@
 The backend monolith — an idiomatic [NestJS](https://nestjs.com) application on the Express platform.
 
 This package is stage 3 of the NestJS migration (see `specs/nestjs-monolith-migration.spec.md` and ADR-0018).
-On top of the cross-cutting shell (validated configuration, structured logging, the root Mongo connection, a health endpoint) it serves the first ported resources — the **config + Telegram notifications** surface, the **symbols + instruments** surface, and the **profiles** surface (with its attached-indicators sub-resource) — and establishes the app-wide HTTP contract every later resource reuses.
-It runs alongside the still-deployed `@lametrader/api`; the remaining resource controllers, repositories, and the polling loop are ported in later stages.
+On top of the cross-cutting shell (validated configuration, structured logging, the root Mongo connection, a health endpoint) it serves the first ported resources — the **config + Telegram notifications** surface, the **symbols + instruments** surface, the **profiles** surface (with its attached-indicators sub-resource), and the **candles + backfill** surface (reads, the async backfill job, and its per-job progress WebSocket) — and establishes the app-wide HTTP contract every later resource reuses.
+It runs alongside the still-deployed `@lametrader/api`; the remaining resource controllers and the cutover that starts the polling loop are done in later stages.
 
 ## What's here
 
@@ -16,6 +16,7 @@ It runs alongside the still-deployed `@lametrader/api`; the remaining resource c
 - **Symbols** (`src/symbols`) — the `SymbolsModule`: `SymbolService` over a Mongoose-backed watchlist (`watchlist` collection) and the market-data sources, behind the `/instruments` + `/symbols` controller.
   It imports the `ProfilesModule` and injects its `ProfileService` as the symbol-removal → profile-prune cascade (ADR-0009): removing a symbol prunes it from every profile's `symbols` scope.
 - **Profiles** (`src/profiles`) — the `ProfilesModule`: `ProfileService` over a Mongoose-backed profile store (`profiles` collection), behind the `/profiles` controller (CRUD + the attached-indicators sub-resource). Validates a `symbols` scope against the watchlist and attached-indicator inputs against the indicator registry.
+- **Candles** (`src/candles`) — the `CandlesModule`: the single owner of the Mongoose-backed candle store (`candles` collection), binding and exporting the `CANDLE_REPOSITORY` token (the shared-persistence pattern; the symbols use-case imports it for quote enrichment + the remove cascade). It drives the `BackfillService` (reads) and `BackfillJobService` (async jobs) behind the `/symbols/:id/candles` + `/backfill` controller, and serves the per-job progress WebSocket via the `BackfillProgressGateway` (a raw `ws` server on the HTTP upgrade, matching the param'd URL).
 - **Indicators** (`src/indicators`) — the `IndicatorsModule`: the shared, read-only `IndicatorRegistry` (catalog of the shipped `sma` / `vwma` modules, pure logic) built by `defaultIndicators` and exported for the profiles use-case to validate against. The indicators HTTP routes are added on top of this module in a later stage.
 - **Market data** (`src/market-data`) — the `MarketDataModule`: the registered discovery sources (Binance for crypto, Yahoo for stocks/funds/FX) bound to the `MARKET_DATA_SOURCES` token, fanned out by the symbols use-case (and, later, backfill/polling).
 - **HTTP contract** (`src/common`) — the keystone the whole API reuses: a global `DomainExceptionFilter` mapping domain errors to status codes with the uniform `{ error, fields? }` envelope, and a global `ValidationPipe` (class-validator DTOs) emitting the same envelope on validation failure.
@@ -40,6 +41,10 @@ It runs alongside the still-deployed `@lametrader/api`; the remaining resource c
 | `POST`   | `/symbols`                                  | `{ id, periods? }`             | Add (validates existence). **201** / 400 / 404 / 409.   |
 | `PATCH`  | `/symbols/:id`                              | `{ periods }`                  | Change a symbol's periods. 200 / 400 / 404.             |
 | `DELETE` | `/symbols/:id`                              | —                              | Remove a symbol **and its stored candles**. **204**.    |
+| `GET`    | `/symbols/:id/candles?period=&from=&to=&limit=` | —                          | Read a keyset-paginated page of stored candles. 200 / 400. |
+| `POST`   | `/symbols/:id/backfill`                     | `{ period, from?, to? }`       | Start a backfill **job**; returns **202** with the running job. 202 / 400 / 404 / 409. |
+| `GET`    | `/symbols/:id/backfill/jobs/:jobId`         | —                              | Get a backfill job's current state. 200 / 404.          |
+| `WS`     | `/symbols/:id/backfill/jobs/:jobId/progress` | —                             | Stream a job's snapshots (full job per frame, keyed by job id). |
 | `GET`    | `/profiles`                                 | —                              | List profiles. 200.                                     |
 | `POST`   | `/profiles`                                 | `{ name, description?, enabled?, scope?, chartStates? }` | Create. **201** / 400 / 409.       |
 | `GET`    | `/profiles/:id`                             | —                              | Get one. 200 / 404.                                     |
@@ -81,7 +86,29 @@ With `?enrich=true`, each item carries a `quote` computed server-side from the s
 `quote` is **`null`** when the symbol does not watch `defaultPeriod` or has fewer than two candles stored there.
 Absent or `?enrich=false` returns the plain list.
 
-The nested sub-resources of a symbol (`/symbols/:id/candles`, `/state`, `/indicators`, `/rule-events`) are ported with their own feature modules in later stages.
+The remaining nested sub-resources of a symbol (`/state`, `/indicators`, `/rule-events`) are ported with their own feature modules in later stages; `/candles` + `/backfill` are served by the candles module below.
+
+### Candles & backfill resource
+
+Backfill historical OHLC candles for a **watched** symbol+period into MongoDB and read them back.
+A candle is the OHLC base `{ type, time, open, high, low, close }` plus per-asset-class fields — crypto adds `volume`/`quoteVolume`/`trades`, equities add `volume`, FX adds none; `time` is the open time in epoch ms.
+`from`/`to` are epoch ms; omit both on a backfill to fetch the provider's deepest available history. The `period` must be one of the symbol's watched periods.
+
+A backfill runs **asynchronously** (ADR-0008): `POST` validates synchronously, starts the work in the background, and returns **202** with a job `{ id, symbolId, period, status, progress, summary, error }` (`status` is `running` | `succeeded` | `failed`; `progress` is `{ saved, total }` once a chunk lands; `summary` is set on success; `error` on failure).
+Poll `GET …/jobs/:jobId` or stream the WebSocket for updates.
+Synchronous client errors are preserved: **404** when the symbol isn't watched, **400** for a period it doesn't watch or an invalid range, **409** when a backfill for that symbol+period is already running.
+An upstream provider failure does not fail the POST — the job goes `failed` with the provider's reason in `error`.
+
+The summary is `{ id, period, from, to, fetched, saved, complete }` (`from`/`to` are the first/last persisted candle time, or `null` when nothing was fetched; `complete` is `false` when the provider capped the fetch and more history may exist).
+
+`GET …/candles` returns one **keyset-paginated** page `{ candles, nextCursor, latestTime }`, where `candles` is ascending by `time`, `nextCursor` is the `time` to pass as the next request's `from` (or `null` on the last page), and `latestTime` is the latest stored candle's `time` for the whole `(symbol, period)` (or `null` when none). `limit` defaults to 100, max 1000 (over the max → 400). Page forward by re-issuing with `from = nextCursor`.
+
+**Progress over WebSocket.**
+Connect to `/symbols/:id/backfill/jobs/:jobId/progress` with the `jobId` from the 202 response.
+The socket immediately receives the job's current snapshot, then a frame on each state change (progress tick and the terminal `succeeded`/`failed`), each the full job object.
+Frames are keyed by job id, so concurrent jobs never interleave; intermediate progress is not replayed.
+A job is only streamable under its own symbol path; otherwise the socket gets a single `{ error }` frame and closes.
+Nest's `@WebSocketGateway` cannot path-match URL params, so this route is served by a raw `ws` server that handles the HTTP `upgrade` for exactly this URL pattern (`BackfillProgressGateway`) — preserving the URL + protocol byte-for-byte so the web client is unchanged.
 
 ### Profiles resource
 
