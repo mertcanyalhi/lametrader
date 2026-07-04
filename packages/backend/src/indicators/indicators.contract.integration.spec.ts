@@ -8,10 +8,10 @@ import {
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { InMemoryCandleRepository } from '../candles/in-memory-candle.repository.js';
 import { DomainExceptionFilter } from '../common/domain-exception.filter.js';
 import { buildValidationPipe } from '../common/validation.pipe.js';
-import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
+import { InMemoryCandleRepository } from '../market/persistence/in-memory-candle.repository.js';
+import { InMemoryWatchlistRepository } from '../market/persistence/in-memory-watchlist.repository.js';
 import { defaultIndicators } from './default-indicators.js';
 import { IndicatorService } from './indicator.service.js';
 import { IndicatorRegistry } from './indicator-registry.js';

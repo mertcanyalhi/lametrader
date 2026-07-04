@@ -1,10 +1,10 @@
 import type { ProfileRepository, WatchlistRepository } from '@lametrader/core';
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { IndicatorRegistry } from '../indicators/indicator-registry.js';
 import { IndicatorsModule } from '../indicators/indicators.module.js';
-import { WatchlistModule } from '../watchlist/watchlist.module.js';
-import { WATCHLIST_REPOSITORY } from '../watchlist/watchlist-repository.token.js';
+import { WATCHLIST_REPOSITORY } from '../market/interfaces/watchlist-repository.token.js';
+import { MarketModule } from '../market/market.module.js';
 import { MongooseProfileRepository } from './mongoose-profile.repository.js';
 import { ProfileService } from './profile.service.js';
 import { ProfileEntry, ProfileEntrySchema } from './profile-entry.schema.js';
@@ -40,7 +40,7 @@ import { ProfilesController } from './profiles.controller.js';
 @Module({
   imports: [
     IndicatorsModule,
-    WatchlistModule,
+    forwardRef(() => MarketModule),
     MongooseModule.forFeature([{ name: ProfileEntry.name, schema: ProfileEntrySchema }]),
   ],
   controllers: [ProfilesController],

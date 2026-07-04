@@ -3,7 +3,7 @@
  * gateway fans out.
  *
  * Each binds one instance of the single shared
- * {@link import('../candles/stream-hub.js').StreamHub} (no duplicate
+ * {@link import('../common/services/stream-hub.js').StreamHub} (no duplicate
  * implementation). The hubs live in a dependency-free
  * {@link import('./stream-hubs.module.js').StreamHubsModule} so that both the
  * producers that publish to them (the `PollingService` in `CandlesModule`, the

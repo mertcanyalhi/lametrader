@@ -7,19 +7,19 @@ import type {
   WatchlistRepository,
 } from '@lametrader/core';
 import { Inject, Injectable } from '@nestjs/common';
-import { CANDLE_REPOSITORY } from '../candles/candle-repository.token.js';
 import { EVENT_LOG } from '../common/interfaces/event-log.token.js';
 import { TelegramNotifier } from '../common/services/telegram-notifier.js';
 import { IndicatorService } from '../indicators/indicator.service.js';
+import { CANDLE_REPOSITORY } from '../market/interfaces/candle-repository.token.js';
+import { WATCHLIST_REPOSITORY } from '../market/interfaces/watchlist-repository.token.js';
 import { STATE_REPOSITORY } from '../state/state-repository.token.js';
-import { WATCHLIST_REPOSITORY } from '../watchlist/watchlist-repository.token.js';
 import { IndicatorSeriesStore } from './indicator-series-store.js';
 import { RULE_REPOSITORY } from './rule-repository.token.js';
 import { type WiredRuleEngine, wireRuleEngine } from './wire/wire-rule-engine.js';
 
 /**
  * Holds the relocated rule engine as a **ready-but-idle** provider — the
- * live-wiring parallel of the relocated {@link import('../candles/polling.service.js').PollingService}.
+ * live-wiring parallel of the relocated {@link import('../market/services/polling.service.js').PollingService}.
  *
  * Injects every collaborator the engine needs from its owning module: the rule
  * store ({@link RULE_REPOSITORY}), the state store ({@link STATE_REPOSITORY}), the

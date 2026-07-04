@@ -2,8 +2,8 @@ import { type StateRepository, type StateValue, type WatchlistRepository } from 
 import { Controller, Get, Inject, Param, Query } from '@nestjs/common';
 import { ApiExtraModels, ApiOkResponse, ApiTags, getSchemaPath } from '@nestjs/swagger';
 import { SymbolNotFoundError } from '../domain/symbol.js';
-import { SymbolIdParamDto } from '../symbols/dto/symbol-id-param.dto.js';
-import { WATCHLIST_REPOSITORY } from '../watchlist/watchlist-repository.token.js';
+import { SymbolIdParamDto } from '../market/dto/symbol-id-param.dto.js';
+import { WATCHLIST_REPOSITORY } from '../market/interfaces/watchlist-repository.token.js';
 import { ProfileStateParamDto } from './dto/profile-state-param.dto.js';
 import { StateHistoryEntryDto } from './dto/state-history-entry.dto.js';
 import { StateKeyDescriptorDto } from './dto/state-key-descriptor.dto.js';

@@ -11,8 +11,8 @@ import {
   SymbolType,
 } from '@lametrader/core';
 import YahooFinance from 'yahoo-finance2';
-import { CandleError } from '../domain/candle.js';
-import { MarketDataError, symbolType } from '../domain/symbol.js';
+import { CandleError } from '../../domain/candle.js';
+import { MarketDataError, symbolType } from '../../domain/symbol.js';
 
 /**
  * Map Yahoo's `quoteType` to our {@link SymbolType} (others are skipped).

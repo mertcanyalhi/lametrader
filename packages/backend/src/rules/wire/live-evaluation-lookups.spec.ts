@@ -1,5 +1,5 @@
 import { Period, StateValueType } from '@lametrader/core';
-import type { CandleEvent } from '../../candles/polling.service.types.js';
+import type { CandleEvent } from '../../market/interfaces/polling.service.types.js';
 import { InMemoryStateRepository } from '../../state/in-memory-state.repository.js';
 import { barSeriesKey } from '../evaluation-context.js';
 import { LiveEvaluationLookups } from './live-evaluation-lookups.js';

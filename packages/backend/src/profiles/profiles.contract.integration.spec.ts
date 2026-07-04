@@ -5,7 +5,7 @@ import request from 'supertest';
 import { DomainExceptionFilter } from '../common/domain-exception.filter.js';
 import { buildValidationPipe } from '../common/validation.pipe.js';
 import { defaultIndicators } from '../indicators/default-indicators.js';
-import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
+import { InMemoryWatchlistRepository } from '../market/persistence/in-memory-watchlist.repository.js';
 import { InMemoryProfileRepository } from './in-memory-profile.repository.js';
 import { ProfileService } from './profile.service.js';
 import { ProfilesController } from './profiles.controller.js';

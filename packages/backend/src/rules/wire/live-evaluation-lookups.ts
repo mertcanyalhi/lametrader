@@ -6,7 +6,7 @@ import {
   StateValueType,
 } from '@lametrader/core';
 
-import type { CandleEvent } from '../../candles/polling.service.types.js';
+import type { CandleEvent } from '../../market/interfaces/polling.service.types.js';
 import type { BarAxis } from '../bar-series-view.js';
 import { barSeriesKey } from '../evaluation-context.js';
 import { ArraySeriesView } from '../indicator-series-store.js';

@@ -13,11 +13,11 @@ import type { Model } from 'mongoose';
 import request from 'supertest';
 import { WebSocket } from 'ws';
 import { AppModule } from '../src/app.module.js';
-import { CandleEntry } from '../src/candles/candle-entry.schema.js';
 import { MarketDataError } from '../src/domain/symbol.js';
-import { InMemoryMarketDataSource } from '../src/market-data/in-memory-market-data-source.js';
-import { MARKET_DATA_SOURCES } from '../src/market-data/market-data-source.token.js';
-import { WatchlistEntry } from '../src/watchlist/watchlist-entry.schema.js';
+import { InMemoryMarketDataSource } from '../src/market/market-data/in-memory-market-data-source.js';
+import { MARKET_DATA_SOURCES } from '../src/market/market-data/market-data-source.token.js';
+import { CandleEntry } from '../src/market/persistence/candle-entry.schema.js';
+import { WatchlistEntry } from '../src/market/persistence/watchlist-entry.schema.js';
 
 /** The stub instrument the catalog knows. */
 const BTC: Instrument = {

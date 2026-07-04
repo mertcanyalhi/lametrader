@@ -11,17 +11,17 @@ import {
   type WatchedSymbol,
   type WatchlistRepository,
 } from '@lametrader/core';
-import type { ConfigService } from '../common/services/config.service.js';
-import { computeQuote } from '../domain/quote.js';
+import type { ConfigService } from '../../common/services/config.service.js';
+import { computeQuote } from '../../domain/quote.js';
 import {
   assertInstrumentTypeMatchesId,
   parseSymbolPeriods,
   SymbolConflictError,
   SymbolNotFoundError,
   symbolType,
-} from '../domain/symbol.js';
+} from '../../domain/symbol.js';
+import type { SymbolProfilePruner } from '../interfaces/symbol.service.types.js';
 import { assertSourceSupportsPeriods, sourceForType } from '../market-data/source-registry.js';
-import type { SymbolProfilePruner } from './symbol.service.types.js';
 
 /**
  * Application use-case for discovering, watching, and tuning symbols.

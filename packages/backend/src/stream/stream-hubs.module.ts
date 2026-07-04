@@ -1,7 +1,7 @@
 import type { IndicatorStateEvent, RuleEventEntry, SymbolQuoteEvent } from '@lametrader/core';
 import { Logger, Module } from '@nestjs/common';
-import type { CandleEvent } from '../candles/polling.service.types.js';
-import { StreamHub } from '../candles/stream-hub.js';
+import { StreamHub } from '../common/services/stream-hub.js';
+import type { CandleEvent } from '../market/interfaces/polling.service.types.js';
 import {
   CANDLE_STREAM,
   INDICATOR_STREAM,

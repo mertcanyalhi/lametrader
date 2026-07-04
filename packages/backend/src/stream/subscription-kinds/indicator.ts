@@ -1,5 +1,5 @@
 import { type IndicatorStateEvent, type Period } from '@lametrader/core';
-import type { StreamHub } from '../../candles/stream-hub.js';
+import type { StreamHub } from '../../common/services/stream-hub.js';
 import { IndicatorError, IndicatorNotFoundError } from '../../domain/indicator.js';
 import { SymbolNotFoundError } from '../../domain/symbol.js';
 import type { IndicatorService } from '../../indicators/indicator.service.js';

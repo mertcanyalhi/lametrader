@@ -1,12 +1,11 @@
 import type { CandleRepository, IndicatorStateEvent, WatchlistRepository } from '@lametrader/core';
 import { Module } from '@nestjs/common';
-import { CANDLE_REPOSITORY } from '../candles/candle-repository.token.js';
-import { CandlesModule } from '../candles/candles.module.js';
-import type { StreamHub } from '../candles/stream-hub.js';
+import type { StreamHub } from '../common/services/stream-hub.js';
+import { CANDLE_REPOSITORY } from '../market/interfaces/candle-repository.token.js';
+import { WATCHLIST_REPOSITORY } from '../market/interfaces/watchlist-repository.token.js';
+import { MarketModule } from '../market/market.module.js';
 import { INDICATOR_STREAM } from '../stream/stream.tokens.js';
 import { StreamHubsModule } from '../stream/stream-hubs.module.js';
-import { WatchlistModule } from '../watchlist/watchlist.module.js';
-import { WATCHLIST_REPOSITORY } from '../watchlist/watchlist-repository.token.js';
 import { defaultIndicators } from './default-indicators.js';
 import { IndicatorService } from './indicator.service.js';
 import { IndicatorRegistry } from './indicator-registry.js';
@@ -41,7 +40,7 @@ import { IndicatorsController } from './indicators.controller.js';
  * stream-hubs, mongo}).
  */
 @Module({
-  imports: [CandlesModule, WatchlistModule, StreamHubsModule],
+  imports: [MarketModule, StreamHubsModule],
   controllers: [IndicatorsController],
   providers: [
     { provide: IndicatorRegistry, useFactory: () => defaultIndicators() },

@@ -10,9 +10,9 @@ import {
 } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import { type RawData, WebSocketServer, type WebSocket as WsSocket } from 'ws';
-import type { CandleEvent } from '../candles/polling.service.types.js';
-import type { StreamHub } from '../candles/stream-hub.js';
+import type { StreamHub } from '../common/services/stream-hub.js';
 import { IndicatorService } from '../indicators/indicator.service.js';
+import type { CandleEvent } from '../market/interfaces/polling.service.types.js';
 import { QuoteStreamService } from './quote-stream.service.js';
 import {
   CANDLE_STREAM,
@@ -58,7 +58,7 @@ export function isStreamPath(url: string): boolean {
  * parallel (see {@link SubscriptionRegistry} and the four `subscription-kinds/`).
  * Nest's `@WebSocketGateway` / `WsAdapter` would bind one gateway to a single
  * fixed `path` and cannot coexist with the param'd backfill-progress route on
- * the same server, so — exactly like the {@link import('../candles/backfill-progress.gateway.js').BackfillProgressGateway}
+ * the same server, so — exactly like the {@link import('../market/backfill/backfill-progress.gateway.js').BackfillProgressGateway}
  * — this gateway drives a raw `ws` server in `noServer` mode and handles the
  * HTTP `upgrade` itself: it matches only {@link STREAM_PATH} (and ignores every
  * other upgrade, leaving the socket for the backfill-progress gateway) and then

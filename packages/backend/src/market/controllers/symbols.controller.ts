@@ -19,15 +19,15 @@ import {
   ApiTags,
   getSchemaPath,
 } from '@nestjs/swagger';
-import { AddSymbolDto } from './dto/add-symbol.dto.js';
-import { DiscoverQueryDto } from './dto/discover-query.dto.js';
-import { EnrichedSymbolDto } from './dto/enriched-symbol.dto.js';
-import { InstrumentDto } from './dto/instrument.dto.js';
-import { ListSymbolsQueryDto } from './dto/list-symbols-query.dto.js';
-import { PatchSymbolDto } from './dto/patch-symbol.dto.js';
-import { SymbolIdParamDto } from './dto/symbol-id-param.dto.js';
-import { WatchedSymbolDto } from './dto/watched-symbol.dto.js';
-import { SymbolService } from './symbol.service.js';
+import { AddSymbolDto } from '../dto/add-symbol.dto.js';
+import { DiscoverQueryDto } from '../dto/discover-query.dto.js';
+import { EnrichedSymbolDto } from '../dto/enriched-symbol.dto.js';
+import { InstrumentDto } from '../dto/instrument.dto.js';
+import { ListSymbolsQueryDto } from '../dto/list-symbols-query.dto.js';
+import { PatchSymbolDto } from '../dto/patch-symbol.dto.js';
+import { SymbolIdParamDto } from '../dto/symbol-id-param.dto.js';
+import { WatchedSymbolDto } from '../dto/watched-symbol.dto.js';
+import { SymbolService } from '../services/symbol.service.js';
 
 /**
  * The RESTful symbols surface over the {@link SymbolService}: instrument

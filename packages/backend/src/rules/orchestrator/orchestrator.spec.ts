@@ -25,8 +25,8 @@ import {
 } from '@lametrader/core';
 
 import { InMemoryNotifier } from '../../common/services/in-memory-notifier.js';
+import { InMemoryWatchlistRepository } from '../../market/persistence/in-memory-watchlist.repository.js';
 import { InMemoryStateRepository } from '../../state/in-memory-state.repository.js';
-import { InMemoryWatchlistRepository } from '../../watchlist/in-memory-watchlist.repository.js';
 import { TriggerDispatcher } from '../dispatch/dispatcher.js';
 import { barSeriesKey, buildEvaluationContext } from '../evaluation-context.js';
 import type { EvaluationContext } from '../evaluation-context.types.js';

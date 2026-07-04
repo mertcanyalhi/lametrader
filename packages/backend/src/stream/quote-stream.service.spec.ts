@@ -7,15 +7,15 @@ import {
   SymbolType,
   type WatchedSymbol,
 } from '@lametrader/core';
-import { InMemoryCandleRepository } from '../candles/in-memory-candle.repository.js';
-import type { CandleEvent } from '../candles/polling.service.types.js';
 import { InMemoryConfigRepository } from '../common/persistence/in-memory-config.repository.js';
 import { ConfigService } from '../common/services/config.service.js';
 import { computeQuote } from '../domain/quote.js';
 import { SymbolError, SymbolNotFoundError } from '../domain/symbol.js';
-import { InMemoryMarketDataSource } from '../market-data/in-memory-market-data-source.js';
-import { SymbolService } from '../symbols/symbol.service.js';
-import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
+import type { CandleEvent } from '../market/interfaces/polling.service.types.js';
+import { InMemoryMarketDataSource } from '../market/market-data/in-memory-market-data-source.js';
+import { InMemoryCandleRepository } from '../market/persistence/in-memory-candle.repository.js';
+import { InMemoryWatchlistRepository } from '../market/persistence/in-memory-watchlist.repository.js';
+import { SymbolService } from '../market/services/symbol.service.js';
 import { QuoteStreamService } from './quote-stream.service.js';
 
 /** One hour in ms. */

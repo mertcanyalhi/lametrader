@@ -1,6 +1,6 @@
 import { type Candle, Period, StateValueType, SymbolType } from '@lametrader/core';
 
-import { InMemoryCandleRepository } from '../candles/in-memory-candle.repository.js';
+import { InMemoryCandleRepository } from '../market/persistence/in-memory-candle.repository.js';
 import { type BarAxis, BarSeriesView } from './bar-series-view.js';
 
 const SYMBOL = 'BTC';

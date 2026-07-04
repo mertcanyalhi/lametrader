@@ -2,7 +2,7 @@ import { type Rule, type RuleEventEntry } from '@lametrader/core';
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { RuleError } from '../domain/rule.js';
-import { SymbolIdParamDto } from '../symbols/dto/symbol-id-param.dto.js';
+import { SymbolIdParamDto } from '../market/dto/symbol-id-param.dto.js';
 import { RuleDto } from './dto/rule.dto.js';
 import { RuleCreateDto } from './dto/rule-create.dto.js';
 import { RuleEventEntryDto } from './dto/rule-event-entry.dto.js';

@@ -11,21 +11,21 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { WebSocket } from 'ws';
 import { DomainExceptionFilter } from '../common/domain-exception.filter.js';
+import { StreamHub } from '../common/services/stream-hub.js';
 import { buildValidationPipe } from '../common/validation.pipe.js';
 import { MarketDataError } from '../domain/symbol.js';
-import { InMemoryMarketDataSource } from '../market-data/in-memory-market-data-source.js';
-import { MARKET_DATA_SOURCES } from '../market-data/market-data-source.token.js';
-import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
-import { WATCHLIST_REPOSITORY } from '../watchlist/watchlist-repository.token.js';
-import { BackfillService } from './backfill.service.js';
-import { BackfillJobService } from './backfill-job.service.js';
-import type { BackfillJob } from './backfill-job.types.js';
-import { BACKFILL_JOB_STREAM } from './backfill-job-stream.token.js';
-import { BackfillProgressGateway } from './backfill-progress.gateway.js';
-import { CANDLE_REPOSITORY } from './candle-repository.token.js';
-import { CandlesController } from './candles.controller.js';
-import { InMemoryCandleRepository } from './in-memory-candle.repository.js';
-import { StreamHub } from './stream-hub.js';
+import { BackfillService } from './backfill/backfill.service.js';
+import { BackfillJobService } from './backfill/backfill-job.service.js';
+import type { BackfillJob } from './backfill/backfill-job.types.js';
+import { BACKFILL_JOB_STREAM } from './backfill/backfill-job-stream.token.js';
+import { BackfillProgressGateway } from './backfill/backfill-progress.gateway.js';
+import { CandlesController } from './controllers/candles.controller.js';
+import { CANDLE_REPOSITORY } from './interfaces/candle-repository.token.js';
+import { WATCHLIST_REPOSITORY } from './interfaces/watchlist-repository.token.js';
+import { InMemoryMarketDataSource } from './market-data/in-memory-market-data-source.js';
+import { MARKET_DATA_SOURCES } from './market-data/market-data-source.token.js';
+import { InMemoryCandleRepository } from './persistence/in-memory-candle.repository.js';
+import { InMemoryWatchlistRepository } from './persistence/in-memory-watchlist.repository.js';
 
 /**
  * Local (Docker-free) integration proof of the candles + backfill HTTP **and**

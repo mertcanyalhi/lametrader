@@ -7,7 +7,7 @@ import type { Model } from 'mongoose';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { SymbolEventDoc } from '../src/common/persistence/symbol-event-doc.schema.js';
-import { WatchlistEntry } from '../src/watchlist/watchlist-entry.schema.js';
+import { WatchlistEntry } from '../src/market/persistence/watchlist-entry.schema.js';
 
 /**
  * E2E for the chart state-overlay routes (#434): a watched symbol with a few

@@ -5,13 +5,13 @@ import {
   SymbolType,
   type WatchedSymbol,
 } from '@lametrader/core';
-import { CandleError } from '../domain/candle.js';
-import { SymbolNotFoundError } from '../domain/symbol.js';
+import { CandleError } from '../../domain/candle.js';
+import { SymbolNotFoundError } from '../../domain/symbol.js';
 import { InMemoryMarketDataSource } from '../market-data/in-memory-market-data-source.js';
-import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
+import { InMemoryCandleRepository } from '../persistence/in-memory-candle.repository.js';
+import { InMemoryWatchlistRepository } from '../persistence/in-memory-watchlist.repository.js';
 import { BackfillService } from './backfill.service.js';
 import type { BackfillProgress } from './backfill.service.types.js';
-import { InMemoryCandleRepository } from './in-memory-candle.repository.js';
 
 /** The watched crypto symbol used across the suite. */
 const BTC: WatchedSymbol = {

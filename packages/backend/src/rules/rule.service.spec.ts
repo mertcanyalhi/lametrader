@@ -20,7 +20,7 @@ import {
   RuleNotFoundError,
   TickRuleNotEligibleError,
 } from '../domain/rule.js';
-import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
+import { InMemoryWatchlistRepository } from '../market/persistence/in-memory-watchlist.repository.js';
 import { InMemoryRuleRepository } from './in-memory-rule.repository.js';
 import { RuleService } from './rule.service.js';
 

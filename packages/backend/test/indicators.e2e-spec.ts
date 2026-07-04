@@ -15,14 +15,14 @@ import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/
 import type { Model } from 'mongoose';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
-import { CandleEntry } from '../src/candles/candle-entry.schema.js';
-import { CANDLE_REPOSITORY } from '../src/candles/candle-repository.token.js';
 import { movingAverage } from '../src/indicators/sma.js';
 import { volumeWeightedMovingAverage } from '../src/indicators/vwma.js';
-import { InMemoryMarketDataSource } from '../src/market-data/in-memory-market-data-source.js';
-import { MARKET_DATA_SOURCES } from '../src/market-data/market-data-source.token.js';
-import { WatchlistEntry } from '../src/watchlist/watchlist-entry.schema.js';
-import { WATCHLIST_REPOSITORY } from '../src/watchlist/watchlist-repository.token.js';
+import { CANDLE_REPOSITORY } from '../src/market/interfaces/candle-repository.token.js';
+import { WATCHLIST_REPOSITORY } from '../src/market/interfaces/watchlist-repository.token.js';
+import { InMemoryMarketDataSource } from '../src/market/market-data/in-memory-market-data-source.js';
+import { MARKET_DATA_SOURCES } from '../src/market/market-data/market-data-source.token.js';
+import { CandleEntry } from '../src/market/persistence/candle-entry.schema.js';
+import { WatchlistEntry } from '../src/market/persistence/watchlist-entry.schema.js';
 
 /** The stub instruments the catalog knows (never hit — candles are seeded directly). */
 const BTC_INSTRUMENT: Instrument = {

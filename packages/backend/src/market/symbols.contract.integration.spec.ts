@@ -10,15 +10,15 @@ import {
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { InMemoryCandleRepository } from '../candles/in-memory-candle.repository.js';
 import { DomainExceptionFilter } from '../common/domain-exception.filter.js';
 import { InMemoryConfigRepository } from '../common/persistence/in-memory-config.repository.js';
 import { ConfigService } from '../common/services/config.service.js';
 import { buildValidationPipe } from '../common/validation.pipe.js';
-import { InMemoryMarketDataSource } from '../market-data/in-memory-market-data-source.js';
-import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
-import { SymbolService } from './symbol.service.js';
-import { SymbolsController } from './symbols.controller.js';
+import { SymbolsController } from './controllers/symbols.controller.js';
+import { InMemoryMarketDataSource } from './market-data/in-memory-market-data-source.js';
+import { InMemoryCandleRepository } from './persistence/in-memory-candle.repository.js';
+import { InMemoryWatchlistRepository } from './persistence/in-memory-watchlist.repository.js';
+import { SymbolService } from './services/symbol.service.js';
 
 /**
  * Local (Docker-free) integration proof of the symbols + instruments HTTP

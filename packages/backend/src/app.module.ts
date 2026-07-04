@@ -1,16 +1,15 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule as NestConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
-import { CandlesModule } from './candles/candles.module.js';
 import { CommonModule } from './common/common.module.js';
 import { validateEnv } from './common/env.validation.js';
 import { IndicatorsModule } from './indicators/indicators.module.js';
 import { LiveCascadeService } from './live-cascade.service.js';
+import { MarketModule } from './market/market.module.js';
 import { ProfilesModule } from './profiles/profiles.module.js';
 import { RulesModule } from './rules/rules.module.js';
 import { StateModule } from './state/state.module.js';
 import { StreamModule } from './stream/stream.module.js';
-import { SymbolsModule } from './symbols/symbols.module.js';
 
 /**
  * The application root module — the composition root of the Nest monolith.
@@ -58,8 +57,7 @@ import { SymbolsModule } from './symbols/symbols.module.js';
     ScheduleModule.forRoot(),
     CommonModule,
     ProfilesModule,
-    CandlesModule,
-    SymbolsModule,
+    MarketModule,
     StateModule,
     IndicatorsModule,
     RulesModule,

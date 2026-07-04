@@ -19,7 +19,7 @@ import request from 'supertest';
 import { DomainExceptionFilter } from '../common/domain-exception.filter.js';
 import { InMemoryEventLog } from '../common/persistence/in-memory-event-log.js';
 import { buildValidationPipe } from '../common/validation.pipe.js';
-import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
+import { InMemoryWatchlistRepository } from '../market/persistence/in-memory-watchlist.repository.js';
 import { InMemoryRuleRepository } from './in-memory-rule.repository.js';
 import { RuleService } from './rule.service.js';
 import { RulesController } from './rules.controller.js';

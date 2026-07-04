@@ -196,6 +196,11 @@ Follow these by default, unprompted.
 
 - Prefer well-established, non-commercial (open-source / freely licensed) industry-standard packages wherever they fit. Avoid commercial/paid or obscure unmaintained deps.
 
+### Shell commands
+
+- Prefer flat single-command calls (`grep -rnE ... file1 file2`, `rg`) over `for`-loops or `cd; …; done` chains.
+  The permission matcher can't statically decompose loops/compound scripts, so it prompts every time even when the underlying tools are allowlisted; a flat command matches the allowlist and runs unattended.
+
 ### Runtime config
 
 - Resolve environment-derived settings through `@nestjs/config`: a `validate` hook (`validateEnv`) parses and validates the environment into a typed `AppConfig` at boot (same vars, defaults, and fail-fast behavior as the old settings layer), and feature code reads values from the injected `ConfigService`.

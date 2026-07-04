@@ -7,15 +7,14 @@ import type {
 import { Module } from '@nestjs/common';
 import { getModelToken, MongooseModule } from '@nestjs/mongoose';
 import type { Model } from 'mongoose';
-import { CandlesModule } from '../candles/candles.module.js';
 import { CommonModule } from '../common/common.module.js';
 import { EVENT_LOG } from '../common/interfaces/event-log.token.js';
 import { IndicatorsModule } from '../indicators/indicators.module.js';
+import { WATCHLIST_REPOSITORY } from '../market/interfaces/watchlist-repository.token.js';
+import { MarketModule } from '../market/market.module.js';
 import { PROFILE_REPOSITORY } from '../profiles/profile-repository.token.js';
 import { ProfilesModule } from '../profiles/profiles.module.js';
 import { StateModule } from '../state/state.module.js';
-import { WatchlistModule } from '../watchlist/watchlist.module.js';
-import { WATCHLIST_REPOSITORY } from '../watchlist/watchlist-repository.token.js';
 import { MongooseRuleRepository } from './mongoose-rule.repository.js';
 import { RuleService } from './rule.service.js';
 import { RuleEngineService } from './rule-engine.service.js';
@@ -68,8 +67,7 @@ import { RulesController } from './rules.controller.js';
     ProfilesModule,
     StateModule,
     CommonModule,
-    CandlesModule,
-    WatchlistModule,
+    MarketModule,
     IndicatorsModule,
   ],
   controllers: [RulesController],

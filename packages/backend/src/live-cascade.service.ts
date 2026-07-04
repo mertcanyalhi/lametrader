@@ -1,7 +1,7 @@
 import { Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
-import { PollingService } from './candles/polling.service.js';
-import type { CandleEvent } from './candles/polling.service.types.js';
 import { IndicatorService } from './indicators/indicator.service.js';
+import type { CandleEvent } from './market/interfaces/polling.service.types.js';
+import { PollingService } from './market/services/polling.service.js';
 import { RuleEngineService } from './rules/rule-engine.service.js';
 import { feedCandleIntoEngine, type WiredRuleEngine } from './rules/wire/wire-rule-engine.js';
 import { QuoteStreamService } from './stream/quote-stream.service.js';

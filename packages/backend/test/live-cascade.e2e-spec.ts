@@ -18,15 +18,15 @@ import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/
 import type { Model } from 'mongoose';
 import { WebSocket } from 'ws';
 import { AppModule } from '../src/app.module.js';
-import { CandleEntry } from '../src/candles/candle-entry.schema.js';
-import { CANDLE_REPOSITORY } from '../src/candles/candle-repository.token.js';
-import { PollingService } from '../src/candles/polling.service.js';
 import { ConfigEntry } from '../src/common/persistence/config-entry.schema.js';
 import { ConfigService } from '../src/common/services/config.service.js';
 import { LiveCascadeService } from '../src/live-cascade.service.js';
-import { MARKET_DATA_SOURCES } from '../src/market-data/market-data-source.token.js';
-import { WatchlistEntry } from '../src/watchlist/watchlist-entry.schema.js';
-import { WATCHLIST_REPOSITORY } from '../src/watchlist/watchlist-repository.token.js';
+import { CANDLE_REPOSITORY } from '../src/market/interfaces/candle-repository.token.js';
+import { WATCHLIST_REPOSITORY } from '../src/market/interfaces/watchlist-repository.token.js';
+import { MARKET_DATA_SOURCES } from '../src/market/market-data/market-data-source.token.js';
+import { CandleEntry } from '../src/market/persistence/candle-entry.schema.js';
+import { WatchlistEntry } from '../src/market/persistence/watchlist-entry.schema.js';
+import { PollingService } from '../src/market/services/polling.service.js';
 
 /** The stub instrument the source knows. */
 const BTC: Instrument = {

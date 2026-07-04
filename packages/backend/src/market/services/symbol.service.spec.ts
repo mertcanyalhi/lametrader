@@ -8,10 +8,10 @@ import {
   type WatchedSymbol,
   type WatchlistRepository,
 } from '@lametrader/core';
-import { InMemoryCandleRepository } from '../candles/in-memory-candle.repository.js';
-import { InMemoryConfigRepository } from '../common/persistence/in-memory-config.repository.js';
-import { ConfigService } from '../common/services/config.service.js';
-import { SymbolConflictError, SymbolError, SymbolNotFoundError } from '../domain/symbol.js';
+import { InMemoryConfigRepository } from '../../common/persistence/in-memory-config.repository.js';
+import { ConfigService } from '../../common/services/config.service.js';
+import { SymbolConflictError, SymbolError, SymbolNotFoundError } from '../../domain/symbol.js';
+import { InMemoryCandleRepository } from '../persistence/in-memory-candle.repository.js';
 import { SymbolService } from './symbol.service.js';
 
 /**

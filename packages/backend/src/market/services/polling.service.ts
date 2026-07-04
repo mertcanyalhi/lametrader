@@ -7,9 +7,13 @@ import {
   type WatchlistRepository,
 } from '@lametrader/core';
 import type { SchedulerRegistry } from '@nestjs/schedule';
-import { MarketDataError, symbolType } from '../domain/symbol.js';
+import { MarketDataError, symbolType } from '../../domain/symbol.js';
+import type {
+  CandleEvent,
+  CandleListener,
+  PollingOptions,
+} from '../interfaces/polling.service.types.js';
 import { sourceForType } from '../market-data/source-registry.js';
-import type { CandleEvent, CandleListener, PollingOptions } from './polling.service.types.js';
 
 /**
  * Fraction of a period's interval added as random jitter on top of the floor, so

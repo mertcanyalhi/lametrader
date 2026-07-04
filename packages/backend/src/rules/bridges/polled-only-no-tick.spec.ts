@@ -1,6 +1,6 @@
 import { type EvaluationTriggerEvent, EvaluationTriggerKind, Period } from '@lametrader/core';
 
-import type { CandleEvent } from '../../candles/polling.service.types.js';
+import type { CandleEvent } from '../../market/interfaces/polling.service.types.js';
 import { BarLifecycleBridge } from './bar-lifecycle-bridge.js';
 
 /**

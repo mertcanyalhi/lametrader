@@ -5,9 +5,9 @@ import { Test } from '@nestjs/testing';
 import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
 import { AppModule } from '../src/app.module.js';
-import { CandleEntry } from '../src/candles/candle-entry.schema.js';
-import { CANDLE_REPOSITORY } from '../src/candles/candle-repository.token.js';
-import { runCandleRepositoryContract } from '../src/candles/testing/candle-repository.contract.js';
+import { CANDLE_REPOSITORY } from '../src/market/interfaces/candle-repository.token.js';
+import { CandleEntry } from '../src/market/persistence/candle-entry.schema.js';
+import { runCandleRepositoryContract } from '../src/market/testing/candle-repository.contract.js';
 
 /**
  * Runs the shared {@link CandleRepository} contract against the Mongoose adapter

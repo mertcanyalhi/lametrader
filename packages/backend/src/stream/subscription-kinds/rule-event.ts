@@ -1,5 +1,5 @@
 import type { RuleEventEntry } from '@lametrader/core';
-import type { StreamHub } from '../../candles/stream-hub.js';
+import type { StreamHub } from '../../common/services/stream-hub.js';
 import type { SubscriptionKind } from '../subscription-registry.types.js';
 
 /**

@@ -1,6 +1,6 @@
 import { Period, SymbolType } from '@lametrader/core';
 import YahooFinance from 'yahoo-finance2';
-import { MarketDataError } from '../domain/symbol.js';
+import { MarketDataError } from '../../domain/symbol.js';
 import { resolveYahooChartRange, YahooMarketDataSource } from './yahoo-market-data-source.js';
 
 /** A fixed clock so lookback windows are deterministic. */

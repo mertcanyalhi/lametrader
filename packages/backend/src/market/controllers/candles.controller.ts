@@ -1,17 +1,17 @@
 import { type CandlePage } from '@lametrader/core';
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { ApiAcceptedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import { parseBackfillRange } from '../domain/candle.js';
-import { SymbolNotFoundError } from '../domain/symbol.js';
-import { SymbolIdParamDto } from '../symbols/dto/symbol-id-param.dto.js';
-import { BackfillService } from './backfill.service.js';
-import { BackfillJobService } from './backfill-job.service.js';
-import type { BackfillJob } from './backfill-job.types.js';
-import { BackfillBodyDto } from './dto/backfill-body.dto.js';
-import { BackfillJobDto } from './dto/backfill-job.dto.js';
-import { BackfillJobParamDto } from './dto/backfill-job-param.dto.js';
-import { CandlePageDto } from './dto/candle-page.dto.js';
-import { CandlesQueryDto } from './dto/candles-query.dto.js';
+import { parseBackfillRange } from '../../domain/candle.js';
+import { SymbolNotFoundError } from '../../domain/symbol.js';
+import { BackfillService } from '../backfill/backfill.service.js';
+import { BackfillJobService } from '../backfill/backfill-job.service.js';
+import type { BackfillJob } from '../backfill/backfill-job.types.js';
+import { BackfillBodyDto } from '../backfill/dto/backfill-body.dto.js';
+import { BackfillJobDto } from '../backfill/dto/backfill-job.dto.js';
+import { BackfillJobParamDto } from '../backfill/dto/backfill-job-param.dto.js';
+import { CandlePageDto } from '../dto/candle-page.dto.js';
+import { CandlesQueryDto } from '../dto/candles-query.dto.js';
+import { SymbolIdParamDto } from '../dto/symbol-id-param.dto.js';
 
 /**
  * The RESTful candle / backfill surface over the {@link BackfillService} (reads)

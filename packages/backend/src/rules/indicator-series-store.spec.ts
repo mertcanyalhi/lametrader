@@ -1,10 +1,9 @@
 import { type Candle, Period, StateValueType, SymbolType } from '@lametrader/core';
-
-import { InMemoryCandleRepository } from '../candles/in-memory-candle.repository.js';
 import { IndicatorService } from '../indicators/indicator.service.js';
 import { IndicatorRegistry } from '../indicators/indicator-registry.js';
 import { movingAverage } from '../indicators/sma.js';
-import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
+import { InMemoryCandleRepository } from '../market/persistence/in-memory-candle.repository.js';
+import { InMemoryWatchlistRepository } from '../market/persistence/in-memory-watchlist.repository.js';
 import { IndicatorSeriesStore } from './indicator-series-store.js';
 
 const SYMBOL = 'BTC';

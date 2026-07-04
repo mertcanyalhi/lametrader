@@ -3,7 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { CommonModule } from '../common/common.module.js';
 import { SYMBOL_EVENT_LOG } from '../common/interfaces/symbol-event-log.token.js';
 import type { SymbolEventLog } from '../common/interfaces/symbol-event-log.types.js';
-import { WatchlistModule } from '../watchlist/watchlist.module.js';
+import { MarketModule } from '../market/market.module.js';
 import { MongooseStateRepository } from './mongoose-state.repository.js';
 import { StateController } from './state.controller.js';
 import { StateEntry, StateEntrySchema } from './state-entry.schema.js';
@@ -38,7 +38,7 @@ import { STATE_REPOSITORY } from './state-repository.token.js';
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: StateEntry.name, schema: StateEntrySchema }]),
-    WatchlistModule,
+    MarketModule,
     CommonModule,
   ],
   controllers: [StateController],

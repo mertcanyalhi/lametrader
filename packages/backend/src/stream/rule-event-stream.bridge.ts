@@ -5,8 +5,8 @@ import {
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
-import type { StreamHub } from '../candles/stream-hub.js';
 import { EVENT_LOG } from '../common/interfaces/event-log.token.js';
+import type { StreamHub } from '../common/services/stream-hub.js';
 import { RULE_EVENT_STREAM } from './stream.tokens.js';
 
 /**

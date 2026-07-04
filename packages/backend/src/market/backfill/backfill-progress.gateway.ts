@@ -9,10 +9,10 @@ import {
 } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import { WebSocketServer, type WebSocket as WsSocket } from 'ws';
+import type { StreamHub } from '../../common/services/stream-hub.js';
 import { BackfillJobService } from './backfill-job.service.js';
 import type { BackfillJob } from './backfill-job.types.js';
 import { BACKFILL_JOB_STREAM } from './backfill-job-stream.token.js';
-import type { StreamHub } from './stream-hub.js';
 
 /**
  * The exact URL of the per-job backfill-progress WebSocket:

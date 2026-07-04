@@ -14,12 +14,11 @@ import {
   StateValueType,
   TriggerKind,
 } from '@lametrader/core';
-
-import { InMemoryCandleRepository } from '../../candles/in-memory-candle.repository.js';
 import { InMemoryEventLog } from '../../common/persistence/in-memory-event-log.js';
 import { InMemoryNotifier } from '../../common/services/in-memory-notifier.js';
+import { InMemoryCandleRepository } from '../../market/persistence/in-memory-candle.repository.js';
+import { InMemoryWatchlistRepository } from '../../market/persistence/in-memory-watchlist.repository.js';
 import { InMemoryStateRepository } from '../../state/in-memory-state.repository.js';
-import { InMemoryWatchlistRepository } from '../../watchlist/in-memory-watchlist.repository.js';
 import { InMemoryRuleRepository } from '../in-memory-rule.repository.js';
 import { IndicatorSeriesStore } from '../indicator-series-store.js';
 import { cascadePrevLookups, wireRuleEngine } from './wire-rule-engine.js';

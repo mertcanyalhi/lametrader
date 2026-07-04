@@ -10,11 +10,11 @@ import {
   type WatchedSymbol,
 } from '@lametrader/core';
 import { SchedulerRegistry } from '@nestjs/schedule';
-import { MarketDataError } from '../domain/symbol.js';
-import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
-import { InMemoryCandleRepository } from './in-memory-candle.repository.js';
+import { MarketDataError } from '../../domain/symbol.js';
+import type { CandleEvent } from '../interfaces/polling.service.types.js';
+import { InMemoryCandleRepository } from '../persistence/in-memory-candle.repository.js';
+import { InMemoryWatchlistRepository } from '../persistence/in-memory-watchlist.repository.js';
 import { PollingService } from './polling.service.js';
-import type { CandleEvent } from './polling.service.types.js';
 
 /** Watched crypto symbols (period 1h). */
 const BTC: WatchedSymbol = {

@@ -6,7 +6,7 @@ import {
   type Period,
 } from '@lametrader/core';
 
-import type { CandleEvent } from '../../candles/polling.service.types.js';
+import type { CandleEvent } from '../../market/interfaces/polling.service.types.js';
 import { getLogger } from '../engine-log.js';
 
 /**

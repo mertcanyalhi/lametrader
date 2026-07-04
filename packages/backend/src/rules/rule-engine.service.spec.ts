@@ -1,24 +1,24 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { CANDLE_REPOSITORY } from '../candles/candle-repository.token.js';
-import { InMemoryCandleRepository } from '../candles/in-memory-candle.repository.js';
 import { EVENT_LOG } from '../common/interfaces/event-log.token.js';
 import { InMemoryEventLog } from '../common/persistence/in-memory-event-log.js';
 import { InMemoryNotifier } from '../common/services/in-memory-notifier.js';
 import { TelegramNotifier } from '../common/services/telegram-notifier.js';
 import { defaultIndicators } from '../indicators/default-indicators.js';
 import { IndicatorService } from '../indicators/indicator.service.js';
+import { CANDLE_REPOSITORY } from '../market/interfaces/candle-repository.token.js';
+import { WATCHLIST_REPOSITORY } from '../market/interfaces/watchlist-repository.token.js';
+import { InMemoryCandleRepository } from '../market/persistence/in-memory-candle.repository.js';
+import { InMemoryWatchlistRepository } from '../market/persistence/in-memory-watchlist.repository.js';
 import { InMemoryStateRepository } from '../state/in-memory-state.repository.js';
 import { STATE_REPOSITORY } from '../state/state-repository.token.js';
-import { InMemoryWatchlistRepository } from '../watchlist/in-memory-watchlist.repository.js';
-import { WATCHLIST_REPOSITORY } from '../watchlist/watchlist-repository.token.js';
 import { InMemoryRuleRepository } from './in-memory-rule.repository.js';
 import { RuleEngineService } from './rule-engine.service.js';
 import { RULE_REPOSITORY } from './rule-repository.token.js';
 
 /**
  * Proves the relocated rule engine is **dormant at boot** (the #488 requirement,
- * parity with the relocated {@link import('../candles/polling.service.js').PollingService}).
+ * parity with the relocated {@link import('../market/services/polling.service.js').PollingService}).
  *
  * Boots a Nest module wiring the {@link RuleEngineService} over in-memory fakes —
  * no Mongo, no Docker — and asserts that after `app.init()` the live engine was
