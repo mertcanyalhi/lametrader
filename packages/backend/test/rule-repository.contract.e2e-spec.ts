@@ -6,10 +6,10 @@ import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/
 import type { Model } from 'mongoose';
 import { PROFILE_REPOSITORY } from '../src/analytics/interfaces/profile-repository.token.js';
 import { ProfileEntry } from '../src/analytics/persistence/profile-entry.schema.js';
+import { MongooseRuleRepository } from '../src/analytics/rules/mongoose-rule.repository.js';
+import { RuleEntry } from '../src/analytics/rules/rule-entry.schema.js';
+import { runRuleRepositoryContract } from '../src/analytics/rules/testing/rule-repository.contract.js';
 import { AppModule } from '../src/app.module.js';
-import { MongooseRuleRepository } from '../src/rules/mongoose-rule.repository.js';
-import { RuleEntry } from '../src/rules/rule-entry.schema.js';
-import { runRuleRepositoryContract } from '../src/rules/testing/rule-repository.contract.js';
 
 /**
  * Runs the shared {@link import('@lametrader/core').RuleRepository} contract against the Mongoose adapter

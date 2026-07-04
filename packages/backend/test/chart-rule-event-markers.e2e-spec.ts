@@ -20,10 +20,10 @@ import { Test } from '@nestjs/testing';
 import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import request from 'supertest';
 import { PROFILE_REPOSITORY } from '../src/analytics/interfaces/profile-repository.token.js';
+import { RuleEngineService } from '../src/analytics/rules/rule-engine.service.js';
+import type { WiredRuleEngine } from '../src/analytics/rules/wire/wire-rule-engine.js';
 import { AppModule } from '../src/app.module.js';
 import { WATCHLIST_REPOSITORY } from '../src/market/interfaces/watchlist-repository.token.js';
-import { RuleEngineService } from '../src/rules/rule-engine.service.js';
-import type { WiredRuleEngine } from '../src/rules/wire/wire-rule-engine.js';
 
 /** The watched symbol the rule scopes to. */
 const SYMBOL_ID = 'crypto:BTCUSDT';

@@ -17,7 +17,7 @@ import { Test } from '@nestjs/testing';
 import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import type { Model } from 'mongoose';
 import { AppModule } from '../src/app.module.js';
-import { MarketDataError } from '../src/domain/symbol.js';
+import { MarketDataError } from '../src/common/domain/symbol.js';
 import { CANDLE_REPOSITORY } from '../src/market/interfaces/candle-repository.token.js';
 import { WATCHLIST_REPOSITORY } from '../src/market/interfaces/watchlist-repository.token.js';
 import { MARKET_DATA_SOURCES } from '../src/market/market-data/market-data-source.token.js';
