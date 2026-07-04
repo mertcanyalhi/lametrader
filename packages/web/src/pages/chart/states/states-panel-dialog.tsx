@@ -122,7 +122,7 @@ export function StatesPanelDialog({
 function NoProfileView(): ReactNode {
   return (
     <>
-      <Dialog.Title>State changes</Dialog.Title>
+      <Dialog.Title>States</Dialog.Title>
       <Callout.Root color="amber" mt="3">
         <Callout.Icon>
           <TriangleAlert size={16} aria-hidden="true" />
@@ -190,7 +190,7 @@ function PickerView({
 
   return (
     <>
-      <Dialog.Title>State changes</Dialog.Title>
+      <Dialog.Title>States</Dialog.Title>
       <Flex direction="column" gap="3" mt="3">
         <TextField.Root
           value={query}

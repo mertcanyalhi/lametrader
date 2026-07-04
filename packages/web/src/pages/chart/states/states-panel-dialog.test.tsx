@@ -134,7 +134,7 @@ describe('StatesPanelDialog', () => {
     );
   });
 
-  it('titles the opened dialog "State changes" when a profile is selected', async () => {
+  it('titles the opened dialog "States" when a profile is selected', async () => {
     setStoredProfileId(PROFILE.id);
     renderPanel();
     const user = userEvent.setup();
@@ -143,7 +143,7 @@ describe('StatesPanelDialog', () => {
     const dialog = await screen.findByRole('dialog');
     expect({
       title: within(dialog).getByRole('heading').textContent,
-    }).toEqual({ title: 'State changes' });
+    }).toEqual({ title: 'States' });
   });
 
   it('renders a warning callout and no checkboxes when no profile is selected', async () => {
@@ -157,7 +157,7 @@ describe('StatesPanelDialog', () => {
       title: within(dialog).getByRole('heading').textContent,
       warning: within(dialog).queryByText(/select or create a profile to overlay states/i) !== null,
       checkboxes: within(dialog).queryAllByRole('checkbox').length,
-    }).toEqual({ title: 'State changes', warning: true, checkboxes: 0 });
+    }).toEqual({ title: 'States', warning: true, checkboxes: 0 });
   });
 
   it('opens a dialog with a search input and one checkbox per state-key returned by the API', async () => {
