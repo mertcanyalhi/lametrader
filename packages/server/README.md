@@ -21,6 +21,7 @@ It runs alongside the still-deployed `@lametrader/api`; the remaining resource c
 - **Indicators** (`src/indicators`) — the `IndicatorsModule`: the shared, read-only `IndicatorRegistry` (catalog of the shipped `sma` / `vwma` modules, pure logic) built by `defaultIndicators` and exported for the profiles use-case to validate against. It drives the indicators controller — the read-only catalog (`GET /indicators`, `GET /indicators/:key`) straight off the registry, and the ad-hoc compute route (`GET /symbols/:id/indicators/:key`) over the relocated `IndicatorService` (explicit-composition contract kept as-is, ADR-0010). Compute reads a symbol's stored candles and guards on the watchlist, so this module imports the shared `CandlesModule` (`CANDLE_REPOSITORY`) and `WatchlistModule` (`WATCHLIST_REPOSITORY`).
 - **Event log** (`src/event-log`) — the `EventLogModule`: the single owner of the mirrored rule-event log (ADR-0014), binding and exporting the full `EVENT_LOG` port (a Mongoose adapter over the `rules` and `watchlist` documents' embedded `events` arrays) and the narrow `SYMBOL_EVENT_LOG` read port aliased onto it. The state resource's `StateHistoryService` consumes the narrow port; the rules resource appends and reads through the full one.
 - **Rules** (`src/rules`) — the `RulesModule`: the single owner of the Mongoose-backed rule store (`rules` collection), binding and exporting the `RULE_REPOSITORY` token (the greenfield v2 rule-shape round-trip preserved, ADR-0016). It drives the `/rules` CRUD controller plus the chart-facing event reads (`/rules/:id/events`, `/symbols/:id/rule-events[/count]`) over the relocated `RuleService`, and hosts the whole relocated rule engine (orchestrator, dispatcher, action runner, bridges, operators, evaluation context) behind a **dormant** `RuleEngineService` — constructed with every collaborator injected but never started at boot (like the polling loop); the cutover stage (#490) drives `start()` via a lifecycle hook.
+- **Stream** (`src/stream`) — the `StreamModule`: the multiplexed `GET (WS) /stream` gateway carrying candle / indicator / quote / rule-event subscriptions on one socket. Like the backfill-progress gateway it drives a raw `ws` server on the HTTP `upgrade`, matching **only** `/stream` (ignoring every other upgrade) so both raw-`ws` gateways coexist on the one server. It hosts the relocated `SubscriptionRegistry` + the four subscription kinds + the relocated `QuoteStreamService`, and completes the producer→hub topology — `PollingService.onCandle`, `IndicatorService.onState`, `QuoteStreamService.onQuote`, and the event log's symbol-side `onAppend` (via a `RuleEventStreamBridge`) publish to four shared `StreamHub`s in a dependency-free `StreamHubsModule` that the gateway subscribes to. Every producer stays **dormant** at boot (nothing polls, computes, or appends); the cutover stage (#490) starts them.
 - **Market data** (`src/market-data`) — the `MarketDataModule`: the registered discovery sources (Binance for crypto, Yahoo for stocks/funds/FX) bound to the `MARKET_DATA_SOURCES` token, fanned out by the symbols use-case (and, later, backfill/polling).
 - **HTTP contract** (`src/common`) — the keystone the whole API reuses: a global `DomainExceptionFilter` mapping domain errors to status codes with the uniform `{ error, fields? }` envelope, and a global `ValidationPipe` (class-validator DTOs) emitting the same envelope on validation failure.
 - **Logging** (`src/logging`) — [`nestjs-pino`](https://github.com/iamolegga/nestjs-pino) for request and application logging.
@@ -74,6 +75,7 @@ It runs alongside the still-deployed `@lametrader/api`; the remaining resource c
 | `GET`    | `/rules/:id/events?limit=&before=&from=&to=` | —                             | One rule's mirrored events log (newest-first). 200 / 404. |
 | `GET`    | `/symbols/:id/rule-events?limit=&before=&from=&to=&chartStates=` | —          | One symbol's mirrored events log (newest-first), optionally `chartStates`-filtered. 200 / 400. |
 | `GET`    | `/symbols/:id/rule-events/count`            | —                              | `{ count }` of the symbol's mirrored events. 200.       |
+| `WS`     | `/stream`                                   | —                              | Multiplexed live stream: subscribe/unsubscribe to candles, indicators, quotes, and rule events; receive live frames. |
 
 ### Config resource
 
@@ -206,6 +208,49 @@ Each fire mirrors its entries onto both the rule and the affected symbol; reads 
 - `GET /rules/:id/events?limit=&before=&from=&to=` — one rule's events log (**404** on an unknown rule). `limit` defaults to 50 (max 500); `from` is inclusive and `to` / `before` are exclusive bounds on the entry's source `ts` (epoch ms).
 - `GET /symbols/:id/rule-events?limit=&before=&from=&to=&chartStates=` — one symbol's mirrored events log. `chartStates` is a JSON-encoded array of state keys (e.g. `["price:trend"]`): when present the read keeps only `stateSet` / `stateRemoved` entries whose `key` is in the list (`[]` ⇒ none); when absent the read is unfiltered. A malformed `chartStates` or a non-numeric `from` / `to` is a **400**.
 - `GET /symbols/:id/rule-events/count` — `{ count }` of the symbol's mirrored events (backs the chart's Events badge).
+
+### Live stream
+
+Once the polling loop is running (started at cutover, #490), the service pushes new candles — plus any subscribed indicator's recomputed state, any subscribed symbol's recomputed quote, and any subscribed symbol's mirrored rule events — to clients over one **multiplexed** WebSocket.
+A single socket can watch many symbols and hold many indicator / quote subscriptions in parallel.
+
+| Method | Path      | Description                                                                                  |
+| ------ | --------- | ------------------------------------------------------------------------------------------- |
+| `WS`   | `/stream` | Subscribe/unsubscribe to candles, indicators, quotes, and rule events; receive live frames. |
+
+After connecting, send JSON control messages.
+The route multiplexes four surfaces: candle, indicator, quote, and rule-event.
+A malformed control message is answered with an `{ "error": "<reason>" }` frame (a non-JSON payload with `{ "error": "invalid JSON message" }`) rather than being silently dropped; closing the socket releases every subscription on it.
+
+**Candle subscriptions** — keyed by symbol id.
+
+- `{ "action": "subscribe", "id": "crypto:BTCUSDT" }` — start receiving that symbol; `{ "action": "unsubscribe", "id": "crypto:BTCUSDT" }` — stop.
+- For each polled candle of a subscribed symbol the socket receives `{ "id": "crypto:BTCUSDT", "period": "1h", "candle": { … }, "final": false }`.
+  `final` is `true` once the bar has closed and `false` for the still-forming bar.
+  The stream is live-only — it does not replay history.
+
+**Indicator subscriptions** — keyed by a server-generated `subscriptionId`, scoped to `(id, period, indicator: { key, inputs })`.
+
+- `{ "action": "subscribe-indicator", "id": "crypto:BTCUSDT", "period": "1h", "indicator": { "key": "sma", "inputs": { "length": 3 } } }` — the server validates (symbol watched, indicator known, asset-class match, inputs valid) and replies with `{ "action": "subscribed-indicator", "subscriptionId": "…", "id": "crypto:BTCUSDT", "period": "1h", "indicatorKey": "sma" }`.
+  A validation failure replies with `{ "error": "<reason>" }` and opens no subscription.
+- `{ "action": "unsubscribe-indicator", "subscriptionId": "…" }` — stop.
+- For each polled candle on the subscribed `(id, period)` a state frame is delivered: `{ "subscriptionId": "…", "id": "crypto:BTCUSDT", "period": "1h", "indicatorKey": "sma", "state": { "time": 1704153600000, "value": 42.5 }, "final": false }`.
+  `state` carries only the latest point; `final` mirrors the candle's `final`.
+
+**Quote subscriptions** — keyed by a server-generated `subscriptionId`, scoped to a symbol id; the quote is derived on the config's `defaultPeriod` (the live counterpart of `GET /symbols?enrich=true`).
+
+- `{ "action": "subscribe-quote", "id": "crypto:BTCUSDT" }` — the server validates (symbol watched, watches `defaultPeriod`, has ≥ 2 candles there) and replies with `{ "action": "subscribed-quote", "subscriptionId": "…", "id": "crypto:BTCUSDT", "period": "1d" }`.
+  A validation failure replies with `{ "error": "<reason>" }`.
+- `{ "action": "unsubscribe-quote", "subscriptionId": "…" }` — stop.
+- For each polled candle on the symbol's `defaultPeriod` a quote frame is delivered: `{ "subscriptionId": "…", "id": "crypto:BTCUSDT", "period": "1d", "quote": { "price": 110, "change": 10, "changePct": 0.1, "time": 1704153600000 }, "final": true }`.
+  `change` / `changePct` are measured against the previous close; after a `final: true` frame the baseline rotates to the just-closed bar.
+
+**Rule-event subscriptions** — keyed by symbol id — the mirrored side of the event log's append fan-out.
+
+- `{ "action": "subscribe-rule-event", "id": "crypto:BTCUSDT" }` — start receiving each `RuleEventEntry` appended to that symbol's events log; `{ "action": "unsubscribe-rule-event", "id": "crypto:BTCUSDT" }` — stop.
+- For each successful symbol-side append the socket receives `{ "symbolId": "crypto:BTCUSDT", "entry": { … } }`, where `entry` is the same `RuleEventEntry` tagged union the REST event-log endpoints return.
+
+Nest's `@WebSocketGateway` cannot path-match URL params or share one path with another gateway, so `/stream` is served by a raw `ws` server that handles the HTTP `upgrade` for exactly this URL (`StreamGateway`) — preserving the URL + protocol byte-for-byte so the web client is unchanged, and coexisting with the backfill-progress WebSocket on the same server.
 
 ## API documentation
 
