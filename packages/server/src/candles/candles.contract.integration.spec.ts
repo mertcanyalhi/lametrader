@@ -1,4 +1,5 @@
 import {
+  type CandleRepository,
   type CryptoCandle,
   type Instrument,
   MarketDataError,
@@ -162,6 +163,24 @@ describe('candles + backfill HTTP/WS contract (integration)', () => {
     expect({ status: res.status, body: res.body }).toEqual({
       status: 200,
       body: { candles: [], nextCursor: null, latestTime: null },
+    });
+  });
+
+  it('GET /symbols/:id/candles returns an empty page carrying latestTime when history sits outside the window', async () => {
+    app = await buildApp();
+    baseUrl = await app.getUrl();
+    // History exists (latest at 3000) but entirely before the requested window —
+    // the re-anchor signal (#70): candles empty, latestTime still points at it.
+    const candles = app.get<CandleRepository>(CANDLE_REPOSITORY);
+    await candles.save(BTC.id, Period.OneHour, SERIES);
+
+    const res = await request(app.getHttpServer()).get(
+      `/symbols/${BTC.id}/candles?period=1h&from=100000&to=200000`,
+    );
+
+    expect({ status: res.status, body: res.body }).toEqual({
+      status: 200,
+      body: { candles: [], nextCursor: null, latestTime: 3000 },
     });
   });
 
