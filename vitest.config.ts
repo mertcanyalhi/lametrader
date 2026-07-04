@@ -14,7 +14,6 @@ const pkgSrc = (name: string): string =>
  */
 const alias = {
   '@lametrader/core': pkgSrc('core'),
-  '@lametrader/engine': pkgSrc('engine'),
 };
 
 /**
