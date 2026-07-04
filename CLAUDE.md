@@ -125,10 +125,11 @@ All routine actions go through these scripts — don't invoke `tsc` / `vitest` /
 | `npm run lint` / `lint:fix`        | Biome check / auto-fix                                     |
 | `npm run format`                   | Biome format (write)                                       |
 | `npm test` / `test:watch`          | Vitest unit tier (`web` + `core`)                          |
-| `npm run test:e2e`                 | Vitest e2e tier (`web`)                                    |
+| `npm run test:e2e` / `fe:test:e2e` | Vitest e2e tier (`web`)                                    |
 | `npm run test:live`                | Vitest live tier (real APIs)                               |
-| `npm run test:server`              | Jest unit tier (`server`)                                  |
-| `npm run test:server:e2e`          | Jest e2e tier (`server`, Testcontainers Mongo)             |
+| `npm run fe:test`                  | Vitest unit tier (`web` + `core`) — alias of `npm test`    |
+| `npm run be:test`                  | Jest unit tier (`server`)                                  |
+| `npm run be:test:e2e`              | Jest e2e tier (`server`, Testcontainers Mongo)             |
 | `npm run coverage`                 | Vitest unit + coverage                                     |
 | `npm run check`                    | typecheck + lint + Vitest unit + server Jest unit          |
 | `npm run check:full`               | check + both e2e tiers (CI on PR)                          |
