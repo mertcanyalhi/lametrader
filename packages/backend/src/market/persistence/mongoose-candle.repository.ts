@@ -24,7 +24,12 @@ export class MongooseCandleRepository implements CandleRepository {
 
   async save(symbolId: string, period: Period, candles: Candle[]): Promise<void> {
     if (candles.length === 0) return;
-    await this.model.bulkWrite(
+    // Write through the underlying native collection, not `model.bulkWrite`:
+    // `toDocument` already emits the exact stored shape, so Mongoose's per-op
+    // cast+validate is redundant work that dominates the persist path on a large
+    // backfill (millions of candles). This restores the pre-migration
+    // native-driver write speed while keeping Mongoose for everything else.
+    await this.model.collection.bulkWrite(
       candles.map((candle) => {
         const doc = toDocument(symbolId, period, candle);
         return { replaceOne: { filter: { _id: doc._id }, replacement: doc, upsert: true } };
