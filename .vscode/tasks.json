@@ -1,0 +1,13 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // Build the backend before the "Debug backend" launch config runs it.
+      "type": "npm",
+      "script": "build",
+      "path": "packages/backend",
+      "label": "npm: build - @lametrader/backend",
+      "problemMatcher": ["$tsc"]
+    }
+  ]
+}
