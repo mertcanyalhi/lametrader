@@ -95,7 +95,13 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
           return view?.asOf(Number.MAX_SAFE_INTEGER)?.value ?? null;
         }
         case OperandKind.IndicatorRef:
-          return deps.indicatorStore.latest(operand.instanceId, operand.stateKey);
+          if (interval === undefined) return null;
+          return deps.indicatorStore.latest(
+            deps.symbolId,
+            interval,
+            operand.instanceId,
+            operand.stateKey,
+          );
         case OperandKind.SymbolStateRef:
           return deps.getSymbolState(deps.profileId, deps.symbolId, operand.key);
         case OperandKind.GlobalStateRef:
@@ -119,7 +125,13 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
           return view ? prevFromSeries(view) : null;
         }
         case OperandKind.IndicatorRef: {
-          const series = deps.indicatorStore.series(operand.instanceId, operand.stateKey);
+          if (interval === undefined) return null;
+          const series = deps.indicatorStore.series(
+            deps.symbolId,
+            interval,
+            operand.instanceId,
+            operand.stateKey,
+          );
           if (series.length >= 2) return prevFromSeries(series);
           return deps.getPrevIndicator?.(operand.instanceId, operand.stateKey) ?? null;
         }
@@ -144,7 +156,13 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
           return view ?? EMPTY_SERIES;
         }
         case OperandKind.IndicatorRef:
-          return deps.indicatorStore.series(operand.instanceId, operand.stateKey);
+          if (interval === undefined) return EMPTY_SERIES;
+          return deps.indicatorStore.series(
+            deps.symbolId,
+            interval,
+            operand.instanceId,
+            operand.stateKey,
+          );
         case OperandKind.SymbolStateRef: {
           const v = deps.getSymbolState(deps.profileId, deps.symbolId, operand.key);
           return v ? singletonSeries(v) : EMPTY_SERIES;

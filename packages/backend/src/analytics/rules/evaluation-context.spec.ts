@@ -98,12 +98,15 @@ describe('buildEvaluationContext', () => {
     const low = ctx.resolveLatest({ kind: OperandKind.Low }, PERIOD);
     const close = ctx.resolveLatest({ kind: OperandKind.Close }, PERIOD);
     const volume = ctx.resolveLatest({ kind: OperandKind.Volume }, PERIOD);
-    const indicatorRef = ctx.resolveLatest({
-      kind: OperandKind.IndicatorRef,
-      instanceId: INSTANCE_ID,
-      stateKey: 'value',
-      valueType: StateValueType.Number,
-    });
+    const indicatorRef = ctx.resolveLatest(
+      {
+        kind: OperandKind.IndicatorRef,
+        instanceId: INSTANCE_ID,
+        stateKey: 'value',
+        valueType: StateValueType.Number,
+      },
+      PERIOD,
+    );
     const symbolRef = ctx.resolveLatest({
       kind: OperandKind.SymbolStateRef,
       key: 'mode',
@@ -144,6 +147,19 @@ describe('buildEvaluationContext', () => {
       globalRef: { type: StateValueType.String, value: 'bull' },
       literal: { type: StateValueType.Number, value: 42 },
     });
+  });
+
+  it('resolveLatest of an IndicatorRef with no interval resolves to null (no period to key on)', async () => {
+    const { ctx } = await seed();
+
+    expect(
+      ctx.resolveLatest({
+        kind: OperandKind.IndicatorRef,
+        instanceId: INSTANCE_ID,
+        stateKey: 'value',
+        valueType: StateValueType.Number,
+      }),
+    ).toBeNull();
   });
 
   it('resolveLatest reads the OHLCV operand at the given interval, isolating periods', async () => {

@@ -10,7 +10,9 @@ import { InMemoryCandleRepository } from '../../market/persistence/in-memory-can
 import { InMemoryWatchlistRepository } from '../../market/persistence/in-memory-watchlist.repository.js';
 import { defaultIndicators } from '../indicators/default-indicators.js';
 import { IndicatorService } from '../indicators/indicator.service.js';
+import { PROFILE_REPOSITORY } from '../interfaces/profile-repository.token.js';
 import { STATE_REPOSITORY } from '../interfaces/state-repository.token.js';
+import { InMemoryProfileRepository } from '../persistence/in-memory-profile.repository.js';
 import { InMemoryStateRepository } from '../persistence/in-memory-state.repository.js';
 import { InMemoryRuleRepository } from './in-memory-rule.repository.js';
 import { RuleEngineService } from './rule-engine.service.js';
@@ -45,6 +47,7 @@ describe('RuleEngineService dormancy', () => {
         { provide: EVENT_LOG, useValue: new InMemoryEventLog() },
         { provide: CANDLE_REPOSITORY, useValue: candles },
         { provide: TelegramNotifier, useValue: notifier },
+        { provide: PROFILE_REPOSITORY, useValue: new InMemoryProfileRepository() },
         {
           provide: IndicatorService,
           useValue: new IndicatorService(defaultIndicators(), watchlist, candles),

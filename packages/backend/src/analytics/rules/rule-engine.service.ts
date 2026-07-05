@@ -2,6 +2,7 @@ import type {
   CandleRepository,
   EventLog,
   Notifier,
+  ProfileRepository,
   RuleRepository,
   StateRepository,
   WatchlistRepository,
@@ -12,9 +13,11 @@ import { TelegramNotifier } from '../../common/services/telegram-notifier.js';
 import { CANDLE_REPOSITORY } from '../../market/interfaces/candle-repository.token.js';
 import { WATCHLIST_REPOSITORY } from '../../market/interfaces/watchlist-repository.token.js';
 import { IndicatorService } from '../indicators/indicator.service.js';
+import { PROFILE_REPOSITORY } from '../interfaces/profile-repository.token.js';
 import { STATE_REPOSITORY } from '../interfaces/state-repository.token.js';
 import { IndicatorSeriesStore } from './indicator-series-store.js';
 import { RULE_REPOSITORY } from './rule-repository.token.js';
+import { warmIndicatorStore } from './wire/warm-indicator-store.js';
 import { type WiredRuleEngine, wireRuleEngine } from './wire/wire-rule-engine.js';
 
 /**
@@ -60,6 +63,7 @@ export class RuleEngineService {
    * @param eventLog - the shared mirrored rule-event log (orchestrator appends).
    * @param candles - the shared candle store (OHLCV operand resolution).
    * @param notifier - the notification sink the action-runner dispatches through.
+   * @param profiles - the profile store; enumerated at {@link start} to warm each attached indicator instance.
    * @param indicators - the ad-hoc indicator compute use-case the series store wraps.
    */
   constructor(
@@ -69,6 +73,7 @@ export class RuleEngineService {
     @Inject(EVENT_LOG) private readonly eventLog: EventLog,
     @Inject(CANDLE_REPOSITORY) private readonly candles: CandleRepository,
     @Inject(TelegramNotifier) private readonly notifier: Notifier,
+    @Inject(PROFILE_REPOSITORY) private readonly profiles: ProfileRepository,
     indicators: IndicatorService,
   ) {
     this.indicatorStore = new IndicatorSeriesStore(indicators);
@@ -94,6 +99,14 @@ export class RuleEngineService {
    */
   async start(): Promise<WiredRuleEngine> {
     if (this.wired !== null) return this.wired;
+    // Populate the store the evaluator reads from every enabled profile's
+    // attached indicator instances before any live candle flows (#498); the
+    // wired engine then keeps it current via `onBar` on the candle feed.
+    await warmIndicatorStore({
+      store: this.indicatorStore,
+      profiles: this.profiles,
+      watchlist: this.watchlist,
+    });
     this.wired = await wireRuleEngine({
       rules: this.rules,
       state: this.state,
