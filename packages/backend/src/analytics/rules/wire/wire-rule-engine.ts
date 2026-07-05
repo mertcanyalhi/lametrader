@@ -326,6 +326,26 @@ async function warmLiveBarSeries(
   for (const [key, view] of history) {
     if (view.length > 0) merged.set(key, view);
   }
+  // DBG_MOVING temporary diagnostic (#499) — remove before merge.
+  {
+    const closeKey = [...merged.keys()].find((k) => k.endsWith('|close'));
+    const closeView = closeKey !== undefined ? merged.get(closeKey) : undefined;
+    const newest = closeView?.asOf(Number.MAX_SAFE_INTEGER)?.value ?? null;
+    log.error(
+      {
+        DBG_MOVING: true,
+        symbolId,
+        upperTs,
+        observedPeriods: lookups.observedPeriods(symbolId),
+        historyKeys: [...history.keys()],
+        historyCloseLen: closeKey !== undefined ? (history.get(closeKey)?.length ?? null) : null,
+        mergedCloseKey: closeKey ?? null,
+        mergedCloseLen: closeView?.length ?? null,
+        mergedCloseNewest: newest,
+      },
+      'dbg_moving_warm_bar_series',
+    );
+  }
   return merged;
 }
 
