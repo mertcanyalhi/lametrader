@@ -57,7 +57,7 @@ const channelLeaf = (
 });
 
 describe('evaluateChannel', () => {
-  it('returns true for EnteringChannel when latest left is strictly inside the band and the most recent non-on-boundary baseline was strictly outside (with consolidation at the upper bound before entry)', () => {
+  it('returns true for EnteringChannel when latest left is strictly inside the band and the most recent non-on-boundary baseline was strictly outside (with consolidation at the upper bound before entry)', async () => {
     // Baseline strictly above (120), then consolidates AT the upper bound 110
     // three times, then enters strictly inside the channel at 95.
     const ctx = fakeCtx(
@@ -69,20 +69,24 @@ describe('evaluateChannel', () => {
         [500, 95],
       ]),
     );
-    expect(evaluateChannel(channelLeaf(ChannelOperator.EnteringChannel, 90, 110), ctx)).toBe(true);
+    expect(await evaluateChannel(channelLeaf(ChannelOperator.EnteringChannel, 90, 110), ctx)).toBe(
+      true,
+    );
   });
 
-  it('returns true for ExitingChannel when latest left is strictly outside the band and the most recent non-on-boundary baseline was strictly inside', () => {
+  it('returns true for ExitingChannel when latest left is strictly outside the band and the most recent non-on-boundary baseline was strictly inside', async () => {
     const ctx = fakeCtx(
       seriesOf([
         [100, 100],
         [200, 120],
       ]),
     );
-    expect(evaluateChannel(channelLeaf(ChannelOperator.ExitingChannel, 90, 110), ctx)).toBe(true);
+    expect(await evaluateChannel(channelLeaf(ChannelOperator.ExitingChannel, 90, 110), ctx)).toBe(
+      true,
+    );
   });
 
-  it('returns the strict snapshot `lower < latest < upper` for InsideChannel (no historical walk)', () => {
+  it('returns the strict snapshot `lower < latest < upper` for InsideChannel (no historical walk)', async () => {
     const insideCtx = fakeCtx(
       seriesOf([
         [100, 50],
@@ -102,16 +106,19 @@ describe('evaluateChannel', () => {
       ]),
     );
     expect({
-      inside: evaluateChannel(channelLeaf(ChannelOperator.InsideChannel, 90, 110), insideCtx),
-      onBoundary: evaluateChannel(
+      inside: await evaluateChannel(channelLeaf(ChannelOperator.InsideChannel, 90, 110), insideCtx),
+      onBoundary: await evaluateChannel(
         channelLeaf(ChannelOperator.InsideChannel, 90, 110),
         onBoundaryCtx,
       ),
-      outside: evaluateChannel(channelLeaf(ChannelOperator.InsideChannel, 90, 110), outsideCtx),
+      outside: await evaluateChannel(
+        channelLeaf(ChannelOperator.InsideChannel, 90, 110),
+        outsideCtx,
+      ),
     }).toEqual({ inside: true, onBoundary: false, outside: false });
   });
 
-  it('returns false for EnteringChannel when the left series is empty or no off-boundary baseline exists', () => {
+  it('returns false for EnteringChannel when the left series is empty or no off-boundary baseline exists', async () => {
     // All baselines sit on a boundary.
     const allBoundaryCtx = fakeCtx(
       seriesOf([
@@ -122,11 +129,11 @@ describe('evaluateChannel', () => {
     );
     const emptyCtx = fakeCtx(seriesOf([]));
     expect({
-      allBoundary: evaluateChannel(
+      allBoundary: await evaluateChannel(
         channelLeaf(ChannelOperator.EnteringChannel, 90, 110),
         allBoundaryCtx,
       ),
-      empty: evaluateChannel(channelLeaf(ChannelOperator.EnteringChannel, 90, 110), emptyCtx),
+      empty: await evaluateChannel(channelLeaf(ChannelOperator.EnteringChannel, 90, 110), emptyCtx),
     }).toEqual({ allBoundary: false, empty: false });
   });
 });

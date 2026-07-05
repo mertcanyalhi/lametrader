@@ -15,9 +15,12 @@ import type { EvaluationContext } from '../evaluation-context.types.js';
  * either side is not a {@link StateValueType.Number}, or either value is
  * `NaN` — matches CONTEXT.md's "no data yet → false" semantics.
  */
-export function evaluateComparison(leaf: ComparisonLeafCondition, ctx: EvaluationContext): boolean {
-  const left = asNumber(ctx.resolveLatest(leaf.left, leaf.interval));
-  const right = asNumber(ctx.resolveLatest(leaf.right, leaf.interval));
+export async function evaluateComparison(
+  leaf: ComparisonLeafCondition,
+  ctx: EvaluationContext,
+): Promise<boolean> {
+  const left = asNumber(await ctx.resolveLatest(leaf.left, leaf.interval));
+  const right = asNumber(await ctx.resolveLatest(leaf.right, leaf.interval));
   if (left === null || right === null) return false;
   switch (leaf.operator) {
     case ComparisonOperator.Gt:

@@ -69,7 +69,7 @@ const priceCrossingIndicator = (operator: CrossingOperator): CrossingLeafConditi
 });
 
 describe('evaluateCrossing', () => {
-  it('returns true for CrossingUp when the latest left strictly exceeds the right and the most recent non-flat baseline (asOf-resampled) was strictly below', () => {
+  it('returns true for CrossingUp when the latest left strictly exceeds the right and the most recent non-flat baseline (asOf-resampled) was strictly below', async () => {
     const ctx = fakeCtx({
       priceSeries: seriesOf([
         [100, 90],
@@ -77,10 +77,12 @@ describe('evaluateCrossing', () => {
         [300, 105],
       ]),
     });
-    expect(evaluateCrossing(priceCrossingLiteral100(CrossingOperator.CrossingUp), ctx)).toBe(true);
+    expect(await evaluateCrossing(priceCrossingLiteral100(CrossingOperator.CrossingUp), ctx)).toBe(
+      true,
+    );
   });
 
-  it('skips historical points where left === right (lookback-past-flats) — consolidation at the threshold followed by a transit fires Crossing on a fixture with three consecutive boundary samples', () => {
+  it('skips historical points where left === right (lookback-past-flats) — consolidation at the threshold followed by a transit fires Crossing on a fixture with three consecutive boundary samples', async () => {
     const ctx = fakeCtx({
       priceSeries: seriesOf([
         [100, 90],
@@ -90,10 +92,12 @@ describe('evaluateCrossing', () => {
         [500, 105],
       ]),
     });
-    expect(evaluateCrossing(priceCrossingLiteral100(CrossingOperator.Crossing), ctx)).toBe(true);
+    expect(await evaluateCrossing(priceCrossingLiteral100(CrossingOperator.Crossing), ctx)).toBe(
+      true,
+    );
   });
 
-  it('produces the same verdict for cross-frequency (rare vs frequent right updates) — asOf resampling decouples cadence from result', () => {
+  it('produces the same verdict for cross-frequency (rare vs frequent right updates) — asOf resampling decouples cadence from result', async () => {
     const leftSeries = seriesOf([
       [100, 90],
       [200, 95],
@@ -111,12 +115,12 @@ describe('evaluateCrossing', () => {
     const frequentCtx = fakeCtx({ priceSeries: leftSeries, rightSeries: frequentRight });
     const leaf = priceCrossingIndicator(CrossingOperator.CrossingUp);
     expect({
-      rare: evaluateCrossing(leaf, rareCtx),
-      frequent: evaluateCrossing(leaf, frequentCtx),
+      rare: await evaluateCrossing(leaf, rareCtx),
+      frequent: await evaluateCrossing(leaf, frequentCtx),
     }).toEqual({ rare: true, frequent: true });
   });
 
-  it('returns false when the left series is empty, the latest left sits on the boundary, or no non-flat baseline exists', () => {
+  it('returns false when the left series is empty, the latest left sits on the boundary, or no non-flat baseline exists', async () => {
     const onBoundaryCtx = fakeCtx({
       priceSeries: seriesOf([
         [100, 90],
@@ -133,9 +137,9 @@ describe('evaluateCrossing', () => {
     const emptyCtx = fakeCtx({ priceSeries: seriesOf([]) });
     const leaf = priceCrossingLiteral100(CrossingOperator.CrossingUp);
     expect({
-      onBoundary: evaluateCrossing(leaf, onBoundaryCtx),
-      allFlat: evaluateCrossing(leaf, allFlatCtx),
-      empty: evaluateCrossing(leaf, emptyCtx),
+      onBoundary: await evaluateCrossing(leaf, onBoundaryCtx),
+      allFlat: await evaluateCrossing(leaf, allFlatCtx),
+      empty: await evaluateCrossing(leaf, emptyCtx),
     }).toEqual({ onBoundary: false, allFlat: false, empty: false });
   });
 });

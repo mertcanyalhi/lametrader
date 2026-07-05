@@ -67,7 +67,7 @@ const literal100: ConditionOperand = {
 };
 
 describe('evaluateLeaf', () => {
-  it('dispatches every LeafConditionFamily variant to its operator function and returns the resulting boolean', () => {
+  it('dispatches every LeafConditionFamily variant to its operator function and returns the resulting boolean', async () => {
     const comparison: ComparisonLeafCondition = {
       family: LeafConditionFamily.Comparison,
       operator: ComparisonOperator.Gt,
@@ -111,11 +111,11 @@ describe('evaluateLeaf', () => {
       right: { kind: OperandKind.Literal, value: up },
     };
     expect({
-      comparison: evaluateLeaf(comparison, ctx),
-      crossing: evaluateLeaf(crossing, ctx),
-      channel: evaluateLeaf(channel, ctx),
-      moving: evaluateLeaf(moving, ctx),
-      state: evaluateLeaf(state, ctx),
+      comparison: await evaluateLeaf(comparison, ctx),
+      crossing: await evaluateLeaf(crossing, ctx),
+      channel: await evaluateLeaf(channel, ctx),
+      moving: await evaluateLeaf(moving, ctx),
+      state: await evaluateLeaf(state, ctx),
     }).toEqual({
       comparison: true,
       crossing: true,

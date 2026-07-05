@@ -14,11 +14,11 @@ import { evaluateState } from './state.js';
  * The discriminator is `leaf.family` — exhaustive over every family in
  * {@link LeafConditionFamily}.
  *
- * Pure: every read inside the dispatched function goes through
- * {@link EvaluationContext}; no I/O, no clock reads. Returns `false` on any
- * "no data yet" branch (never throws).
+ * Async: every read goes through {@link EvaluationContext}, whose series views
+ * may page the candle repository lazily as an operator walks. No clock reads.
+ * Resolves to `false` on any "no data yet" branch (never throws).
  */
-export function evaluateLeaf(leaf: LeafCondition, ctx: EvaluationContext): boolean {
+export function evaluateLeaf(leaf: LeafCondition, ctx: EvaluationContext): Promise<boolean> {
   switch (leaf.family) {
     case LeafConditionFamily.Comparison:
       return evaluateComparison(leaf, ctx);

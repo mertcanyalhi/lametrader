@@ -35,22 +35,22 @@ const log = getLogger('engine.rules.operators');
  * identity element of the group (`And: true`, `Or: false`), matching the
  * usual short-circuit semantics.
  */
-export function evaluateCondition(
+export async function evaluateCondition(
   node: ConditionNode,
   context: EvaluationContext,
   ruleId: string,
-): boolean {
+): Promise<boolean> {
   switch (node.kind) {
     case ConditionNodeKind.Leaf:
       return evaluateAndTraceLeaf(node.leaf, context, ruleId);
     case ConditionNodeKind.And:
       for (const child of node.children) {
-        if (!evaluateCondition(child, context, ruleId)) return false;
+        if (!(await evaluateCondition(child, context, ruleId))) return false;
       }
       return true;
     case ConditionNodeKind.Or:
       for (const child of node.children) {
-        if (evaluateCondition(child, context, ruleId)) return true;
+        if (await evaluateCondition(child, context, ruleId)) return true;
       }
       return false;
   }
@@ -73,14 +73,14 @@ export function evaluateCondition(
  * Payload assembly is skipped when the operators-scope is not at `trace`,
  * so the hot path stays free.
  */
-function evaluateAndTraceLeaf(
+async function evaluateAndTraceLeaf(
   leaf: LeafCondition,
   ctx: EvaluationContext,
   ruleId: string,
-): boolean {
-  const result = evaluateLeaf(leaf, ctx);
+): Promise<boolean> {
+  const result = await evaluateLeaf(leaf, ctx);
   if (!log.isLevelEnabled('trace')) return result;
-  log.trace(leafTracePayload(leaf, ctx, result, ruleId), 'leaf_decision');
+  log.trace(await leafTracePayload(leaf, ctx, result, ruleId), 'leaf_decision');
   return result;
 }
 
@@ -104,20 +104,20 @@ interface LeafTracePayload {
 }
 
 /** Build the {@link LeafTracePayload} for `leaf` under `ctx` with the known `result`. */
-function leafTracePayload(
+async function leafTracePayload(
   leaf: LeafCondition,
   ctx: EvaluationContext,
   result: boolean,
   ruleId: string,
-): LeafTracePayload {
+): Promise<LeafTracePayload> {
   const base: LeafTracePayload = {
     ruleId,
     symbolId: ctx.symbolId,
     family: leaf.family,
     operator: leaf.operator,
     leftKind: leaf.left.kind,
-    leftValue: ctx.resolveLatest(leaf.left, leaf.interval),
-    leftPrev: ctx.resolvePrev(leaf.left, leaf.interval),
+    leftValue: await ctx.resolveLatest(leaf.left, leaf.interval),
+    leftPrev: await ctx.resolvePrev(leaf.left, leaf.interval),
     result,
   };
   const right = singleRightOperand(leaf);
@@ -125,8 +125,8 @@ function leafTracePayload(
   return {
     ...base,
     rightKind: right.kind,
-    rightValue: ctx.resolveLatest(right, leaf.interval),
-    rightPrev: ctx.resolvePrev(right, leaf.interval),
+    rightValue: await ctx.resolveLatest(right, leaf.interval),
+    rightPrev: await ctx.resolvePrev(right, leaf.interval),
   };
 }
 

@@ -1,5 +1,5 @@
 import { type CandleRepository, OperandKind, type Period, type StateValue } from '@lametrader/core';
-import { type BarAxis, BarSeriesView } from './bar-series-view.js';
+import { type BarAxis, PagedBarSeriesView } from './bar-series-view.js';
 import type { EvaluationContext } from './evaluation-context.types.js';
 import { ArraySeriesView, type IndicatorSeriesStore } from './indicator-series-store.js';
 import type { SeriesPoint, SeriesView } from './series.types.js';
@@ -51,19 +51,19 @@ export interface EvaluationContextDeps {
    */
   getPrevIndicator?(instanceId: string, stateKey: string): StateValue | null;
   /**
-   * OHLCV bar series the orchestrator pre-loaded for this evaluation, keyed
-   * by `(period, axis)` (`barSeriesKey(period, axis)`).
-   * The sync `resolveLatest` / `resolveSeries` paths read from this map —
-   * the `CandleRepository` is async and the operator contract is sync, so
-   * the orchestrator (or {@link prewarmBarSeries}) is responsible for
-   * warming the cache before invoking operators.
+   * OHLCV bar series the orchestrator wired for this evaluation, keyed by
+   * `(period, axis)` (`barSeriesKey(period, axis)`).
+   * The `resolveLatest` / `resolveSeries` paths read from this map; each view
+   * is a lazy {@link SeriesView} (typically a {@link PagedBarSeriesView} pager
+   * over the async `CandleRepository`), so no full-history load happens up front
+   * — a view pages the store only when an operator walks it.
    *
-   * Defaults to empty when omitted; operators see length-0 series and treat
+   * Defaults to empty when omitted; operators see an empty walk and treat
    * the operand as "no data yet" rather than crashing.
    *
-   * Widened to {@link SeriesView} so lazy single-point projections (e.g.
-   * `LiveEvaluationLookups.bookSeriesFor`) satisfy the slot without
-   * paying the `BarSeriesView.load` round-trip every evaluation.
+   * Typed as {@link SeriesView} so lazy pagers, single-point live-mirror
+   * projections (`LiveEvaluationLookups.bookSeriesFor`), and array views all
+   * satisfy the slot uniformly.
    */
   barSeries?: ReadonlyMap<string, SeriesView>;
 }
@@ -71,10 +71,10 @@ export interface EvaluationContextDeps {
 /**
  * Build a fresh {@link EvaluationContext} for one inbound evaluation.
  *
- * Pure: resolves operands by dispatching on `kind` and reading the
- * injected stores. OHLCV bars are read from `deps.barSeries`, which the
- * orchestrator pre-warms via {@link prewarmBarSeries} (one async load per
- * `(period, axis)`); every operator call after that is synchronous.
+ * Resolves operands by dispatching on `kind` and reading the injected stores.
+ * OHLCV bars are read from `deps.barSeries`, whose views (lazy pagers built by
+ * {@link prewarmBarSeries}) page the candle repository only as an operator walks
+ * — the reads are async, so `resolveLatest` / `resolvePrev` return promises.
  */
 export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationContext {
   const barSeries: ReadonlyMap<string, SeriesView> =
@@ -82,17 +82,19 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
 
   return {
     symbolId: deps.symbolId,
-    resolveLatest(operand, interval) {
+    async resolveLatest(operand, interval) {
       switch (operand.kind) {
-        case OperandKind.Price:
-          return priceSeries(barSeries, interval)?.asOf(Number.MAX_SAFE_INTEGER)?.value ?? null;
+        case OperandKind.Price: {
+          const view = priceSeries(barSeries, interval);
+          return view ? ((await view.asOf(Number.MAX_SAFE_INTEGER))?.value ?? null) : null;
+        }
         case OperandKind.Open:
         case OperandKind.High:
         case OperandKind.Low:
         case OperandKind.Close:
         case OperandKind.Volume: {
           const view = barSeriesFor(barSeries, interval, operandToAxis(operand));
-          return view?.asOf(Number.MAX_SAFE_INTEGER)?.value ?? null;
+          return view ? ((await view.asOf(Number.MAX_SAFE_INTEGER))?.value ?? null) : null;
         }
         case OperandKind.IndicatorRef:
           if (interval === undefined) return null;
@@ -110,7 +112,7 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
           return operand.value;
       }
     },
-    resolvePrev(operand, interval) {
+    async resolvePrev(operand, interval) {
       switch (operand.kind) {
         case OperandKind.Price: {
           const view = priceSeries(barSeries, interval);
@@ -132,8 +134,11 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
             operand.instanceId,
             operand.stateKey,
           );
-          if (series.length >= 2) return prevFromSeries(series);
-          return deps.getPrevIndicator?.(operand.instanceId, operand.stateKey) ?? null;
+          // A series with a second-newest point yields it (walk-and-count, since
+          // the view carries no length); otherwise fall to the optional hook for
+          // non-numeric indicator keys not projected into the store.
+          const prev = await prevFromSeries(series);
+          return prev ?? deps.getPrevIndicator?.(operand.instanceId, operand.stateKey) ?? null;
         }
         case OperandKind.SymbolStateRef:
           return deps.getPrevSymbolState?.(deps.profileId, deps.symbolId, operand.key) ?? null;
@@ -179,28 +184,30 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
 }
 
 /**
- * Build a `Map<barSeriesKey, BarSeriesView>` covering every `(period, axis)`
+ * Build a `Map<barSeriesKey, PagedBarSeriesView>` covering every `(period, axis)`
  * pair the orchestrator needs, ready to feed `EvaluationContextDeps.barSeries`.
  *
- * One async load per pair; the resulting map is fully synchronous to read.
+ * Each entry is a lazy pager over the candle repository bounded above by
+ * `before` (exclusive) — building the map does no I/O; a pager fetches its first
+ * page only when an operator actually walks or `asOf`-queries that operand, so a
+ * warmed `(period, axis)` a rule never reads never touches the store.
+ *
+ * `before` bounds the newest candle any pager may read (`time < before`) — pass
+ * the firing observation's timestamp + 1 so a later-ts candle already in the
+ * store can't become the series' newest point.
  */
-export async function prewarmBarSeries(
+export function prewarmBarSeries(
   candleRepository: CandleRepository,
   symbolId: string,
-  barWindow: { from: number; to: number },
+  before: number,
   required: ReadonlyArray<{ period: Period; axis: BarAxis }>,
-): Promise<Map<string, BarSeriesView>> {
-  const out = new Map<string, BarSeriesView>();
+): Map<string, PagedBarSeriesView> {
+  const out = new Map<string, PagedBarSeriesView>();
   for (const { period, axis } of required) {
-    const view = await BarSeriesView.load(
-      candleRepository,
-      symbolId,
-      period,
-      barWindow.from,
-      barWindow.to,
-      axis,
+    out.set(
+      barSeriesKey(period, axis),
+      new PagedBarSeriesView(candleRepository, symbolId, period, axis, before),
     );
-    out.set(barSeriesKey(period, axis), view);
   }
   return out;
 }
@@ -283,13 +290,13 @@ function operandToAxis(
  * The second-newest point's value on a series, or `null` when the series
  * has fewer than two points.
  *
- * Walks the (lazy) backward iterator just far enough — skips the newest
- * point, returns the next.
+ * Walks the lazy backward iterator just far enough — skips the newest point,
+ * returns the next — so a paging view fetches at most the one page the two
+ * points live on.
  */
-function prevFromSeries(series: SeriesView): StateValue | null {
-  if (series.length < 2) return null;
+async function prevFromSeries(series: SeriesView): Promise<StateValue | null> {
   let skippedNewest = false;
-  for (const point of series.backwardWalk()) {
+  for await (const point of series.backwardWalk()) {
     if (!skippedNewest) {
       skippedNewest = true;
       continue;

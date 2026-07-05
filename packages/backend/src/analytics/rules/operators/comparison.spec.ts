@@ -41,15 +41,15 @@ const priceGt100: ComparisonLeafCondition = {
 };
 
 describe('evaluateComparison', () => {
-  it('returns true for Gt when the resolved left number is strictly greater than the right (both read via resolveLatest)', () => {
+  it('returns true for Gt when the resolved left number is strictly greater than the right (both read via resolveLatest)', async () => {
     const ctx = fakeCtx({
       [OperandKind.Price]: { type: StateValueType.Number, value: 120 },
       [OperandKind.Literal]: { type: StateValueType.Number, value: 100 },
     });
-    expect(evaluateComparison(priceGt100, ctx)).toBe(true);
+    expect(await evaluateComparison(priceGt100, ctx)).toBe(true);
   });
 
-  it('returns false (does not throw) when an operand is null, the StateValueTypes differ, or a value is NaN', () => {
+  it('returns false (does not throw) when an operand is null, the StateValueTypes differ, or a value is NaN', async () => {
     const nullLeftCtx = fakeCtx({
       [OperandKind.Price]: null,
       [OperandKind.Literal]: { type: StateValueType.Number, value: 100 },
@@ -73,9 +73,9 @@ describe('evaluateComparison', () => {
       right: literal100,
     };
     expect({
-      nullLeft: evaluateComparison(priceGt100, nullLeftCtx),
-      typeMismatch: evaluateComparison(typeMismatchLeaf, typeMismatchCtx),
-      nanLeft: evaluateComparison(priceGt100, nanLeftCtx),
+      nullLeft: await evaluateComparison(priceGt100, nullLeftCtx),
+      typeMismatch: await evaluateComparison(typeMismatchLeaf, typeMismatchCtx),
+      nanLeft: await evaluateComparison(priceGt100, nanLeftCtx),
     }).toEqual({ nullLeft: false, typeMismatch: false, nanLeft: false });
   });
 });

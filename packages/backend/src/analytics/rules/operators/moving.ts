@@ -16,16 +16,25 @@ import type { EvaluationContext } from '../evaluation-context.types.js';
  * percent change against the threshold (with a divide-by-zero guard on
  * `past.value === 0`).
  *
- * Returns `false` (never throws) when the series has fewer than
- * `lookbackBars + 1` samples, or either reference sample isn't a finite Number.
+ * Returns `false` (never throws) when the series runs dry before reaching the
+ * `lookbackBars`-back sample (fewer than `lookbackBars + 1` points), or either
+ * reference sample isn't a finite Number.
+ *
+ * The lazy series has no cheap length, so this walks-and-counts: it steps back
+ * up to `lookbackBars + 1` points, reading the newest as `current` and the
+ * `lookbackBars`-back one as `past`; if the walk ends before `past` is reached,
+ * `past` stays `null` and the leaf returns `false` — exactly the old
+ * `length < lookbackBars + 1` guard, without asking the pager for a count.
  */
-export function evaluateMoving(leaf: MovingLeafCondition, ctx: EvaluationContext): boolean {
+export async function evaluateMoving(
+  leaf: MovingLeafCondition,
+  ctx: EvaluationContext,
+): Promise<boolean> {
   const series = ctx.resolveSeries(leaf.left, leaf.interval);
-  if (series.length < leaf.lookbackBars + 1) return false;
   let current: number | null = null;
   let past: number | null = null;
   let stepsSeen = 0;
-  for (const point of series.backwardWalk()) {
+  for await (const point of series.backwardWalk()) {
     if (stepsSeen === 0) {
       current = numericPoint(point.value);
       if (current === null) return false;

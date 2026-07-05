@@ -42,7 +42,7 @@ const movingLeaf = (
 });
 
 describe('evaluateMoving', () => {
-  it('returns true for MovingUp when current - past (3 bars back) >= absolute threshold', () => {
+  it('returns true for MovingUp when current - past (3 bars back) >= absolute threshold', async () => {
     const ctx = fakeCtx(
       seriesOf([
         [100, 90],
@@ -51,10 +51,10 @@ describe('evaluateMoving', () => {
         [400, 110],
       ]),
     );
-    expect(evaluateMoving(movingLeaf(MovingOperator.MovingUp, 10, 3), ctx)).toBe(true);
+    expect(await evaluateMoving(movingLeaf(MovingOperator.MovingUp, 10, 3), ctx)).toBe(true);
   });
 
-  it('returns true for MovingDownPercent when (past - current) / past * 100 >= threshold, and false when past is 0 (no divide-by-zero)', () => {
+  it('returns true for MovingDownPercent when (past - current) / past * 100 >= threshold, and false when past is 0 (no divide-by-zero)', async () => {
     const downCtx = fakeCtx(
       seriesOf([
         [100, 100],
@@ -68,12 +68,15 @@ describe('evaluateMoving', () => {
       ]),
     );
     expect({
-      down: evaluateMoving(movingLeaf(MovingOperator.MovingDownPercent, 10, 1), downCtx),
-      zeroPast: evaluateMoving(movingLeaf(MovingOperator.MovingDownPercent, 10, 1), zeroPastCtx),
+      down: await evaluateMoving(movingLeaf(MovingOperator.MovingDownPercent, 10, 1), downCtx),
+      zeroPast: await evaluateMoving(
+        movingLeaf(MovingOperator.MovingDownPercent, 10, 1),
+        zeroPastCtx,
+      ),
     }).toEqual({ down: true, zeroPast: false });
   });
 
-  it('returns false when the series has fewer than lookbackBars + 1 samples', () => {
+  it('returns false when the series runs dry before the lookbackBars-back sample (fewer than lookbackBars + 1 points)', async () => {
     const shortCtx = fakeCtx(
       seriesOf([
         [100, 90],
@@ -82,8 +85,8 @@ describe('evaluateMoving', () => {
     );
     const emptyCtx = fakeCtx(seriesOf([]));
     expect({
-      short: evaluateMoving(movingLeaf(MovingOperator.MovingUp, 5, 3), shortCtx),
-      empty: evaluateMoving(movingLeaf(MovingOperator.MovingUp, 5, 3), emptyCtx),
+      short: await evaluateMoving(movingLeaf(MovingOperator.MovingUp, 5, 3), shortCtx),
+      empty: await evaluateMoving(movingLeaf(MovingOperator.MovingUp, 5, 3), emptyCtx),
     }).toEqual({ short: false, empty: false });
   });
 });

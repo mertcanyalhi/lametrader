@@ -26,7 +26,7 @@ export interface EvaluationContext {
    * operands to select the bar period, ignored by period-agnostic operands
    * (`Price`, state-refs, `Literal`).
    */
-  resolveLatest(operand: ConditionOperand, interval?: Period): StateValue | null;
+  resolveLatest(operand: ConditionOperand, interval?: Period): Promise<StateValue | null>;
   /**
    * Previous (one-step-back) value for the operand, or `null` when no prior
    * snapshot has been observed.
@@ -44,7 +44,7 @@ export interface EvaluationContext {
    * `interval` scopes OHLCV operands to their bar period (see
    * {@link resolveLatest}).
    */
-  resolvePrev(operand: ConditionOperand, interval?: Period): StateValue | null;
+  resolvePrev(operand: ConditionOperand, interval?: Period): Promise<StateValue | null>;
   /**
    * Ordered series view for the operand on its native timeline.
    *

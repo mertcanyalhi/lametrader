@@ -17,7 +17,7 @@ import {
   type TickEvent,
   type WatchlistRepository,
 } from '@lametrader/core';
-import type { BarAxis } from '../bar-series-view.js';
+import { type BarAxis, FallbackSeriesView } from '../bar-series-view.js';
 import { BarLifecycleBridge, IndicatorCascadeBridge } from '../bridges/index.js';
 import { TriggerDispatcher } from '../dispatch/dispatcher.js';
 import { getLogger } from '../engine-log.js';
@@ -120,12 +120,7 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
       // operator read the wrong "current" bar and never fire.
       // Upgrade path: also bound `from` to each firing rule's `lookbackBars`
       // × interval once the dispatcher threads the rule through.
-      const barSeries = await warmLiveBarSeries(
-        deps.candleRepository,
-        firingSymbolId,
-        event.ts,
-        lookups,
-      );
+      const barSeries = warmLiveBarSeries(deps.candleRepository, firingSymbolId, event.ts, lookups);
       return buildEvaluationContext({
         symbolId: firingSymbolId,
         profileId,
@@ -283,48 +278,47 @@ interface EventBatch {
 const BAR_AXES: readonly BarAxis[] = ['open', 'high', 'low', 'close', 'volume'];
 
 /**
- * Pre-warm the `(period, axis) → SeriesView` map the evaluation context reads
- * for OHLCV / `Price` operands, backed by the real candle history.
+ * Build the `(period, axis) → SeriesView` map the evaluation context reads for
+ * OHLCV / `Price` operands, backed by the real candle history — lazily.
  *
  * For every period the symbol has an observed candle on (per the live mirror),
- * loads a full-window `BarSeriesView` for each of the five OHLCV axes from the
- * candle repository via {@link prewarmBarSeries}. Series operators (`Moving` /
- * `Channel` / `Crossing`) then walk the actual stored bars instead of the
- * single live-mirror point that made them never fire (#499).
+ * wires a {@link PagedBarSeriesView} pager over the candle repository for each of
+ * the five OHLCV axes via {@link prewarmBarSeries}. Series operators (`Moving` /
+ * `Channel` / `Crossing`) then walk the actual stored bars — paging backward on
+ * demand — instead of the single live-mirror point that made them never fire
+ * (#499). Nothing is loaded up front: a pager fetches its first page only when
+ * an operator reads that operand.
  *
- * The single-point live mirror ({@link LiveEvaluationLookups.bookSeriesFor}) is
- * the base map, overridden per `(period, axis)` only where the repository holds
- * history: in production the poll loop persists each candle before fan-out, so
- * the repository is always at least as fresh as the mirror; the mirror stays
- * the fallback for the current bar when the repository has no row yet (e.g. the
- * forming bar under evaluation), so snapshot / comparison operands that read
- * the latest value keep resolving. Returns an empty map for an unobserved
- * symbol — operators see length-0 series and treat the operand as "no data yet".
+ * Each pager is wrapped in a {@link FallbackSeriesView} over the single-point
+ * live mirror ({@link LiveEvaluationLookups.bookSeriesFor}): when the repository
+ * holds history for a `(period, axis)` the pager wins; when it holds none yet
+ * (e.g. the forming bar under evaluation, before the poll loop persists it) the
+ * mirror's snapshot point stands in, so snapshot / comparison operands that read
+ * the latest value keep resolving. This preserves the earlier eager "override
+ * the mirror only where the repository has rows" merge without an up-front probe.
+ * Returns just the mirror map for an unobserved symbol.
  *
- * `upperTs` is the firing observation's timestamp: the loaded window is
- * `[0, upperTs]` (inclusive) so a repository row stored *after* this
- * observation — a later bar the store already holds, or leftover data from
- * another run against a shared store — never becomes the series' newest point
- * and is never mistaken for the current bar.
+ * `upperTs` is the firing observation's timestamp: every pager is bounded to
+ * `time < upperTs + 1` so a repository row stored *after* this observation — a
+ * later bar the store already holds, or leftover data from another run against a
+ * shared store — never becomes the series' newest point and is never mistaken
+ * for the current bar (#504).
  */
-async function warmLiveBarSeries(
+function warmLiveBarSeries(
   candleRepository: CandleRepository,
   symbolId: string,
   upperTs: number,
   lookups: LiveEvaluationLookups,
-): Promise<ReadonlyMap<string, SeriesView>> {
-  const merged = new Map<string, SeriesView>(lookups.bookSeriesFor(symbolId));
+): ReadonlyMap<string, SeriesView> {
+  const mirror = lookups.bookSeriesFor(symbolId);
+  const merged = new Map<string, SeriesView>(mirror);
   const required = lookups
     .observedPeriods(symbolId)
     .flatMap((period) => BAR_AXES.map((axis) => ({ period, axis })));
-  const history = await prewarmBarSeries(
-    candleRepository,
-    symbolId,
-    { from: 0, to: upperTs + 1 },
-    required,
-  );
-  for (const [key, view] of history) {
-    if (view.length > 0) merged.set(key, view);
+  const pagers = prewarmBarSeries(candleRepository, symbolId, upperTs + 1, required);
+  for (const [key, pager] of pagers) {
+    const fallback = mirror.get(key);
+    merged.set(key, fallback ? new FallbackSeriesView(pager, fallback) : pager);
   }
   return merged;
 }

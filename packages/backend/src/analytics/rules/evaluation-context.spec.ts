@@ -19,6 +19,13 @@ const PERIOD = Period.OneMinute;
 const PROFILE = 'profile-1';
 const INSTANCE_ID = 'sma-3-inst';
 
+/** Drain an async backward walk into an array for full-payload assertions. */
+async function collect<T>(iter: AsyncIterableIterator<T>): Promise<T[]> {
+  const out: T[] = [];
+  for await (const item of iter) out.push(item);
+  return out;
+}
+
 const candle = (time: number, close: number): Candle => ({
   type: SymbolType.Crypto,
   time,
@@ -66,7 +73,7 @@ const seed = async () => {
   };
 
   const barWindow = { from: 0, to: 4 * 60_000 };
-  const barSeries = await prewarmBarSeries(repo, SYMBOL, barWindow, [
+  const barSeries = prewarmBarSeries(repo, SYMBOL, barWindow.to, [
     { period: PERIOD, axis: 'open' },
     { period: PERIOD, axis: 'high' },
     { period: PERIOD, axis: 'low' },
@@ -92,13 +99,13 @@ describe('buildEvaluationContext', () => {
   it('resolveLatest returns the current StateValue for every operand kind', async () => {
     const { ctx } = await seed();
 
-    const price = ctx.resolveLatest({ kind: OperandKind.Price });
-    const open = ctx.resolveLatest({ kind: OperandKind.Open }, PERIOD);
-    const high = ctx.resolveLatest({ kind: OperandKind.High }, PERIOD);
-    const low = ctx.resolveLatest({ kind: OperandKind.Low }, PERIOD);
-    const close = ctx.resolveLatest({ kind: OperandKind.Close }, PERIOD);
-    const volume = ctx.resolveLatest({ kind: OperandKind.Volume }, PERIOD);
-    const indicatorRef = ctx.resolveLatest(
+    const price = await ctx.resolveLatest({ kind: OperandKind.Price });
+    const open = await ctx.resolveLatest({ kind: OperandKind.Open }, PERIOD);
+    const high = await ctx.resolveLatest({ kind: OperandKind.High }, PERIOD);
+    const low = await ctx.resolveLatest({ kind: OperandKind.Low }, PERIOD);
+    const close = await ctx.resolveLatest({ kind: OperandKind.Close }, PERIOD);
+    const volume = await ctx.resolveLatest({ kind: OperandKind.Volume }, PERIOD);
+    const indicatorRef = await ctx.resolveLatest(
       {
         kind: OperandKind.IndicatorRef,
         instanceId: INSTANCE_ID,
@@ -107,17 +114,17 @@ describe('buildEvaluationContext', () => {
       },
       PERIOD,
     );
-    const symbolRef = ctx.resolveLatest({
+    const symbolRef = await ctx.resolveLatest({
       kind: OperandKind.SymbolStateRef,
       key: 'mode',
       valueType: StateValueType.String,
     });
-    const globalRef = ctx.resolveLatest({
+    const globalRef = await ctx.resolveLatest({
       kind: OperandKind.GlobalStateRef,
       key: 'regime',
       valueType: StateValueType.String,
     });
-    const literal = ctx.resolveLatest({
+    const literal = await ctx.resolveLatest({
       kind: OperandKind.Literal,
       value: { type: StateValueType.Number, value: 42 },
     });
@@ -153,7 +160,7 @@ describe('buildEvaluationContext', () => {
     const { ctx } = await seed();
 
     expect(
-      ctx.resolveLatest({
+      await ctx.resolveLatest({
         kind: OperandKind.IndicatorRef,
         instanceId: INSTANCE_ID,
         stateKey: 'value',
@@ -183,7 +190,7 @@ describe('buildEvaluationContext', () => {
     );
 
     const barWindow = { from: 0, to: 4 * 3_600_000 };
-    const barSeries = await prewarmBarSeries(repo, SYMBOL, barWindow, [
+    const barSeries = prewarmBarSeries(repo, SYMBOL, barWindow.to, [
       { period: Period.OneMinute, axis: 'close' },
       { period: Period.OneHour, axis: 'close' },
     ]);
@@ -200,11 +207,11 @@ describe('buildEvaluationContext', () => {
     });
 
     expect({
-      minuteClose: ctx.resolveLatest({ kind: OperandKind.Close }, Period.OneMinute),
-      hourClose: ctx.resolveLatest({ kind: OperandKind.Close }, Period.OneHour),
+      minuteClose: await ctx.resolveLatest({ kind: OperandKind.Close }, Period.OneMinute),
+      hourClose: await ctx.resolveLatest({ kind: OperandKind.Close }, Period.OneHour),
       // A missing interval has no period to key on — resolves to null rather
       // than borrowing another period's bar.
-      noInterval: ctx.resolveLatest({ kind: OperandKind.Close }),
+      noInterval: await ctx.resolveLatest({ kind: OperandKind.Close }),
     }).toEqual({
       minuteClose: { type: StateValueType.Number, value: 30 },
       hourClose: { type: StateValueType.Number, value: 50 },
@@ -232,7 +239,7 @@ describe('buildEvaluationContext', () => {
     );
 
     const barWindow = { from: 0, to: 2 * 60_000 };
-    const barSeries = await prewarmBarSeries(repo, SYMBOL, barWindow, [
+    const barSeries = prewarmBarSeries(repo, SYMBOL, barWindow.to, [
       { period: PERIOD, axis: 'close' },
     ]);
 
@@ -250,23 +257,21 @@ describe('buildEvaluationContext', () => {
 
     // A bare Price leaf carries no interval; Price falls back to the latest
     // close of the only observed period.
-    expect(ctx.resolveLatest({ kind: OperandKind.Price })).toEqual({
+    expect(await ctx.resolveLatest({ kind: OperandKind.Price })).toEqual({
       type: StateValueType.Number,
       value: 42,
     });
   });
 
-  it('resolveSeries returns the close-axis series for Price with backward walk + asOf + length', async () => {
+  it('resolveSeries returns the close-axis series for Price with backward walk + asOf', async () => {
     const { ctx } = await seed();
     const series = ctx.resolveSeries({ kind: OperandKind.Price });
-    const walked = [...series.backwardWalk()];
+    const walked = await collect(series.backwardWalk());
 
     expect({
-      length: series.length,
       walked,
-      asOfMid: series.asOf(150_000),
+      asOfMid: await series.asOf(150_000),
     }).toEqual({
-      length: 3,
       walked: [
         { ts: 180_000, value: { type: StateValueType.Number, value: 30 } },
         { ts: 120_000, value: { type: StateValueType.Number, value: 20 } },
@@ -303,7 +308,7 @@ describe('buildEvaluationContext', () => {
     };
 
     const barWindow = { from: 0, to: 4 * 60_000 };
-    const barSeries = await prewarmBarSeries(repo, SYMBOL, barWindow, [
+    const barSeries = prewarmBarSeries(repo, SYMBOL, barWindow.to, [
       { period: PERIOD, axis: 'close' },
     ]);
 
@@ -321,19 +326,19 @@ describe('buildEvaluationContext', () => {
       getPrevGlobalState: (_p, key) => prevGlobalStates[key] ?? null,
     });
 
-    const prevPrice = ctx.resolvePrev({ kind: OperandKind.Price });
-    const prevClose = ctx.resolvePrev({ kind: OperandKind.Close }, PERIOD);
-    const prevSymbol = ctx.resolvePrev({
+    const prevPrice = await ctx.resolvePrev({ kind: OperandKind.Price });
+    const prevClose = await ctx.resolvePrev({ kind: OperandKind.Close }, PERIOD);
+    const prevSymbol = await ctx.resolvePrev({
       kind: OperandKind.SymbolStateRef,
       key: 'mode',
       valueType: StateValueType.String,
     });
-    const prevGlobal = ctx.resolvePrev({
+    const prevGlobal = await ctx.resolvePrev({
       kind: OperandKind.GlobalStateRef,
       key: 'regime',
       valueType: StateValueType.String,
     });
-    const prevLiteral = ctx.resolvePrev({
+    const prevLiteral = await ctx.resolvePrev({
       kind: OperandKind.Literal,
       value: { type: StateValueType.Number, value: 42 },
     });
@@ -355,15 +360,13 @@ describe('buildEvaluationContext', () => {
       kind: OperandKind.Literal,
       value: { type: StateValueType.Number, value: 42 },
     });
-    const walked = [...series.backwardWalk()];
+    const walked = await collect(series.backwardWalk());
 
     expect({
-      length: series.length,
       walked,
-      asOfPast: series.asOf(0),
-      asOfFuture: series.asOf(Number.MAX_SAFE_INTEGER),
+      asOfPast: await series.asOf(0),
+      asOfFuture: await series.asOf(Number.MAX_SAFE_INTEGER),
     }).toEqual({
-      length: 1,
       walked: [{ ts: 0, value: { type: StateValueType.Number, value: 42 } }],
       asOfPast: { ts: 0, value: { type: StateValueType.Number, value: 42 } },
       asOfFuture: { ts: 0, value: { type: StateValueType.Number, value: 42 } },

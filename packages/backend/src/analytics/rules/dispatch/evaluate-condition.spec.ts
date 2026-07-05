@@ -10,6 +10,7 @@ import {
 } from '@lametrader/core';
 
 import type { EvaluationContext } from '../evaluation-context.types.js';
+import { ArraySeriesView } from '../indicator-series-store.js';
 import type { SeriesView } from '../series.types.js';
 import { evaluateCondition } from './evaluate-condition.js';
 
@@ -18,11 +19,7 @@ import { evaluateCondition } from './evaluate-condition.js';
  * Returns the literal's value for literals, and the canned value otherwise.
  */
 function fakeContext(latest: Map<string, StateValue | null>): EvaluationContext {
-  const emptySeries: SeriesView = {
-    length: 0,
-    backwardWalk: () => [].values(),
-    asOf: () => null,
-  };
+  const emptySeries: SeriesView = new ArraySeriesView([]);
   return {
     symbolId: 'AAPL',
     resolveLatest(operand) {
@@ -55,23 +52,23 @@ function leafGtLiteral(left: ConditionOperand, rhs: number): ConditionNode {
 }
 
 describe('evaluateCondition — tree walker', () => {
-  it('returns true on a single leaf whose operator returns true', () => {
+  it('returns true on a single leaf whose operator returns true', async () => {
     const ctx = fakeContext(
       new Map([[OperandKind.Price as string, { type: StateValueType.Number, value: 120 }]]),
     );
     const tree = leafGtLiteral({ kind: OperandKind.Price }, 100);
-    expect(evaluateCondition(tree, ctx, 'r-1')).toEqual(true);
+    expect(await evaluateCondition(tree, ctx, 'r-1')).toEqual(true);
   });
 
-  it('returns false on a single leaf whose operator returns false', () => {
+  it('returns false on a single leaf whose operator returns false', async () => {
     const ctx = fakeContext(
       new Map([[OperandKind.Price as string, { type: StateValueType.Number, value: 80 }]]),
     );
     const tree = leafGtLiteral({ kind: OperandKind.Price }, 100);
-    expect(evaluateCondition(tree, ctx, 'r-1')).toEqual(false);
+    expect(await evaluateCondition(tree, ctx, 'r-1')).toEqual(false);
   });
 
-  it('returns true on an And of two true leaves', () => {
+  it('returns true on an And of two true leaves', async () => {
     const ctx = fakeContext(
       new Map([[OperandKind.Price as string, { type: StateValueType.Number, value: 120 }]]),
     );
@@ -82,10 +79,10 @@ describe('evaluateCondition — tree walker', () => {
         leafGtLiteral({ kind: OperandKind.Price }, 110),
       ],
     };
-    expect(evaluateCondition(tree, ctx, 'r-1')).toEqual(true);
+    expect(await evaluateCondition(tree, ctx, 'r-1')).toEqual(true);
   });
 
-  it('returns false on an And short-circuiting on the first false leaf', () => {
+  it('returns false on an And short-circuiting on the first false leaf', async () => {
     const ctx = fakeContext(
       new Map([[OperandKind.Price as string, { type: StateValueType.Number, value: 80 }]]),
     );
@@ -96,10 +93,10 @@ describe('evaluateCondition — tree walker', () => {
         leafGtLiteral({ kind: OperandKind.Price }, 50),
       ],
     };
-    expect(evaluateCondition(tree, ctx, 'r-1')).toEqual(false);
+    expect(await evaluateCondition(tree, ctx, 'r-1')).toEqual(false);
   });
 
-  it('returns true on an Or short-circuiting on the first true leaf', () => {
+  it('returns true on an Or short-circuiting on the first true leaf', async () => {
     const ctx = fakeContext(
       new Map([[OperandKind.Price as string, { type: StateValueType.Number, value: 120 }]]),
     );
@@ -110,10 +107,10 @@ describe('evaluateCondition — tree walker', () => {
         leafGtLiteral({ kind: OperandKind.Price }, 200),
       ],
     };
-    expect(evaluateCondition(tree, ctx, 'r-1')).toEqual(true);
+    expect(await evaluateCondition(tree, ctx, 'r-1')).toEqual(true);
   });
 
-  it('returns false on an Or of two false leaves', () => {
+  it('returns false on an Or of two false leaves', async () => {
     const ctx = fakeContext(
       new Map([[OperandKind.Price as string, { type: StateValueType.Number, value: 80 }]]),
     );
@@ -124,6 +121,6 @@ describe('evaluateCondition — tree walker', () => {
         leafGtLiteral({ kind: OperandKind.Price }, 200),
       ],
     };
-    expect(evaluateCondition(tree, ctx, 'r-1')).toEqual(false);
+    expect(await evaluateCondition(tree, ctx, 'r-1')).toEqual(false);
   });
 });
