@@ -47,14 +47,6 @@ export interface ProfileFields {
   enabled: boolean;
   /** Which watched symbols the profile applies to. */
   scope: ProfileScopeSpec;
-  /**
-   * Symbol-state keys whose markers the chart should render for this profile.
-   *
-   * An entry is a state key (e.g. `'price:trend'`); the chart draws `stateSet` / `stateRemoved` markers only for the keys listed here.
-   *
-   * Empty (`[]`, the default) means render nothing — existing profiles start blank, with no migration/back-fill.
-   */
-  chartStates: string[];
 }
 
 /**

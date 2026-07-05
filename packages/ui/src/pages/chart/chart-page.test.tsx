@@ -18,7 +18,7 @@ import {
 import { Theme } from '@radix-ui/themes';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
@@ -31,9 +31,19 @@ import { ThemeProvider } from '../../lib/theme-context.js';
 vi.mock('./candle-chart.js', () => ({ CandleChart: () => <div>candle-chart</div> }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
 // The chart subscribes to the live candle stream; stub the shared client so the
-// page tests don't open a (jsdom-absent) WebSocket.
+// page tests don't open a (jsdom-absent) WebSocket. Subscribers are captured so
+// a test can emit a live frame (e.g. a fresh candle bar).
+const { streamSubs } = vi.hoisted(() => ({
+  streamSubs: [] as Array<{ kind: string; key: unknown; cb: (event: unknown) => void }>,
+}));
 vi.mock('../../lib/stream/stream-client.js', () => ({
-  streamClient: { subscribe: () => () => {}, onReconnect: () => () => {} },
+  streamClient: {
+    subscribe: (kind: string, key: unknown, cb: (event: unknown) => void) => {
+      streamSubs.push({ kind, key, cb });
+      return () => {};
+    },
+    onReconnect: () => () => {},
+  },
 }));
 
 import { ChartPage } from './chart-page.js';
@@ -77,6 +87,7 @@ describe('ChartPage', () => {
   let matchers: Array<{ includes: string; body: () => unknown }>;
 
   beforeEach(() => {
+    streamSubs.length = 0;
     matchers = [];
     const fetchSpy = vi.fn(async (url: string) => {
       const match = matchers.find((m) => String(url).includes(m.includes));
@@ -209,7 +220,6 @@ describe('ChartPage', () => {
     createdAt: 1,
     updatedAt: 1,
     indicators: [],
-    chartStates: [],
   };
   const DISABLED_PROFILE: Profile = {
     id: 'p-0',
@@ -220,7 +230,6 @@ describe('ChartPage', () => {
     createdAt: 1,
     updatedAt: 1,
     indicators: [],
-    chartStates: [],
   };
 
   it('hosts the profile picker trigger in the bottom-bar Chart actions group', async () => {
@@ -451,6 +460,53 @@ describe('ChartPage', () => {
     expect(computeUrls).toEqual([
       '/api/symbols/crypto:BTCUSDT/indicators/sma?period=1h&from=1000000&to=2000001&length=14&source=close',
     ]);
+  });
+
+  it('extends the rule-events window to a live-streamed bar past the loaded feed', async () => {
+    onRequest('/symbols?enrich=true', () => [BTC]);
+    onRequest('/config', () => CONFIG);
+    onRequest('/profiles', () => []);
+    onRequest('/indicators', () => []);
+    onRequest('/candles', () => ({
+      candles: [candle(1_000_000, 100), candle(2_000_000, 102)],
+      nextCursor: null,
+    }));
+    onRequest('/rules?', () => []);
+    onRequest('/state-keys', () => []);
+    onRequest('/rule-events/count', () => ({ count: 0 }));
+    onRequest('/rule-events?from=', () => []);
+
+    renderAt('/chart?id=crypto:BTCUSDT&period=1h');
+
+    const fetchSpy = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    // Initial window: bounded by the last loaded candle (2_000_000 + 1).
+    await waitFor(() =>
+      expect(
+        fetchSpy.mock.calls.some((c) =>
+          String(c[0]).includes('/rule-events?from=1000000&to=2000001'),
+        ),
+      ).toEqual(true),
+    );
+
+    // A fresh bar arrives on the live candle feed, past the loaded feed's tail.
+    const candleSub = streamSubs.find((s) => s.kind === 'candle' && s.key === 'crypto:BTCUSDT');
+    act(() =>
+      candleSub?.cb({
+        id: 'crypto:BTCUSDT',
+        period: Period.OneHour,
+        candle: candle(3_000_000, 105),
+        final: false,
+      }),
+    );
+
+    // The window now reaches the live bar (3_000_000 + 1) so its events render.
+    await waitFor(() =>
+      expect(
+        fetchSpy.mock.calls.some((c) =>
+          String(c[0]).includes('/rule-events?from=1000000&to=3000001'),
+        ),
+      ).toEqual(true),
+    );
   });
 
   it('issues no compute call until the candle feed has loaded a window — closes the full-history race', async () => {

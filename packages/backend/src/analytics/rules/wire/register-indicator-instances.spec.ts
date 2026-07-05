@@ -35,7 +35,6 @@ const profile = (overrides: Partial<Profile> & Pick<Profile, 'id' | 'indicators'
   description: '',
   enabled: true,
   scope: { type: ProfileScope.All },
-  chartStates: [],
   createdAt: 0,
   updatedAt: 0,
   ...overrides,

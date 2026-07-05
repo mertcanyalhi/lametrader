@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { ProfileScopeDto } from './profile-scope.dto.js';
 
 /**
@@ -45,13 +45,4 @@ export class ProfilePatchDto {
   @ValidateNested()
   @Type(() => ProfileScopeDto)
   scope?: ProfileScopeDto;
-
-  /**
-   * Replacement chart-state keys, when changing them.
-   */
-  @ApiPropertyOptional({ type: String, isArray: true })
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  chartStates?: string[];
 }

@@ -40,8 +40,4 @@ export class ProfileDto {
   /** Attached indicator instances, in attachment order. */
   @ApiProperty({ type: IndicatorInstanceDto, isArray: true })
   indicators!: IndicatorInstanceDto[];
-
-  /** Symbol-state keys whose markers the chart renders for this profile. */
-  @ApiProperty({ type: String, isArray: true })
-  chartStates!: string[];
 }

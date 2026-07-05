@@ -83,7 +83,6 @@ describe('profiles HTTP contract (integration)', () => {
         createdAt: 1000,
         updatedAt: 1000,
         indicators: [],
-        chartStates: [],
       },
     });
   });
@@ -104,7 +103,6 @@ describe('profiles HTTP contract (integration)', () => {
         createdAt: 1000,
         updatedAt: 1000,
         indicators: [],
-        chartStates: [],
       },
     });
   });
@@ -146,7 +144,6 @@ describe('profiles HTTP contract (integration)', () => {
         createdAt: 1000,
         updatedAt: 1000,
         indicators: [],
-        chartStates: [],
       },
     });
   });
@@ -166,7 +163,6 @@ describe('profiles HTTP contract (integration)', () => {
         createdAt: 1000,
         updatedAt: 1000,
         indicators: [],
-        chartStates: [],
       },
     });
   });

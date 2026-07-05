@@ -11,6 +11,7 @@ import {
   liveCandleForPeriod,
   mergeCandlesByTime,
   useCandleStream,
+  useLatestCandle,
   usePagedCandles,
 } from './candles.js';
 
@@ -316,6 +317,45 @@ describe('useCandleStream', () => {
       { action: 'unsubscribe', id: ID },
       { action: 'subscribe', id: OTHER },
     ]);
+  });
+});
+
+describe('useLatestCandle', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+  });
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('keeps the charted period bar when a frame for another period arrives after it', () => {
+    const hourly = { id: ID, period: Period.OneHour, candle: candle(NOW), final: false };
+    const daily = { id: ID, period: Period.OneDay, candle: candle(NOW + 1_000), final: false };
+    const { result } = renderHook(() => useLatestCandle(ID, Period.OneHour));
+    const socket = FakeWebSocket.instances[0];
+
+    act(() => {
+      socket?.open();
+      socket?.emit(hourly);
+      socket?.emit(daily);
+    });
+
+    expect(result.current).toEqual(hourly.candle);
+  });
+
+  it('returns null when only another period has streamed', () => {
+    const daily = { id: ID, period: Period.OneDay, candle: candle(NOW), final: false };
+    const { result } = renderHook(() => useLatestCandle(ID, Period.OneHour));
+    const socket = FakeWebSocket.instances[0];
+
+    act(() => {
+      socket?.open();
+      socket?.emit(daily);
+    });
+
+    expect(result.current).toEqual(null);
   });
 });
 

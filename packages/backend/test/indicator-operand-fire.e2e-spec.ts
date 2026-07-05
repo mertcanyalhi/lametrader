@@ -155,7 +155,6 @@ describe('indicator-operand rule firing (e2e)', () => {
           inputs: { length: 3, source: 'close' },
         },
       ],
-      chartStates: [],
       createdAt: 0,
       updatedAt: 0,
     });

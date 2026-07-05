@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { ProfileScopeDto } from './profile-scope.dto.js';
 
 /**
@@ -8,10 +8,10 @@ import { ProfileScopeDto } from './profile-scope.dto.js';
  * mirrors the old TypeBox `ProfileInputSchema`.
  *
  * Only `name` is required; the rest default in the domain (`description` `''`,
- * `enabled` `true`, `scope` `all`, `chartStates` `[]`). Boundary validation pins
- * the field-level contract (correct types, no unknown properties); the domain
- * rules (non-blank name, unique name, scope ids watched) are enforced by
- * `ProfileService` and surface as `{ error }` 400 / 409.
+ * `enabled` `true`, `scope` `all`). Boundary validation pins the field-level
+ * contract (correct types, no unknown properties); the domain rules (non-blank
+ * name, unique name, scope ids watched) are enforced by `ProfileService` and
+ * surface as `{ error }` 400 / 409.
  */
 export class ProfileInputDto {
   /**
@@ -45,13 +45,4 @@ export class ProfileInputDto {
   @ValidateNested()
   @Type(() => ProfileScopeDto)
   scope?: ProfileScopeDto;
-
-  /**
-   * Symbol-state keys whose markers the chart renders; defaults to `[]`.
-   */
-  @ApiPropertyOptional({ type: String, isArray: true })
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  chartStates?: string[];
 }

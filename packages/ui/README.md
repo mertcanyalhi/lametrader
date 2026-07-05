@@ -28,8 +28,6 @@ A bottom action bar holds the profile picker (a single modal that both **selects
 With no profile selected, the indicator panel shows a warning callout pointing back to the profile picker; an attached indicator whose definition's `appliesTo` excludes the current symbol's type renders muted with an "n/a for `<type>`" note (it stays attached on the profile — it just can't compute on this symbol).
 The selected profile is per-user state persisted to `localStorage` (`lametrader.selectedProfileId`), not URL state — sharing a chart link does not share a profile.
 First-run defaulting picks the first enabled profile when nothing is stored; a stored id missing from `GET /profiles` is treated as "No profile" and is not proactively wiped (so a profile re-created elsewhere re-binds).
-The profile create/edit form carries a **Chart states** control — a chips-style combobox (multi-select that also takes free-text) bound to the profile's `chartStates`, the state keys whose markers the chart renders.
-Its suggestions seed from the current chart symbol's known state keys (`GET /symbols/:id/state-keys`) and any typed key is accepted as-is, so a not-yet-written state can be pre-configured; opened away from a chart (e.g. the rules page) the suggestion list is empty and free-text entry still works.
 Crypto and equities get a volume sub-pane; FX (no volume) omits it.
 Candle and volume colors follow the app theme and update live when you toggle it.
 Scrolling back in time loads older history a window at a time until the start of what's stored; a symbol with no stored candles shows a "Run backfill" card that fetches history without leaving the page.
@@ -42,8 +40,8 @@ Each applicable instance gets a deterministic palette colour, fetched once per `
 A legend below the canvas lists every overlay with its display name + summary, the value at the crosshair (or the latest non-null when no crosshair), a show/hide eye (chart-local view state), and a remove `x` that opens the same `AlertDialog` detach confirm the panel uses.
 Live updates land in a follow-up issue.
 
-Rule-event markers (`stateSet` / `stateRemoved`) render on the candle series for only the state keys the active profile lists in its **Chart states** — the chart threads that list into its windowed marker read, which filters server-side, so a profile with an empty `chartStates` renders no markers and a profile switch refetches with the new set.
-There is no per-type marker picker: the profile's `chartStates` is the single control over what renders.
+Rule-event markers (`stateSet` / `stateRemoved`) render on the candle series for only the state keys selected in the bottom-bar **States** panel — the chart threads that selection into its windowed marker read, which filters server-side, so an empty selection renders no markers and toggling a key refetches with the new set.
+There is no per-type marker picker and no separate profile control: the States-panel selection is the single control over both the value overlays and the change markers.
 
 ### `/rules` — Rules
 
@@ -122,7 +120,7 @@ The mutations invalidate `['profiles']` so the profile's embedded `indicators[]`
 
 `src/lib/hooks/rules.ts` exposes the rules data layer (mounted under `/api/rules`) — `useRules(filters?)` (`GET /rules?profileId=&symbolId=&enabled=`), `useRule(id)`, `useCreateRule` (`POST /rules`), `usePatchRule` (`PATCH /rules/:id`), `useDeleteRule` (`DELETE /rules/:id`), and `useRuleEvents(id, { limit?, before? })` (`GET /rules/:id/events`).
 The chart's Events panel and the per-rule / per-symbol `EventsDialog` build on top of these via `useInfiniteQuery` for "Load more" pagination keyed by the oldest event's `ts`.
-The chart's markers use `useRuleEventsForRange(id, from, to, chartStates)` (`GET /symbols/:id/rule-events?from=&to=&limit=500&chartStates=`) — a windowed read filtered server-side to the active profile's `chartStates` and keyed on it, so a profile switch refetches; `useRuleEventStream(id)` invalidates that query per live frame, so the stream honours the same filter for free.
+The chart's markers use `useRuleEventsForRange(id, from, to, selectedStateKeys)` (`GET /symbols/:id/rule-events?from=&to=&limit=500&chartStates=`) — a windowed read filtered server-side to the States-panel-selected keys and keyed on them, so a selection change refetches; `useRuleEventStream(id)` invalidates that query per live frame, so the stream honours the same filter for free. The upper bound tracks the live bar (`useLatestCandle`), so an event on a freshly-formed candle lands in the window without a reload.
 
 `src/lib/hooks/telegram.ts` exposes the notification-destinations data layer behind the rule editor's destination dropdown and the settings page's destinations CRUD — `useTelegramDestinations` (`GET /config/notifications/telegram` → `{ name, chatId }[]`), `useUpsertTelegramDestination` (`POST` upsert; tokens are write-only), and `useDeleteTelegramDestination` (`DELETE /config/notifications/telegram/:name`).
 Token reads aren't possible: the API never returns `botToken` on a list, so there's no client-side bot-token handling beyond the Add form.

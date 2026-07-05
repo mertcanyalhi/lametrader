@@ -68,12 +68,6 @@ export class ProfileEntry {
    */
   @Prop({ type: [MongooseSchema.Types.Mixed], default: [] })
   indicators!: IndicatorInstance[];
-
-  /**
-   * Symbol-state keys whose markers the chart renders for this profile.
-   */
-  @Prop({ type: [String], default: [] })
-  chartStates!: string[];
 }
 
 /**

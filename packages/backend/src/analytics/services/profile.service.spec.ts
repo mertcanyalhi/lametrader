@@ -76,7 +76,6 @@ describe('ProfileService.create', () => {
       createdAt: 1000,
       updatedAt: 1000,
       indicators: [],
-      chartStates: [],
     });
     expect(await profiles.list()).toEqual([created]);
   });
@@ -127,7 +126,6 @@ describe('ProfileService.replace', () => {
       createdAt: 1000,
       updatedAt: 2000,
       indicators: replaced.indicators,
-      chartStates: [],
     });
   });
 });
@@ -150,7 +148,6 @@ describe('ProfileService.update', () => {
       createdAt: 1000,
       updatedAt: 2000,
       indicators: updated.indicators,
-      chartStates: [],
     });
   });
 });
@@ -210,7 +207,6 @@ describe('ProfileService.pruneSymbol', () => {
         createdAt: 1000,
         updatedAt: 2000,
         indicators: [],
-        chartStates: [],
       },
       {
         id: 'p2',
@@ -221,7 +217,6 @@ describe('ProfileService.pruneSymbol', () => {
         createdAt: 1000,
         updatedAt: 2000,
         indicators: [],
-        chartStates: [],
       },
     ]);
   });

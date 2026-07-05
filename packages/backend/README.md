@@ -51,10 +51,10 @@ On boot it also runs the continuous market-data **poll loop** that drives the li
 | `GET`    | `/symbols/:id/backfill/jobs/:jobId`         | —                              | Get a backfill job's current state. 200 / 404.          |
 | `WS`     | `/symbols/:id/backfill/jobs/:jobId/progress` | —                             | Stream a job's snapshots (full job per frame, keyed by job id). |
 | `GET`    | `/profiles`                                 | —                              | List profiles. 200.                                     |
-| `POST`   | `/profiles`                                 | `{ name, description?, enabled?, scope?, chartStates? }` | Create. **201** / 400 / 409.       |
+| `POST`   | `/profiles`                                 | `{ name, description?, enabled?, scope? }` | Create. **201** / 400 / 409.       |
 | `GET`    | `/profiles/:id`                             | —                              | Get one. 200 / 404.                                     |
-| `PUT`    | `/profiles/:id`                             | `{ name, description?, enabled?, scope?, chartStates? }` | Full replace. 200 / 400 / 404 / 409. |
-| `PATCH`  | `/profiles/:id`                             | `{ name?, description?, enabled?, scope?, chartStates? }` | Partial update. 200 / 400 / 404 / 409. |
+| `PUT`    | `/profiles/:id`                             | `{ name, description?, enabled?, scope? }` | Full replace. 200 / 400 / 404 / 409. |
+| `PATCH`  | `/profiles/:id`                             | `{ name?, description?, enabled?, scope? }` | Partial update. 200 / 400 / 404 / 409. |
 | `DELETE` | `/profiles/:id`                             | —                              | Delete. **204** / 404.                                  |
 | `GET`    | `/profiles/:id/indicators`                  | —                              | List the profile's attached indicators. 200 / 404.     |
 | `POST`   | `/profiles/:id/indicators`                  | `{ indicatorKey, inputs?, label? }` | Attach an indicator. **201** / 400 / 404.          |
@@ -134,10 +134,9 @@ Nest's `@WebSocketGateway` cannot path-match URL params, so this route is served
 ### Profiles resource
 
 A **profile** is a named, enable/disable-able template scoped to watched symbols — either all of them (the default) or an explicit subset.
-A profile is `{ id, name, description, enabled, scope, chartStates, createdAt, updatedAt, indicators }`, where `scope` is either `{ "type": "all" }` or `{ "type": "symbols", "symbolIds": [...] }`.
+A profile is `{ id, name, description, enabled, scope, createdAt, updatedAt, indicators }`, where `scope` is either `{ "type": "all" }` or `{ "type": "symbols", "symbolIds": [...] }`.
 Names are unique.
 Every id in a `symbols` scope must be currently watched, and an empty subset normalizes to `all`.
-`chartStates` is a `string[]` of symbol-state keys whose markers the chart renders for this profile; it defaults to `[]` and is preserved on a `PATCH` that omits it.
 
 - `POST /profiles` — create (**201**), **400** on invalid input or a scope referencing an unwatched symbol, **409** on a duplicate name.
 - `PUT /profiles/:id` — full replace; preserves `id`, `createdAt`, and the attached `indicators` (200 / 400 / 404 / 409).

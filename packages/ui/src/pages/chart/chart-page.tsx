@@ -13,7 +13,7 @@ import { getStoredPeriod, setStoredPeriod } from '../../lib/chart-period.js';
 import { getStoredStateOverlays } from '../../lib/chart-state-overlays.js';
 import { getStoredSymbolId, setStoredSymbolId } from '../../lib/chart-symbol.js';
 import { formatChangePct, formatPrice } from '../../lib/format.js';
-import { liveCandleForPeriod, useCandleStream, usePagedCandles } from '../../lib/hooks/candles.js';
+import { useLatestCandle, usePagedCandles } from '../../lib/hooks/candles.js';
 import { computeIndicatorQueryOptions, useIndicatorCatalog } from '../../lib/hooks/indicators.js';
 import { useProfiles } from '../../lib/hooks/profiles.js';
 import { useRuleEventStream, useRuleEventsForRange } from '../../lib/hooks/rules.js';
@@ -199,7 +199,7 @@ function ChartLayout({
         role="group"
         aria-label="Chart actions"
       >
-        <ProfilePickerDialog symbolId={id} />
+        <ProfilePickerDialog />
         <SymbolPickerDialog currentId={id} watched={symbols} onSelect={selectSymbol} />
         <PeriodRangeDialog
           period={period}
@@ -294,9 +294,11 @@ function ChartView({
   selectedStateKeys: string[];
 }): ReactNode {
   const feed = usePagedCandles({ id, period });
-  // The chart applies live bars itself; here the live bar only drives the tab
-  // title's latest close (display, so the latest frame is enough).
-  const liveCandle = liveCandleForPeriod(useCandleStream(id), period);
+  // The chart applies live bars itself; here the live bar drives the tab-title
+  // latest close AND the events-window upper bound (`eventsTo` below). It must
+  // track the charted period specifically — a collapsed newest-any-period frame
+  // would read `null` between this period's ticks and leave the window stale.
+  const liveCandle = useLatestCandle(id, period);
   const lastLoaded = feed.candles.at(-1) ?? null;
   // The live bar is the freshest "latest"; when it opens a new bar the last
   // loaded one becomes the title's previous-close baseline.
@@ -326,12 +328,22 @@ function ChartView({
     to: computeTo,
   });
   // Read the rule events whose `ts` falls in the chart's visible candle window,
-  // filtered server-side to the active profile's `chartStates` (empty ⇒ none),
-  // then map each to a glyph marker. A profile switch changes `chartStates`,
-  // which re-keys the query and refetches; the live stream invalidates the same
-  // query, so it honours the filter for free.
-  const chartStates = profile?.chartStates ?? [];
-  const eventsQuery = useRuleEventsForRange(id, computeFrom, computeTo, chartStates);
+  // filtered server-side to the state keys selected in the States panel
+  // (`selectedStateKeys`, empty ⇒ none), then map each to a glyph marker. The
+  // States selection is the single control for both the value overlays and these
+  // change markers; toggling it re-keys the query and refetches, and the live
+  // stream invalidates the same query so it honours the filter for free.
+  // The events window must reach the newest bar on screen. The chart applies
+  // live-streamed bars itself, but `feed.candles` (and thus `computeTo`) only
+  // advances on refetch — so an event firing on a freshly-formed bar falls past
+  // `computeTo` and never renders. Extend the upper bound to the live bar for
+  // the events read alone (the indicator/state compute window stays pinned to
+  // closed candles on purpose).
+  const eventsTo =
+    liveCandle && (computeTo === undefined || liveCandle.time + 1 > computeTo)
+      ? liveCandle.time + 1
+      : computeTo;
+  const eventsQuery = useRuleEventsForRange(id, computeFrom, eventsTo, selectedStateKeys);
   const eventMarkers = useMemo(() => buildEventMarkers(eventsQuery.data ?? []), [eventsQuery.data]);
   const body = feed.isPending ? (
     <ChartLoading />

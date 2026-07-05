@@ -77,35 +77,11 @@ export function parseProfileScope(input: unknown): ProfileScopeSpec {
 }
 
 /**
- * Validate and normalize an unknown `chartStates` input into a `string[]`.
- *
- * Defaults a missing value to `[]`.
- *
- * @throws {@link ProfileError} when the value is not an array or an element is not a string.
- */
-export function parseChartStates(input: unknown): string[] {
-  if (input === undefined) {
-    return [];
-  }
-  if (!Array.isArray(input)) {
-    throw new ProfileError('chartStates must be an array of strings');
-  }
-  const keys: string[] = [];
-  for (const raw of input) {
-    if (typeof raw !== 'string') {
-      throw new ProfileError(`invalid chart state key: ${String(raw)}`);
-    }
-    keys.push(raw);
-  }
-  return keys;
-}
-
-/**
  * Validate and normalize an unknown input into the mutable {@link ProfileFields}.
  *
- * Applies defaults: description `''`, enabled `true`, scope `All`, chartStates `[]`.
+ * Applies defaults: description `''`, enabled `true`, scope `All`.
  *
- * @throws {@link ProfileError} on a blank `name`, a wrong-typed `description`/`enabled`, or an invalid `chartStates`.
+ * @throws {@link ProfileError} on a blank `name` or a wrong-typed `description`/`enabled`.
  */
 export function parseProfileFields(input: unknown): ProfileFields {
   const obj = (input ?? {}) as {
@@ -113,7 +89,6 @@ export function parseProfileFields(input: unknown): ProfileFields {
     description?: unknown;
     enabled?: unknown;
     scope?: unknown;
-    chartStates?: unknown;
   };
   if (typeof obj.name !== 'string' || obj.name.trim().length === 0) {
     throw new ProfileError('name must be a non-empty string');
@@ -129,7 +104,6 @@ export function parseProfileFields(input: unknown): ProfileFields {
     description: obj.description === undefined ? '' : obj.description,
     enabled: obj.enabled === undefined ? true : obj.enabled,
     scope: obj.scope === undefined ? { type: ProfileScope.All } : parseProfileScope(obj.scope),
-    chartStates: parseChartStates(obj.chartStates),
   };
 }
 
@@ -144,13 +118,11 @@ export function mergeProfileFields(current: ProfileFields, patch: unknown): Prof
     description?: unknown;
     enabled?: unknown;
     scope?: unknown;
-    chartStates?: unknown;
   };
   return parseProfileFields({
     name: obj.name ?? current.name,
     description: obj.description ?? current.description,
     enabled: obj.enabled ?? current.enabled,
     scope: obj.scope ?? current.scope,
-    chartStates: obj.chartStates ?? current.chartStates,
   });
 }

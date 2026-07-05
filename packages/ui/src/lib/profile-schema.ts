@@ -23,12 +23,6 @@ export interface ProfileFormValues {
   description: string;
   /** Whether the profile is active. */
   enabled: boolean;
-  /**
-   * Symbol-state keys whose markers the chart renders for this profile.
-   *
-   * Defaults to `[]`; carried through the form (seeded from a loaded profile) so a save preserves it even though no control edits it yet.
-   */
-  chartStates: string[];
 }
 
 /**
@@ -44,5 +38,4 @@ export const profileFormSchema: yup.ObjectSchema<ProfileFormValues> = yup.object
     .label(FIELD_LABELS.name),
   description: yup.string().defined().default('').label(FIELD_LABELS.description),
   enabled: yup.boolean().required(),
-  chartStates: yup.array(yup.string().defined()).defined().default([]),
 });

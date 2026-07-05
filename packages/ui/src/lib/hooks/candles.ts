@@ -171,6 +171,31 @@ export function liveCandleForPeriod(event: CandleEvent | null, period: Period): 
 }
 
 /**
+ * The latest live candle for one symbol AND period, or `null` before the first
+ * matching frame.
+ *
+ * Unlike {@link useCandleStream} — which keeps the newest frame across *every*
+ * polled period, so filtering it with {@link liveCandleForPeriod} yields `null`
+ * whenever the last frame was for another period — this filters to `period`
+ * *inside* the subscription, so a frame for a different period never clears the
+ * charted period's bar. Consumers that need a stable "newest bar on screen"
+ * (e.g. the chart's events window) must use this, not the collapsed stream.
+ *
+ * @param id - canonical symbol id to stream candles for.
+ * @param period - the period the chart is rendering.
+ */
+export function useLatestCandle(id: string, period: Period): Candle | null {
+  const [latest, setLatest] = useState<{ id: string; period: Period; candle: Candle } | null>(null);
+
+  useStreamSubscription(StreamKind.Candle, id, (event) => {
+    const candle = liveCandleForPeriod(event, period);
+    if (candle) setLatest({ id, period, candle });
+  });
+
+  return latest?.id === id && latest.period === period ? latest.candle : null;
+}
+
+/**
  * Merge two time-ascending candle series into one, deduped by `time`, with the
  * `latest` series winning on overlap (it carries the fresher reading). Used to
  * fold the catch-up recent window over the paged history so reopening the chart

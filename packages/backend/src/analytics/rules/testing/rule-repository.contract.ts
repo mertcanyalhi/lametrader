@@ -63,7 +63,6 @@ export function runRuleRepositoryContract(
       enabled: true,
       scope: { type: ProfileScope.All },
       indicators: [],
-      chartStates: [],
       createdAt: 0,
       updatedAt: 0,
       ...overrides,

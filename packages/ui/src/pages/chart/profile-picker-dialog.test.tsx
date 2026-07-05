@@ -26,7 +26,6 @@ const SCALPER: Profile = {
   createdAt: NOW,
   updatedAt: NOW,
   indicators: [],
-  chartStates: [],
 };
 
 const SWING: Profile = {
@@ -38,7 +37,6 @@ const SWING: Profile = {
   createdAt: NOW,
   updatedAt: NOW,
   indicators: [],
-  chartStates: [],
 };
 
 const DISABLED: Profile = {
@@ -50,19 +48,6 @@ const DISABLED: Profile = {
   createdAt: NOW,
   updatedAt: NOW,
   indicators: [],
-  chartStates: [],
-};
-
-const THEMED: Profile = {
-  id: 'p-4',
-  name: 'Themed',
-  description: 'has states',
-  enabled: true,
-  scope: { type: ProfileScope.All },
-  createdAt: NOW,
-  updatedAt: NOW,
-  indicators: [],
-  chartStates: ['price:trend'],
 };
 
 interface FetchCall {
@@ -195,7 +180,6 @@ describe('ProfilePickerDialog', () => {
       createdAt: NOW,
       updatedAt: NOW,
       indicators: [],
-      chartStates: [],
     };
     matchers.push({
       match: (url, method) => method === 'POST' && url.endsWith('/profiles'),
@@ -225,7 +209,6 @@ describe('ProfilePickerDialog', () => {
         name: created.name,
         description: created.description,
         enabled: true,
-        chartStates: [],
         scope: { type: 'all' },
       },
       stored: created.id,
@@ -287,7 +270,7 @@ describe('ProfilePickerDialog', () => {
     });
   });
 
-  it('edits a profile via PATCH /profiles/:id carrying name/description/enabled and chartStates', async () => {
+  it('edits a profile via PATCH /profiles/:id carrying name/description/enabled', async () => {
     setStoredProfileId(SCALPER.id);
     const renamed: Profile = { ...SCALPER, name: 'Quick', description: 'edited' };
     matchers.push({
@@ -322,81 +305,6 @@ describe('ProfilePickerDialog', () => {
       name: renamed.name,
       description: renamed.description,
       enabled: true,
-      chartStates: [],
-    });
-  });
-
-  it('renders a Chart states section with the label, info affordance, and a multi-select combobox', async () => {
-    profiles = [];
-    renderPicker();
-    await openPicker('No profile');
-    const user = userEvent.setup();
-
-    await user.click(screen.getByRole('button', { name: /new profile/i }));
-    await screen.findByRole('textbox', { name: 'Name' });
-    const dialog = screen.getByRole('dialog');
-
-    expect({
-      label: within(dialog).getByText('Chart states').tagName,
-      info: within(dialog).getByRole('button', { name: 'States to be rendered in the chart.' })
-        .tagName,
-      combobox: within(dialog).getByRole('combobox', { name: 'Chart states' }).getAttribute('role'),
-    }).toEqual({ label: 'LABEL', info: 'BUTTON', combobox: 'combobox' });
-  });
-
-  it('initialises the Chart states control from the loaded profile chartStates', async () => {
-    profiles = [THEMED];
-    setStoredProfileId(THEMED.id);
-    renderPicker();
-    await openPicker(THEMED.name);
-    const user = userEvent.setup();
-
-    const row = within(screen.getByRole('dialog')).getByText(THEMED.name).closest('div');
-    if (!row) throw new Error('row not found');
-    await user.click(within(row as HTMLElement).getByRole('button', { name: /edit/i }));
-    await screen.findByRole('textbox', { name: 'Name' });
-
-    expect(
-      screen.getByRole('button', { name: 'Remove price:trend' }).getAttribute('aria-label'),
-    ).toEqual('Remove price:trend');
-  });
-
-  it('sends the edited chartStates through the edit PATCH', async () => {
-    profiles = [THEMED];
-    setStoredProfileId(THEMED.id);
-    const saved: Profile = { ...THEMED, chartStates: ['price:trend', 'custom:key'] };
-    matchers.push({
-      match: (url, method) => method === 'PATCH' && url.endsWith(`/profiles/${THEMED.id}`),
-      respond: () => {
-        profiles = profiles.map((p) => (p.id === THEMED.id ? saved : p));
-        return { status: 200, body: saved };
-      },
-    });
-    renderPicker();
-    await openPicker(THEMED.name);
-    const user = userEvent.setup();
-
-    const row = within(screen.getByRole('dialog')).getByText(THEMED.name).closest('div');
-    if (!row) throw new Error('row not found');
-    await user.click(within(row as HTMLElement).getByRole('button', { name: /edit/i }));
-    await screen.findByRole('textbox', { name: 'Name' });
-    await user.click(screen.getByRole('combobox', { name: 'Chart states' }));
-    await user.keyboard('custom:key{Enter}');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
-
-    await waitFor(() =>
-      expect(
-        calls.some((c) => c.method === 'PATCH' && c.url.endsWith(`/profiles/${THEMED.id}`)),
-      ).toEqual(true),
-    );
-    const patch = calls.find(
-      (c) => c.method === 'PATCH' && c.url.endsWith(`/profiles/${THEMED.id}`),
-    );
-    expect(patch?.body).toEqual({
-      name: THEMED.name,
-      description: THEMED.description,
-      enabled: true,
-      chartStates: ['price:trend', 'custom:key'],
     });
   });
 

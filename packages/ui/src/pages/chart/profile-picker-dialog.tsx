@@ -17,7 +17,6 @@ import { Pencil, Plus, Trash2, User } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { type SubmitHandler, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { FieldLabel } from '../../components/field-label.js';
 import { ApiError } from '../../lib/api-fetch.js';
 import {
   useCreateProfile,
@@ -25,7 +24,6 @@ import {
   useProfiles,
   useUpdateProfile,
 } from '../../lib/hooks/profiles.js';
-import { useSymbolStateKeys } from '../../lib/hooks/state.js';
 import { getLogger } from '../../lib/log.js';
 import {
   FIELD_LABELS,
@@ -33,7 +31,6 @@ import {
   profileFormSchema,
 } from '../../lib/profile-schema.js';
 import { useSelectedProfile } from '../../lib/selected-profile-context.js';
-import { ChartStatesPicker } from './chart-states-picker.js';
 
 /** Scoped logger for picker lifecycle / mutation failures. */
 const log = getLogger('profile-picker');
@@ -53,13 +50,8 @@ type View = { kind: 'list' } | { kind: 'create' } | { kind: 'edit'; profile: Pro
  *
  * Modeled on `symbol-picker-dialog.tsx`. The delete confirmation is a nested
  * `AlertDialog` (per project rule "Confirmation prompt → `<AlertDialog>`").
- *
- * `symbolId` is the chart's current symbol, used to seed the profile form's
- * Chart states combobox from that symbol's known state keys. It is absent when
- * the picker is mounted away from a chart (e.g. the rules page), where the
- * suggestion list is simply empty and free-text entry still works.
  */
-export function ProfilePickerDialog({ symbolId }: { symbolId?: string } = {}): ReactNode {
+export function ProfilePickerDialog(): ReactNode {
   const { profileId, setProfileId } = useSelectedProfile();
   const profilesQuery = useProfiles();
   const profiles = profilesQuery.data ?? [];
@@ -132,7 +124,6 @@ export function ProfilePickerDialog({ symbolId }: { symbolId?: string } = {}): R
           ) : view.kind === 'create' ? (
             <ProfileForm
               mode="create"
-              symbolId={symbolId}
               onCancel={() => setView({ kind: 'list' })}
               onCreated={handleCreated}
               onEdited={handleEdited}
@@ -141,7 +132,6 @@ export function ProfilePickerDialog({ symbolId }: { symbolId?: string } = {}): R
             <ProfileForm
               mode="edit"
               profile={view.profile}
-              symbolId={symbolId}
               onCancel={() => setView({ kind: 'list' })}
               onCreated={handleCreated}
               onEdited={handleEdited}
@@ -282,24 +272,18 @@ function ProfileRow({
 function ProfileForm({
   mode,
   profile,
-  symbolId,
   onCancel,
   onCreated,
   onEdited,
 }: {
   mode: 'create' | 'edit';
   profile?: Profile;
-  symbolId?: string;
   onCancel: () => void;
   onCreated: (profile: Profile) => void;
   onEdited: () => void;
 }): ReactNode {
   const create = useCreateProfile();
   const update = useUpdateProfile();
-  // Seed the Chart states suggestions from the current chart symbol's known
-  // state keys; disabled (empty list) when opened away from a chart.
-  const stateKeysQuery = useSymbolStateKeys(symbolId ?? '');
-  const stateKeyOptions = (stateKeysQuery.data ?? []).map((entry) => entry.key);
   const { register, handleSubmit, setValue, setError, watch, formState } =
     useForm<ProfileFormValues>({
       resolver: yupResolver(profileFormSchema),
@@ -307,14 +291,12 @@ function ProfileForm({
         name: profile?.name ?? '',
         description: profile?.description ?? '',
         enabled: profile?.enabled ?? true,
-        chartStates: profile?.chartStates ?? [],
       },
       mode: 'onSubmit',
     });
   const submitting = create.isPending || update.isPending;
   const nameError = formState.errors.name?.message;
   const enabled = watch('enabled');
-  const chartStates = watch('chartStates');
 
   const onSubmit: SubmitHandler<ProfileFormValues> = async (values) => {
     if (mode === 'create') {
@@ -333,15 +315,14 @@ function ProfileForm({
     }
     if (!profile) return;
     try {
-      // Edit sends name/description/enabled/chartStates; omitting scope +
-      // indicators lets the server preserve them (preserve-on-PATCH-omit).
+      // Edit sends name/description/enabled; omitting scope + indicators lets
+      // the server preserve them (preserve-on-PATCH-omit).
       const saved = await update.mutateAsync({
         id: profile.id,
         patch: {
           name: values.name,
           description: values.description,
           enabled: values.enabled,
-          chartStates: values.chartStates,
         },
       });
       toast.success(`Saved ${saved.name}`);
@@ -409,22 +390,6 @@ function ProfileForm({
             Enabled
           </Text>
         </Flex>
-        <Box>
-          <FieldLabel
-            label="Chart states"
-            hint="States to be rendered in the chart."
-            hintLabel="States to be rendered in the chart."
-            htmlFor="chart-states-chart-states"
-          />
-          <ChartStatesPicker
-            value={chartStates}
-            options={stateKeyOptions}
-            ariaLabel="Chart states"
-            onChange={(next) =>
-              setValue('chartStates', next, { shouldDirty: true, shouldValidate: false })
-            }
-          />
-        </Box>
       </Flex>
       <Flex gap="3" mt="5" justify="end">
         <Button type="button" variant="soft" color="gray" onClick={onCancel}>

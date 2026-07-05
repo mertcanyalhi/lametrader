@@ -40,8 +40,8 @@ export class MongooseProfileRepository implements ProfileRepository {
 }
 
 /**
- * Map a stored document to a domain {@link Profile}. `indicators` / `chartStates`
- * default to `[]` for legacy documents written before those fields existed.
+ * Map a stored document to a domain {@link Profile}. `indicators` defaults to
+ * `[]` for legacy documents written before the field existed.
  */
 function toProfile(doc: ProfileEntry): Profile {
   return {
@@ -53,7 +53,6 @@ function toProfile(doc: ProfileEntry): Profile {
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
     indicators: doc.indicators ?? [],
-    chartStates: doc.chartStates ?? [],
   };
 }
 
@@ -70,6 +69,5 @@ function toDocument(profile: Profile): ProfileEntry {
     createdAt: profile.createdAt,
     updatedAt: profile.updatedAt,
     indicators: profile.indicators,
-    chartStates: profile.chartStates,
   };
 }
