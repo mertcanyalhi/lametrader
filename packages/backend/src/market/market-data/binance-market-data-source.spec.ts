@@ -37,14 +37,51 @@ describe('BinanceMarketDataSource.fetchCandles', () => {
     expect(batch.candles.length).toBe(1001);
   });
 
-  it('reports complete: false when the page cap is hit with full pages remaining', async () => {
-    // Every page is full (1000) → the MAX_PAGES cap stops a still-growing fetch.
-    const full = Array.from({ length: 1000 }, (_, i) => klineRow(i + 1));
-    stubKlinePages([full]);
+  it('walks the full history forward to the newest kline, past the old 50-page bound', async () => {
+    // 60 full pages (beyond the removed 50-page cap) then a short page ends it,
+    // each page continuing where the last left off — the newest candle is reached.
+    const FULL_PAGES = 60;
+    let call = 0;
+    globalThis.fetch = jest.fn(async () => {
+      const base = call * 1000 + 1;
+      const rows =
+        call < FULL_PAGES
+          ? Array.from({ length: 1000 }, (_, i) => klineRow(base + i))
+          : [klineRow(base)];
+      call += 1;
+      return { ok: true, json: async () => rows } as Response;
+    }) as unknown as typeof fetch;
     const source = new BinanceMarketDataSource();
 
     const batch = await source.fetchCandles('crypto:BTCUSDT', Period.OneHour);
-    expect(batch.complete).toBe(false);
+
+    expect(batch.complete).toBe(true);
+    expect(batch.candles.length).toBe(FULL_PAGES * 1000 + 1);
+    expect(batch.candles.at(0)?.time).toBe(1);
+    expect(batch.candles.at(-1)?.time).toBe(FULL_PAGES * 1000 + 1);
+  });
+
+  it('pages forward within an explicit range, bounded by the requested end', async () => {
+    // A window `[100, 250)`: one page of rows at 100..1099, cut off at `to`.
+    const rows = Array.from({ length: 1000 }, (_, i) => klineRow(100 + i));
+    const urls: string[] = [];
+    globalThis.fetch = jest.fn(async (url: string) => {
+      urls.push(url);
+      return { ok: true, json: async () => rows } as Response;
+    }) as unknown as typeof fetch;
+    const source = new BinanceMarketDataSource();
+
+    const batch = await source.fetchCandles('crypto:BTCUSDT', Period.OneHour, {
+      from: 100,
+      to: 250,
+    });
+
+    expect(batch.complete).toBe(true);
+    expect(batch.candles.length).toBe(150);
+    expect(batch.candles.at(0)?.time).toBe(100);
+    expect(batch.candles.at(-1)?.time).toBe(249);
+    expect(urls[0]?.includes('startTime=100')).toBe(true);
+    expect(urls[0]?.includes('endTime=250')).toBe(true);
   });
 
   it('rejects a period Binance has no kline interval for, without a network call', async () => {

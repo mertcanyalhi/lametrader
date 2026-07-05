@@ -37,12 +37,6 @@ const BINANCE_INTERVAL: Partial<Record<Period, string>> = {
 const KLINES_LIMIT = 1000;
 
 /**
- * Safety cap on pages walked when backfilling deep history (no `range`), to keep
- * a keyless backfill bounded. Deep, gapless paging is out of scope (see spec).
- */
-const MAX_PAGES = 50;
-
-/**
  * The subset of a Binance `exchangeInfo` symbol entry we consume.
  */
 interface ExchangeSymbol {
@@ -97,18 +91,21 @@ export class BinanceMarketDataSource implements MarketDataSource {
     }
     const ticker = id.slice(`${SymbolType.Crypto}:`.length);
     const out: CryptoCandle[] = [];
+    // No range ⇒ start at epoch 0 so the provider returns from its earliest
+    // available kline, then page forward through the whole history to now.
     let startTime = range?.from ?? 0;
     const endTime = range?.to;
-    // True unless we stop at MAX_PAGES with more history still available.
+    // Cleared only if the cursor fails to advance (a provider anomaly) — a
+    // normal walk always terminates at the natural end of the series.
     let complete = true;
 
     try {
-      for (let page = 0; page < MAX_PAGES; page += 1) {
-        const url =
+      while (true) {
+        const rows = await fetchJson<BinanceKline[]>(
           `${BASE}/api/v3/klines?symbol=${encodeURIComponent(ticker)}` +
-          `&interval=${interval}&startTime=${startTime}&limit=${KLINES_LIMIT}` +
-          (endTime !== undefined ? `&endTime=${endTime}` : '');
-        const rows = await fetchJson<BinanceKline[]>(url);
+            `&interval=${interval}&startTime=${startTime}&limit=${KLINES_LIMIT}` +
+            (endTime !== undefined ? `&endTime=${endTime}` : ''),
+        );
         if (rows.length === 0) break;
         let reachedEnd = false;
         for (const row of rows) {
@@ -119,16 +116,17 @@ export class BinanceMarketDataSource implements MarketDataSource {
           }
           out.push(candle);
         }
-        // Reached the requested upper bound, or the provider ran out of data.
+        // Reached the requested upper bound, or a short page means the provider
+        // ran out of data — either way the series is fully walked.
         if (reachedEnd || rows.length < KLINES_LIMIT) break;
-        // A full final page means more rows remain that we won't fetch — the
-        // result is truncated, so report it as not complete.
-        if (page === MAX_PAGES - 1) {
+        // Advance past this page's last open time. If it can't advance, the
+        // provider is misbehaving; stop rather than loop forever.
+        const next = (rows[rows.length - 1]?.[0] ?? startTime) + 1;
+        if (next <= startTime) {
           complete = false;
           break;
         }
-        const lastOpen = rows[rows.length - 1]?.[0] ?? startTime;
-        startTime = lastOpen + 1;
+        startTime = next;
       }
     } catch (cause) {
       throw new MarketDataError(
