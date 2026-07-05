@@ -112,17 +112,26 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
       // Warm a real multi-bar OHLCV series from the candle repository (not the
       // single-point live mirror) so series operators — `Moving` / `Channel`
       // / `Crossing` — walk the actual history behind the store (#499). The
-      // window is "everything stored" per observed `(period, axis)`; that is
-      // correct for every lookback and for the unbounded-lookback siblings.
-      // Upgrade path: bound the window to each firing rule's `lookbackBars`
+      // window is "everything stored up to and including the bar under
+      // evaluation" per observed `(period, axis)`: the upper bound is the
+      // firing event's timestamp so a candle stored *after* this observation
+      // (a later bar the repository already holds, or leftover cross-run data)
+      // never leaks in as the series' newest point — which would make a series
+      // operator read the wrong "current" bar and never fire.
+      // Upgrade path: also bound `from` to each firing rule's `lookbackBars`
       // × interval once the dispatcher threads the rule through.
-      const barSeries = await warmLiveBarSeries(deps.candleRepository, firingSymbolId, lookups);
+      const barSeries = await warmLiveBarSeries(
+        deps.candleRepository,
+        firingSymbolId,
+        event.ts,
+        lookups,
+      );
       return buildEvaluationContext({
         symbolId: firingSymbolId,
         profileId,
         candleRepository: deps.candleRepository,
         indicatorStore: deps.indicatorStore,
-        barWindow: { from: 0, to: Number.MAX_SAFE_INTEGER },
+        barWindow: { from: 0, to: event.ts + 1 },
         getSymbolState: (pid, symbolId, key) => lookups.getSymbolState(pid, symbolId, key),
         getGlobalState: (pid, key) => lookups.getGlobalState(pid, key),
         getPrevSymbolState: cascadePrev.getPrevSymbolState,
@@ -291,10 +300,17 @@ const BAR_AXES: readonly BarAxis[] = ['open', 'high', 'low', 'close', 'volume'];
  * forming bar under evaluation), so snapshot / comparison operands that read
  * the latest value keep resolving. Returns an empty map for an unobserved
  * symbol — operators see length-0 series and treat the operand as "no data yet".
+ *
+ * `upperTs` is the firing observation's timestamp: the loaded window is
+ * `[0, upperTs]` (inclusive) so a repository row stored *after* this
+ * observation — a later bar the store already holds, or leftover data from
+ * another run against a shared store — never becomes the series' newest point
+ * and is never mistaken for the current bar.
  */
 async function warmLiveBarSeries(
   candleRepository: CandleRepository,
   symbolId: string,
+  upperTs: number,
   lookups: LiveEvaluationLookups,
 ): Promise<ReadonlyMap<string, SeriesView>> {
   const merged = new Map<string, SeriesView>(lookups.bookSeriesFor(symbolId));
@@ -304,7 +320,7 @@ async function warmLiveBarSeries(
   const history = await prewarmBarSeries(
     candleRepository,
     symbolId,
-    { from: 0, to: Number.MAX_SAFE_INTEGER },
+    { from: 0, to: upperTs + 1 },
     required,
   );
   for (const [key, view] of history) {
