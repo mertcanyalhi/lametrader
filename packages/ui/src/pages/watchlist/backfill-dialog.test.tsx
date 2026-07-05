@@ -185,6 +185,36 @@ describe('BackfillDialog', () => {
     );
   });
 
+  it('hides the Start button once every selected period has succeeded', async () => {
+    onRequest('POST', '/symbols/crypto:BTCUSDT/backfill', () => runningJob('job-1'), 202);
+    renderDialog([Period.OneHour]);
+    const user = userEvent.setup();
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'Start backfill' }));
+    });
+    const socket = await latestSocket();
+    act(() =>
+      socket.emit({
+        ...runningJob('job-1'),
+        status: BackfillJobStatus.Succeeded,
+        progress: { saved: 3, total: 3 },
+        summary: {
+          id: BTC_ID,
+          period: Period.OneHour,
+          from: 1000,
+          to: 3000,
+          fetched: 3,
+          saved: 3,
+          complete: true,
+        },
+      }),
+    );
+
+    await screen.findByText('Saved 3 candles');
+    expect(screen.queryByRole('button', { name: 'Start backfill' })).toBeNull();
+  });
+
   it('shows the error of a failed job and retries it with a fresh POST', async () => {
     let started = 0;
     onRequest(

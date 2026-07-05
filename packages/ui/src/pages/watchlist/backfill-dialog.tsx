@@ -66,7 +66,8 @@ function rangeErrorFor(longestAvailable: boolean, fromDate: string, toDate: stri
  * streams progress over each per-job WebSocket to a success summary (with the
  * backfilled date range) or a failure with Retry. A `409` (already running)
  * surfaces inline. While any job is running, Start is disabled and shows a
- * loading indicator. The date range is opt-in behind "Longest available period".
+ * loading indicator; once every selected period has succeeded, Start is hidden
+ * and only Close remains. The date range is opt-in behind "Longest available period".
  *
  * Opened from the row's Backfill action and auto-opened after a successful add.
  *
@@ -116,6 +117,10 @@ export function BackfillDialog({
   const options = sortPeriods(periods);
   const inProgress =
     start.isPending || options.some((period) => jobIds[period] && isActive(statuses[period]));
+  // Every selected period has finished successfully — nothing left to start.
+  const completed =
+    selected.length > 0 &&
+    selected.every((period) => statuses[period] === BackfillJobStatus.Succeeded);
   const rangeError = rangeErrorFor(longestAvailable, fromDate, toDate);
 
   function range(): { from?: number; to?: number } {
@@ -233,13 +238,15 @@ export function BackfillDialog({
               Close
             </Button>
           </Dialog.Close>
-          <Button
-            onClick={handleStart}
-            disabled={selected.length === 0 || inProgress || rangeError !== null}
-            loading={inProgress}
-          >
-            Start backfill
-          </Button>
+          {completed ? null : (
+            <Button
+              onClick={handleStart}
+              disabled={selected.length === 0 || inProgress || rangeError !== null}
+              loading={inProgress}
+            >
+              Start backfill
+            </Button>
+          )}
         </Flex>
       </Dialog.Content>
     </Dialog.Root>
