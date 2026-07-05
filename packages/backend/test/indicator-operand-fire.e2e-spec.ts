@@ -112,11 +112,11 @@ async function eventTypesInWindow(
  * indicator across the literal.
  *
  * Boots the real Nest app, attaches an `sma` instance to an enabled profile, and
- * starts the dormant engine ({@link RuleEngineService.start}) — which warms the
- * `IndicatorSeriesStore` the evaluator reads. Seeded closes put SMA(3) at 20;
- * feeding a closing bar that lifts SMA above the literal drives the store's
- * `onBar` and fires the rule. The negative case keeps SMA below its literal and
- * asserts no fire.
+ * starts the dormant engine ({@link RuleEngineService.start}) — which registers
+ * the instance config the evaluator's lazy `IndicatorSeriesStore` view pages on
+ * demand. Seeded closes put SMA(3) at 20; feeding a closing bar that lifts SMA
+ * above the literal makes the lazy view compute the current value and fires the
+ * rule. The negative case keeps SMA below its literal and asserts no fire.
  */
 describe('indicator-operand rule firing (e2e)', () => {
   let app: INestApplication;
@@ -182,7 +182,7 @@ describe('indicator-operand rule firing (e2e)', () => {
     expect(created.status).toEqual(201);
     const ruleId = created.body.id as string;
 
-    // Persist the new bar first (the store recomputes onBar from the repo), then
+    // Persist the new bar first (the lazy view pages it from the repo), then
     // feed it. SMA(3) of [20,30,40] = 30 > 25.
     const barTime = 4 * MINUTE;
     await candleRepo.save(SYMBOL_ID, Period.OneMinute, [candle(barTime, 40)]);

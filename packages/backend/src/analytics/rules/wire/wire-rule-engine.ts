@@ -126,6 +126,11 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
         profileId,
         candleRepository: deps.candleRepository,
         indicatorStore: deps.indicatorStore,
+        // Bound the lazy `IndicatorRef` view to `time < event.ts + 1` — the same
+        // exclusive upper bound the bar pagers bake in (`upperTs + 1`), so a
+        // candle stored after this observation can't become the indicator's
+        // newest point (mirrors #504's bar-series bound).
+        before: event.ts + 1,
         getSymbolState: (pid, symbolId, key) => lookups.getSymbolState(pid, symbolId, key),
         getGlobalState: (pid, key) => lookups.getGlobalState(pid, key),
         getPrevSymbolState: cascadePrev.getPrevSymbolState,
@@ -151,10 +156,6 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
   // never a later batch's (#459). `TimerEvent`-only batches land on the global
   // chain (no symbol).
   const serializer = createPerSymbolSerializer<EventBatch>(async (batch) => {
-    // Advance the indicator series store for this observation *before* the
-    // mirror + events, so an `IndicatorRef` operand evaluated this step reads
-    // the freshly-recomputed value rather than the previous bar's (#498).
-    if (batch.prepare !== undefined) await batch.prepare();
     batch.record();
     for (const event of batch.events) {
       try {
@@ -196,11 +197,6 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
     };
     serializer.enqueue({
       symbolId: candle.id,
-      // Recompute every indicator instance warmed at this (symbol, period) for
-      // the just-closed bar, so indicator operands see the current value. The
-      // candle is already persisted upstream (the poll loop stores before the
-      // fan-out), so the recompute reads a repository that includes this bar.
-      prepare: () => deps.indicatorStore.onBar(candle.id, candle.period, candle.candle),
       record: () => {
         lookups.recordCandle(candle);
         lookups.recordQuote(candle.id, candle.candle.close); // TODO: Collapse these 2 into a single function; we don't need 2 function calls
@@ -255,14 +251,6 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
 interface EventBatch {
   /** Serializer key — every event in the batch shares this symbol (absent = global chain). */
   symbolId?: string;
-  /**
-   * Optional async pre-step run *inside* the serialized step, before
-   * {@link record} and {@link events}. The bar batch uses it to recompute the
-   * indicator series store for the just-arrived bar so `IndicatorRef` operands
-   * evaluate against the current value (#498); batches with no async warm-up
-   * (indicator-cascade) omit it.
-   */
-  prepare?(): Promise<void>;
   /** Advance the sync lookups mirror for this observation. */
   record(): void;
   /** The trigger events to process in order, after {@link record}. */

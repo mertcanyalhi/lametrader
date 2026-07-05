@@ -17,7 +17,7 @@ import { PROFILE_REPOSITORY } from '../interfaces/profile-repository.token.js';
 import { STATE_REPOSITORY } from '../interfaces/state-repository.token.js';
 import { IndicatorSeriesStore } from './indicator-series-store.js';
 import { RULE_REPOSITORY } from './rule-repository.token.js';
-import { warmIndicatorStore } from './wire/warm-indicator-store.js';
+import { registerIndicatorInstances } from './wire/register-indicator-instances.js';
 import { type WiredRuleEngine, wireRuleEngine } from './wire/wire-rule-engine.js';
 
 /**
@@ -44,9 +44,9 @@ import { type WiredRuleEngine, wireRuleEngine } from './wire/wire-rule-engine.js
 @Injectable()
 export class RuleEngineService {
   /**
-   * The in-memory indicator series store shared with the evaluation context.
-   * Constructed idle; its only production writer (warm-up) is driven from
-   * {@link start}, not the constructor.
+   * The indicator series store shared with the evaluation context. Constructed
+   * idle; its instance configs are registered from {@link start}, not the
+   * constructor, and each series is paged + computed on demand at read time.
    */
   private readonly indicatorStore: IndicatorSeriesStore;
 
@@ -63,7 +63,7 @@ export class RuleEngineService {
    * @param eventLog - the shared mirrored rule-event log (orchestrator appends).
    * @param candles - the shared candle store (OHLCV operand resolution).
    * @param notifier - the notification sink the action-runner dispatches through.
-   * @param profiles - the profile store; enumerated at {@link start} to warm each attached indicator instance.
+   * @param profiles - the profile store; enumerated at {@link start} to register each attached indicator-instance config.
    * @param indicators - the ad-hoc indicator compute use-case the series store wraps.
    */
   constructor(
@@ -76,7 +76,7 @@ export class RuleEngineService {
     @Inject(PROFILE_REPOSITORY) private readonly profiles: ProfileRepository,
     indicators: IndicatorService,
   ) {
-    this.indicatorStore = new IndicatorSeriesStore(indicators);
+    this.indicatorStore = new IndicatorSeriesStore(this.candles, indicators);
   }
 
   /**
@@ -99,13 +99,13 @@ export class RuleEngineService {
    */
   async start(): Promise<WiredRuleEngine> {
     if (this.wired !== null) return this.wired;
-    // Populate the store the evaluator reads from every enabled profile's
-    // attached indicator instances before any live candle flows (#498); the
-    // wired engine then keeps it current via `onBar` on the candle feed.
-    await warmIndicatorStore({
+    // Register every enabled profile's attached indicator-instance config so an
+    // `IndicatorRef` operand can resolve through the store's lazy series view
+    // (#506). No compute or candle load here — the series is paged + computed on
+    // demand as an operator walks it.
+    await registerIndicatorInstances({
       store: this.indicatorStore,
       profiles: this.profiles,
-      watchlist: this.watchlist,
     });
     this.wired = await wireRuleEngine({
       rules: this.rules,
