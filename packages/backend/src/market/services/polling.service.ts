@@ -66,6 +66,18 @@ export class PollingService {
   private readonly extraListeners: CandleListener[] = [];
 
   /**
+   * Per-`${symbolId}|${period}` finality of the last-observed resume-position
+   * bar (`candle.time` → whether it was already emitted `final`).
+   *
+   * Lets the unchanged-resume-bar skip distinguish a bar that just *closed*
+   * with no price move in its final interval — the `final:false → final:true`
+   * flip must still emit so `BarClosed` (and `OncePerBarClose` rules) fire —
+   * from a stale bar an inclusive poll window re-returns unchanged and already
+   * final, which must stay silent.
+   */
+  private readonly resumeBarFinal = new Map<string, boolean>();
+
+  /**
    * @param sources - market-data providers, one or more per asset class.
    * @param candles - the candle persistence port (also the resume cursor).
    * @param watchlist - the watchlist persistence port.
@@ -197,15 +209,27 @@ export class PollingService {
       if (candles.length === 0) return;
       await this.candles.save(symbol.id, period, candles);
       const span = periodMillis(period);
+      const key = `${symbol.id}|${period}`;
       for (const candle of candles) {
+        const final = candle.time + span <= now;
         // The `from: latest.time` resume window is inclusive, so the provider
-        // always re-returns the last stored bar. On a closed market that bar is
-        // unchanged, so skipping it here stops each poll re-emitting a stale
-        // candle — which would otherwise re-fire per-tick rules against the last
-        // session's price all weekend. A changed resume bar (still-forming, or a
-        // partial that just closed) differs and still emits.
-        if (candle.time === latest.time && candlesEqual(candle, latest)) continue;
-        this.emit({ id: symbol.id, period, candle, final: candle.time + span <= now });
+        // always re-returns the last stored bar. When it comes back unchanged we
+        // normally skip it — otherwise a closed market re-emits a stale candle
+        // every poll, re-firing per-tick rules against the last session's price
+        // all weekend. But the bar's `final` flag isn't part of its content, so
+        // an unchanged bar that just crossed from forming to closed (no price
+        // move in its last interval) must still emit once — else its `BarClosed`
+        // (and any `OncePerBarClose` rule) never fires. We let that one
+        // finality flip through and suppress every other unchanged re-return.
+        if (candle.time === latest.time && candlesEqual(candle, latest)) {
+          const alreadyFinal = this.resumeBarFinal.get(key);
+          const closingNow = final && alreadyFinal === false;
+          this.resumeBarFinal.set(key, final);
+          if (!closingNow) continue;
+        } else {
+          this.resumeBarFinal.set(key, final);
+        }
+        this.emit({ id: symbol.id, period, candle, final });
       }
     } catch (error) {
       if (error instanceof MarketDataError) return;

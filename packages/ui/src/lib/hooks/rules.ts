@@ -9,6 +9,7 @@ import {
 import { apiFetch } from '../api-fetch.js';
 import { StreamKind } from '../stream/stream-client.types.js';
 import { useStreamSubscription } from '../stream/use-stream-subscription.js';
+import { STATE_QUERY_KEY } from './state.js';
 
 /** Stable root for every rules-related query key. */
 export const RULES_QUERY_KEY = ['rules'] as const;
@@ -267,17 +268,21 @@ export function useRuleEventsForRange(
  * Subscribe to one symbol's live rule-event feed
  * (`subscribe-rule-event` over the shared stream client).
  *
- * Each inbound frame invalidates every windowed-range query under the same
- * symbol so the chart's marker query refetches and the new entry lands in the
- * window if it falls inside it.
+ * Each inbound frame invalidates the whole {@link RULES_QUERY_KEY} root so
+ * every rules query refetches — the chart's windowed markers
+ * (`symbol-events-range`), the Events badge count, AND the Events dialog list
+ * (`symbol-events`) / per-rule events (`events`), which are keyed separately
+ * and would otherwise stay stale until a window refocus / reload.
+ * A rule-event frame is also the signal that rule-engine state may have changed
+ * (`StateSet` / `StateRemoved` events are mirrored to the symbol feed), so the
+ * whole `STATE_QUERY_KEY` root is invalidated too — the states panel's
+ * current-value map has no poll of its own.
  * Renders nothing — sit it as a child of the chart layout for one-symbol-per-page.
  */
 export function useRuleEventStream(symbolId: string): void {
   const queryClient = useQueryClient();
   useStreamSubscription(StreamKind.RuleEvent, symbolId, () => {
-    queryClient.invalidateQueries({
-      queryKey: [...RULES_QUERY_KEY, 'symbol-events-range', symbolId],
-    });
-    queryClient.invalidateQueries({ queryKey: symbolRuleEventsCountKey(symbolId) });
+    queryClient.invalidateQueries({ queryKey: RULES_QUERY_KEY });
+    queryClient.invalidateQueries({ queryKey: STATE_QUERY_KEY });
   });
 }

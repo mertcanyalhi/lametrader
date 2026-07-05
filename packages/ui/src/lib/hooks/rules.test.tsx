@@ -16,6 +16,21 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { STATE_QUERY_KEY } from './state';
+
+/**
+ * Capture the frame callback `useRuleEventStream` registers, so a test can
+ * drive a synthetic stream frame without standing up a fake WebSocket.
+ */
+const { streamHandlers } = vi.hoisted(() => ({
+  streamHandlers: [] as Array<(event: unknown) => void>,
+}));
+vi.mock('../stream/use-stream-subscription.js', () => ({
+  useStreamSubscription: (_kind: unknown, _key: unknown, onEvent: (event: unknown) => void) => {
+    streamHandlers.push(onEvent);
+  },
+}));
+
 import {
   type RuleInput,
   symbolRuleEventsRangeKey,
@@ -23,6 +38,7 @@ import {
   useDeleteRule,
   usePatchRule,
   useRule,
+  useRuleEventStream,
   useRuleEvents,
   useRuleEventsForRange,
   useRules,
@@ -265,6 +281,23 @@ describe('rules hooks', () => {
     });
     // No await — `enabled: false` means the query never runs.
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('useRuleEventStream invalidates the whole rules and state roots on each frame', () => {
+    streamHandlers.length = 0;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries').mockResolvedValue();
+    const wrapper = ({ children }: { children: ReactNode }): ReactNode => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    renderHook(() => useRuleEventStream('crypto:BTCUSDT'), { wrapper });
+
+    act(() => streamHandlers[0]?.({}));
+
+    expect(invalidateSpy.mock.calls).toEqual([
+      [{ queryKey: ['rules'] }],
+      [{ queryKey: STATE_QUERY_KEY }],
+    ]);
   });
 
   it('symbolRuleEventsRangeKey includes chartStates so a profile switch refetches', () => {
