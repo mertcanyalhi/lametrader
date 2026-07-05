@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 import {
   type ConditionOperand,
+  type EnumOption,
+  FieldType,
   type IndicatorInstance,
   OperandKind,
   ProfileScope,
   RuleScopeKind,
+  type StateFieldDescriptor,
   StateValueType,
 } from '@lametrader/core';
 import { Theme } from '@radix-ui/themes';
@@ -24,15 +27,17 @@ function Harness({
   initial,
   indicators = [],
   knownStateKeys = { symbol: {}, global: {} },
-  indicatorStateKeysByKey,
+  indicatorStateFieldsByKey,
   literalValueType,
+  literalEnumOptions,
   onSnapshot,
 }: {
   initial: ConditionOperand;
   indicators?: IndicatorInstance[];
   knownStateKeys?: KnownStateKeys;
-  indicatorStateKeysByKey?: Record<string, string[]>;
+  indicatorStateFieldsByKey?: Record<string, StateFieldDescriptor[]>;
   literalValueType?: StateValueType;
+  literalEnumOptions?: EnumOption[];
   onSnapshot?: (operand: ConditionOperand) => void;
 }): ReactNode {
   const [value, setValue] = useState<ConditionOperand>(initial);
@@ -46,13 +51,31 @@ function Harness({
         }}
         indicators={indicators}
         knownStateKeys={knownStateKeys}
-        indicatorStateKeysByKey={indicatorStateKeysByKey}
+        indicatorStateFieldsByKey={indicatorStateFieldsByKey}
         literalValueType={literalValueType}
+        literalEnumOptions={literalEnumOptions}
         ariaLabel="Left operand kind"
       />
     </Theme>
   );
 }
+
+/** Supertrend's declared state schema: an enum `signal` then a numeric `value`. */
+const SUPERTREND_FIELDS: StateFieldDescriptor[] = [
+  {
+    type: FieldType.Enum,
+    key: 'signal',
+    label: 'Signal',
+    options: [
+      { value: 'up', label: 'Up Trend' },
+      { value: 'down', label: 'Down Trend' },
+    ],
+  },
+  { type: FieldType.Number, key: 'value', label: 'Trend Value' },
+];
+
+/** SMA's declared state schema: a single numeric `value`. */
+const SMA_FIELDS: StateFieldDescriptor[] = [{ type: FieldType.Number, key: 'value', label: 'SMA' }];
 
 describe('OperandPicker', () => {
   it('renders the Price label (replaces v1 Current) in the kind option set', () => {
@@ -253,7 +276,7 @@ describe('OperandPicker', () => {
     expect(screen.queryByLabelText('Global state value type')).toEqual(null);
   });
 
-  it('seeds the IndicatorRef state-key options from the catalog entry matching the selected instance', async () => {
+  it("populates the IndicatorRef state-field Select from the selected instance's schema, showing labels", async () => {
     const user = userEvent.setup();
     render(
       <Harness
@@ -272,22 +295,17 @@ describe('OperandPicker', () => {
             summary: 'Supertrend',
           },
         ]}
-        indicatorStateKeysByKey={{ supertrend: ['signal', 'value'], sma: ['value'] }}
+        indicatorStateFieldsByKey={{ supertrend: SUPERTREND_FIELDS, sma: SMA_FIELDS }}
       />,
     );
-    const input = screen.getByLabelText('Indicator state field');
-    await user.click(input);
-    await user.keyboard('{ArrowDown}');
-    expect({
-      signal: screen.getByText('signal'),
-      value: screen.getByText('value'),
-    }).toEqual({
-      signal: expect.anything(),
-      value: expect.anything(),
-    });
+    await user.click(screen.getByLabelText('Indicator state field'));
+    const options = screen.getAllByRole('option').map((option) => option.textContent);
+    expect(options).toEqual(['Signal', 'Trend Value']);
   });
 
-  it('renders an IndicatorRef combobox even when the catalog has no entry for the indicator key', () => {
+  it('derives the operand valueType to String when the picked state field is an enum', async () => {
+    const user = userEvent.setup();
+    const snapshots: ConditionOperand[] = [];
     render(
       <Harness
         initial={{
@@ -305,10 +323,135 @@ describe('OperandPicker', () => {
             summary: 'Supertrend',
           },
         ]}
-        indicatorStateKeysByKey={{ sma: ['value'] }}
+        indicatorStateFieldsByKey={{ supertrend: SUPERTREND_FIELDS }}
+        onSnapshot={(operand) => snapshots.push(operand)}
+      />,
+    );
+    await user.click(screen.getByLabelText('Indicator state field'));
+    await user.click(screen.getByRole('option', { name: 'Signal' }));
+    expect(snapshots[snapshots.length - 1]).toEqual({
+      kind: OperandKind.IndicatorRef,
+      instanceId: 'ind-a',
+      stateKey: 'signal',
+      valueType: StateValueType.String,
+    });
+  });
+
+  it('derives the operand valueType to Number when the picked state field is numeric', async () => {
+    const user = userEvent.setup();
+    const snapshots: ConditionOperand[] = [];
+    render(
+      <Harness
+        initial={{
+          kind: OperandKind.IndicatorRef,
+          instanceId: 'ind-a',
+          stateKey: '',
+          valueType: StateValueType.Number,
+        }}
+        indicators={[
+          {
+            id: 'ind-a',
+            indicatorKey: 'supertrend',
+            version: 1,
+            inputs: {},
+            summary: 'Supertrend',
+          },
+        ]}
+        indicatorStateFieldsByKey={{ supertrend: SUPERTREND_FIELDS }}
+        onSnapshot={(operand) => snapshots.push(operand)}
+      />,
+    );
+    await user.click(screen.getByLabelText('Indicator state field'));
+    await user.click(screen.getByRole('option', { name: 'Trend Value' }));
+    expect(snapshots[snapshots.length - 1]).toEqual({
+      kind: OperandKind.IndicatorRef,
+      instanceId: 'ind-a',
+      stateKey: 'value',
+      valueType: StateValueType.Number,
+    });
+  });
+
+  it("resets stateKey and valueType to the new indicator's first descriptor on instance switch", async () => {
+    const user = userEvent.setup();
+    const snapshots: ConditionOperand[] = [];
+    render(
+      <Harness
+        initial={{
+          kind: OperandKind.IndicatorRef,
+          instanceId: 'ind-a',
+          stateKey: 'signal',
+          valueType: StateValueType.String,
+        }}
+        indicators={[
+          {
+            id: 'ind-a',
+            indicatorKey: 'supertrend',
+            version: 1,
+            inputs: {},
+            summary: 'Supertrend',
+          },
+          { id: 'ind-b', indicatorKey: 'sma', version: 1, inputs: {}, summary: 'SMA' },
+        ]}
+        indicatorStateFieldsByKey={{ supertrend: SUPERTREND_FIELDS, sma: SMA_FIELDS }}
+        onSnapshot={(operand) => snapshots.push(operand)}
+      />,
+    );
+    await user.click(screen.getByLabelText('Indicator instance'));
+    await user.click(screen.getByRole('option', { name: 'SMA' }));
+    expect(snapshots[snapshots.length - 1]).toEqual({
+      kind: OperandKind.IndicatorRef,
+      instanceId: 'ind-b',
+      stateKey: 'value',
+      valueType: StateValueType.Number,
+    });
+  });
+
+  it('renders the IndicatorRef state-field Select even when the catalog has no entry for the key', () => {
+    render(
+      <Harness
+        initial={{
+          kind: OperandKind.IndicatorRef,
+          instanceId: 'ind-a',
+          stateKey: '',
+          valueType: StateValueType.Number,
+        }}
+        indicators={[
+          {
+            id: 'ind-a',
+            indicatorKey: 'supertrend',
+            version: 1,
+            inputs: {},
+            summary: 'Supertrend',
+          },
+        ]}
+        indicatorStateFieldsByKey={{ sma: SMA_FIELDS }}
       />,
     );
     expect(screen.getByLabelText('Indicator state field')).toBeDefined();
+  });
+
+  it('option-binds an enum-typed LHS RHS literal to the descriptor options, submitting the value', async () => {
+    const user = userEvent.setup();
+    const snapshots: ConditionOperand[] = [];
+    render(
+      <Harness
+        initial={{ kind: OperandKind.Literal, value: { type: StateValueType.String, value: '' } }}
+        literalValueType={StateValueType.String}
+        literalEnumOptions={[
+          { value: 'up', label: 'Up Trend' },
+          { value: 'down', label: 'Down Trend' },
+        ]}
+        onSnapshot={(operand) => snapshots.push(operand)}
+      />,
+    );
+    await user.click(screen.getByLabelText('Literal value'));
+    const options = screen.getAllByRole('option').map((option) => option.textContent);
+    expect(options).toEqual(['Up Trend', 'Down Trend']);
+    await user.click(screen.getByRole('option', { name: 'Up Trend' }));
+    expect(snapshots[snapshots.length - 1]).toEqual({
+      kind: OperandKind.Literal,
+      value: { type: StateValueType.String, value: 'up' },
+    });
   });
 });
 

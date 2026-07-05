@@ -5,6 +5,8 @@ import {
   type ComparisonOperator,
   type ConditionOperand,
   type CrossingOperator,
+  type EnumOption,
+  FieldType,
   type IndicatorInstance,
   type LeafCondition,
   LeafConditionFamily,
@@ -20,7 +22,7 @@ import { Box, Flex, Select, Text, TextField } from '@radix-ui/themes';
 import type { ReactNode } from 'react';
 import { OperandValueKind, operandValueKind } from '../../lib/rule-form-schema.js';
 import {
-  type IndicatorStateKeysByKey,
+  type IndicatorStateFieldsByKey,
   OperandPicker,
   operandNeedsInterval,
 } from './operand-picker.js';
@@ -74,7 +76,7 @@ export function LeafEditor({
   instancePeriods,
   knownStateKeys,
   stateKeysLoading,
-  indicatorStateKeysByKey,
+  indicatorStateFieldsByKey,
   priorActions = [],
 }: {
   value: LeafCondition;
@@ -83,7 +85,7 @@ export function LeafEditor({
   instancePeriods: InstancePeriods;
   knownStateKeys: KnownStateKeys;
   stateKeysLoading?: boolean;
-  indicatorStateKeysByKey?: IndicatorStateKeysByKey;
+  indicatorStateFieldsByKey?: IndicatorStateFieldsByKey;
   priorActions?: Action[];
 }): ReactNode {
   const left = value.left;
@@ -103,7 +105,7 @@ export function LeafEditor({
             indicators={visibleIndicators}
             knownStateKeys={knownStateKeys}
             stateKeysLoading={stateKeysLoading}
-            indicatorStateKeysByKey={indicatorStateKeysByKey}
+            indicatorStateFieldsByKey={indicatorStateFieldsByKey}
             ariaLabel="Left operand kind"
           />
         </Box>
@@ -126,7 +128,7 @@ export function LeafEditor({
           visibleIndicators,
           knownStateKeys,
           stateKeysLoading,
-          indicatorStateKeysByKey,
+          indicatorStateFieldsByKey,
           left,
           priorActions,
         )}
@@ -159,11 +161,14 @@ function renderFamilyBody(
   indicators: IndicatorInstance[],
   knownStateKeys: KnownStateKeys,
   stateKeysLoading: boolean | undefined,
-  indicatorStateKeysByKey: IndicatorStateKeysByKey | undefined,
+  indicatorStateFieldsByKey: IndicatorStateFieldsByKey | undefined,
   left: ConditionOperand,
   priorActions: Action[],
 ): ReactNode {
   const rhsLiteralType = resolveRhsLiteralType(leaf, left, priorActions);
+  // When the LHS is an enum-typed IndicatorRef, its RHS literal is bound to the
+  // descriptor's closed option set (issue #455 AC3).
+  const rhsEnumOptions = resolveRhsEnumOptions(left, indicators, indicatorStateFieldsByKey);
   switch (leaf.family) {
     case LeafConditionFamily.Comparison:
     case LeafConditionFamily.Crossing:
@@ -179,8 +184,9 @@ function renderFamilyBody(
             indicators={indicators}
             knownStateKeys={knownStateKeys}
             stateKeysLoading={stateKeysLoading}
-            indicatorStateKeysByKey={indicatorStateKeysByKey}
+            indicatorStateFieldsByKey={indicatorStateFieldsByKey}
             literalValueType={rhsLiteralType}
+            literalEnumOptions={rhsEnumOptions}
             ariaLabel="Right operand kind"
           />
         </Box>
@@ -198,8 +204,9 @@ function renderFamilyBody(
               indicators={indicators}
               knownStateKeys={knownStateKeys}
               stateKeysLoading={stateKeysLoading}
-              indicatorStateKeysByKey={indicatorStateKeysByKey}
+              indicatorStateFieldsByKey={indicatorStateFieldsByKey}
               literalValueType={rhsLiteralType}
+              literalEnumOptions={rhsEnumOptions}
               ariaLabel="Upper bound operand kind"
             />
           </Box>
@@ -213,8 +220,9 @@ function renderFamilyBody(
               indicators={indicators}
               knownStateKeys={knownStateKeys}
               stateKeysLoading={stateKeysLoading}
-              indicatorStateKeysByKey={indicatorStateKeysByKey}
+              indicatorStateFieldsByKey={indicatorStateFieldsByKey}
               literalValueType={rhsLiteralType}
+              literalEnumOptions={rhsEnumOptions}
               ariaLabel="Lower bound operand kind"
             />
           </Box>
@@ -479,6 +487,30 @@ export function resolveRhsLiteralType(
     return fromAction ?? base;
   }
   return base;
+}
+
+/**
+ * Resolve the closed enum option set a Literal RHS should be bound to, or
+ * `undefined` when the LHS isn't an enum-typed {@link OperandKind.IndicatorRef}.
+ *
+ * The LHS instance's `indicatorKey` selects the schema; the LHS `stateKey`
+ * picks the descriptor; an {@link FieldType.Enum} descriptor yields its
+ * `options` (per issue #455 AC3). Any other LHS returns `undefined`, leaving
+ * the RHS literal on its type-driven widget.
+ */
+export function resolveRhsEnumOptions(
+  left: ConditionOperand,
+  indicators: IndicatorInstance[],
+  indicatorStateFieldsByKey: IndicatorStateFieldsByKey | undefined,
+): readonly EnumOption[] | undefined {
+  if (left.kind !== OperandKind.IndicatorRef) return undefined;
+  const indicatorKey = indicators.find((instance) => instance.id === left.instanceId)?.indicatorKey;
+  if (indicatorKey === undefined) return undefined;
+  const field = indicatorStateFieldsByKey?.[indicatorKey]?.find(
+    (descriptor) => descriptor.key === left.stateKey,
+  );
+  if (field === undefined || field.type !== FieldType.Enum) return undefined;
+  return field.options;
 }
 
 /**
