@@ -41,7 +41,7 @@ import { FIELD_LABELS, type RuleFormValues, ruleFormSchema } from '../../lib/rul
 import { ActionsPicker } from './actions-picker.js';
 import { ConditionTreeEditor } from './condition-tree-editor.js';
 import type { InstancePeriods, KnownStateKeys } from './leaf-editor.js';
-import { filterIndicatorsByScope, type IndicatorStateKeysByKey } from './operand-picker.js';
+import { filterIndicatorsByScope, type IndicatorStateFieldsByKey } from './operand-picker.js';
 import { ScopePicker } from './scope-picker.js';
 import { TRIGGER_KIND_EXPLANATIONS, TRIGGER_KIND_LABELS, TriggerPicker } from './trigger-picker.js';
 
@@ -102,13 +102,14 @@ export function RuleEditorDialog({
   };
   const stateKeysLoading = symbolStateKeysQuery.isPending || globalStateQuery.isPending;
 
-  // Seed the `IndicatorRef` operand's state-key combobox from the catalog —
-  // one map entry per `IndicatorDefinition.key`, listing its `state[].key`s.
+  // Seed the `IndicatorRef` operand's state-field `Select` from the catalog —
+  // one map entry per `IndicatorDefinition.key`, carrying its full `state`
+  // descriptors so the picker shows labels, submits keys, and derives valueType.
   const indicatorCatalogQuery = useIndicatorCatalog();
-  const indicatorStateKeysByKey: IndicatorStateKeysByKey = {};
+  const indicatorStateFieldsByKey: IndicatorStateFieldsByKey = {};
   const catalog = Array.isArray(indicatorCatalogQuery.data) ? indicatorCatalogQuery.data : [];
   for (const definition of catalog) {
-    indicatorStateKeysByKey[definition.key] = definition.state.map((field) => field.key);
+    indicatorStateFieldsByKey[definition.key] = definition.state;
   }
 
   // Lazy: assume each instance is computed at the symbol's first watched
@@ -246,7 +247,7 @@ export function RuleEditorDialog({
                 instancePeriods={instancePeriods}
                 knownStateKeys={knownStateKeys}
                 stateKeysLoading={stateKeysLoading}
-                indicatorStateKeysByKey={indicatorStateKeysByKey}
+                indicatorStateFieldsByKey={indicatorStateFieldsByKey}
                 priorActions={actions}
               />
               {conditionError ? (

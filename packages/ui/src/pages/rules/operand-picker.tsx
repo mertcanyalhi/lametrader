@@ -1,5 +1,7 @@
 import {
   type ConditionOperand,
+  type EnumOption,
+  FieldType,
   type IndicatorInstance,
   OperandKind,
   type Period,
@@ -7,6 +9,7 @@ import {
   type ProfileScopeSpec,
   type RuleScope,
   RuleScopeKind,
+  type StateFieldDescriptor,
   type StateValue,
   StateValueType,
 } from '@lametrader/core';
@@ -16,16 +19,37 @@ import type { KnownStateKeys } from './leaf-editor.js';
 import { StateKeyPicker } from './state-key-picker.js';
 
 /**
- * Per-indicator-key catalog of the state-field keys the definition declares.
+ * Per-indicator-key catalog of the state-field descriptors the definition
+ * declares.
  *
- * Keyed by {@link IndicatorDefinition.key} (e.g. `'sma'` → `['value']`,
- * `'supertrend'` → `['signal', 'value']`).
+ * Keyed by {@link IndicatorDefinition.key} (e.g. `'sma'` → its `value`
+ * descriptor, `'supertrend'` → its `signal` + `value` descriptors).
  *
- * Feeds the `IndicatorRef` operand's state-key combobox — missing entries fall
- * through to a freetext-only picker via {@link StateKeyPicker}'s empty-list
- * behaviour.
+ * Feeds the `IndicatorRef` operand's state-field `Select`: the descriptors'
+ * `label`s populate the option list, the `key`s are the submitted values, and
+ * each descriptor's `type` derives the operand's `valueType` (a closed set —
+ * state keys outside the schema never resolve at rule-eval time, so there is
+ * no freetext fallback here). Missing entries render an empty `Select`.
  */
-export type IndicatorStateKeysByKey = Record<string, string[]>;
+export type IndicatorStateFieldsByKey = Record<string, readonly StateFieldDescriptor[]>;
+
+/**
+ * Map a state field descriptor's {@link FieldType} to the {@link StateValueType}
+ * an `IndicatorRef` operand carries.
+ *
+ * `StateValueType` has no `Enum` member and enum state fields resolve to plain
+ * strings at eval time, so `FieldType.Enum` maps to `StateValueType.String`;
+ * the closed-set constraint is enforced in the UI by an options-bound literal
+ * `Select` on the RHS (see {@link LiteralValueInput}).
+ */
+function stateFieldValueType(field: StateFieldDescriptor): StateValueType {
+  switch (field.type) {
+    case FieldType.Number:
+      return StateValueType.Number;
+    case FieldType.Enum:
+      return StateValueType.String;
+  }
+}
 
 /**
  * Drop-down options for the operand-kind selector, in the order they render.
@@ -98,14 +122,18 @@ export const RHS_ALLOWED_KINDS = OPERAND_KIND_OPTIONS.map((option) => option.val
  *                          row's `interval` by the caller before passing in.
  * @param symbolStateKeys - Known symbol-state keys to seed the dropdown.
  * @param globalStateKeys - Known global-state keys to seed the dropdown.
- * @param indicatorStateKeysByKey - Per-indicator-definition state-key catalog,
- *                                    keyed by `IndicatorDefinition.key`. Used
- *                                    to seed the `IndicatorRef.stateKey`
- *                                    combobox. Missing entries fall through
- *                                    to a freetext-only picker.
+ * @param indicatorStateFieldsByKey - Per-indicator-definition state-field
+ *                                    descriptor catalog, keyed by
+ *                                    `IndicatorDefinition.key`. Populates the
+ *                                    `IndicatorRef` state-field `Select` and
+ *                                    derives the operand's `valueType`.
  * @param literalValueType - When this is an RHS Literal, the LHS-derived value
  *                            type that types the input control. `undefined`
  *                            means "infer from the operand itself".
+ * @param literalEnumOptions - When this is an RHS Literal against an enum-typed
+ *                              `IndicatorRef` LHS, the descriptor's closed
+ *                              option set — renders an option-bound `Select`
+ *                              instead of a freetext input.
  * @param ariaLabel      - Accessible name for the kind dropdown (e.g.
  *                          "Left operand kind").
  */
@@ -115,8 +143,9 @@ export function OperandPicker({
   indicators,
   knownStateKeys,
   stateKeysLoading,
-  indicatorStateKeysByKey,
+  indicatorStateFieldsByKey,
   literalValueType,
+  literalEnumOptions,
   ariaLabel,
 }: {
   value: ConditionOperand;
@@ -124,8 +153,9 @@ export function OperandPicker({
   indicators: IndicatorInstance[];
   knownStateKeys: KnownStateKeys;
   stateKeysLoading?: boolean;
-  indicatorStateKeysByKey?: IndicatorStateKeysByKey;
+  indicatorStateFieldsByKey?: IndicatorStateFieldsByKey;
   literalValueType?: StateValueType;
+  literalEnumOptions?: readonly EnumOption[];
   ariaLabel: string;
 }): ReactNode {
   return (
@@ -133,7 +163,15 @@ export function OperandPicker({
       <Select.Root
         value={value.kind}
         onValueChange={(next) =>
-          onChange(operandFromKind(next as OperandKind, value, indicators, literalValueType))
+          onChange(
+            operandFromKind(
+              next as OperandKind,
+              value,
+              indicators,
+              indicatorStateFieldsByKey,
+              literalValueType,
+            ),
+          )
         }
       >
         <Select.Trigger aria-label={ariaLabel} />
@@ -178,8 +216,9 @@ export function OperandPicker({
         indicators={indicators}
         knownStateKeys={knownStateKeys}
         stateKeysLoading={stateKeysLoading}
-        indicatorStateKeysByKey={indicatorStateKeysByKey}
+        indicatorStateFieldsByKey={indicatorStateFieldsByKey}
         literalValueType={literalValueType}
+        literalEnumOptions={literalEnumOptions}
       />
     </Flex>
   );
@@ -199,16 +238,18 @@ function OperandDetail({
   indicators,
   knownStateKeys,
   stateKeysLoading,
-  indicatorStateKeysByKey,
+  indicatorStateFieldsByKey,
   literalValueType,
+  literalEnumOptions,
 }: {
   value: ConditionOperand;
   onChange: (next: ConditionOperand) => void;
   indicators: IndicatorInstance[];
   knownStateKeys: KnownStateKeys;
   stateKeysLoading?: boolean;
-  indicatorStateKeysByKey?: IndicatorStateKeysByKey;
+  indicatorStateFieldsByKey?: IndicatorStateFieldsByKey;
   literalValueType?: StateValueType;
+  literalEnumOptions?: readonly EnumOption[];
 }): ReactNode {
   switch (value.kind) {
     case OperandKind.Price:
@@ -220,13 +261,14 @@ function OperandDetail({
       return null;
     case OperandKind.IndicatorRef: {
       const selected = indicators.find((instance) => instance.id === value.instanceId);
-      const indicatorKey = selected?.indicatorKey ?? '';
-      const indicatorKeyList = indicatorStateKeysByKey?.[indicatorKey] ?? [];
+      const fields = indicatorStateFieldsByKey?.[selected?.indicatorKey ?? ''] ?? [];
       return (
         <Flex direction="column" gap="2">
           <Select.Root
             value={value.instanceId === '' ? undefined : value.instanceId}
-            onValueChange={(next) => onChange({ ...value, instanceId: next })}
+            onValueChange={(next) =>
+              onChange(indicatorRefForInstance(value, next, indicators, indicatorStateFieldsByKey))
+            }
           >
             <Select.Trigger placeholder="Pick an indicator" aria-label="Indicator instance" />
             <Select.Content>
@@ -237,12 +279,23 @@ function OperandDetail({
               ))}
             </Select.Content>
           </Select.Root>
-          <StateKeyPicker
-            value={value.stateKey}
-            knownKeys={indicatorKeyList}
-            ariaLabel="Indicator state field"
-            onChange={(stateKey) => onChange({ ...value, stateKey })}
-          />
+          <Select.Root
+            value={value.stateKey === '' ? undefined : value.stateKey}
+            onValueChange={(next) => {
+              const field = fields.find((descriptor) => descriptor.key === next);
+              if (field === undefined) return;
+              onChange({ ...value, stateKey: field.key, valueType: stateFieldValueType(field) });
+            }}
+          >
+            <Select.Trigger placeholder="Pick a state field" aria-label="Indicator state field" />
+            <Select.Content>
+              {fields.map((field) => (
+                <Select.Item key={field.key} value={field.key}>
+                  {field.label}
+                </Select.Item>
+              ))}
+            </Select.Content>
+          </Select.Root>
         </Flex>
       );
     }
@@ -309,6 +362,7 @@ function OperandDetail({
         <LiteralValueInput
           value={value}
           inferredType={literalValueType ?? value.value.type}
+          enumOptions={literalEnumOptions}
           onChange={onChange}
         />
       );
@@ -363,12 +417,47 @@ function ValueTypeRow({
 function LiteralValueInput({
   value,
   inferredType,
+  enumOptions,
   onChange,
 }: {
   value: { kind: OperandKind.Literal; value: { type: StateValueType; value: unknown } };
   inferredType: StateValueType;
+  enumOptions?: readonly EnumOption[];
   onChange: (next: ConditionOperand) => void;
 }): ReactNode {
+  // An enum-typed LHS constrains the RHS to the descriptor's closed option set:
+  // a `Select` of `EnumOption`s (labels shown, values submitted) replaces the
+  // freetext string input so an out-of-set value can't be entered.
+  if (
+    inferredType === StateValueType.String &&
+    enumOptions !== undefined &&
+    enumOptions.length > 0
+  ) {
+    const current =
+      value.value.type === StateValueType.String && typeof value.value.value === 'string'
+        ? value.value.value
+        : '';
+    return (
+      <Select.Root
+        value={current === '' ? undefined : current}
+        onValueChange={(next) =>
+          onChange({
+            kind: OperandKind.Literal,
+            value: { type: StateValueType.String, value: next },
+          })
+        }
+      >
+        <Select.Trigger placeholder="Pick a value" aria-label="Literal value" />
+        <Select.Content>
+          {enumOptions.map((option) => (
+            <Select.Item key={option.value} value={option.value}>
+              {option.label}
+            </Select.Item>
+          ))}
+        </Select.Content>
+      </Select.Root>
+    );
+  }
   switch (inferredType) {
     case StateValueType.Number: {
       const current =
@@ -441,6 +530,7 @@ export function operandFromKind(
   kind: OperandKind,
   prev: ConditionOperand,
   indicators: IndicatorInstance[],
+  indicatorStateFieldsByKey?: IndicatorStateFieldsByKey,
   literalValueType?: StateValueType,
 ): ConditionOperand {
   switch (kind) {
@@ -452,16 +542,20 @@ export function operandFromKind(
     case OperandKind.Volume:
       return { kind };
     case OperandKind.IndicatorRef: {
-      const firstInstance = indicators[0]?.id ?? '';
-      return {
-        kind: OperandKind.IndicatorRef,
-        instanceId: prev.kind === OperandKind.IndicatorRef ? prev.instanceId : firstInstance,
-        stateKey: prev.kind === OperandKind.IndicatorRef ? prev.stateKey : '',
-        valueType:
-          prev.kind === OperandKind.IndicatorRef
-            ? prev.valueType
-            : (literalValueType ?? StateValueType.Number),
-      };
+      if (prev.kind === OperandKind.IndicatorRef) return prev;
+      // Seed the default instance's first declared state field so the fresh
+      // operand is immediately valid (mirrors the instance-switch reset).
+      return indicatorRefForInstance(
+        {
+          kind: OperandKind.IndicatorRef,
+          instanceId: '',
+          stateKey: '',
+          valueType: StateValueType.Number,
+        },
+        indicators[0]?.id ?? '',
+        indicators,
+        indicatorStateFieldsByKey,
+      );
     }
     case OperandKind.SymbolStateRef:
       return {
@@ -489,6 +583,33 @@ export function operandFromKind(
       };
     }
   }
+}
+
+/**
+ * Build an `IndicatorRef` operand pointed at `instanceId`, resetting its
+ * `stateKey` + `valueType` to the target indicator's **first** declared state
+ * descriptor (per issue #455: switching the instance re-scopes the state-field
+ * options and lands on a valid default).
+ *
+ * When the instance has no schema entry (catalog missing / empty), the key
+ * clears to `''` and `valueType` falls back to `Number`; the state `Select`
+ * then shows its placeholder until the catalog resolves.
+ */
+function indicatorRefForInstance(
+  prev: Extract<ConditionOperand, { kind: OperandKind.IndicatorRef }>,
+  instanceId: string,
+  indicators: IndicatorInstance[],
+  indicatorStateFieldsByKey: IndicatorStateFieldsByKey | undefined,
+): ConditionOperand {
+  const indicatorKey =
+    indicators.find((instance) => instance.id === instanceId)?.indicatorKey ?? '';
+  const first = indicatorStateFieldsByKey?.[indicatorKey]?.[0];
+  return {
+    ...prev,
+    instanceId,
+    stateKey: first?.key ?? '',
+    valueType: first !== undefined ? stateFieldValueType(first) : StateValueType.Number,
+  };
 }
 
 /**
