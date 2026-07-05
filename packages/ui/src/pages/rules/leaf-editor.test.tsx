@@ -315,6 +315,20 @@ describe('resolveRhsLiteralType', () => {
     expect(resolveRhsLiteralType(leaf, leaf.left, [])).toEqual(StateValueType.Number);
   });
 
+  it('resolves the RHS literal type to Bool when the LHS is a Bool-typed SymbolStateRef (forces a Switch)', () => {
+    const leaf: LeafCondition = {
+      family: LeafConditionFamily.State,
+      operator: StateOperator.Equals,
+      left: {
+        kind: OperandKind.SymbolStateRef,
+        key: 'isLong',
+        valueType: StateValueType.Bool,
+      },
+      right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 0 } },
+    };
+    expect(resolveRhsLiteralType(leaf, leaf.left, [])).toEqual(StateValueType.Bool);
+  });
+
   it('honours a same-rule SetSymbolState action over the LHS operand valueType', () => {
     const leaf: LeafCondition = {
       family: LeafConditionFamily.State,
