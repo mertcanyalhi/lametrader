@@ -128,6 +128,20 @@ export class LiveEvaluationLookups implements EvaluationLookups {
   }
 
   /**
+   * The distinct periods for which a candle has been recorded for `symbolId`,
+   * in first-observed order (`[]` when the symbol has no recorded candle yet).
+   *
+   * The live wire-up ({@link wireRuleEngine}) reads this to decide which
+   * `(period, axis)` bar series to pre-warm from the candle repository for an
+   * evaluation — one real multi-bar window per observed period, so series
+   * operators (`Moving` / `Channel` / `Crossing`) walk the actual history
+   * behind the repository rather than a single live-mirror point (#499).
+   */
+  observedPeriods(symbolId: string): Period[] {
+    return [...(this.ohlcv.get(symbolId)?.keys() ?? [])];
+  }
+
+  /**
    * Build a `SeriesView` map keyed by `(period, axis)` (`barSeriesKey`) over
    * every observed period's latest OHLCV snapshot for `symbolId`, suitable
    * for handing to `buildEvaluationContext`'s `barSeries`.

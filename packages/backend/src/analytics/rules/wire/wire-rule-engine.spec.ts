@@ -4,6 +4,7 @@ import {
   ConditionNodeKind,
   EvaluationTriggerKind,
   LeafConditionFamily,
+  MovingOperator,
   NotificationChannel,
   OperandKind,
   Period,
@@ -680,6 +681,216 @@ describe('wireRuleEngine', () => {
         },
       },
     ]);
+  });
+
+  it('fires a MovingUp rule end-to-end because the live bar series is the real multi-bar candle history, not a single point (regression #499)', async () => {
+    // Two 1m bars live in the candle store: close 100 then close 110. A
+    // MovingUp(lookbackBars: 1, threshold: 5) leaf needs the prior bar to
+    // compute the delta (110 - 100 = 10 >= 5). Before #499 the live context
+    // saw a single-point bar series, so `evaluateMoving` short-circuited at
+    // its `length < lookbackBars + 1` guard and the rule never fired.
+    const ruleId = 'r-moving';
+    await rules.save({
+      id: ruleId,
+      profileId: 'profile-1',
+      name: 'close moving up',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.Moving,
+          operator: MovingOperator.MovingUp,
+          left: { kind: OperandKind.Close },
+          threshold: 5,
+          lookbackBars: 1,
+          interval: Period.OneMinute,
+        },
+      },
+      trigger: { kind: TriggerKind.OncePerBarClose, period: Period.OneMinute },
+      expiration: null,
+      actions: [
+        {
+          kind: ActionKind.SetSymbolState,
+          key: 'moved',
+          value: { type: StateValueType.Bool, value: true },
+        },
+      ],
+      enabled: true,
+      order: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    });
+
+    await candles.save('AAPL', Period.OneMinute, [
+      { time: 60_000, open: 100, high: 100, low: 100, close: 100, volume: 10 },
+      { time: 120_000, open: 110, high: 110, low: 110, close: 110, volume: 10 },
+    ]);
+
+    const wired = await wireRuleEngine({
+      rules,
+      state,
+      watchlist,
+      eventLog,
+      notifier,
+      candleRepository: candles,
+      indicatorStore,
+    });
+
+    wired.barBridge.handleCandle({
+      id: 'AAPL',
+      period: Period.OneMinute,
+      candle: { time: 120_000, open: 110, high: 110, low: 110, close: 110, volume: 10 },
+      final: true,
+    });
+    await wired.drain();
+
+    const ruleEvents = await eventLog.ruleEvents(ruleId);
+    expect(ruleEvents.map((e) => e.type)).toEqual([RuleEventType.StateSet, RuleEventType.Fired]);
+    expect(await state.getSymbolState('profile-1', 'AAPL', 'moved')).toEqual({
+      type: StateValueType.Bool,
+      value: true,
+    });
+  });
+
+  it('does not fire a MovingUp rule when the close delta across the lookback window is below the threshold (regression #499)', async () => {
+    // Same wiring path as above; the two bars move 100 → 110 (delta 10) but the
+    // threshold is 50, so the operator computes a real delta and stays false —
+    // proving the fire in the positive case is the movement, not a wiring
+    // accident.
+    const ruleId = 'r-moving-quiet';
+    await rules.save({
+      id: ruleId,
+      profileId: 'profile-1',
+      name: 'close moving up a lot',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.Moving,
+          operator: MovingOperator.MovingUp,
+          left: { kind: OperandKind.Close },
+          threshold: 50,
+          lookbackBars: 1,
+          interval: Period.OneMinute,
+        },
+      },
+      trigger: { kind: TriggerKind.OncePerBarClose, period: Period.OneMinute },
+      expiration: null,
+      actions: [
+        {
+          kind: ActionKind.SetSymbolState,
+          key: 'moved',
+          value: { type: StateValueType.Bool, value: true },
+        },
+      ],
+      enabled: true,
+      order: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    });
+
+    await candles.save('AAPL', Period.OneMinute, [
+      { time: 60_000, open: 100, high: 100, low: 100, close: 100, volume: 10 },
+      { time: 120_000, open: 110, high: 110, low: 110, close: 110, volume: 10 },
+    ]);
+
+    const wired = await wireRuleEngine({
+      rules,
+      state,
+      watchlist,
+      eventLog,
+      notifier,
+      candleRepository: candles,
+      indicatorStore,
+    });
+
+    wired.barBridge.handleCandle({
+      id: 'AAPL',
+      period: Period.OneMinute,
+      candle: { time: 120_000, open: 110, high: 110, low: 110, close: 110, volume: 10 },
+      final: true,
+    });
+    await wired.drain();
+
+    expect(await eventLog.ruleEvents(ruleId)).toEqual([]);
+    expect(await state.getSymbolState('profile-1', 'AAPL', 'moved')).toBeNull();
+  });
+
+  it('fires a MovingUp rule on the bar under evaluation even when the repository holds a later-ts candle (window is bounded to the firing bar, #499)', async () => {
+    // Regression: the live context warms the bar series from the candle
+    // repository over `[0, firing-bar-ts]`, not the whole store. A candle
+    // stored *after* the bar under evaluation — a later bar the store already
+    // holds, or leftover data from another run against a shared store — must
+    // not become the series' newest point, or the operator reads it as the
+    // "current" bar and computes the wrong delta (here 90 → 200 across the
+    // lookback would flip a real +100 move into a false −110).
+    const ruleId = 'r-moving-bounded';
+    await rules.save({
+      id: ruleId,
+      profileId: 'profile-1',
+      name: 'close moving up',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.Moving,
+          operator: MovingOperator.MovingUp,
+          left: { kind: OperandKind.Close },
+          threshold: 5,
+          lookbackBars: 1,
+          interval: Period.OneMinute,
+        },
+      },
+      trigger: { kind: TriggerKind.OncePerBarClose, period: Period.OneMinute },
+      expiration: null,
+      actions: [
+        {
+          kind: ActionKind.SetSymbolState,
+          key: 'moved',
+          value: { type: StateValueType.Bool, value: true },
+        },
+      ],
+      enabled: true,
+      order: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    });
+
+    // Bars 60_000 → 120_000 move 90 → 200 (delta 110 ≥ 5). A later-ts candle at
+    // 180_000 (close 90) already sits in the store; an unbounded window would
+    // read it as "current" and compute 90 − 200 = −110, never firing.
+    await candles.save('AAPL', Period.OneMinute, [
+      { time: 60_000, open: 90, high: 90, low: 90, close: 90, volume: 10 },
+      { time: 180_000, open: 90, high: 90, low: 90, close: 90, volume: 10 },
+      { time: 120_000, open: 200, high: 200, low: 200, close: 200, volume: 10 },
+    ]);
+
+    const wired = await wireRuleEngine({
+      rules,
+      state,
+      watchlist,
+      eventLog,
+      notifier,
+      candleRepository: candles,
+      indicatorStore,
+    });
+
+    wired.barBridge.handleCandle({
+      id: 'AAPL',
+      period: Period.OneMinute,
+      candle: { time: 120_000, open: 200, high: 200, low: 200, close: 200, volume: 10 },
+      final: true,
+    });
+    await wired.drain();
+
+    expect((await eventLog.ruleEvents(ruleId)).map((e) => e.type)).toEqual([
+      RuleEventType.StateSet,
+      RuleEventType.Fired,
+    ]);
+    expect(await state.getSymbolState('profile-1', 'AAPL', 'moved')).toEqual({
+      type: StateValueType.Bool,
+      value: true,
+    });
   });
 
   it('resolves cleanly with no rules persisted (no profiles to warm)', async () => {

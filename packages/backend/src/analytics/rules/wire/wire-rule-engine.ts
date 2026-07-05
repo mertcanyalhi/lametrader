@@ -17,14 +17,16 @@ import {
   type TickEvent,
   type WatchlistRepository,
 } from '@lametrader/core';
+import type { BarAxis } from '../bar-series-view.js';
 import { BarLifecycleBridge, IndicatorCascadeBridge } from '../bridges/index.js';
 import { TriggerDispatcher } from '../dispatch/dispatcher.js';
 import { getLogger } from '../engine-log.js';
-import { buildEvaluationContext } from '../evaluation-context.js';
+import { buildEvaluationContext, prewarmBarSeries } from '../evaluation-context.js';
 import type { IndicatorSeriesStore } from '../indicator-series-store.js';
 import { ActionRunner } from '../orchestrator/action-runner.js';
 import { RuleOrchestrator } from '../orchestrator/orchestrator.js';
 import { createPerSymbolSerializer } from '../orchestrator/per-symbol-serializer.js';
+import type { SeriesView } from '../series.types.js';
 import { type InitialStateEntry, LiveEvaluationLookups } from './live-evaluation-lookups.js';
 
 /**
@@ -98,7 +100,7 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
   const actions = new ActionRunner(deps.state, deps.notifier, lookups);
   const dispatcher = new TriggerDispatcher({
     rules: deps.rules,
-    buildContext: (event, firingSymbolId, profileId) => {
+    buildContext: async (event, firingSymbolId, profileId) => {
       // Cascade events (`SymbolStateChanged` / `GlobalStateChanged`) already
       // carry the slot's `prev` value on their payload — thread it through so
       // `ChangesTo` / `ChangesFrom` see the real prior value instead of `null`
@@ -107,22 +109,35 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
       // prev to `null` for state slots — sourcing a meaningful prev there is
       // larger scope and explicitly deferred by #433.
       const cascadePrev = cascadePrevLookups(event);
-      // Lazy: bar window is "everything stored so far" — operators that need
-      // a real lookback window pull from the indicator store + tick ring,
-      // which already encode their own bounds. Upgrade path: derive the
-      // window from the firing rule's `lookbackBars` × interval.
+      // Warm a real multi-bar OHLCV series from the candle repository (not the
+      // single-point live mirror) so series operators — `Moving` / `Channel`
+      // / `Crossing` — walk the actual history behind the store (#499). The
+      // window is "everything stored up to and including the bar under
+      // evaluation" per observed `(period, axis)`: the upper bound is the
+      // firing event's timestamp so a candle stored *after* this observation
+      // (a later bar the repository already holds, or leftover cross-run data)
+      // never leaks in as the series' newest point — which would make a series
+      // operator read the wrong "current" bar and never fire.
+      // Upgrade path: also bound `from` to each firing rule's `lookbackBars`
+      // × interval once the dispatcher threads the rule through.
+      const barSeries = await warmLiveBarSeries(
+        deps.candleRepository,
+        firingSymbolId,
+        event.ts,
+        lookups,
+      );
       return buildEvaluationContext({
         symbolId: firingSymbolId,
         profileId,
         candleRepository: deps.candleRepository,
         indicatorStore: deps.indicatorStore,
-        barWindow: { from: 0, to: Number.MAX_SAFE_INTEGER },
+        barWindow: { from: 0, to: event.ts + 1 },
         getSymbolState: (pid, symbolId, key) => lookups.getSymbolState(pid, symbolId, key),
         getGlobalState: (pid, key) => lookups.getGlobalState(pid, key),
         getPrevSymbolState: cascadePrev.getPrevSymbolState,
         getPrevGlobalState: cascadePrev.getPrevGlobalState,
         getPrevIndicator: () => null,
-        barSeries: lookups.bookSeriesFor(firingSymbolId),
+        barSeries,
       });
     },
   });
@@ -258,6 +273,60 @@ interface EventBatch {
   record(): void;
   /** The trigger events to process in order, after {@link record}. */
   events: readonly EvaluationTriggerEvent[];
+}
+
+/**
+ * The five OHLCV axes projected for each observed period when warming the
+ * live bar series — the same axis set the single-point mirror booked, now
+ * backed by the candle repository's real history.
+ */
+const BAR_AXES: readonly BarAxis[] = ['open', 'high', 'low', 'close', 'volume'];
+
+/**
+ * Pre-warm the `(period, axis) → SeriesView` map the evaluation context reads
+ * for OHLCV / `Price` operands, backed by the real candle history.
+ *
+ * For every period the symbol has an observed candle on (per the live mirror),
+ * loads a full-window `BarSeriesView` for each of the five OHLCV axes from the
+ * candle repository via {@link prewarmBarSeries}. Series operators (`Moving` /
+ * `Channel` / `Crossing`) then walk the actual stored bars instead of the
+ * single live-mirror point that made them never fire (#499).
+ *
+ * The single-point live mirror ({@link LiveEvaluationLookups.bookSeriesFor}) is
+ * the base map, overridden per `(period, axis)` only where the repository holds
+ * history: in production the poll loop persists each candle before fan-out, so
+ * the repository is always at least as fresh as the mirror; the mirror stays
+ * the fallback for the current bar when the repository has no row yet (e.g. the
+ * forming bar under evaluation), so snapshot / comparison operands that read
+ * the latest value keep resolving. Returns an empty map for an unobserved
+ * symbol — operators see length-0 series and treat the operand as "no data yet".
+ *
+ * `upperTs` is the firing observation's timestamp: the loaded window is
+ * `[0, upperTs]` (inclusive) so a repository row stored *after* this
+ * observation — a later bar the store already holds, or leftover data from
+ * another run against a shared store — never becomes the series' newest point
+ * and is never mistaken for the current bar.
+ */
+async function warmLiveBarSeries(
+  candleRepository: CandleRepository,
+  symbolId: string,
+  upperTs: number,
+  lookups: LiveEvaluationLookups,
+): Promise<ReadonlyMap<string, SeriesView>> {
+  const merged = new Map<string, SeriesView>(lookups.bookSeriesFor(symbolId));
+  const required = lookups
+    .observedPeriods(symbolId)
+    .flatMap((period) => BAR_AXES.map((axis) => ({ period, axis })));
+  const history = await prewarmBarSeries(
+    candleRepository,
+    symbolId,
+    { from: 0, to: upperTs + 1 },
+    required,
+  );
+  for (const [key, view] of history) {
+    if (view.length > 0) merged.set(key, view);
+  }
+  return merged;
 }
 
 /**
