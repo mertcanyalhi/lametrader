@@ -88,11 +88,12 @@ const flushMicrotasks = async (): Promise<void> => {
 async function build() {
   const watchlist = new InMemoryWatchlistRepository([BTC]);
   const candles = new InMemoryCandleRepository();
-  // A cursor exists so polling resumes; the source grows two bars past it.
+  // A cursor exists so polling resumes; the source finalizes the last stored bar
+  // (a partial close) and grows one bar past it, so both re-emit on the poll.
   await candles.save(BTC.id, Period.OneHour, [
     candle(0, 10),
     candle(HOUR, 20),
-    candle(2 * HOUR, 30),
+    candle(2 * HOUR, 25),
   ]);
   const source = new InMemoryMarketDataSource(
     [{ ...BTC }],

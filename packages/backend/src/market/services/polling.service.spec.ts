@@ -137,7 +137,9 @@ describe('PollingService.poll', () => {
   });
 
   it('emits one CandleEvent per fetched candle, final when the bar has closed', async () => {
-    await repo.save(BTC.id, Period.OneHour, [candle(0)]);
+    // A changed resume bar (partial close now finalized) so it still emits and
+    // the `final` flag is exercised across all three fetched candles.
+    await repo.save(BTC.id, Period.OneHour, [{ ...candle(0), close: 1.1 }]);
     const source = new RecordingSource({ [BTC.id]: [candle(0), candle(HOUR), candle(2 * HOUR)] });
     const events: CandleEvent[] = [];
     const service = new PollingService(
@@ -155,6 +157,25 @@ describe('PollingService.poll', () => {
       { id: BTC.id, period: Period.OneHour, candle: candle(HOUR), final: true },
       { id: BTC.id, period: Period.OneHour, candle: candle(2 * HOUR), final: false },
     ]);
+  });
+
+  it('does not re-emit the resume bar when the provider returns it unchanged (closed market)', async () => {
+    // Closed market: the inclusive `from: latest.time` window re-returns only the
+    // last stored bar, byte-identical. It must not be re-emitted as a fresh tick.
+    await repo.save(BTC.id, Period.OneHour, [candle(0)]);
+    const source = new RecordingSource({ [BTC.id]: [candle(0)] });
+    const events: CandleEvent[] = [];
+    const service = new PollingService(
+      [source],
+      repo,
+      new InMemoryWatchlistRepository([BTC]),
+      registry,
+      { onCandle: (e) => events.push(e), intervals: allIntervals(1000), now: () => NOW },
+    );
+
+    await service.poll();
+
+    expect(events).toEqual([]);
   });
 
   it('skips a symbol+period with no stored candles (no fetch, no emit)', async () => {
@@ -176,7 +197,8 @@ describe('PollingService.poll', () => {
   });
 
   it('fans each polled candle to an added listener alongside the base sink', async () => {
-    await repo.save(BTC.id, Period.OneHour, [candle(0)]);
+    // Seed a partial H:00 bar so the re-returned resume bar differs and still emits.
+    await repo.save(BTC.id, Period.OneHour, [{ ...candle(0), close: 1.1 }]);
     const source = new RecordingSource({ [BTC.id]: [candle(0), candle(HOUR)] });
     const base: CandleEvent[] = [];
     const cascaded: CandleEvent[] = [];
@@ -220,7 +242,8 @@ describe('PollingService.poll', () => {
   });
 
   it('catches a MarketDataError on one symbol and still polls the others', async () => {
-    await repo.save(BTC.id, Period.OneHour, [candle(0)]);
+    // Partial H:00 bar so BTC's re-returned resume bar differs and still emits.
+    await repo.save(BTC.id, Period.OneHour, [{ ...candle(0), close: 1.1 }]);
     await repo.save(ETH.id, Period.OneHour, [candle(0)]);
     const source = new RecordingSource({ [BTC.id]: [candle(0), candle(HOUR)] }, [ETH.id]);
     const events: CandleEvent[] = [];

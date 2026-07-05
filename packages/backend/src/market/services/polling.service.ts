@@ -1,4 +1,5 @@
 import {
+  type Candle,
   type CandleEvent,
   type CandleListener,
   type CandleRepository,
@@ -197,6 +198,13 @@ export class PollingService {
       await this.candles.save(symbol.id, period, candles);
       const span = periodMillis(period);
       for (const candle of candles) {
+        // The `from: latest.time` resume window is inclusive, so the provider
+        // always re-returns the last stored bar. On a closed market that bar is
+        // unchanged, so skipping it here stops each poll re-emitting a stale
+        // candle — which would otherwise re-fire per-tick rules against the last
+        // session's price all weekend. A changed resume bar (still-forming, or a
+        // partial that just closed) differs and still emits.
+        if (candle.time === latest.time && candlesEqual(candle, latest)) continue;
         this.emit({ id: symbol.id, period, candle, final: candle.time + span <= now });
       }
     } catch (error) {
@@ -224,4 +232,19 @@ export class PollingService {
  */
 function timeoutName(period: Period): string {
   return `${TIMEOUT_PREFIX}${period}`;
+}
+
+/**
+ * Whether two candles are field-for-field identical.
+ *
+ * Candles are flat records of numbers plus a `type` discriminant (no nested
+ * objects), so a shallow own-key comparison is a full equality — used to detect
+ * the unchanged resume bar an inclusive poll window re-returns.
+ */
+function candlesEqual(a: Candle, b: Candle): boolean {
+  const ax = a as unknown as Record<string, unknown>;
+  const bx = b as unknown as Record<string, unknown>;
+  const keys = Object.keys(ax);
+  if (keys.length !== Object.keys(bx).length) return false;
+  return keys.every((key) => ax[key] === bx[key]);
 }
