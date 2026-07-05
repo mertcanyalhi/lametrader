@@ -1,7 +1,6 @@
 import { yupResolver } from '@hookform/resolvers/yup';
 import {
   type IndicatorInstance,
-  type Period,
   type Rule,
   RuleScopeKind,
   type StateValue,
@@ -112,13 +111,10 @@ export function RuleEditorDialog({
     indicatorStateFieldsByKey[definition.key] = definition.state;
   }
 
-  // Lazy: assume each instance is computed at the symbol's first watched
-  // period; the IndicatorInstance shape doesn't carry the explicit period,
-  // and the indicator-binding contract narrows by `Interval` on the row.
-  const instancePeriods: InstancePeriods = computeInstancePeriods(
-    indicators,
-    watchedSymbols.flatMap((symbol) => symbol.periods),
-  );
+  // Per-instance periods are unknown — the `IndicatorInstance` shape carries
+  // no period — so the row's `Interval` no longer filters (and so can no longer
+  // silently drop) a selected indicator. See `computeInstancePeriods`.
+  const instancePeriods: InstancePeriods = computeInstancePeriods(indicators);
 
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -508,22 +504,25 @@ function topLevelKey(path: string): string {
 }
 
 /**
- * Best-effort lookup of which {@link Period} each indicator instance is
- * computed at — used to filter the row's indicator dropdown by `Interval`.
+ * Map each indicator instance to the `Period` it is computed at — the
+ * lookup the row's `Interval` filters the indicator dropdown by (leaf-editor's
+ * `filterIndicatorsByPeriod`).
  *
- * The `IndicatorInstance` shape doesn't carry the period; we default to the
- * first watched period across all symbols as a sensible heuristic. When a
- * future attach API stamps the period on the instance directly, swap this
- * for a direct read.
+ * The {@link IndicatorInstance} shape carries no period, so the period is
+ * genuinely unknown; every instance maps to `undefined`. We deliberately do
+ * NOT fabricate one: an earlier heuristic stamped every instance with the
+ * first watched period, which made a selected indicator vanish from the
+ * dropdown the moment the user picked any other `Interval` — the filter
+ * dropped the (wrongly-periodised) instance, blanking the instance +
+ * state-field Selects even though the operand still referenced it.
+ * `filterIndicatorsByPeriod` treats an unknown period as "always show", so a
+ * selection now survives an interval change; the filter still narrows by a
+ * real period once the attach API stamps one on the instance.
  */
-function computeInstancePeriods(
-  indicators: IndicatorInstance[],
-  watchedPeriods: Period[],
-): InstancePeriods {
+export function computeInstancePeriods(indicators: IndicatorInstance[]): InstancePeriods {
   const result: InstancePeriods = {};
-  const fallback = watchedPeriods[0];
   for (const instance of indicators) {
-    result[instance.id] = fallback;
+    result[instance.id] = undefined;
   }
   return result;
 }

@@ -3,6 +3,7 @@ import {
   ActionKind,
   ComparisonOperator,
   ConditionNodeKind,
+  type IndicatorInstance,
   LeafConditionFamily,
   NotificationChannel,
   OperandKind,
@@ -17,7 +18,7 @@ import { userEvent } from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeDraftRule } from '../../lib/draft-rule.js';
-import { RuleEditorDialog } from './rule-editor-dialog';
+import { computeInstancePeriods, RuleEditorDialog } from './rule-editor-dialog';
 
 /** A wrapper that wires the dialog with a fresh TanStack client + Theme. */
 function Harness({ initial }: { initial: Rule }): ReactNode {
@@ -201,5 +202,20 @@ describe('RuleEditorDialog', () => {
         (init as RequestInit | undefined)?.method === 'POST',
     );
     expect(postCall).toBeDefined();
+  });
+});
+
+describe('computeInstancePeriods', () => {
+  it('maps every indicator instance to an unknown period rather than fabricating one, so the row Interval never hides a selected indicator', () => {
+    const instances: IndicatorInstance[] = [
+      { id: 'sma-1', indicatorKey: 'sma', version: 1, inputs: {}, summary: 'SMA(14)' },
+      { id: 'sma-2', indicatorKey: 'sma', version: 1, inputs: {}, summary: 'SMA(50)' },
+    ];
+
+    expect(computeInstancePeriods(instances)).toEqual({ 'sma-1': undefined, 'sma-2': undefined });
+  });
+
+  it('returns an empty map when there are no indicator instances', () => {
+    expect(computeInstancePeriods([])).toEqual({});
   });
 });
