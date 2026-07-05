@@ -62,8 +62,17 @@ export interface TriggerDispatcherDeps {
    * own `profileId`; the dispatcher still passes the firing rule's value here
    * — both are guaranteed to match because the candidate query filters rules
    * by `event.profileId`.
+   *
+   * May return the context synchronously or as a `Promise` — the live wire-up
+   * pre-warms a real multi-bar OHLCV series from the async candle repository
+   * before returning it (#499), while unit fakes stay synchronous. The
+   * dispatcher awaits either shape.
    */
-  buildContext: (event: RuleEvent, firingSymbolId: string, profileId: string) => EvaluationContext;
+  buildContext: (
+    event: RuleEvent,
+    firingSymbolId: string,
+    profileId: string,
+  ) => EvaluationContext | Promise<EvaluationContext>;
 }
 
 /**
@@ -189,7 +198,7 @@ export class TriggerDispatcher {
 
     for (const { rule, firingSymbolId } of candidates) {
       candidateIds.push(rule.id);
-      const ctx = this.deps.buildContext(event, firingSymbolId, rule.profileId);
+      const ctx = await this.deps.buildContext(event, firingSymbolId, rule.profileId);
       if (!evaluateCondition(rule.condition, ctx, rule.id)) {
         droppedCandidates.push({ ruleId: rule.id, reason: 'condition-false' });
         continue;

@@ -53,6 +53,23 @@ describe('LiveEvaluationLookups.recordCandle (period-keyed)', () => {
   });
 });
 
+describe('LiveEvaluationLookups.observedPeriods', () => {
+  it('returns the distinct periods recorded for a symbol via recordCandle', () => {
+    const lookups = new LiveEvaluationLookups(new InMemoryStateRepository());
+    lookups.recordCandle(candleEvent('BTCUSDT', Period.OneHour, 49900));
+    lookups.recordCandle(candleEvent('BTCUSDT', Period.OneMinute, 50010));
+    lookups.recordCandle(candleEvent('BTCUSDT', Period.OneMinute, 50020));
+
+    expect(lookups.observedPeriods('BTCUSDT')).toEqual([Period.OneHour, Period.OneMinute]);
+  });
+
+  it('returns an empty array for a symbol with no recorded candle', () => {
+    const lookups = new LiveEvaluationLookups(new InMemoryStateRepository());
+
+    expect(lookups.observedPeriods('BTCUSDT')).toEqual([]);
+  });
+});
+
 describe('LiveEvaluationLookups.warmInitialState', () => {
   it('populates the per-symbol mirror so getSymbolState returns the seeded value', () => {
     const state = new InMemoryStateRepository();
