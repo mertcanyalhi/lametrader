@@ -5,11 +5,13 @@ import { IndicatorService } from '../indicators/indicator.service.js';
 import { IndicatorRegistry } from '../indicators/indicator-registry.js';
 import { movingAverage } from '../indicators/sma.js';
 import { IndicatorSeriesStore } from './indicator-series-store.js';
+import type { SeriesPoint } from './series.types.js';
 
 const SYMBOL = 'BTC';
 const OTHER = 'ETH';
 const PERIOD = Period.OneMinute;
 const INSTANCE_ID = 'sma-3-inst';
+const NO_UPPER_BOUND = Number.MAX_SAFE_INTEGER;
 
 const candle = (time: number, close: number): Candle => ({
   type: SymbolType.Crypto,
@@ -22,6 +24,13 @@ const candle = (time: number, close: number): Candle => ({
   quoteVolume: close,
   trades: 1,
 });
+
+/** Drain an async backward walk into an array for full-payload assertions. */
+async function collect<T>(iter: AsyncIterableIterator<T>): Promise<T[]> {
+  const out: T[] = [];
+  for await (const item of iter) out.push(item);
+  return out;
+}
 
 const setup = async (): Promise<{
   repo: InMemoryCandleRepository;
@@ -53,18 +62,9 @@ const setup = async (): Promise<{
   indicators.register(movingAverage);
   const service = new IndicatorService(indicators, watchlist, repo);
 
-  const store = new IndicatorSeriesStore(service);
-  await store.warmup({
+  const store = new IndicatorSeriesStore(repo, service);
+  store.register({
     instanceId: INSTANCE_ID,
-    symbolId: SYMBOL,
-    period: PERIOD,
-    indicatorKey: 'sma',
-    inputs: { length: 3, source: 'close' },
-  });
-  await store.warmup({
-    instanceId: INSTANCE_ID,
-    symbolId: OTHER,
-    period: PERIOD,
     indicatorKey: 'sma',
     inputs: { length: 3, source: 'close' },
   });
@@ -73,43 +73,46 @@ const setup = async (): Promise<{
 };
 
 describe('IndicatorSeriesStore', () => {
-  it('warmup rebuilds the series from candle history so latest() matches the SMA over the seeded bars for that symbol+period', async () => {
+  it('resolves a registered instance to a lazy view whose latest matches the SMA over the seeded bars', async () => {
     const { store } = await setup();
+    const view = store.series(SYMBOL, PERIOD, INSTANCE_ID, 'value', NO_UPPER_BOUND);
 
-    // SMA(3) over BTC [10,20,30,40,50] — last row is mean(30,40,50) = 40.
-    expect(store.latest(SYMBOL, PERIOD, INSTANCE_ID, 'value')).toEqual({
-      type: StateValueType.Number,
-      value: 40,
+    // SMA(3) over BTC [10,20,30,40,50] — newest row is mean(30,40,50) = 40.
+    expect(await view.asOf(NO_UPPER_BOUND)).toEqual({
+      ts: 300_000,
+      value: { type: StateValueType.Number, value: 40 },
     });
   });
 
-  it('keeps independent series per symbol under the same instanceId so latest reads the requested symbol', async () => {
+  it('keeps independent series per symbol under the same instanceId so the requested symbol is read', async () => {
     const { store } = await setup();
+    const view = store.series(OTHER, PERIOD, INSTANCE_ID, 'value', NO_UPPER_BOUND);
 
     // Same instanceId, different symbol — ETH is flat at 100, so its SMA(3) is 100.
-    expect(store.latest(OTHER, PERIOD, INSTANCE_ID, 'value')).toEqual({
-      type: StateValueType.Number,
-      value: 100,
+    expect(await view.asOf(NO_UPPER_BOUND)).toEqual({
+      ts: 300_000,
+      value: { type: StateValueType.Number, value: 100 },
     });
   });
 
-  it('onBar appends a fresh row that matches what an SMA would compute over the warmup + new bar combined', async () => {
-    const { repo, store } = await setup();
-    const newBar = candle(6 * 60_000, 60);
-    await repo.save(SYMBOL, PERIOD, [newBar]);
-
-    await store.onBar(SYMBOL, PERIOD, newBar);
-
-    // SMA(3) of BTC [40,50,60] = 50.
-    expect(store.latest(SYMBOL, PERIOD, INSTANCE_ID, 'value')).toEqual({
-      type: StateValueType.Number,
-      value: 50,
-    });
-  });
-
-  it('latest returns null for a slot that was never warmed', async () => {
+  it('returns an empty view for an instance that was never registered', async () => {
     const { store } = await setup();
+    const view = store.series(SYMBOL, PERIOD, 'unknown-inst', 'value', NO_UPPER_BOUND);
 
-    expect(store.latest('DOGE', PERIOD, INSTANCE_ID, 'value')).toBeNull();
+    expect(await collect(view.backwardWalk())).toEqual([]);
+  });
+
+  it('bounds the resolved series above by before, excluding a bar stored at or after it', async () => {
+    const { store } = await setup();
+    // Bound below the 300s bar — only bars with time < 300_000 are read.
+    const view = store.series(SYMBOL, PERIOD, INSTANCE_ID, 'value', 300_000);
+    const walked: SeriesPoint[] = await collect(view.backwardWalk());
+
+    // SMA(3) over [10,20,30,40]: 240s = mean(20,30,40) = 30, 180s = mean(10,20,30) = 20;
+    // the 300s bar (close 50) is excluded, so it never becomes the newest point.
+    expect(walked).toEqual([
+      { ts: 240_000, value: { type: StateValueType.Number, value: 30 } },
+      { ts: 180_000, value: { type: StateValueType.Number, value: 20 } },
+    ]);
   });
 });

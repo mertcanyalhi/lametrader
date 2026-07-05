@@ -56,11 +56,9 @@ const seed = async () => {
   indicators.register(movingAverage);
   const indicatorService = new IndicatorService(indicators, watchlist, repo);
 
-  const indicatorStore = new IndicatorSeriesStore(indicatorService);
-  await indicatorStore.warmup({
+  const indicatorStore = new IndicatorSeriesStore(repo, indicatorService);
+  indicatorStore.register({
     instanceId: INSTANCE_ID,
-    symbolId: SYMBOL,
-    period: PERIOD,
     indicatorKey: 'sma',
     inputs: { length: 3, source: 'close' },
   });
@@ -86,6 +84,7 @@ const seed = async () => {
     profileId: PROFILE,
     candleRepository: repo,
     indicatorStore,
+    before: barWindow.to,
     barSeries,
     getSymbolState: (_profileId, sym, key) => (sym === SYMBOL ? (symbolState[key] ?? null) : null),
     getGlobalState: (_profileId, key) => globalState[key] ?? null,
@@ -185,6 +184,7 @@ describe('buildEvaluationContext', () => {
     const indicators = new IndicatorRegistry();
     indicators.register(movingAverage);
     const indicatorStore = new IndicatorSeriesStore(
+      repo,
       new IndicatorService(indicators, watchlist, repo),
     );
 
@@ -199,6 +199,7 @@ describe('buildEvaluationContext', () => {
       profileId: PROFILE,
       candleRepository: repo,
       indicatorStore,
+      before: barWindow.to,
       barSeries,
       getSymbolState: () => null,
       getGlobalState: () => null,
@@ -233,6 +234,7 @@ describe('buildEvaluationContext', () => {
     const indicators = new IndicatorRegistry();
     indicators.register(movingAverage);
     const indicatorStore = new IndicatorSeriesStore(
+      repo,
       new IndicatorService(indicators, watchlist, repo),
     );
 
@@ -247,6 +249,7 @@ describe('buildEvaluationContext', () => {
       candleRepository: repo,
       // No tick has been observed for the symbol.
       indicatorStore,
+      before: barWindow.to,
       barSeries,
       getSymbolState: () => null,
       getGlobalState: () => null,
@@ -295,7 +298,7 @@ describe('buildEvaluationContext', () => {
     const indicators = new IndicatorRegistry();
     indicators.register(movingAverage);
     const indicatorService = new IndicatorService(indicators, watchlist, repo);
-    const indicatorStore = new IndicatorSeriesStore(indicatorService);
+    const indicatorStore = new IndicatorSeriesStore(repo, indicatorService);
 
     const prevSymbolStates: Record<string, StateValue> = {
       mode: { type: StateValueType.String, value: 'disarmed' },
@@ -314,6 +317,7 @@ describe('buildEvaluationContext', () => {
       profileId: PROFILE,
       candleRepository: repo,
       indicatorStore,
+      before: barWindow.to,
       barSeries,
       getSymbolState: () => null,
       getGlobalState: () => null,

@@ -21,8 +21,15 @@ export interface EvaluationContextDeps {
   profileId: string;
   /** Read-side candle store for OHLCV operands. */
   candleRepository: CandleRepository;
-  /** In-memory indicator series store (`IndicatorRef` operand). */
+  /** Indicator series store — builds the lazy `IndicatorRef` view per read. */
   indicatorStore: IndicatorSeriesStore;
+  /**
+   * Exclusive upper bound (epoch ms) for every series this context reads — the
+   * firing observation's timestamp + 1. Bounds the lazy `IndicatorRef` view so a
+   * candle stored after this observation can't leak in as the indicator's newest
+   * point, mirroring the bar pagers (which bake the same `+ 1` in when built).
+   */
+  before: number;
   /** Read for `SymbolStateRef` operands; `null` when the key isn't set. */
   getSymbolState(profileId: string, symbolId: string, key: string): StateValue | null;
   /** Read for `GlobalStateRef` operands; `null` when the key isn't set. */
@@ -89,14 +96,17 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
           const view = barSeriesFor(barSeries, interval, operandToAxis(operand));
           return view ? ((await view.asOf(Number.MAX_SAFE_INTEGER))?.value ?? null) : null;
         }
-        case OperandKind.IndicatorRef:
+        case OperandKind.IndicatorRef: {
           if (interval === undefined) return null;
-          return deps.indicatorStore.latest(
+          const view = deps.indicatorStore.series(
             deps.symbolId,
             interval,
             operand.instanceId,
             operand.stateKey,
+            deps.before,
           );
+          return (await view.asOf(Number.MAX_SAFE_INTEGER))?.value ?? null;
+        }
         case OperandKind.SymbolStateRef:
           return deps.getSymbolState(deps.profileId, deps.symbolId, operand.key);
         case OperandKind.GlobalStateRef:
@@ -126,6 +136,7 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
             interval,
             operand.instanceId,
             operand.stateKey,
+            deps.before,
           );
           // A series with a second-newest point yields it (walk-and-count, since
           // the view carries no length); otherwise fall to the optional hook for
@@ -160,6 +171,7 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
             interval,
             operand.instanceId,
             operand.stateKey,
+            deps.before,
           );
         case OperandKind.SymbolStateRef: {
           const v = deps.getSymbolState(deps.profileId, deps.symbolId, operand.key);
