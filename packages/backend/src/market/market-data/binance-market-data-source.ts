@@ -1,12 +1,15 @@
 import {
   type BackfillRange,
   type CandleBatch,
+  type CandleFetchProgress,
   type CryptoCandle,
   type Instrument,
   type MarketDataSource,
   Period,
+  periodMillis,
   SymbolType,
 } from '@lametrader/core';
+import { Logger } from '@nestjs/common';
 import { CandleError } from '../../common/domain/candle.js';
 import { MarketDataError, symbolType } from '../../common/domain/symbol.js';
 
@@ -52,6 +55,9 @@ interface ExchangeSymbol {
  * endpoints used here are public.
  */
 export class BinanceMarketDataSource implements MarketDataSource {
+  /** Perf-trace logger for the paging loop (debug = summary, verbose = per page). */
+  private readonly logger = new Logger(BinanceMarketDataSource.name);
+
   /**
    * Binance serves crypto only.
    */
@@ -83,7 +89,12 @@ export class BinanceMarketDataSource implements MarketDataSource {
     return match ? toInstrument(match) : null;
   }
 
-  async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<CandleBatch> {
+  async fetchCandles(
+    id: string,
+    period: Period,
+    range?: BackfillRange,
+    onProgress?: CandleFetchProgress,
+  ): Promise<CandleBatch> {
     if (symbolType(id) !== SymbolType.Crypto) return { candles: [], complete: true };
     const interval = BINANCE_INTERVAL[period];
     if (!interval) {
@@ -98,15 +109,29 @@ export class BinanceMarketDataSource implements MarketDataSource {
     // Cleared only if the cursor fails to advance (a provider anomaly) — a
     // normal walk always terminates at the natural end of the series.
     let complete = true;
+    // Estimated total for progress, fixed after the first page (whose oldest
+    // candle is the earliest the provider holds); 0 until then.
+    let estimatedTotal = 0;
+
+    // Perf trace: split wall time into network (awaiting fetch) vs CPU (parsing
+    // rows into candles + growing `out`) so a slow backfill can be attributed.
+    const startedAt = performance.now();
+    let page = 0;
+    let fetchMs = 0;
+    let parseMs = 0;
 
     try {
       while (true) {
+        const fetchAt = performance.now();
         const rows = await fetchJson<BinanceKline[]>(
           `${BASE}/api/v3/klines?symbol=${encodeURIComponent(ticker)}` +
             `&interval=${interval}&startTime=${startTime}&limit=${KLINES_LIMIT}` +
             (endTime !== undefined ? `&endTime=${endTime}` : ''),
         );
+        const pageFetchMs = performance.now() - fetchAt;
+        fetchMs += pageFetchMs;
         if (rows.length === 0) break;
+        const parseAt = performance.now();
         let reachedEnd = false;
         for (const row of rows) {
           const candle = toCandle(row);
@@ -116,6 +141,20 @@ export class BinanceMarketDataSource implements MarketDataSource {
           }
           out.push(candle);
         }
+        const pageParseMs = performance.now() - parseAt;
+        parseMs += pageParseMs;
+        page += 1;
+        if (page === 1) {
+          // The first page starts at the earliest available candle, so its oldest
+          // row anchors the estimate: (end − earliest) / one period.
+          const earliest = rows[0]?.[0] ?? startTime;
+          const end = endTime ?? Date.now();
+          estimatedTotal = Math.max(1, Math.ceil((end - earliest) / periodMillis(period)));
+        }
+        onProgress?.(out.length, Math.max(estimatedTotal, out.length));
+        this.logger.verbose(
+          `page ${page} ${id} ${period}: ${rows.length} rows → ${out.length} candles, fetch ${pageFetchMs.toFixed(0)}ms, parse ${pageParseMs.toFixed(1)}ms`,
+        );
         // Reached the requested upper bound, or a short page means the provider
         // ran out of data — either way the series is fully walked.
         if (reachedEnd || rows.length < KLINES_LIMIT) break;
@@ -134,6 +173,9 @@ export class BinanceMarketDataSource implements MarketDataSource {
         { cause },
       );
     }
+    this.logger.debug(
+      `fetchCandles ${id} ${period}: ${out.length} candles / ${page} pages in ${(performance.now() - startedAt).toFixed(0)}ms (fetch ${fetchMs.toFixed(0)}ms, parse ${parseMs.toFixed(0)}ms)`,
+    );
     return { candles: out, complete };
   }
 }

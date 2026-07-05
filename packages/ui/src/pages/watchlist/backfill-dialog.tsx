@@ -1,4 +1,4 @@
-import type { Period } from '@lametrader/core';
+import { BackfillPhase, type Period } from '@lametrader/core';
 import {
   Button,
   Checkbox,
@@ -27,10 +27,15 @@ import { sortPeriods } from '../../lib/periods.js';
 /** Scoped logger for the backfill flow. */
 const log = getLogger('backfill-dialog');
 
-/** Progress as a 0–100 percentage for the determinate bar. */
+/** Progress as a 0–100 percentage for the determinate bar (clamped; the fetch estimate can be exceeded). */
 function percent(progress: BackfillProgress | null): number {
   if (!progress || progress.total <= 0) return 0;
-  return Math.round((progress.saved / progress.total) * 100);
+  return Math.min(100, Math.round((progress.done / progress.total) * 100));
+}
+
+/** Human label for the active phase shown beside the bar. */
+function phaseLabel(phase: BackfillPhase): string {
+  return phase === BackfillPhase.Fetching ? 'Fetching' : 'Saving';
 }
 
 /** A backfilled candle `time` (epoch ms) as a calendar date and time. */
@@ -314,9 +319,14 @@ function PeriodStatus({
   }
   return (
     <Flex align="center" justify="end" gap="2">
+      {job.progress ? (
+        <Text size="1" color="gray">
+          {phaseLabel(job.progress.phase)}
+        </Text>
+      ) : null}
       <Progress value={percent(job.progress)} className="w-32" />
       <Text size="1" color="gray" className="tabular-nums">
-        {job.progress?.saved ?? 0} / {job.progress?.total ?? 0}
+        {job.progress?.done ?? 0} / {job.progress?.total ?? 0}
       </Text>
     </Flex>
   );

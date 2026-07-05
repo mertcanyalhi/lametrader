@@ -2,6 +2,7 @@ import {
   type BackfillRange,
   type Candle,
   type CandleBatch,
+  type CandleFetchProgress,
   type EquityCandle,
   type FxCandle,
   type Instrument,
@@ -175,7 +176,12 @@ export class YahooMarketDataSource implements MarketDataSource {
     }
   }
 
-  async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<CandleBatch> {
+  async fetchCandles(
+    id: string,
+    period: Period,
+    range?: BackfillRange,
+    onProgress?: CandleFetchProgress,
+  ): Promise<CandleBatch> {
     const type = symbolType(id);
     if (!this.types.includes(type)) return { candles: [], complete: true };
     const interval = YAHOO_INTERVAL[period];
@@ -201,6 +207,8 @@ export class YahooMarketDataSource implements MarketDataSource {
       // comes back with partial/zero volume, and ingesting it would overwrite
       // those older candles' correct values. Drop anything outside `[from, to)`.
       const candles = range ? out.filter((c) => c.time >= range.from && c.time < range.to) : out;
+      // Single-response source: one progress frame with the full count as the total.
+      onProgress?.(candles.length, candles.length);
       // Yahoo's chart returns the whole requested window in one response — no
       // paging cap of ours applies, so the batch is always complete.
       return { candles, complete: true };

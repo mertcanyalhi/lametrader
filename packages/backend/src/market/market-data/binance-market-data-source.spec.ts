@@ -84,6 +84,36 @@ describe('BinanceMarketDataSource.fetchCandles', () => {
     expect(urls[0]?.includes('endTime=250')).toBe(true);
   });
 
+  it('reports retrieval progress per page against an estimate from the first page', async () => {
+    const HOUR = 3_600_000;
+    // Two full pages (earliest candle at t=0) then a short page ends history.
+    const p1 = Array.from({ length: 1000 }, (_, i) => klineRow(i * HOUR));
+    const p2 = Array.from({ length: 1000 }, (_, i) => klineRow((1000 + i) * HOUR));
+    const p3 = [klineRow(2000 * HOUR)];
+    let call = 0;
+    globalThis.fetch = jest.fn(async () => {
+      const rows = [p1, p2, p3][Math.min(call, 2)];
+      call += 1;
+      return { ok: true, json: async () => rows } as Response;
+    }) as unknown as typeof fetch;
+    const source = new BinanceMarketDataSource();
+    const frames: Array<[number, number]> = [];
+
+    await source.fetchCandles(
+      'crypto:BTCUSDT',
+      Period.OneHour,
+      { from: 0, to: 3000 * HOUR },
+      (done, total) => frames.push([done, total]),
+    );
+
+    // total estimate = ceil((to − earliest) / 1h) = 3000; done is cumulative.
+    expect(frames).toEqual([
+      [1000, 3000],
+      [2000, 3000],
+      [2001, 3000],
+    ]);
+  });
+
   it('rejects a period Binance has no kline interval for, without a network call', async () => {
     const fetchSpy = jest.fn();
     globalThis.fetch = fetchSpy as unknown as typeof fetch;

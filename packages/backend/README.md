@@ -115,7 +115,7 @@ Backfill historical OHLC candles for a **watched** symbol+period into MongoDB an
 A candle is the OHLC base `{ type, time, open, high, low, close }` plus per-asset-class fields — crypto adds `volume`/`quoteVolume`/`trades`, equities add `volume`, FX adds none; `time` is the open time in epoch ms.
 `from`/`to` are epoch ms; omit both on a backfill to fetch the provider's deepest available history. The `period` must be one of the symbol's watched periods.
 
-A backfill runs **asynchronously** (ADR-0008): `POST` validates synchronously, starts the work in the background, and returns **202** with a job `{ id, symbolId, period, status, progress, summary, error }` (`status` is `running` | `succeeded` | `failed`; `progress` is `{ saved, total }` once a chunk lands; `summary` is set on success; `error` on failure).
+A backfill runs **asynchronously** (ADR-0008): `POST` validates synchronously, starts the work in the background, and returns **202** with a job `{ id, symbolId, period, status, progress, summary, error }` (`status` is `running` | `succeeded` | `failed`; `progress` is `{ phase, done, total }` — `phase` is `fetching` (retrieving from the provider, `total` estimated) then `saving` (persisting, `total` = actual fetched count), `done` the count so far; `summary` is set on success; `error` on failure).
 Poll `GET …/jobs/:jobId` or stream the WebSocket for updates.
 Synchronous client errors are preserved: **404** when the symbol isn't watched, **400** for a period it doesn't watch or an invalid range, **409** when a backfill for that symbol+period is already running.
 An upstream provider failure does not fail the POST — the job goes `failed` with the provider's reason in `error`.

@@ -136,7 +136,7 @@ describe('backfill API (e2e)', () => {
       symbolId: BTC.id,
       period: '1h',
       status: 'succeeded',
-      progress: { saved: 3, total: 3 },
+      progress: { phase: 'saving', done: 3, total: 3 },
       summary: {
         id: BTC.id,
         period: '1h',

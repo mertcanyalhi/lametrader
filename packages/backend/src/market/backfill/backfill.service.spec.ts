@@ -1,4 +1,5 @@
 import {
+  BackfillPhase,
   type CryptoCandle,
   type MarketDataSource,
   Period,
@@ -120,17 +121,20 @@ describe('BackfillService', () => {
     });
   });
 
-  it('reports progress per 500-candle chunk', async () => {
+  it('reports a fetching frame then a saving frame per 500-candle chunk', async () => {
     const candles = Array.from({ length: 1200 }, (_, i) => candle((i + 1) * 1000));
     const service = serviceWith(candles);
     const progress: BackfillProgress[] = [];
 
     await service.backfill(BTC.id, Period.OneHour, undefined, (p) => progress.push(p));
 
+    // The in-memory source is single-response: one Fetching frame with the full
+    // count, then the save loop's Saving frames per chunk.
     expect(progress).toEqual([
-      { saved: 500, total: 1200 },
-      { saved: 1000, total: 1200 },
-      { saved: 1200, total: 1200 },
+      { phase: BackfillPhase.Fetching, done: 1200, total: 1200 },
+      { phase: BackfillPhase.Saving, done: 500, total: 1200 },
+      { phase: BackfillPhase.Saving, done: 1000, total: 1200 },
+      { phase: BackfillPhase.Saving, done: 1200, total: 1200 },
     ]);
   });
 

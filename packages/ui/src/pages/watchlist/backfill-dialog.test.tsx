@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { Period } from '@lametrader/core';
+import { BackfillPhase, Period } from '@lametrader/core';
 import { Theme } from '@radix-ui/themes';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -131,13 +131,18 @@ describe('BackfillDialog', () => {
     });
 
     const socket = await latestSocket();
-    act(() => socket.emit({ ...runningJob('job-1'), progress: { saved: 1, total: 3 } }));
+    act(() =>
+      socket.emit({
+        ...runningJob('job-1'),
+        progress: { phase: BackfillPhase.Fetching, done: 1, total: 3 },
+      }),
+    );
     await screen.findByRole('progressbar');
     act(() =>
       socket.emit({
         ...runningJob('job-1'),
         status: BackfillJobStatus.Succeeded,
-        progress: { saved: 3, total: 3 },
+        progress: { phase: BackfillPhase.Saving, done: 3, total: 3 },
         summary: {
           id: BTC_ID,
           period: Period.OneHour,
@@ -178,7 +183,12 @@ describe('BackfillDialog', () => {
       await user.click(screen.getByRole('button', { name: 'Start backfill' }));
     });
     const socket = await latestSocket();
-    act(() => socket.emit({ ...runningJob('job-1'), progress: { saved: 1, total: 3 } }));
+    act(() =>
+      socket.emit({
+        ...runningJob('job-1'),
+        progress: { phase: BackfillPhase.Fetching, done: 1, total: 3 },
+      }),
+    );
 
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Start backfill' })).toBeDisabled(),
@@ -198,7 +208,7 @@ describe('BackfillDialog', () => {
       socket.emit({
         ...runningJob('job-1'),
         status: BackfillJobStatus.Succeeded,
-        progress: { saved: 3, total: 3 },
+        progress: { phase: BackfillPhase.Saving, done: 3, total: 3 },
         summary: {
           id: BTC_ID,
           period: Period.OneHour,
@@ -237,7 +247,7 @@ describe('BackfillDialog', () => {
       firstSocket.emit({
         ...runningJob('job-1'),
         status: BackfillJobStatus.Failed,
-        progress: { saved: 1, total: 3 },
+        progress: { phase: BackfillPhase.Fetching, done: 1, total: 3 },
         error: 'Binance failed to fetch candles for crypto:BTCUSDT: 418',
       }),
     );
@@ -253,7 +263,7 @@ describe('BackfillDialog', () => {
       secondSocket.emit({
         ...runningJob('job-2'),
         status: BackfillJobStatus.Succeeded,
-        progress: { saved: 3, total: 3 },
+        progress: { phase: BackfillPhase.Saving, done: 3, total: 3 },
         summary: {
           id: BTC_ID,
           period: Period.OneHour,

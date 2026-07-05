@@ -56,6 +56,7 @@ export type {
   Candle,
   CandleBatch,
   CandleEvent,
+  CandleFetchProgress,
   CandleListener,
   CandlePage,
   CandleRepository,
@@ -63,6 +64,7 @@ export type {
   EquityCandle,
   FxCandle,
 } from './types/market-data/candle.types.js';
+export { BackfillPhase } from './types/market-data/candle.types.js';
 export type {
   EnrichedSymbol,
   SymbolQuote,

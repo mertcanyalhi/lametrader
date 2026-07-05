@@ -87,6 +87,27 @@ export interface CandleBatch {
 }
 
 /**
+ * Which half of a backfill a progress frame describes: retrieving candles from
+ * the provider ({@link BackfillPhase.Fetching}, the slow paged walk) or
+ * persisting them ({@link BackfillPhase.Saving}).
+ */
+export enum BackfillPhase {
+  /** Candles are being retrieved from the provider. */
+  Fetching = 'fetching',
+  /** Retrieved candles are being persisted. */
+  Saving = 'saving',
+}
+
+/**
+ * Fire-and-forget progress callback for {@link CandleFeed.fetchCandles}, invoked
+ * after each retrieved page (or once for a single-response source).
+ *
+ * @param done - candles retrieved so far.
+ * @param total - estimated total to retrieve (see the backfill-fetch-progress spec).
+ */
+export type CandleFetchProgress = (done: number, total: number) => void;
+
+/**
  * One page of stored candles: the candles (ascending by `time`) plus the keyset
  * cursor — the `time` to pass as the next page's `from`, or `null` when this is
  * the last page.

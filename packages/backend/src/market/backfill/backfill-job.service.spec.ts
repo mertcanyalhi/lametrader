@@ -1,4 +1,10 @@
-import { type CryptoCandle, Period, SymbolType, type WatchedSymbol } from '@lametrader/core';
+import {
+  BackfillPhase,
+  type CryptoCandle,
+  Period,
+  SymbolType,
+  type WatchedSymbol,
+} from '@lametrader/core';
 import { BackfillConflictError } from '../../common/domain/candle.js';
 import { SymbolNotFoundError } from '../../common/domain/symbol.js';
 import { InMemoryMarketDataSource } from '../market-data/in-memory-market-data-source.js';
@@ -88,7 +94,7 @@ describe('BackfillJobService', () => {
       symbolId: BTC.id,
       period: Period.OneHour,
       status: BackfillJobStatus.Succeeded,
-      progress: { saved: 2, total: 2 },
+      progress: { phase: BackfillPhase.Saving, done: 2, total: 2 },
       summary: {
         id: BTC.id,
         period: Period.OneHour,
@@ -111,10 +117,16 @@ describe('BackfillJobService', () => {
 
     expect(updates.map((job) => job.status)).toEqual([
       BackfillJobStatus.Running, // created
-      BackfillJobStatus.Running, // progress tick
+      BackfillJobStatus.Running, // fetching frame
+      BackfillJobStatus.Running, // saving frame
       BackfillJobStatus.Succeeded, // terminal
     ]);
-    expect(updates[1]?.progress).toEqual({ saved: 2, total: 2 });
+    expect(updates.map((job) => job.progress)).toEqual([
+      null, // created
+      { phase: BackfillPhase.Fetching, done: 2, total: 2 },
+      { phase: BackfillPhase.Saving, done: 2, total: 2 },
+      { phase: BackfillPhase.Saving, done: 2, total: 2 }, // terminal keeps last progress
+    ]);
   });
 
   it('rejects a not-watched symbol synchronously, before creating a job', async () => {

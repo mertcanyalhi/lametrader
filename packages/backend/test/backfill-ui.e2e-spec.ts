@@ -45,7 +45,7 @@ const SERIES: CryptoCandle[] = [candle(1000), candle(2000), candle(3000)];
 /** One streamed backfill-job frame (the modal reads these bare job objects). */
 interface JobFrame {
   status: string;
-  progress: { saved: number; total: number } | null;
+  progress: { phase: string; done: number; total: number } | null;
   summary: unknown;
   error: string | null;
 }

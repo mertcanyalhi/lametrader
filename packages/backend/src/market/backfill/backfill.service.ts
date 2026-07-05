@@ -1,4 +1,5 @@
 import {
+  BackfillPhase,
   type BackfillRange,
   type CandleFeed,
   type CandlePage,
@@ -6,6 +7,7 @@ import {
   type Period,
   type WatchlistRepository,
 } from '@lametrader/core';
+import { Logger } from '@nestjs/common';
 import { CandleError } from '../../common/domain/candle.js';
 import { SymbolNotFoundError, symbolType } from '../../common/domain/symbol.js';
 import { sourceForType } from '../market-data/source-registry.js';
@@ -30,6 +32,9 @@ const CHUNK_SIZE = 500;
  * {@link import('./candles.module.js').CandlesModule}, fakes in unit tests.
  */
 export class BackfillService {
+  /** Perf-trace logger (debug = fetch/save split, verbose = per chunk). */
+  private readonly logger = new Logger(BackfillService.name);
+
   /**
    * @param sources - candle-feed providers, one or more per asset class.
    * @param candles - the candle persistence port.
@@ -80,15 +85,35 @@ export class BackfillService {
     await this.assertBackfillable(id, period);
 
     const source = sourceForType(this.sources, symbolType(id));
-    const { candles: fetched, complete } = await source.fetchCandles(id, period, range);
+    // Perf trace: time the provider fetch vs the persist loop separately so a
+    // slow backfill can be attributed to one or the other.
+    const fetchAt = performance.now();
+    // Retrieval is the slow, paged phase: report Fetching frames against the
+    // source's estimated total as each page lands.
+    const { candles: fetched, complete } = await source.fetchCandles(
+      id,
+      period,
+      range,
+      (done, total) => onProgress?.({ phase: BackfillPhase.Fetching, done, total }),
+    );
+    const fetchMs = performance.now() - fetchAt;
 
+    const saveAt = performance.now();
     let saved = 0;
     for (let i = 0; i < fetched.length; i += CHUNK_SIZE) {
       const chunk = fetched.slice(i, i + CHUNK_SIZE);
+      const chunkAt = performance.now();
       await this.candles.save(id, period, chunk);
+      this.logger.verbose(
+        `save ${id} ${period}: chunk ${saved}–${saved + chunk.length} in ${(performance.now() - chunkAt).toFixed(0)}ms`,
+      );
       saved += chunk.length;
-      onProgress?.({ saved, total: fetched.length });
+      // Persistence phase: the total is now the exact fetched count.
+      onProgress?.({ phase: BackfillPhase.Saving, done: saved, total: fetched.length });
     }
+    this.logger.debug(
+      `backfill ${id} ${period}: fetched ${fetched.length} in ${fetchMs.toFixed(0)}ms, saved ${saved} in ${(performance.now() - saveAt).toFixed(0)}ms`,
+    );
 
     const first = fetched.at(0);
     const last = fetched.at(-1);

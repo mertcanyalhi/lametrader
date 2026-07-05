@@ -1,17 +1,21 @@
-import type { Period } from '@lametrader/core';
+import type { BackfillPhase, Period } from '@lametrader/core';
 
 /**
- * Progress emitted while a backfill persists candles, after each saved chunk.
+ * Progress emitted during a backfill: one stream of frames across both phases —
+ * retrieval ({@link BackfillPhase.Fetching}, `total` estimated) then persistence
+ * ({@link BackfillPhase.Saving}, `total` = the actual fetched count).
  */
 export interface BackfillProgress {
-  /** Candles persisted so far. */
-  saved: number;
-  /** Total candles fetched for this backfill. */
+  /** Which phase this frame describes. */
+  phase: BackfillPhase;
+  /** Candles retrieved (Fetching) or persisted (Saving) so far. */
+  done: number;
+  /** Estimated total (Fetching) or actual fetched count (Saving). */
   total: number;
 }
 
 /**
- * A callback notified after each persisted chunk during a backfill.
+ * A callback notified on each progress frame during a backfill.
  */
 export type BackfillProgressListener = (progress: BackfillProgress) => void;
 

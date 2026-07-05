@@ -1,5 +1,5 @@
 import type { Period } from '../config/config.types.js';
-import type { BackfillRange, CandleBatch } from './candle.types.js';
+import type { BackfillRange, CandleBatch, CandleFetchProgress } from './candle.types.js';
 
 /**
  * The asset classes the platform can track. The value is the prefix of a
@@ -82,8 +82,17 @@ export interface CandleFeed {
    * `time` and typed for the source's asset class. With `range` omitted, returns
    * the provider's deepest available history. The {@link CandleBatch} reports
    * whether the result is complete or was capped by a provider-side limit.
+   *
+   * `onProgress` (optional) is invoked after each retrieved page with the running
+   * count and an estimated total, so a caller can report retrieval progress
+   * during the (paged, slow) walk — see the backfill-fetch-progress spec.
    */
-  fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<CandleBatch>;
+  fetchCandles(
+    id: string,
+    period: Period,
+    range?: BackfillRange,
+    onProgress?: CandleFetchProgress,
+  ): Promise<CandleBatch>;
 }
 
 /**

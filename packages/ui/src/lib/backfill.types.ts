@@ -1,4 +1,4 @@
-import type { Period } from '@lametrader/core';
+import type { BackfillPhase, Period } from '@lametrader/core';
 
 /**
  * Wire types for the backfill job resource the web app drives over HTTP + the
@@ -17,11 +17,13 @@ export enum BackfillJobStatus {
   Failed = 'failed',
 }
 
-/** Progress emitted after each persisted chunk. */
+/** A backfill progress frame, reported across both the fetch and save phases. */
 export interface BackfillProgress {
-  /** Candles persisted so far. */
-  saved: number;
-  /** Total candles fetched for this backfill. */
+  /** Which phase this frame describes (`fetching` then `saving`). */
+  phase: BackfillPhase;
+  /** Candles retrieved (fetching) or persisted (saving) so far. */
+  done: number;
+  /** Estimated total (fetching) or actual fetched count (saving). */
   total: number;
 }
 
