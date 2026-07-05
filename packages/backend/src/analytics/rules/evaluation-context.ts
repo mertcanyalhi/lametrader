@@ -23,13 +23,6 @@ export interface EvaluationContextDeps {
   candleRepository: CandleRepository;
   /** In-memory indicator series store (`IndicatorRef` operand). */
   indicatorStore: IndicatorSeriesStore;
-  /**
-   * Half-open `[from, to)` window used when projecting an OHLCV bar series.
-   *
-   * The orchestrator scopes this to the operator's needed lookback; the
-   * default in tests is "all bars stored for the symbol".
-   */
-  barWindow: { from: number; to: number };
   /** Read for `SymbolStateRef` operands; `null` when the key isn't set. */
   getSymbolState(profileId: string, symbolId: string, key: string): StateValue | null;
   /** Read for `GlobalStateRef` operands; `null` when the key isn't set. */
@@ -73,7 +66,7 @@ export interface EvaluationContextDeps {
  *
  * Resolves operands by dispatching on `kind` and reading the injected stores.
  * OHLCV bars are read from `deps.barSeries`, whose views (lazy pagers built by
- * {@link prewarmBarSeries}) page the candle repository only as an operator walks
+ * {@link buildBarSeriesPagers}) page the candle repository only as an operator walks
  * — the reads are async, so `resolveLatest` / `resolvePrev` return promises.
  */
 export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationContext {
@@ -196,7 +189,7 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
  * the firing observation's timestamp + 1 so a later-ts candle already in the
  * store can't become the series' newest point.
  */
-export function prewarmBarSeries(
+export function buildBarSeriesPagers(
   candleRepository: CandleRepository,
   symbolId: string,
   before: number,
@@ -213,7 +206,7 @@ export function prewarmBarSeries(
 }
 
 /**
- * Cache key for the pre-warmed bar series map — one slot per `(period, axis)`.
+ * Cache key for the bar-series pager map — one slot per `(period, axis)`.
  *
  * Keyed by period so a rule row scoped to one interval resolves its OHLCV
  * operands independently of another period's most recent bar (#463).

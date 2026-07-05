@@ -21,7 +21,7 @@ import { type BarAxis, FallbackSeriesView } from '../bar-series-view.js';
 import { BarLifecycleBridge, IndicatorCascadeBridge } from '../bridges/index.js';
 import { TriggerDispatcher } from '../dispatch/dispatcher.js';
 import { getLogger } from '../engine-log.js';
-import { buildEvaluationContext, prewarmBarSeries } from '../evaluation-context.js';
+import { buildBarSeriesPagers, buildEvaluationContext } from '../evaluation-context.js';
 import type { IndicatorSeriesStore } from '../indicator-series-store.js';
 import { ActionRunner } from '../orchestrator/action-runner.js';
 import { RuleOrchestrator } from '../orchestrator/orchestrator.js';
@@ -126,7 +126,6 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
         profileId,
         candleRepository: deps.candleRepository,
         indicatorStore: deps.indicatorStore,
-        barWindow: { from: 0, to: event.ts + 1 },
         getSymbolState: (pid, symbolId, key) => lookups.getSymbolState(pid, symbolId, key),
         getGlobalState: (pid, key) => lookups.getGlobalState(pid, key),
         getPrevSymbolState: cascadePrev.getPrevSymbolState,
@@ -283,7 +282,7 @@ const BAR_AXES: readonly BarAxis[] = ['open', 'high', 'low', 'close', 'volume'];
  *
  * For every period the symbol has an observed candle on (per the live mirror),
  * wires a {@link PagedBarSeriesView} pager over the candle repository for each of
- * the five OHLCV axes via {@link prewarmBarSeries}. Series operators (`Moving` /
+ * the five OHLCV axes via {@link buildBarSeriesPagers}. Series operators (`Moving` /
  * `Channel` / `Crossing`) then walk the actual stored bars — paging backward on
  * demand — instead of the single live-mirror point that made them never fire
  * (#499). Nothing is loaded up front: a pager fetches its first page only when
@@ -315,7 +314,7 @@ function warmLiveBarSeries(
   const required = lookups
     .observedPeriods(symbolId)
     .flatMap((period) => BAR_AXES.map((axis) => ({ period, axis })));
-  const pagers = prewarmBarSeries(candleRepository, symbolId, upperTs + 1, required);
+  const pagers = buildBarSeriesPagers(candleRepository, symbolId, upperTs + 1, required);
   for (const [key, pager] of pagers) {
     const fallback = mirror.get(key);
     merged.set(key, fallback ? new FallbackSeriesView(pager, fallback) : pager);
