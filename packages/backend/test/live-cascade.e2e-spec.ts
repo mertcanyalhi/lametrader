@@ -201,25 +201,18 @@ describe('live poll cascade (e2e)', () => {
       indicatorKey: 'sma',
     });
 
-    // A real poll resumes from the 3*HOUR cursor and introduces 4*HOUR; the
-    // cascade fans each into IndicatorService.handleCandle. SMA(3) over closes
-    // [10,20,30,40,50] yields 30 at 3*HOUR and 40 at 4*HOUR; each bar is decades
-    // old, so `final` is derived as true from the poll clock.
+    // A real poll resumes from the 3*HOUR cursor: that bar is unchanged and
+    // already closed, so it is not re-emitted — only the new 4*HOUR bar fans
+    // through the cascade into IndicatorService.handleCandle. SMA(3) over closes
+    // [20,30,40,50] yields 40 at 4*HOUR; the bar is decades old, so `final` is
+    // true. The barrier confirms no second frame follows.
     await polling.poll();
 
-    const first = (await s.next()) as unknown as IndicatorStateEvent;
-    const second = (await s.next()) as unknown as IndicatorStateEvent;
-    const byTime = [first, second].sort((a, b) => a.state.time - b.state.time);
-    expect(byTime).toEqual([
-      {
-        subscriptionId: ack.subscriptionId,
-        id: BTC.id,
-        period: Period.OneHour,
-        indicatorKey: 'sma',
-        state: { time: 3 * HOUR, value: expect.closeTo(30, 6) },
-        final: true,
-      },
-      {
+    const frame = (await s.next()) as unknown as IndicatorStateEvent;
+    s.send({ action: '__barrier__' });
+    const barrier = await s.next();
+    expect({ frame, barrier }).toEqual({
+      frame: {
         subscriptionId: ack.subscriptionId,
         id: BTC.id,
         period: Period.OneHour,
@@ -227,7 +220,8 @@ describe('live poll cascade (e2e)', () => {
         state: { time: 4 * HOUR, value: expect.closeTo(40, 6) },
         final: true,
       },
-    ]);
+      barrier: { error: 'unknown action' },
+    });
   });
 
   it('streams a derived quote from a real poll through the activated cascade', async () => {
@@ -241,38 +235,31 @@ describe('live poll cascade (e2e)', () => {
       period: Period.OneHour,
     });
 
-    // Baseline previous close at subscribe time is 30 (the 2*HOUR bar). A real
-    // poll emits 3*HOUR then 4*HOUR; the cascade fans each into
-    // QuoteStreamService.handleCandle, and each closed bar rotates the baseline.
+    // Baseline at subscribe time is current close 40 (3*HOUR) over previous 30
+    // (2*HOUR). The poll resumes from the 3*HOUR cursor: unchanged and already
+    // closed, so it is not re-emitted — only the new 4*HOUR bar reaches
+    // QuoteStreamService.handleCandle. Because the 3*HOUR bar never streams, the
+    // baseline previous close stays 30, so the 4*HOUR change is 50-30 (not 50-40).
+    // The barrier confirms no second frame follows.
     await polling.poll();
 
-    const first = (await s.next()) as unknown as SymbolQuoteEvent;
-    const second = (await s.next()) as unknown as SymbolQuoteEvent;
-    expect([first, second]).toEqual([
-      {
-        subscriptionId: ack.subscriptionId,
-        id: BTC.id,
-        period: Period.OneHour,
-        quote: {
-          price: 40,
-          change: expect.closeTo(10, 6),
-          changePct: expect.closeTo(0.333333, 6),
-          time: 3 * HOUR,
-        },
-        final: true,
-      },
-      {
+    const frame = (await s.next()) as unknown as SymbolQuoteEvent;
+    s.send({ action: '__barrier__' });
+    const barrier = await s.next();
+    expect({ frame, barrier }).toEqual({
+      frame: {
         subscriptionId: ack.subscriptionId,
         id: BTC.id,
         period: Period.OneHour,
         quote: {
           price: 50,
-          change: expect.closeTo(10, 6),
-          changePct: expect.closeTo(0.25, 6),
+          change: expect.closeTo(20, 6),
+          changePct: expect.closeTo(0.666667, 6),
           time: 4 * HOUR,
         },
         final: true,
       },
-    ]);
+      barrier: { error: 'unknown action' },
+    });
   });
 });

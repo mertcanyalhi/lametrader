@@ -218,15 +218,17 @@ describe('live stream (e2e)', () => {
 
     await polling.poll();
 
-    const first = (await s.next()) as unknown as CandleEvent;
-    const second = (await s.next()) as unknown as CandleEvent;
-    const byTime = [first, second].sort((a, b) => a.candle.time - b.candle.time);
-    // The poll resumes from the stored cursor (3*HOUR) and introduces 4*HOUR;
-    // both bars sit decades in the past, so each is closed (`final: true`).
-    expect(byTime).toEqual([
-      { id: BTC.id, period: Period.OneHour, candle: candle(3 * HOUR, 40), final: true },
-      { id: BTC.id, period: Period.OneHour, candle: candle(4 * HOUR, 50), final: true },
-    ]);
+    // The poll resumes from the stored cursor (3*HOUR): that bar is unchanged and
+    // already closed, so it is not re-emitted — only genuinely new/changed bars
+    // stream. The new 4*HOUR bar (decades in the past, so closed) is the sole
+    // frame; the barrier confirms no second frame follows.
+    const frame = (await s.next()) as unknown as CandleEvent;
+    s.send({ action: '__barrier__' });
+    const barrier = await s.next();
+    expect({ frame, barrier }).toEqual({
+      frame: { id: BTC.id, period: Period.OneHour, candle: candle(4 * HOUR, 50), final: true },
+      barrier: { error: 'unknown action' },
+    });
   });
 
   it('acks subscribe-indicator and streams recomputed state per driven candle', async () => {
