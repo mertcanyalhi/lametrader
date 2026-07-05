@@ -7,6 +7,8 @@ import {
   MovingOperator,
   OperandKind,
   Period,
+  type ProfileRepository,
+  ProfileScope,
   type Rule,
   type RuleEventEntry,
   RuleEventType,
@@ -19,6 +21,7 @@ import {
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import { PROFILE_REPOSITORY } from '../src/analytics/interfaces/profile-repository.token.js';
 import { RuleEngineService } from '../src/analytics/rules/rule-engine.service.js';
 import type { WiredRuleEngine } from '../src/analytics/rules/wire/wire-rule-engine.js';
 import { AppModule } from '../src/app.module.js';
@@ -124,6 +127,23 @@ describe('moving-operand rule firing (e2e)', () => {
       exchange: 'Binance',
       currency: 'USDT',
       periods: [Period.OneMinute],
+    });
+
+    // An enabled profile the rules belong to. The engine only evaluates rules
+    // whose parent profile is enabled (the ADR-0012 kill-switch, enforced by
+    // `listEnabledForSymbol`), so without this the rules are filtered out and
+    // never fire. No indicators — the Moving rules read `Close` directly.
+    const profiles = app.get<ProfileRepository>(PROFILE_REPOSITORY);
+    await profiles.save({
+      id: 'profile-e2e-moving',
+      name: 'profile-e2e-moving',
+      description: '',
+      enabled: true,
+      scope: { type: ProfileScope.All },
+      indicators: [],
+      chartStates: [],
+      createdAt: 0,
+      updatedAt: 0,
     });
 
     // Seed a flat run of closes so the prior bar the operator walks back to is
