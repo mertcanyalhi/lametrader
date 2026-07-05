@@ -462,19 +462,25 @@ describe('ChartPage', () => {
     ]);
   });
 
-  it('extends the rule-events window to a live-streamed bar past the loaded feed', async () => {
+  it('extends the state-overlay window to a live-streamed bar past the loaded feed', async () => {
+    // Select the state key 'trend' for the auto-selected profile so the overlay
+    // series read fires.
+    window.localStorage.setItem(
+      'chart-state-overlays::p-1::crypto:BTCUSDT',
+      JSON.stringify(['trend']),
+    );
     onRequest('/symbols?enrich=true', () => [BTC]);
     onRequest('/config', () => CONFIG);
-    onRequest('/profiles', () => []);
+    onRequest('/profiles', () => [SCALPER]);
     onRequest('/indicators', () => []);
     onRequest('/candles', () => ({
       candles: [candle(1_000_000, 100), candle(2_000_000, 102)],
       nextCursor: null,
     }));
     onRequest('/rules?', () => []);
-    onRequest('/state-keys', () => []);
     onRequest('/rule-events/count', () => ({ count: 0 }));
-    onRequest('/rule-events?from=', () => []);
+    onRequest('/state-keys', () => [{ key: 'trend', valueType: 'number' }]);
+    onRequest('/state/trend/series', () => []);
 
     renderAt('/chart?id=crypto:BTCUSDT&period=1h');
 
@@ -483,7 +489,7 @@ describe('ChartPage', () => {
     await waitFor(() =>
       expect(
         fetchSpy.mock.calls.some((c) =>
-          String(c[0]).includes('/rule-events?from=1000000&to=2000001'),
+          String(c[0]).includes('/state/trend/series?from=1000000&to=2000001'),
         ),
       ).toEqual(true),
     );
@@ -499,11 +505,12 @@ describe('ChartPage', () => {
       }),
     );
 
-    // The window now reaches the live bar (3_000_000 + 1) so its events render.
+    // The window now reaches the live bar (3_000_000 + 1) so a state set on the
+    // fresh bar lands in the series and its value marker renders.
     await waitFor(() =>
       expect(
         fetchSpy.mock.calls.some((c) =>
-          String(c[0]).includes('/rule-events?from=1000000&to=3000001'),
+          String(c[0]).includes('/state/trend/series?from=1000000&to=3000001'),
         ),
       ).toEqual(true),
     );

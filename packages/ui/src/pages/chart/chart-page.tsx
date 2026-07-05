@@ -16,7 +16,7 @@ import { formatChangePct, formatPrice } from '../../lib/format.js';
 import { useLatestCandle, usePagedCandles } from '../../lib/hooks/candles.js';
 import { computeIndicatorQueryOptions, useIndicatorCatalog } from '../../lib/hooks/indicators.js';
 import { useProfiles } from '../../lib/hooks/profiles.js';
-import { useRuleEventStream, useRuleEventsForRange } from '../../lib/hooks/rules.js';
+import { useRuleEventStream } from '../../lib/hooks/rules.js';
 import {
   type SymbolStateKey,
   symbolStateTimeSeriesQueryOptions,
@@ -35,7 +35,6 @@ import { IndicatorPanelDialog } from './indicators/indicator-panel-dialog.js';
 import { paletteColor } from './indicators/overlay-palette.js';
 import { PeriodRangeDialog } from './period-range-dialog.js';
 import { ProfilePickerDialog } from './profile-picker-dialog.js';
-import { buildEventMarkers } from './rule-event-markers.js';
 import type { StateOverlay } from './states/state-overlay.js';
 import { StatesPanelDialog } from './states/states-panel-dialog.js';
 import { SymbolPickerDialog } from './symbol-picker-dialog.js';
@@ -321,30 +320,28 @@ function ChartView({
     from: computeFrom,
     to: computeTo,
   });
+  // The state-overlay window must reach the newest bar on screen. The chart
+  // applies live-streamed bars itself, but `feed.candles` (and thus `computeTo`)
+  // only advances on refetch — so a state set on a freshly-formed bar falls past
+  // `computeTo` and its value marker never renders. Extend the upper bound to the
+  // live bar for the state read alone (the indicator-compute window stays pinned
+  // to closed candles on purpose).
+  const liveTo =
+    liveCandle && (computeTo === undefined || liveCandle.time + 1 > computeTo)
+      ? liveCandle.time + 1
+      : computeTo;
   const stateOverlays = useChartStateOverlays({
     symbolId: id,
     selectedStateKeys,
     from: computeFrom,
-    to: computeTo,
+    to: liveTo,
   });
-  // Read the rule events whose `ts` falls in the chart's visible candle window,
-  // filtered server-side to the state keys selected in the States panel
-  // (`selectedStateKeys`, empty ⇒ none), then map each to a glyph marker. The
-  // States selection is the single control for both the value overlays and these
-  // change markers; toggling it re-keys the query and refetches, and the live
-  // stream invalidates the same query so it honours the filter for free.
-  // The events window must reach the newest bar on screen. The chart applies
-  // live-streamed bars itself, but `feed.candles` (and thus `computeTo`) only
-  // advances on refetch — so an event firing on a freshly-formed bar falls past
-  // `computeTo` and never renders. Extend the upper bound to the live bar for
-  // the events read alone (the indicator/state compute window stays pinned to
-  // closed candles on purpose).
-  const eventsTo =
-    liveCandle && (computeTo === undefined || liveCandle.time + 1 > computeTo)
-      ? liveCandle.time + 1
-      : computeTo;
-  const eventsQuery = useRuleEventsForRange(id, computeFrom, eventsTo, selectedStateKeys);
-  const eventMarkers = useMemo(() => buildEventMarkers(eventsQuery.data ?? []), [eventsQuery.data]);
+  // The chart deliberately renders no rule-event markers: state changes are shown
+  // via the value overlays above, not as separate glyphs. The event-marker path
+  // (`useRuleEventsForRange` / `buildEventMarkers` and `CandleChart`'s
+  // `eventMarkers` prop) is kept intact — unwired — as a debugging aid: re-add
+  // `eventMarkers={buildEventMarkers(useRuleEventsForRange(id, computeFrom, liveTo,
+  // selectedStateKeys).data ?? [])}` on `CandleChart` to overlay the raw events.
   const body = feed.isPending ? (
     <ChartLoading />
   ) : feed.isError ? (
@@ -364,7 +361,6 @@ function ChartView({
       legendOverlays={legendOverlays}
       onToggleLegendVisible={toggleVisible}
       legendProfile={profile}
-      eventMarkers={eventMarkers}
     />
   );
   return (

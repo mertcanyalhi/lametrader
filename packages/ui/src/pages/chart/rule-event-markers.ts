@@ -6,6 +6,10 @@ import type {
   Time,
 } from 'lightweight-charts';
 
+// NOTE: currently unwired. The chart shows state changes via value overlays, not
+// rule-event glyphs, so `buildEventMarkers` has no production caller today. It's
+// kept as a debugging aid — see `chart-page.tsx` for how to re-overlay raw events.
+
 /**
  * Glyph + color + position descriptor for one {@link RuleEventType}.
  * Fixed mapping per issue #435's settled design.
