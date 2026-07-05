@@ -178,6 +178,34 @@ describe('PollingService.poll', () => {
     expect(events).toEqual([]);
   });
 
+  it('emits the closing bar once when it finalizes unchanged (no price move in its last interval)', async () => {
+    // The forming H:00 bar was stored partial; the market then ticks it to its
+    // final close on the next poll, and no trade lands in the interval after —
+    // so the bar closes byte-identical to that last-seen forming value. The
+    // finality flip (final:false → final:true) still has to emit, or the bar's
+    // close is never seen and `OncePerBarClose` never fires.
+    await repo.save(BTC.id, Period.OneHour, [{ ...candle(0), close: 1.1 }]);
+    const source = new RecordingSource({ [BTC.id]: [candle(0)] });
+    const events: CandleEvent[] = [];
+    let clock = 1_000_000;
+    const service = new PollingService(
+      [source],
+      repo,
+      new InMemoryWatchlistRepository([BTC]),
+      registry,
+      { onCandle: (e) => events.push(e), intervals: allIntervals(1000), now: () => clock },
+    );
+
+    await service.poll();
+    clock = NOW;
+    await service.poll();
+
+    expect(events).toEqual([
+      { id: BTC.id, period: Period.OneHour, candle: candle(0), final: false },
+      { id: BTC.id, period: Period.OneHour, candle: candle(0), final: true },
+    ]);
+  });
+
   it('skips a symbol+period with no stored candles (no fetch, no emit)', async () => {
     const source = new RecordingSource({ [BTC.id]: [candle(0), candle(HOUR)] });
     const events: CandleEvent[] = [];
