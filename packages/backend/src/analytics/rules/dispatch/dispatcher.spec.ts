@@ -236,6 +236,33 @@ describe('TriggerDispatcher — OncePerBar latch', () => {
     const fires = await dispatcher.dispatch(TICK_EVENT_AT(61_000));
     expect(fires).toEqual([]);
   });
+
+  it('does NOT re-arm one symbol on another symbol BarOpened of the same period', async () => {
+    // The latch key carries the firing symbol; a BarOpened for AAPL must only
+    // re-arm AAPL's latch, not MSFT's, even though both share the trigger
+    // period. Otherwise a busy watchlist re-fires every OncePerBar rule across
+    // all symbols on any single symbol's bar roll.
+    const r = rule({
+      trigger: { kind: TriggerKind.OncePerBar, period: Period.OneMinute },
+      scope: { kind: RuleScopeKind.Symbols, symbolIds: ['AAPL', 'MSFT'] },
+    });
+    const { dispatcher } = await setup({ rules: [r] });
+    await dispatcher.dispatch(TICK_EVENT_AT(1_000));
+    await dispatcher.dispatch({
+      kind: EvaluationTriggerKind.Tick,
+      ts: 1_000,
+      symbolId: 'MSFT',
+      price: 120,
+    });
+    await dispatcher.dispatch(BAR_OPENED(60_000, Period.OneMinute));
+    const fires = await dispatcher.dispatch({
+      kind: EvaluationTriggerKind.Tick,
+      ts: 61_000,
+      symbolId: 'MSFT',
+      price: 120,
+    });
+    expect(fires).toEqual([]);
+  });
 });
 
 describe('TriggerDispatcher — Once lifetime claim', () => {

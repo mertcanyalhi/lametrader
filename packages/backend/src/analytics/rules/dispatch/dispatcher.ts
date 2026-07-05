@@ -340,15 +340,19 @@ export class TriggerDispatcher {
   }
 
   /**
-   * Drop any OncePerBar latches whose period matches the BarOpened event's
-   * period — the next matching tick on that period will re-fire.
+   * Drop any OncePerBar latches for the BarOpened event's `(symbol, period)`
+   * — the next matching tick on that symbol+period will re-fire.
    *
-   * Period is baked into the latch key (`<ruleId>|<sym>|<period>`); a
-   * non-matching-period BarOpened leaves those latches alone.
+   * Both symbol and period are baked into the latch key
+   * (`<ruleId>|<sym>|<period>`); the re-arm matches on the `|<sym>|<period>`
+   * suffix so a BarOpened for one symbol never clears another symbol's latch
+   * of the same period. The leading `|` before `<sym>` keeps the match exact
+   * even when one symbol id is a suffix of another (`BTC` / `WBTC`).
    */
   private rearmOncePerBarLatches(event: BarOpenedEvent): void {
+    const suffix = `${LATCH_KEY_SEP}${event.symbolId}${LATCH_KEY_SEP}${event.period}`;
     for (const key of this.oncePerBarLatch) {
-      if (keyHasPeriod(key, event.period)) this.oncePerBarLatch.delete(key);
+      if (key.endsWith(suffix)) this.oncePerBarLatch.delete(key);
     }
   }
 
@@ -391,10 +395,6 @@ function latchKey(ruleId: string, firingSymbolId: string, period?: string): stri
   return period === undefined
     ? `${ruleId}${LATCH_KEY_SEP}${firingSymbolId}`
     : `${ruleId}${LATCH_KEY_SEP}${firingSymbolId}${LATCH_KEY_SEP}${period}`;
-}
-
-function keyHasPeriod(key: string, period: string): boolean {
-  return key.endsWith(`${LATCH_KEY_SEP}${period}`);
 }
 
 /** Whether the event carries a symbol (i.e. is symbol-scoped). */
