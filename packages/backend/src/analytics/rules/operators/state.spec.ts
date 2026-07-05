@@ -59,19 +59,19 @@ const up: StateValue = { type: StateValueType.String, value: 'up' };
 const down: StateValue = { type: StateValueType.String, value: 'down' };
 
 describe('evaluateState', () => {
-  it('matches v1 semantics for Equals/NotEquals snapshot, ChangesTo (prev != right && current == right), ChangesFrom (prev == right && current != right); null is a distinct sentinel', () => {
+  it('matches v1 semantics for Equals/NotEquals snapshot, ChangesTo (prev != right && current == right), ChangesFrom (prev == right && current != right); null is a distinct sentinel', async () => {
     const upUp = fakeCtx({ leftLatest: up, leftPrev: up, rightLatest: up });
     const downUp = fakeCtx({ leftLatest: up, leftPrev: down, rightLatest: up });
     const upDown = fakeCtx({ leftLatest: down, leftPrev: up, rightLatest: up });
     const nullUp = fakeCtx({ leftLatest: up, leftPrev: null, rightLatest: up });
     expect({
-      equalsSame: evaluateState(stateLeaf(StateOperator.Equals), upUp),
-      notEqualsSame: evaluateState(stateLeaf(StateOperator.NotEquals), upUp),
-      changesToFires: evaluateState(stateLeaf(StateOperator.ChangesTo), downUp),
-      changesToHolds: evaluateState(stateLeaf(StateOperator.ChangesTo), upUp),
-      changesFromFires: evaluateState(stateLeaf(StateOperator.ChangesFrom), upDown),
-      changesFromHolds: evaluateState(stateLeaf(StateOperator.ChangesFrom), upUp),
-      changesToFromNull: evaluateState(stateLeaf(StateOperator.ChangesTo), nullUp),
+      equalsSame: await evaluateState(stateLeaf(StateOperator.Equals), upUp),
+      notEqualsSame: await evaluateState(stateLeaf(StateOperator.NotEquals), upUp),
+      changesToFires: await evaluateState(stateLeaf(StateOperator.ChangesTo), downUp),
+      changesToHolds: await evaluateState(stateLeaf(StateOperator.ChangesTo), upUp),
+      changesFromFires: await evaluateState(stateLeaf(StateOperator.ChangesFrom), upDown),
+      changesFromHolds: await evaluateState(stateLeaf(StateOperator.ChangesFrom), upUp),
+      changesToFromNull: await evaluateState(stateLeaf(StateOperator.ChangesTo), nullUp),
     }).toEqual({
       equalsSame: true,
       notEqualsSame: false,

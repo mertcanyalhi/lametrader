@@ -28,27 +28,31 @@ import type { SeriesView } from '../series.types.js';
  * Returns `false` for empty left series, missing right resolution, no baseline
  * found, or any other "no data yet" branch — never throws.
  */
-export function evaluateCrossing(leaf: CrossingLeafCondition, ctx: EvaluationContext): boolean {
+export async function evaluateCrossing(
+  leaf: CrossingLeafCondition,
+  ctx: EvaluationContext,
+): Promise<boolean> {
   const leftSeries = ctx.resolveSeries(leaf.left, leaf.interval);
-  if (leftSeries.length === 0) return false;
   const rightSeries = ctx.resolveSeries(leaf.right, leaf.interval);
-  if (rightSeries.length === 0) return false;
 
+  // An empty left series ends the walk immediately (`newestLeft.done`); an empty
+  // right series resolves `asOf` to `null` below — both short-circuit to `false`
+  // without asking the lazy series for a length.
   const walker = leftSeries.backwardWalk();
-  const newestLeft = walker.next();
+  const newestLeft = await walker.next();
   if (newestLeft.done) return false;
   const newestLeftValue = numericPoint(newestLeft.value.value);
   if (newestLeftValue === null) return false;
-  const newestRight = numericAsOf(rightSeries, newestLeft.value.ts);
+  const newestRight = await numericAsOf(rightSeries, newestLeft.value.ts);
   if (newestRight === null) return false;
   const currentSide = Math.sign(newestLeftValue - newestRight);
   if (currentSide === 0) return false;
 
   let baselineSide = 0;
-  for (const point of walker) {
+  for await (const point of walker) {
     const lv = numericPoint(point.value);
     if (lv === null) continue;
-    const rv = numericAsOf(rightSeries, point.ts);
+    const rv = await numericAsOf(rightSeries, point.ts);
     if (rv === null) continue;
     const diff = lv - rv;
     if (diff === 0) continue;
@@ -81,8 +85,8 @@ function numericPoint(value: StateValue): number | null {
  * `asOf` lookup on a series that unwraps to a number or `null`.
  * Combines the step-function resampling with the StateValue → number guard.
  */
-function numericAsOf(series: SeriesView, ts: number): number | null {
-  const point = series.asOf(ts);
+async function numericAsOf(series: SeriesView, ts: number): Promise<number | null> {
+  const point = await series.asOf(ts);
   if (point === null) return null;
   return numericPoint(point.value);
 }

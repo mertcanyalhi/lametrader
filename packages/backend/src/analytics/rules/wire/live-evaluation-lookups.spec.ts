@@ -34,7 +34,7 @@ describe('LiveEvaluationLookups.recordCandle (period-keyed)', () => {
     expect(lookups.getOpenValue('BTCUSDT', Period.OneHour)).toEqual(null);
   });
 
-  it('books one series per (period, axis) so each period resolves independently', () => {
+  it('books one series per (period, axis) so each period resolves independently', async () => {
     const lookups = new LiveEvaluationLookups(new InMemoryStateRepository());
     lookups.recordCandle(candleEvent('BTCUSDT', Period.OneHour, 49900));
     lookups.recordCandle(candleEvent('BTCUSDT', Period.OneMinute, 50010));
@@ -42,10 +42,12 @@ describe('LiveEvaluationLookups.recordCandle (period-keyed)', () => {
     const book = lookups.bookSeriesFor('BTCUSDT');
 
     expect({
-      hourOpen: book.get(barSeriesKey(Period.OneHour, 'open'))?.asOf(Number.MAX_SAFE_INTEGER)
-        ?.value,
-      minuteOpen: book.get(barSeriesKey(Period.OneMinute, 'open'))?.asOf(Number.MAX_SAFE_INTEGER)
-        ?.value,
+      hourOpen: (
+        await book.get(barSeriesKey(Period.OneHour, 'open'))?.asOf(Number.MAX_SAFE_INTEGER)
+      )?.value,
+      minuteOpen: (
+        await book.get(barSeriesKey(Period.OneMinute, 'open'))?.asOf(Number.MAX_SAFE_INTEGER)
+      )?.value,
     }).toEqual({
       hourOpen: { type: StateValueType.Number, value: 49900 },
       minuteOpen: { type: StateValueType.Number, value: 50010 },

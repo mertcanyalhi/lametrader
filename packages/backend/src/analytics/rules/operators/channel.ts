@@ -28,20 +28,24 @@ import type { SeriesView } from '../series.types.js';
  * Returns `false` (never throws) for empty series, missing bound resolution,
  * or no off-boundary baseline found.
  */
-export function evaluateChannel(leaf: ChannelLeafCondition, ctx: EvaluationContext): boolean {
+export async function evaluateChannel(
+  leaf: ChannelLeafCondition,
+  ctx: EvaluationContext,
+): Promise<boolean> {
   const leftSeries = ctx.resolveSeries(leaf.left, leaf.interval);
-  if (leftSeries.length === 0) return false;
   const lowerSeries = ctx.resolveSeries(leaf.lower, leaf.interval);
   const upperSeries = ctx.resolveSeries(leaf.upper, leaf.interval);
-  if (lowerSeries.length === 0 || upperSeries.length === 0) return false;
 
+  // An empty left series ends the walk immediately (`newest.done`); an empty
+  // bound series resolves `asOf` to `null` below — both short-circuit to
+  // `false` without a cheap length up front.
   const walker = leftSeries.backwardWalk();
-  const newest = walker.next();
+  const newest = await walker.next();
   if (newest.done) return false;
   const newestValue = numericPoint(newest.value.value);
   if (newestValue === null) return false;
-  const newestLower = numericAsOf(lowerSeries, newest.value.ts);
-  const newestUpper = numericAsOf(upperSeries, newest.value.ts);
+  const newestLower = await numericAsOf(lowerSeries, newest.value.ts);
+  const newestUpper = await numericAsOf(upperSeries, newest.value.ts);
   if (newestLower === null || newestUpper === null) return false;
 
   if (leaf.operator === ChannelOperator.InsideChannel) {
@@ -60,11 +64,11 @@ export function evaluateChannel(leaf: ChannelLeafCondition, ctx: EvaluationConte
   let baselineStrictlyOutside = false;
   let baselineStrictlyInside = false;
   let baselineFound = false;
-  for (const point of walker) {
+  for await (const point of walker) {
     const lv = numericPoint(point.value);
     if (lv === null) continue;
-    const lo = numericAsOf(lowerSeries, point.ts);
-    const up = numericAsOf(upperSeries, point.ts);
+    const lo = await numericAsOf(lowerSeries, point.ts);
+    const up = await numericAsOf(upperSeries, point.ts);
     if (lo === null || up === null) continue;
     if (lv === lo || lv === up) continue;
     baselineStrictlyOutside = lv < lo || lv > up;
@@ -93,8 +97,8 @@ function numericPoint(value: StateValue): number | null {
 }
 
 /** `asOf` lookup on a series that unwraps to a number or `null`. */
-function numericAsOf(series: SeriesView, ts: number): number | null {
-  const point = series.asOf(ts);
+async function numericAsOf(series: SeriesView, ts: number): Promise<number | null> {
+  const point = await series.asOf(ts);
   if (point === null) return null;
   return numericPoint(point.value);
 }

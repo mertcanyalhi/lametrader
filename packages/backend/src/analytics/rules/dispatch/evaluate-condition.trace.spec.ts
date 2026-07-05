@@ -11,6 +11,7 @@ import {
 
 import { _resetLogRoot, _resetLogScopes } from '../engine-log.js';
 import type { EvaluationContext } from '../evaluation-context.types.js';
+import { ArraySeriesView } from '../indicator-series-store.js';
 import type { SeriesView } from '../series.types.js';
 import { evaluateCondition } from './evaluate-condition.js';
 
@@ -18,11 +19,7 @@ import { evaluateCondition } from './evaluate-condition.js';
  * Empty series — operators only used here need `resolveLatest` /
  * `resolvePrev`.
  */
-const EMPTY_SERIES: SeriesView = {
-  length: 0,
-  backwardWalk: () => [].values(),
-  asOf: () => null,
-};
+const EMPTY_SERIES: SeriesView = new ArraySeriesView([]);
 
 /**
  * Trivial context — Price = 120, SymbolStateRef "trend" = "up" (prev "down"),
@@ -59,7 +56,7 @@ describe('evaluateCondition trace', () => {
     _resetLogScopes([]);
   });
 
-  it('emits a leaf_decision trace under engine.rules.operators for a Comparison leaf with operand kinds, values, and result', () => {
+  it('emits a leaf_decision trace under engine.rules.operators for a Comparison leaf with operand kinds, values, and result', async () => {
     const records: Record<string, unknown>[] = [];
     _resetLogRoot({
       write: (line) => {
@@ -78,7 +75,7 @@ describe('evaluateCondition trace', () => {
       },
     };
 
-    evaluateCondition(node, TRIVIAL_CTX, 'r-1');
+    await evaluateCondition(node, TRIVIAL_CTX, 'r-1');
 
     expect(records).toEqual([
       {
@@ -102,7 +99,7 @@ describe('evaluateCondition trace', () => {
     ]);
   });
 
-  it('emits a leaf_decision trace for a State leaf carrying leftPrev (the v1 leaf_decision payload survives)', () => {
+  it('emits a leaf_decision trace for a State leaf carrying leftPrev (the v1 leaf_decision payload survives)', async () => {
     const records: Record<string, unknown>[] = [];
     _resetLogRoot({
       write: (line) => {
@@ -127,7 +124,7 @@ describe('evaluateCondition trace', () => {
       },
     };
 
-    evaluateCondition(node, TRIVIAL_CTX, 'r-1');
+    await evaluateCondition(node, TRIVIAL_CTX, 'r-1');
 
     expect(records).toEqual([
       {
@@ -151,7 +148,7 @@ describe('evaluateCondition trace', () => {
     ]);
   });
 
-  it('does not emit any leaf_decision record when the operators scope is not enabled', () => {
+  it('does not emit any leaf_decision record when the operators scope is not enabled', async () => {
     const records: Record<string, unknown>[] = [];
     _resetLogRoot({
       write: (line) => {
@@ -172,7 +169,7 @@ describe('evaluateCondition trace', () => {
       },
     };
 
-    evaluateCondition(node, TRIVIAL_CTX, 'r-1');
+    await evaluateCondition(node, TRIVIAL_CTX, 'r-1');
 
     expect(records).toEqual([]);
   });

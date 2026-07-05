@@ -192,19 +192,15 @@ interface InstanceEntry {
 export class ArraySeriesView implements SeriesView {
   constructor(private readonly points: readonly SeriesPoint[]) {}
 
-  get length(): number {
-    return this.points.length;
-  }
-
-  *backwardWalk(): IterableIterator<SeriesPoint> {
+  async *backwardWalk(): AsyncIterableIterator<SeriesPoint> {
     for (let i = this.points.length - 1; i >= 0; i -= 1) {
       const point = this.points[i];
       if (point !== undefined) yield point;
     }
   }
 
-  asOf(queryTs: number): SeriesPoint | null {
-    for (const point of this.backwardWalk()) {
+  async asOf(queryTs: number): Promise<SeriesPoint | null> {
+    for await (const point of this.backwardWalk()) {
       if (point.ts <= queryTs) return point;
     }
     return null;
