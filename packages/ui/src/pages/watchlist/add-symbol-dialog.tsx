@@ -225,7 +225,7 @@ function SearchResults({
         columns="1"
         gap="2"
         size="1"
-        className="pr-3"
+        className="pr-3 pb-px"
       >
         {instruments.map((instrument) => (
           <RadioCards.Item key={instrument.id} value={instrument.id}>
