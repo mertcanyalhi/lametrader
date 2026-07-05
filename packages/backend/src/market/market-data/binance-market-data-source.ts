@@ -40,6 +40,23 @@ const BINANCE_INTERVAL: Partial<Record<Period, string>> = {
 const KLINES_LIMIT = 1000;
 
 /**
+ * Max windows fetched concurrently during a backfill. Bounded so a keyless deep
+ * fetch stays within Binance's request-weight budget (see {@link BinanceMarketDataSource.fetchKlines}
+ * for the `429` backoff that covers the rest).
+ */
+const CONCURRENCY = 8;
+
+/**
+ * Max times a rate-limited (`429`) request is retried before giving up.
+ */
+const MAX_RETRIES = 5;
+
+/**
+ * Fallback backoff (ms) per attempt when a `429` carries no `Retry-After`.
+ */
+const RETRY_BASE_MS = 1000;
+
+/**
  * The subset of a Binance `exchangeInfo` symbol entry we consume.
  */
 interface ExchangeSymbol {
@@ -55,7 +72,7 @@ interface ExchangeSymbol {
  * endpoints used here are public.
  */
 export class BinanceMarketDataSource implements MarketDataSource {
-  /** Perf-trace logger for the paging loop (debug = summary, verbose = per page). */
+  /** Perf-trace logger (debug = per-fetch summary, verbose = per window). */
   private readonly logger = new Logger(BinanceMarketDataSource.name);
 
   /**
@@ -67,6 +84,17 @@ export class BinanceMarketDataSource implements MarketDataSource {
    * The periods Binance can fetch — exactly the keys of {@link BINANCE_INTERVAL}.
    */
   readonly periods = Object.keys(BINANCE_INTERVAL) as Period[];
+
+  /**
+   * @param now - current epoch ms (injectable so a no-range fetch's `end` is
+   *   deterministic in tests).
+   * @param sleep - backoff delay (injectable so `429`-retry tests don't wait).
+   */
+  constructor(
+    private readonly now: () => number = Date.now,
+    private readonly sleep: (ms: number) => Promise<void> = (ms) =>
+      new Promise((resolve) => setTimeout(resolve, ms)),
+  ) {}
 
   async search(query: string): Promise<Instrument[]> {
     const info = await fetchJson<{ symbols: ExchangeSymbol[] }>(`${BASE}/api/v3/exchangeInfo`);
@@ -101,83 +129,109 @@ export class BinanceMarketDataSource implements MarketDataSource {
       throw new CandleError(`Binance does not support period ${period}`);
     }
     const ticker = id.slice(`${SymbolType.Crypto}:`.length);
-    const out: CryptoCandle[] = [];
-    // No range ⇒ start at epoch 0 so the provider returns from its earliest
-    // available kline, then page forward through the whole history to now.
-    let startTime = range?.from ?? 0;
-    const endTime = range?.to;
-    // Cleared only if the cursor fails to advance (a provider anomaly) — a
-    // normal walk always terminates at the natural end of the series.
-    let complete = true;
-    // Estimated total for progress, fixed after the first page (whose oldest
-    // candle is the earliest the provider holds); 0 until then.
-    let estimatedTotal = 0;
-
-    // Perf trace: split wall time into network (awaiting fetch) vs CPU (parsing
-    // rows into candles + growing `out`) so a slow backfill can be attributed.
-    const startedAt = performance.now();
-    let page = 0;
-    let fetchMs = 0;
-    let parseMs = 0;
+    const span = periodMillis(period);
+    // One window = KLINES_LIMIT bars, so a window is exactly this wide in ms.
+    const windowMs = KLINES_LIMIT * span;
+    const end = range?.to ?? this.now();
 
     try {
-      while (true) {
-        const fetchAt = performance.now();
-        const rows = await fetchJson<BinanceKline[]>(
+      // A ranged fetch bounds the span directly; a no-range fetch probes the
+      // provider's earliest kline so the whole `[earliest, now)` span is known
+      // up front and can be split into independent windows.
+      const earliest = range ? range.from : await this.earliestOpen(ticker, interval);
+      if (earliest === null || earliest >= end) return { candles: [], complete: true };
+
+      // Total is exact from the span (no longer estimated from the first page).
+      const total = Math.max(1, Math.ceil((end - earliest) / span));
+      const starts: number[] = [];
+      for (let w = earliest; w < end; w += windowMs) starts.push(w);
+
+      const startedAt = performance.now();
+      const out: CryptoCandle[] = [];
+      let done = 0;
+      // Windows are independent, so fetch up to CONCURRENCY at once; they land
+      // out of order, so accumulate then sort once at the end.
+      await pool(starts, CONCURRENCY, async (start) => {
+        const rows = await this.fetchKlines(
           `${BASE}/api/v3/klines?symbol=${encodeURIComponent(ticker)}` +
-            `&interval=${interval}&startTime=${startTime}&limit=${KLINES_LIMIT}` +
-            (endTime !== undefined ? `&endTime=${endTime}` : ''),
+            `&interval=${interval}&startTime=${start}&endTime=${start + windowMs - 1}` +
+            `&limit=${KLINES_LIMIT}`,
         );
-        const pageFetchMs = performance.now() - fetchAt;
-        fetchMs += pageFetchMs;
-        if (rows.length === 0) break;
-        const parseAt = performance.now();
-        let reachedEnd = false;
         for (const row of rows) {
           const candle = toCandle(row);
-          if (endTime !== undefined && candle.time >= endTime) {
-            reachedEnd = true;
-            break;
-          }
-          out.push(candle);
+          if (candle.time >= earliest && candle.time < end) out.push(candle);
         }
-        const pageParseMs = performance.now() - parseAt;
-        parseMs += pageParseMs;
-        page += 1;
-        if (page === 1) {
-          // The first page starts at the earliest available candle, so its oldest
-          // row anchors the estimate: (end − earliest) / one period.
-          const earliest = rows[0]?.[0] ?? startTime;
-          const end = endTime ?? Date.now();
-          estimatedTotal = Math.max(1, Math.ceil((end - earliest) / periodMillis(period)));
-        }
-        onProgress?.(out.length, Math.max(estimatedTotal, out.length));
-        this.logger.verbose(
-          `page ${page} ${id} ${period}: ${rows.length} rows → ${out.length} candles, fetch ${pageFetchMs.toFixed(0)}ms, parse ${pageParseMs.toFixed(1)}ms`,
-        );
-        // Reached the requested upper bound, or a short page means the provider
-        // ran out of data — either way the series is fully walked.
-        if (reachedEnd || rows.length < KLINES_LIMIT) break;
-        // Advance past this page's last open time. If it can't advance, the
-        // provider is misbehaving; stop rather than loop forever.
-        const next = (rows[rows.length - 1]?.[0] ?? startTime) + 1;
-        if (next <= startTime) {
-          complete = false;
-          break;
-        }
-        startTime = next;
-      }
+        done = out.length;
+        this.logger.verbose(`window ${ticker} ${period} @${start}: ${rows.length} rows`);
+        onProgress?.(done, Math.max(total, done));
+      });
+      out.sort((a, b) => a.time - b.time);
+      this.logger.debug(
+        `fetchCandles ${id} ${period}: ${out.length} candles / ${starts.length} windows (≤${CONCURRENCY} concurrent) in ${(performance.now() - startedAt).toFixed(0)}ms`,
+      );
+      // The whole span is covered, so the batch is always complete.
+      return { candles: out, complete: true };
     } catch (cause) {
       throw new MarketDataError(
         `Binance failed to fetch candles for ${id}: ${(cause as Error).message}`,
         { cause },
       );
     }
-    this.logger.debug(
-      `fetchCandles ${id} ${period}: ${out.length} candles / ${page} pages in ${(performance.now() - startedAt).toFixed(0)}ms (fetch ${fetchMs.toFixed(0)}ms, parse ${parseMs.toFixed(0)}ms)`,
-    );
-    return { candles: out, complete };
   }
+
+  /**
+   * The provider's earliest available open time for `ticker`, or `null` when it
+   * has no klines — a `limit=1` probe at `startTime=0`.
+   */
+  private async earliestOpen(ticker: string, interval: string): Promise<number | null> {
+    const rows = await this.fetchKlines(
+      `${BASE}/api/v3/klines?symbol=${encodeURIComponent(ticker)}&interval=${interval}&startTime=0&limit=1`,
+    );
+    return rows[0]?.[0] ?? null;
+  }
+
+  /**
+   * Fetch a `klines` URL, retrying a `429` up to {@link MAX_RETRIES} times —
+   * waiting the response's `Retry-After` seconds (or a bounded per-attempt
+   * default) between tries so a keyless deep backfill rides out rate limiting.
+   */
+  private async fetchKlines(url: string): Promise<BinanceKline[]> {
+    for (let attempt = 0; ; attempt += 1) {
+      const res = await fetch(url);
+      if (res.ok) return (await res.json()) as BinanceKline[];
+      if (res.status === 429 && attempt < MAX_RETRIES) {
+        const retryAfter = Number(res.headers.get('retry-after'));
+        const waitMs =
+          Number.isFinite(retryAfter) && retryAfter > 0
+            ? retryAfter * 1000
+            : RETRY_BASE_MS * (attempt + 1);
+        this.logger.warn(`Binance 429; retrying in ${waitMs}ms (attempt ${attempt + 1})`);
+        await this.sleep(waitMs);
+        continue;
+      }
+      throw new Error(`Binance ${res.status} ${res.statusText}`);
+    }
+  }
+}
+
+/**
+ * Run `worker` over `items` with at most `limit` in flight at once. Rejects (via
+ * `Promise.all`) if any worker throws, so a failed window fails the whole fetch.
+ */
+async function pool<T>(
+  items: readonly T[],
+  limit: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  let index = 0;
+  const runner = async (): Promise<void> => {
+    while (index < items.length) {
+      const item = items[index];
+      index += 1;
+      if (item !== undefined) await worker(item);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, runner));
 }
 
 /**
