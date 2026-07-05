@@ -152,7 +152,6 @@ async function buildOrchestrator(opts: {
       candleRepository: null as unknown as never,
       barSeries,
       indicatorStore,
-      barWindow: { from: 0, to: Number.MAX_SAFE_INTEGER },
       getSymbolState: (pid, symbolId, key) => lookups.getSymbolState(pid, symbolId, key),
       getGlobalState: (pid, key) => lookups.getGlobalState(pid, key),
     });

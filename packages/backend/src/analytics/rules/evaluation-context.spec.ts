@@ -11,7 +11,7 @@ import { InMemoryWatchlistRepository } from '../../market/persistence/in-memory-
 import { IndicatorService } from '../indicators/indicator.service.js';
 import { IndicatorRegistry } from '../indicators/indicator-registry.js';
 import { movingAverage } from '../indicators/sma.js';
-import { buildEvaluationContext, prewarmBarSeries } from './evaluation-context.js';
+import { buildBarSeriesPagers, buildEvaluationContext } from './evaluation-context.js';
 import { IndicatorSeriesStore } from './indicator-series-store.js';
 
 const SYMBOL = 'BTC';
@@ -73,7 +73,7 @@ const seed = async () => {
   };
 
   const barWindow = { from: 0, to: 4 * 60_000 };
-  const barSeries = prewarmBarSeries(repo, SYMBOL, barWindow.to, [
+  const barSeries = buildBarSeriesPagers(repo, SYMBOL, barWindow.to, [
     { period: PERIOD, axis: 'open' },
     { period: PERIOD, axis: 'high' },
     { period: PERIOD, axis: 'low' },
@@ -86,7 +86,6 @@ const seed = async () => {
     profileId: PROFILE,
     candleRepository: repo,
     indicatorStore,
-    barWindow,
     barSeries,
     getSymbolState: (_profileId, sym, key) => (sym === SYMBOL ? (symbolState[key] ?? null) : null),
     getGlobalState: (_profileId, key) => globalState[key] ?? null,
@@ -190,7 +189,7 @@ describe('buildEvaluationContext', () => {
     );
 
     const barWindow = { from: 0, to: 4 * 3_600_000 };
-    const barSeries = prewarmBarSeries(repo, SYMBOL, barWindow.to, [
+    const barSeries = buildBarSeriesPagers(repo, SYMBOL, barWindow.to, [
       { period: Period.OneMinute, axis: 'close' },
       { period: Period.OneHour, axis: 'close' },
     ]);
@@ -200,7 +199,6 @@ describe('buildEvaluationContext', () => {
       profileId: PROFILE,
       candleRepository: repo,
       indicatorStore,
-      barWindow,
       barSeries,
       getSymbolState: () => null,
       getGlobalState: () => null,
@@ -239,7 +237,7 @@ describe('buildEvaluationContext', () => {
     );
 
     const barWindow = { from: 0, to: 2 * 60_000 };
-    const barSeries = prewarmBarSeries(repo, SYMBOL, barWindow.to, [
+    const barSeries = buildBarSeriesPagers(repo, SYMBOL, barWindow.to, [
       { period: PERIOD, axis: 'close' },
     ]);
 
@@ -249,7 +247,6 @@ describe('buildEvaluationContext', () => {
       candleRepository: repo,
       // No tick has been observed for the symbol.
       indicatorStore,
-      barWindow,
       barSeries,
       getSymbolState: () => null,
       getGlobalState: () => null,
@@ -308,7 +305,7 @@ describe('buildEvaluationContext', () => {
     };
 
     const barWindow = { from: 0, to: 4 * 60_000 };
-    const barSeries = prewarmBarSeries(repo, SYMBOL, barWindow.to, [
+    const barSeries = buildBarSeriesPagers(repo, SYMBOL, barWindow.to, [
       { period: PERIOD, axis: 'close' },
     ]);
 
@@ -317,7 +314,6 @@ describe('buildEvaluationContext', () => {
       profileId: PROFILE,
       candleRepository: repo,
       indicatorStore,
-      barWindow,
       barSeries,
       getSymbolState: () => null,
       getGlobalState: () => null,
