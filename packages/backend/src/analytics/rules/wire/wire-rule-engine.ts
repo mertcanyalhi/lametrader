@@ -206,7 +206,6 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
       symbolId: candle.id,
       record: () => {
         lookups.recordCandle(candle);
-        lookups.recordQuote(candle.id, candle.candle.close); // TODO: Collapse these 2 into a single function; we don't need 2 function calls
       },
       events: [...barBatch, tick],
     });
