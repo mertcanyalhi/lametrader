@@ -1,17 +1,25 @@
-import type { TelegramDestination } from '@lametrader/core';
+import { NotificationChannel } from '@lametrader/core';
 import { UnknownDestinationError } from '../domain/notifier.js';
 import { InMemoryConfigRepository } from '../persistence/in-memory-config.repository.js';
-import { TelegramDestinationsService } from './telegram-destinations.service.js';
+import {
+  type CreateNotificationConfigInput,
+  NotificationConfigsService,
+} from './notification-configs.service.js';
 import { TelegramNotifier, TelegramSendError } from './telegram-notifier.js';
+
+/** A Telegram create payload. */
+function telegram(name: string, botToken: string, chatId: string): CreateNotificationConfigInput {
+  return { notificationType: NotificationChannel.Telegram, name, botToken, chatId };
+}
 
 /**
  * Build a notifier with the given destinations and a fetch recorder.
  */
 async function build(
   response: { ok: boolean; status: number } = { ok: true, status: 200 },
-  destinations: TelegramDestination[] = [
-    { name: 'main', botToken: 'TOKEN-1', chatId: '123' },
-    { name: 'alerts', botToken: 'TOKEN-2', chatId: '456' },
+  destinations: CreateNotificationConfigInput[] = [
+    telegram('main', 'TOKEN-1', '123'),
+    telegram('alerts', 'TOKEN-2', '456'),
   ],
 ) {
   const calls: Array<{
@@ -25,8 +33,8 @@ async function build(
     calls.push({ url, init });
     return response;
   };
-  const service = new TelegramDestinationsService(new InMemoryConfigRepository());
-  for (const destination of destinations) await service.upsert(destination);
+  const service = new NotificationConfigsService(new InMemoryConfigRepository());
+  for (const destination of destinations) await service.create(destination);
   const notifier = new TelegramNotifier(service, { fetch: fetchMock });
   return { notifier, calls, service };
 }
@@ -74,8 +82,8 @@ describe('TelegramNotifier', () => {
     const fetchMock = async () => {
       throw new Error('network down');
     };
-    const service = new TelegramDestinationsService(new InMemoryConfigRepository());
-    await service.upsert({ name: 'main', botToken: 'TOKEN-1', chatId: '123' });
+    const service = new NotificationConfigsService(new InMemoryConfigRepository());
+    await service.create(telegram('main', 'TOKEN-1', '123'));
     const notifier = new TelegramNotifier(service, { fetch: fetchMock });
     const err = (await notifier.send('main', 'hi').catch((e) => e)) as TelegramSendError;
     expect(err).toBeInstanceOf(TelegramSendError);
@@ -93,9 +101,9 @@ describe('TelegramNotifier', () => {
 
   it('picks up a destination added via the service after the notifier was built', async () => {
     const { notifier, service } = await build({ ok: true, status: 200 }, [
-      { name: 'main', botToken: 'TOKEN-1', chatId: '123' },
+      telegram('main', 'TOKEN-1', '123'),
     ]);
-    await service.upsert({ name: 'late', botToken: 'LATE', chatId: '999' });
+    await service.create(telegram('late', 'LATE', '999'));
     await expect(notifier.send('late', 'hi')).resolves.toBeUndefined();
   });
 });

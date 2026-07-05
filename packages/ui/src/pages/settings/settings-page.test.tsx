@@ -27,9 +27,8 @@ describe('SettingsPage', () => {
   let queryClient: QueryClient;
   /**
    * Queue of `/api/config` responses (FIFO). `mockJsonResponse` pushes here;
-   * `/api/config/notifications/telegram` always returns `[]` so the
-   * Telegram destinations section's query never consumes a queued config
-   * response.
+   * `/api/config/notifications` always returns `[]` so the Notifications tab's
+   * query never consumes a queued config response.
    */
   let configResponses: Response[];
 
@@ -37,7 +36,7 @@ describe('SettingsPage', () => {
     configResponses = [];
     fetchSpy = vi.fn(async (url: string) => {
       const path = String(url);
-      if (path.endsWith('/config/notifications/telegram')) {
+      if (path.endsWith('/config/notifications')) {
         return new Response('[]', {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
@@ -68,8 +67,8 @@ describe('SettingsPage', () => {
 
   /**
    * Queue the next `/api/config` response (GET or PUT consumed in order).
-   * Calls to `/config/notifications/telegram` are not gated by this
-   * queue — they always return `[]`.
+   * Calls to `/config/notifications` are not gated by this queue — they always
+   * return `[]`.
    */
   function mockJsonResponse(body: unknown, status = 200): void {
     configResponses.push(
@@ -395,5 +394,37 @@ describe('SettingsPage', () => {
     expect(
       await screen.findByText(/the candle timeframes the platform tracks/i),
     ).toBeInTheDocument();
+  });
+
+  it('renders General and Notifications tabs with General selected by default', async () => {
+    mockJsonResponse({
+      periods: [Period.OneHour, Period.OneDay],
+      defaultPeriod: Period.OneDay,
+    });
+    renderPage();
+
+    await screen.findByRole('button', { name: '1h' });
+    // Radix Themes renders each trigger label twice (a hidden bold-width
+    // placeholder), doubling the accessible name — match it with a regex.
+    expect({
+      general: screen.getByRole('tab', { name: /General/ }).getAttribute('aria-selected'),
+      notifications: screen
+        .getByRole('tab', { name: /Notifications/ })
+        .getAttribute('aria-selected'),
+    }).toEqual({ general: 'true', notifications: 'false' });
+  });
+
+  it('shows the notifications section when the Notifications tab is activated', async () => {
+    mockJsonResponse({
+      periods: [Period.OneHour, Period.OneDay],
+      defaultPeriod: Period.OneDay,
+    });
+    renderPage();
+    const user = userEvent.setup();
+
+    await screen.findByRole('button', { name: '1h' });
+    await user.click(screen.getByRole('tab', { name: /Notifications/ }));
+
+    expect(await screen.findByText('No notifications configured.')).toBeInTheDocument();
   });
 });

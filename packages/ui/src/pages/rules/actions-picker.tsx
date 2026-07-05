@@ -24,7 +24,7 @@ import {
 } from '@radix-ui/themes';
 import { Plus, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useTelegramDestinations } from '../../lib/hooks/telegram.js';
+import { useNotifications } from '../../lib/hooks/notifications.js';
 import type { KnownStateKeys } from './leaf-editor.js';
 import { StateKeyPicker } from './state-key-picker.js';
 
@@ -193,8 +193,10 @@ function NotificationBody({
   value: NotificationAction;
   onChange: (next: Action) => void;
 }): ReactNode {
-  const destinations = useTelegramDestinations();
-  const options = destinations.data ?? [];
+  const configs = useNotifications();
+  const options = (configs.data ?? []).filter(
+    (config) => config.notificationType === NotificationChannel.Telegram,
+  );
   return (
     <Flex direction="column" gap="2">
       <Flex gap="2" align="center">

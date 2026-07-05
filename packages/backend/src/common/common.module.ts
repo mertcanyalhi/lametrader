@@ -25,8 +25,8 @@ import { RuleEventDoc, RuleEventDocSchema } from './persistence/rule-event-doc.s
 import { SymbolEventDoc, SymbolEventDocSchema } from './persistence/symbol-event-doc.schema.js';
 import { ConfigService } from './services/config.service.js';
 import { HealthService } from './services/health.service.js';
+import { NotificationConfigsService } from './services/notification-configs.service.js';
 import { streamHubProviders } from './services/stream-hubs.js';
-import { TelegramDestinationsService } from './services/telegram-destinations.service.js';
 import { TelegramNotifier, telegramNotifierFactory } from './services/telegram-notifier.js';
 import { buildValidationPipe } from './validation.pipe.js';
 
@@ -44,8 +44,8 @@ import { buildValidationPipe } from './validation.pipe.js';
  *   read by Market (supported/default periods) and Delivery;
  * - the **event log** ({@link EVENT_LOG} / {@link SYMBOL_EVENT_LOG}), written by
  *   the Analytics rule engine and read by Delivery's rule-event stream;
- * - **telegram notifications** ({@link TelegramNotifier} + its `/config/notifications/telegram`
- *   destinations feature), sent by the Analytics rule engine.
+ * - **notifications** ({@link TelegramNotifier} + the generic `/config/notifications`
+ *   configs feature), sent by the Analytics rule engine.
  *
  * Every shared token is bound and exported here exactly once, so each dependent
  * context imports this module and resolves the one shared instance — the
@@ -93,11 +93,11 @@ import { buildValidationPipe } from './validation.pipe.js';
       inject: [getModelToken(RuleEventDoc.name), getModelToken(SymbolEventDoc.name)],
     },
     { provide: SYMBOL_EVENT_LOG, useExisting: EVENT_LOG },
-    TelegramDestinationsService,
+    NotificationConfigsService,
     {
       provide: TelegramNotifier,
       useFactory: telegramNotifierFactory,
-      inject: [TelegramDestinationsService],
+      inject: [NotificationConfigsService],
     },
     ...streamHubProviders,
   ],
@@ -106,7 +106,7 @@ import { buildValidationPipe } from './validation.pipe.js';
     CONFIG_REPOSITORY,
     EVENT_LOG,
     SYMBOL_EVENT_LOG,
-    TelegramDestinationsService,
+    NotificationConfigsService,
     TelegramNotifier,
     CANDLE_STREAM,
     INDICATOR_STREAM,

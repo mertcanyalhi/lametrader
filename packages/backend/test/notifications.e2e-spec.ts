@@ -4,13 +4,12 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 
 /**
- * E2E for the config-notifications sub-resource from the API consumer's
+ * E2E for the generic `/config/notifications` resource from the API consumer's
  * perspective: the real Nest app over a real Mongo (Testcontainers), exercised
- * over HTTP under `/config/notifications/telegram`.
+ * over HTTP.
  *
  * Storage is folded into the shared config K/V store, so the round-trip also
- * verifies the `ConfigKey.TelegramDestinations` key persists across
- * connections. Mirrors the old Fastify `notifications.e2e.test.ts`.
+ * verifies the `ConfigKey.Notifications` key persists across connections.
  */
 describe('config notifications API (e2e)', () => {
   let app: INestApplication;
@@ -31,37 +30,42 @@ describe('config notifications API (e2e)', () => {
     await app?.close();
   });
 
-  it('round-trips an upsert across a fresh connection (persists in the K/V store)', async () => {
+  it('round-trips a create across a fresh connection (persists in the K/V store)', async () => {
     const post = await request(app.getHttpServer())
-      .post('/config/notifications/telegram')
-      .send({ name: 'main', botToken: 'TOKEN-1', chatId: '123' });
+      .post('/config/notifications')
+      .send({ notificationType: 'telegram', name: 'main', botToken: 'TOKEN-1', chatId: '123' });
     expect({ status: post.status, body: post.body }).toEqual({
-      status: 200,
-      body: { name: 'main', chatId: '123' },
+      status: 201,
+      body: { id: expect.any(String), notificationType: 'telegram', name: 'main', chatId: '123' },
     });
 
     const fresh = await bootApp();
-    const get = await request(fresh.getHttpServer()).get('/config/notifications/telegram');
+    const get = await request(fresh.getHttpServer()).get(`/config/notifications/${post.body.id}`);
     expect({ status: get.status, body: get.body }).toEqual({
       status: 200,
-      body: [{ name: 'main', chatId: '123' }],
+      body: { id: post.body.id, notificationType: 'telegram', name: 'main', chatId: '123' },
     });
     await fresh.close();
   });
 
-  it('DELETE removes the destination and a second DELETE returns 404', async () => {
-    await request(app.getHttpServer())
-      .post('/config/notifications/telegram')
-      .send({ name: 'doomed', botToken: 'TOKEN-X', chatId: '999' });
+  it('supports the PATCH then DELETE lifecycle; a second DELETE returns 404', async () => {
+    const post = await request(app.getHttpServer())
+      .post('/config/notifications')
+      .send({ notificationType: 'telegram', name: 'doomed', botToken: 'TOKEN-X', chatId: '999' });
+    const id = post.body.id;
 
-    const first = await request(app.getHttpServer()).delete(
-      '/config/notifications/telegram/doomed',
-    );
-    const second = await request(app.getHttpServer()).delete(
-      '/config/notifications/telegram/doomed',
-    );
+    const patched = await request(app.getHttpServer())
+      .patch(`/config/notifications/${id}`)
+      .send({ chatId: '111' });
+    const first = await request(app.getHttpServer()).delete(`/config/notifications/${id}`);
+    const second = await request(app.getHttpServer()).delete(`/config/notifications/${id}`);
 
-    expect({ first: first.status, second: second.status }).toEqual({
+    expect({
+      patched: { status: patched.status, chatId: patched.body.chatId },
+      first: first.status,
+      second: second.status,
+    }).toEqual({
+      patched: { status: 200, chatId: '111' },
       first: 204,
       second: 404,
     });

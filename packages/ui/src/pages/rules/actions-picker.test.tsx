@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-  // Telegram destinations hook fires a GET; return [].
+  // The notifications hook fires a GET; return [].
   globalThis.fetch = vi.fn(
     async () =>
       new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }),

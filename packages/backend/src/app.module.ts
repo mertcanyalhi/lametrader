@@ -19,7 +19,7 @@ import { MarketModule } from './market/market.module.js';
  * global `ValidationPipe` (DTO validation emitting the same envelope).
  *
  * Feature modules: {@link ConfigModule} (`/config`),
- * {@link NotificationsModule} (`/config/notifications/telegram`),
+ * {@link NotificationsModule} (`/config/notifications`),
  * {@link ProfilesModule} (`/profiles` + attached indicators),
  * {@link CandlesModule} (`/symbols/:id/candles` + `/backfill`; owns the shared
  * candle store), {@link SymbolsModule} (`/instruments` + `/symbols`; imports

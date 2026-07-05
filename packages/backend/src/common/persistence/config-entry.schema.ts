@@ -14,7 +14,7 @@ import { Schema as MongooseSchema } from 'mongoose';
 export class ConfigEntry {
   /**
    * The config key this document holds (`periods`, `defaultPeriod`,
-   * `telegramDestinations`) — used verbatim as the string `_id`.
+   * `notifications`) — used verbatim as the string `_id`.
    */
   @Prop({ type: String, required: true })
   _id!: string;

@@ -52,7 +52,7 @@ function makeFetchStub(): ReturnType<typeof vi.fn> {
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    if (url.endsWith('/api/config/notifications/telegram')) {
+    if (url.endsWith('/api/config/notifications')) {
       return new Response(JSON.stringify([]), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -167,7 +167,7 @@ describe('RuleEditorDialog', () => {
       if (
         url.endsWith('/api/symbols?enrich=true') ||
         url.endsWith('/api/profiles') ||
-        url.endsWith('/api/config/notifications/telegram')
+        url.endsWith('/api/config/notifications')
       ) {
         return new Response('[]', {
           status: 200,

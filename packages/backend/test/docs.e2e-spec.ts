@@ -34,7 +34,13 @@ describe('OpenAPI docs (e2e)', () => {
     expect({
       openapi: typeof res.body.openapi,
       hasConfig: Object.hasOwn(res.body.paths, '/config'),
-      hasTelegram: Object.hasOwn(res.body.paths, '/config/notifications/telegram'),
-    }).toEqual({ openapi: 'string', hasConfig: true, hasTelegram: true });
+      hasNotifications: Object.hasOwn(res.body.paths, '/config/notifications'),
+      hasTelegramSubroute: Object.hasOwn(res.body.paths, '/config/notifications/telegram'),
+    }).toEqual({
+      openapi: 'string',
+      hasConfig: true,
+      hasNotifications: true,
+      hasTelegramSubroute: false,
+    });
   });
 });

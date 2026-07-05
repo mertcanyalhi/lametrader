@@ -1,10 +1,4 @@
-import type { Period, TelegramDestination } from '@lametrader/core';
-
-/**
- * Re-exported for convenience so consumers of the validated config can name the
- * destination shape without reaching into `@lametrader/core` themselves.
- */
-export type { TelegramDestination };
+import type { Period } from '@lametrader/core';
 
 /**
  * The Pino log levels the server accepts via the `LOG_LEVEL` env var.
@@ -54,11 +48,6 @@ export interface AppConfig {
    * Short bars poll more often than long ones.
    */
   pollIntervals: Record<Period, number>;
-  /**
-   * Telegram destinations rules can target by `name`.
-   * Empty when none are configured (never `undefined`).
-   */
-  telegramDestinations: TelegramDestination[];
   /**
    * Pino log level scoped loggers inherit; `'info'` by default.
    * Bump to `'debug'` / `'trace'` to crank verbosity.
