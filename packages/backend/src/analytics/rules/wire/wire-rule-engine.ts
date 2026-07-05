@@ -109,18 +109,25 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
       // prev to `null` for state slots — sourcing a meaningful prev there is
       // larger scope and explicitly deferred by #433.
       const cascadePrev = cascadePrevLookups(event);
-      // Warm a real multi-bar OHLCV series from the candle repository (not the
+      // Build a lazy, repository-backed multi-bar OHLCV series (not the
       // single-point live mirror) so series operators — `Moving` / `Channel`
-      // / `Crossing` — walk the actual history behind the store (#499). The
-      // window is "everything stored up to and including the bar under
-      // evaluation" per observed `(period, axis)`: the upper bound is the
-      // firing event's timestamp so a candle stored *after* this observation
-      // (a later bar the repository already holds, or leftover cross-run data)
-      // never leaks in as the series' newest point — which would make a series
-      // operator read the wrong "current" bar and never fire.
+      // / `Crossing` — walk the actual history behind the store, paging on
+      // demand (#499). Nothing is loaded here: each pager fetches its first
+      // page only when an operator reads that operand. The window is
+      // "everything stored up to and including the bar under evaluation" per
+      // observed `(period, axis)`: the upper bound is the firing event's
+      // timestamp so a candle stored *after* this observation (a later bar the
+      // repository already holds, or leftover cross-run data) never leaks in as
+      // the series' newest point — which would make a series operator read the
+      // wrong "current" bar and never fire.
       // Upgrade path: also bound `from` to each firing rule's `lookbackBars`
       // × interval once the dispatcher threads the rule through.
-      const barSeries = warmLiveBarSeries(deps.candleRepository, firingSymbolId, event.ts, lookups);
+      const barSeries = buildLiveBarSeries(
+        deps.candleRepository,
+        firingSymbolId,
+        event.ts,
+        lookups,
+      );
       return buildEvaluationContext({
         symbolId: firingSymbolId,
         profileId,
@@ -258,7 +265,7 @@ interface EventBatch {
 }
 
 /**
- * The five OHLCV axes projected for each observed period when warming the
+ * The five OHLCV axes projected for each observed period when building the
  * live bar series — the same axis set the single-point mirror booked, now
  * backed by the candle repository's real history.
  */
@@ -291,7 +298,7 @@ const BAR_AXES: readonly BarAxis[] = ['open', 'high', 'low', 'close', 'volume'];
  * shared store — never becomes the series' newest point and is never mistaken
  * for the current bar (#504).
  */
-function warmLiveBarSeries(
+function buildLiveBarSeries(
   candleRepository: CandleRepository,
   symbolId: string,
   upperTs: number,
