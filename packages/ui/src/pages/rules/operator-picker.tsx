@@ -218,11 +218,11 @@ export const OPERATOR_FAMILY_ORDER: ReadonlyArray<LeafConditionFamily> = [
  *   State refs collapse to a singleton series in `resolveSeries`, so Crossing /
  *   Channel / Moving silently no-op against them — hiding those families avoids
  *   misleading the user (issue #430).
- *   Numeric-typed state refs keep `>` / `<` / `>=` / `<=` for thresholding;
- *   string-typed keep Equals / NotEquals; State adds `ChangesTo` / `ChangesFrom`.
- *   Bool-typed state refs hit this branch too, but `isBoolOperand` upstream
- *   short-circuits the picker entirely (single-operand sugar), so this list is
- *   only seen if that shortcut is ever bypassed.
+ *   The `>` / `<` / `>=` / `<=` ordering comparators are narrowed by the key's
+ *   type one level down in {@link legalOperatorsFor}: numeric keys keep them for
+ *   thresholding, `Bool` / `String` keys drop them so only equality (grafted to
+ *   `State.Equals` / `NotEquals`) + `ChangesTo` / `ChangesFrom` survive, leaving
+ *   the Comparison group empty (and hidden) for those keys (issue #457).
  * - Numeric LHS — every family is legal.
  * - Bool / StringLike LHS (non-state-ref) — only the State family.
  * - Unknown LHS — keep every family available so the user can still pick.
@@ -264,6 +264,7 @@ export function legalFamiliesFor(left: ConditionOperand): ReadonlySet<LeafCondit
 export function legalOperatorsFor(left: ConditionOperand): ReadonlyArray<OperatorOption> {
   const legalFamilies = legalFamiliesFor(left);
   const stateDispatch = isStateDispatchLhs(left);
+  const dropOrdering = isNonNumericStateRef(left);
   const out: OperatorOption[] = [];
   for (const option of OPERATOR_OPTIONS) {
     if (stateDispatch && option.value === ComparisonOperator.Eq) {
@@ -274,9 +275,42 @@ export function legalOperatorsFor(left: ConditionOperand): ReadonlyArray<Operato
       out.push({ ...option, family: LeafConditionFamily.State, value: StateOperator.NotEquals });
       continue;
     }
+    // A Bool / String state key has no ordering: > / < / >= / <= are dropped so
+    // only equality (grafted to State above) + transitions remain (issue #457).
+    if (dropOrdering && ORDERING_COMPARATORS.has(option.value)) continue;
     if (legalFamilies.has(option.family)) out.push(option);
   }
   return out;
+}
+
+/**
+ * The ordering comparators — the Comparison operators that only make sense
+ * against a numeric operand.
+ *
+ * `Eq` / `Neq` are deliberately excluded: they express equality (not ordering)
+ * and stay legal for every value type (grafted to State for state-ref LHS).
+ */
+const ORDERING_COMPARATORS: ReadonlySet<Operator> = new Set([
+  ComparisonOperator.Gt,
+  ComparisonOperator.Lt,
+  ComparisonOperator.Gte,
+  ComparisonOperator.Lte,
+]);
+
+/**
+ * Whether the LHS is a `SymbolStateRef` / `GlobalStateRef` whose picked key
+ * carries a non-numeric (`Bool` / `String`) type — the case where the ordering
+ * comparators must be dropped from the operator list (issue #457).
+ *
+ * A numeric state ref keeps them for thresholding; a non-state-ref bool/string
+ * LHS already excludes Comparison at the family level, so this check is scoped
+ * to state refs where the family stays `[Comparison, State]`.
+ */
+function isNonNumericStateRef(left: ConditionOperand): boolean {
+  if (left.kind !== OperandKind.SymbolStateRef && left.kind !== OperandKind.GlobalStateRef) {
+    return false;
+  }
+  return operandValueKind(left) !== OperandValueKind.Numeric;
 }
 
 /**

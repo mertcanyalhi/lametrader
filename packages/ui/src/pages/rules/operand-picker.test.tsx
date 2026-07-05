@@ -231,6 +231,37 @@ describe('OperandPicker', () => {
     expect(screen.queryByLabelText('Symbol state value type')).toEqual(null);
   });
 
+  it("adopts a known Number-typed symbol-state key's valueType and hides the Value type row on pick", async () => {
+    const user = userEvent.setup();
+    const snapshots: ConditionOperand[] = [];
+    render(
+      <Harness
+        initial={{
+          kind: OperandKind.SymbolStateRef,
+          key: '',
+          valueType: StateValueType.String,
+        }}
+        knownStateKeys={{
+          symbol: {
+            barCount: { type: StateValueType.Number, value: 42 },
+          },
+          global: {},
+        }}
+        onSnapshot={(operand) => snapshots.push(operand)}
+      />,
+    );
+    const input = screen.getByLabelText('Symbol state key');
+    await user.click(input);
+    await user.click(screen.getByText('barCount'));
+    const last = snapshots[snapshots.length - 1];
+    expect(last).toEqual({
+      kind: OperandKind.SymbolStateRef,
+      key: 'barCount',
+      valueType: StateValueType.Number,
+    });
+    expect(screen.queryByLabelText('Symbol state value type')).toEqual(null);
+  });
+
   it('exposes a Value type row on a freetext-created symbol-state key so the user picks its type', () => {
     render(
       <Harness

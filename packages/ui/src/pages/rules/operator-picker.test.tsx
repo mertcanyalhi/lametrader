@@ -292,6 +292,64 @@ describe('legalOperatorsFor', () => {
   });
 });
 
+describe('legalOperatorsFor — ordering comparators narrowed by the state key type', () => {
+  it('drops the ordering comparators for a Bool-typed SymbolStateRef LHS, keeping equality + transitions', () => {
+    const options = legalOperatorsFor({
+      kind: OperandKind.SymbolStateRef,
+      key: 'isLong',
+      valueType: StateValueType.Bool,
+    }).map((o) => o.value);
+    expect(options).toEqual([
+      StateOperator.Equals,
+      StateOperator.NotEquals,
+      StateOperator.ChangesTo,
+      StateOperator.ChangesFrom,
+    ]);
+  });
+
+  it('drops the ordering comparators for a String-typed SymbolStateRef LHS, keeping equality + transitions', () => {
+    const options = legalOperatorsFor({
+      kind: OperandKind.SymbolStateRef,
+      key: 'phase',
+      valueType: StateValueType.String,
+    }).map((o) => o.value);
+    expect(options).toEqual([
+      StateOperator.Equals,
+      StateOperator.NotEquals,
+      StateOperator.ChangesTo,
+      StateOperator.ChangesFrom,
+    ]);
+  });
+
+  it('drops the ordering comparators for a Bool-typed GlobalStateRef LHS, keeping equality + transitions', () => {
+    const options = legalOperatorsFor({
+      kind: OperandKind.GlobalStateRef,
+      key: 'enabled',
+      valueType: StateValueType.Bool,
+    }).map((o) => o.value);
+    expect(options).toEqual([
+      StateOperator.Equals,
+      StateOperator.NotEquals,
+      StateOperator.ChangesTo,
+      StateOperator.ChangesFrom,
+    ]);
+  });
+
+  it('drops the ordering comparators for a String-typed (enum-backed) GlobalStateRef LHS, keeping equality + transitions', () => {
+    const options = legalOperatorsFor({
+      kind: OperandKind.GlobalStateRef,
+      key: 'regime',
+      valueType: StateValueType.String,
+    }).map((o) => o.value);
+    expect(options).toEqual([
+      StateOperator.Equals,
+      StateOperator.NotEquals,
+      StateOperator.ChangesTo,
+      StateOperator.ChangesFrom,
+    ]);
+  });
+});
+
 describe('OPERATOR_OPTIONS metadata', () => {
   it('attaches an icon component to every operator option', () => {
     const missingIcon = OPERATOR_OPTIONS.filter((option) => option.icon === undefined).map(
@@ -394,6 +452,34 @@ describe('OperatorPicker — grouped + iconified rendering', () => {
       state: screen.queryByText('State') !== null,
     }).toEqual({
       comparison: true,
+      crossing: false,
+      channel: false,
+      moving: false,
+      state: true,
+    });
+  });
+
+  it('renders no Comparison group header for a Bool-typed SymbolStateRef LHS (only the State group shows)', async () => {
+    const user = userEvent.setup();
+    render(
+      <PickerHarness
+        left={{
+          kind: OperandKind.SymbolStateRef,
+          key: 'isLong',
+          valueType: StateValueType.Bool,
+        }}
+        initial={StateOperator.Equals}
+      />,
+    );
+    await user.click(screen.getByLabelText('Operator'));
+    expect({
+      comparison: screen.queryByText('Comparison') !== null,
+      crossing: screen.queryByText('Crossing') !== null,
+      channel: screen.queryByText('Channel') !== null,
+      moving: screen.queryByText('Moving') !== null,
+      state: screen.queryByText('State') !== null,
+    }).toEqual({
+      comparison: false,
       crossing: false,
       channel: false,
       moving: false,
