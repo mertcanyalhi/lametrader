@@ -9,6 +9,12 @@ const DEFAULT_MONGO_URI =
   'mongodb://lametrader:lametrader@localhost:27017/lametrader?authSource=admin';
 
 /**
+ * Default Redis connection string backing the persistent `OncePerBar` latch
+ * (local dev infra in `infra/docker-compose.yml`; #513, ADR-0020).
+ */
+const DEFAULT_REDIS_URL = 'redis://localhost:6379';
+
+/**
  * Default port the HTTP server listens on.
  */
 const DEFAULT_PORT = 3000;
@@ -49,6 +55,7 @@ const VALID_LOG_LEVELS: readonly LogLevel[] = ['fatal', 'error', 'warn', 'info',
 export function validateEnv(env: Record<string, unknown>): AppConfig {
   return {
     mongoUri: asString(env.MONGODB_URI) ?? DEFAULT_MONGO_URI,
+    redisUrl: asString(env.REDIS_URL) ?? DEFAULT_REDIS_URL,
     port: parsePort(asString(env.PORT)),
     pollIntervals: resolvePollIntervals(asString(env.POLL_INTERVALS)),
     logLevel: parseLogLevel(asString(env.LOG_LEVEL)),

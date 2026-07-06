@@ -14,6 +14,8 @@ import { CANDLE_REPOSITORY } from '../../market/interfaces/candle-repository.tok
 import { WATCHLIST_REPOSITORY } from '../../market/interfaces/watchlist-repository.token.js';
 import { PROFILE_REPOSITORY } from '../interfaces/profile-repository.token.js';
 import { STATE_REPOSITORY } from '../interfaces/state-repository.token.js';
+import { ONCE_PER_BAR_LATCH_STORE } from './dispatch/once-per-bar-latch.token.js';
+import type { OncePerBarLatchStore } from './dispatch/once-per-bar-latch.types.js';
 import { IndicatorSeriesStore } from './indicator-series-store.js';
 import { RULE_REPOSITORY } from './rule-repository.token.js';
 import { registerIndicatorInstances } from './wire/register-indicator-instances.js';
@@ -57,6 +59,7 @@ export class RuleEngineService {
    * @param candles - the shared candle store (OHLCV operand resolution).
    * @param notifier - the notification sink the action-runner dispatches through.
    * @param profiles - the profile store; enumerated at {@link start} to register each attached indicator-instance config.
+   * @param oncePerBarLatch - the persistent OncePerBar latch store (Redis; #513) the dispatcher's gate reads/writes.
    * @param indicatorStore - the shared indicator series store; `start` warms it from persisted profiles and `ProfileService` keeps it live on mutation (#519).
    */
   constructor(
@@ -67,6 +70,7 @@ export class RuleEngineService {
     @Inject(CANDLE_REPOSITORY) private readonly candles: CandleRepository,
     @Inject(TelegramNotifier) private readonly notifier: Notifier,
     @Inject(PROFILE_REPOSITORY) private readonly profiles: ProfileRepository,
+    @Inject(ONCE_PER_BAR_LATCH_STORE) private readonly oncePerBarLatch: OncePerBarLatchStore,
     private readonly indicatorStore: IndicatorSeriesStore,
   ) {}
 
@@ -100,6 +104,7 @@ export class RuleEngineService {
     });
     this.wired = await wireRuleEngine({
       rules: this.rules,
+      oncePerBarLatch: this.oncePerBarLatch,
       state: this.state,
       watchlist: this.watchlist,
       notifier: this.notifier,

@@ -21,6 +21,7 @@ import type { EvaluationContext } from '../evaluation-context.types.js';
 import { InMemoryRuleRepository } from '../in-memory-rule.repository.js';
 import type { SeriesView } from '../series.types.js';
 import { TriggerDispatcher } from './dispatcher.js';
+import { InMemoryOncePerBarLatchStore } from './in-memory-once-per-bar-latch.store.js';
 
 const EMPTY_SERIES: SeriesView = {
   length: 0,
@@ -140,6 +141,7 @@ describe('TriggerDispatcher trace', () => {
     );
     const dispatcher = new TriggerDispatcher({
       rules: repo,
+      latchStore: new InMemoryOncePerBarLatchStore(),
       buildContext: () => priceContext(120),
     });
 

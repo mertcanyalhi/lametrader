@@ -274,6 +274,7 @@ Feature code takes values from `ConfigService`, never from `process.env` directl
 | Variable                | Default                                                                       | Notes                                                                 |
 | ----------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | `MONGODB_URI`           | `mongodb://lametrader:lametrader@localhost:27017/lametrader?authSource=admin` | Root Mongo connection string.                                         |
+| `REDIS_URL`             | `redis://localhost:6379`                                                       | Redis backing the persistent OncePerBar latch (#513, ADR-0020).       |
 | `PORT`                  | `3000`                                                                         | HTTP listen port; must be an integer in `1..65535`.                   |
 | `POLL_INTERVALS`        | per-period ladder (see `env.validation.ts`)                                   | JSON object of `period → ms` overrides, merged over the defaults.     |
 | `LOG_LEVEL`             | `info`                                                                         | One of `fatal, error, warn, info, debug, trace`.                      |
@@ -282,7 +283,7 @@ Feature code takes values from `ConfigService`, never from `process.env` directl
 ## Run
 
 ```sh
-# Build to dist/, then start (needs a reachable MONGODB_URI).
+# Build to dist/, then start (needs a reachable MONGODB_URI + REDIS_URL).
 npm run build -w @lametrader/backend
 npm run start -w @lametrader/backend
 
@@ -302,7 +303,8 @@ npm run app:logs:server # tail the server's structured logs
 npm run app:down        # tear it down
 ```
 
-The compose `server` service passes `MONGODB_URI`, `PORT`, `POLL_INTERVALS`, `LOG_LEVEL`, and `LOG_SCOPES` (all with sane defaults) and has a `GET /health` healthcheck the web service waits on.
+The compose `server` service passes `MONGODB_URI`, `REDIS_URL`, `PORT`, `POLL_INTERVALS`, `LOG_LEVEL`, and `LOG_SCOPES` (all with sane defaults) and has a `GET /health` healthcheck the web service waits on.
+The default (no-profile) compose brings up **Mongo + Redis** so the local `be:start:dev` loop has both; Redis backs the rule engine's persistent OncePerBar latch (#513, ADR-0020).
 
 ## Test
 

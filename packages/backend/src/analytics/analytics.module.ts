@@ -7,9 +7,12 @@ import type {
   WatchlistRepository,
 } from '@lametrader/core';
 import { forwardRef, Module } from '@nestjs/common';
+import { ConfigService as EnvConfigService } from '@nestjs/config';
 import { getModelToken, MongooseModule } from '@nestjs/mongoose';
+import { Redis } from 'ioredis';
 import type { Model } from 'mongoose';
 import { CommonModule } from '../common/common.module.js';
+import type { AppConfig } from '../common/interfaces/app-config.types.js';
 import { EVENT_LOG } from '../common/interfaces/event-log.token.js';
 import { INDICATOR_STREAM } from '../common/interfaces/stream.tokens.js';
 import { SYMBOL_EVENT_LOG } from '../common/interfaces/symbol-event-log.token.js';
@@ -30,6 +33,8 @@ import { MongooseProfileRepository } from './persistence/mongoose-profile.reposi
 import { MongooseStateRepository } from './persistence/mongoose-state.repository.js';
 import { ProfileEntry, ProfileEntrySchema } from './persistence/profile-entry.schema.js';
 import { StateEntry, StateEntrySchema } from './persistence/state-entry.schema.js';
+import { ONCE_PER_BAR_LATCH_STORE } from './rules/dispatch/once-per-bar-latch.token.js';
+import { RedisOncePerBarLatchStore } from './rules/dispatch/redis-once-per-bar-latch.store.js';
 import { IndicatorSeriesStore } from './rules/indicator-series-store.js';
 import { MongooseRuleRepository } from './rules/mongoose-rule.repository.js';
 import { RuleService } from './rules/rule.service.js';
@@ -114,6 +119,16 @@ import { StateHistoryService } from './services/state-history.service.js';
       useFactory: (rules: RuleRepository, eventLog: EventLog, watchlist: WatchlistRepository) =>
         new RuleService(rules, eventLog, watchlist),
       inject: [RULE_REPOSITORY, EVENT_LOG, WATCHLIST_REPOSITORY],
+    },
+    {
+      // The dispatcher's persistent OncePerBar latch (#513, ADR-0020). Owned
+      // here — the rule engine's dispatcher is the sole consumer — so the Redis
+      // client is constructed in the context that uses it rather than the
+      // shared CommonModule leaf. The store closes the client on shutdown.
+      provide: ONCE_PER_BAR_LATCH_STORE,
+      useFactory: (config: EnvConfigService<AppConfig, true>) =>
+        new RedisOncePerBarLatchStore(new Redis(config.get('redisUrl', { infer: true }))),
+      inject: [EnvConfigService],
     },
     RuleEngineService,
     { provide: STATE_REPOSITORY, useClass: MongooseStateRepository },

@@ -21,6 +21,7 @@ import { InMemoryNotifier } from '../../../common/services/in-memory-notifier.js
 import { InMemoryCandleRepository } from '../../../market/persistence/in-memory-candle.repository.js';
 import { InMemoryWatchlistRepository } from '../../../market/persistence/in-memory-watchlist.repository.js';
 import { InMemoryStateRepository } from '../../persistence/in-memory-state.repository.js';
+import { InMemoryOncePerBarLatchStore } from '../dispatch/in-memory-once-per-bar-latch.store.js';
 import { _resetLogRoot, _setLogLevel } from '../engine-log.js';
 import { InMemoryRuleRepository } from '../in-memory-rule.repository.js';
 import { IndicatorSeriesStore } from '../indicator-series-store.js';
@@ -82,6 +83,7 @@ describe('wireRuleEngine', () => {
 
     const wired = await wireRuleEngine({
       rules,
+      oncePerBarLatch: new InMemoryOncePerBarLatchStore(),
       state,
       watchlist,
       eventLog,
@@ -124,6 +126,7 @@ describe('wireRuleEngine', () => {
       };
       const wired = await wireRuleEngine({
         rules: corruptRules,
+        oncePerBarLatch: new InMemoryOncePerBarLatchStore(),
         state,
         watchlist,
         eventLog,
@@ -223,6 +226,7 @@ describe('wireRuleEngine', () => {
     const allowingNotifier = new InMemoryNotifier(['main']);
     const wired = await wireRuleEngine({
       rules,
+      oncePerBarLatch: new InMemoryOncePerBarLatchStore(),
       state,
       watchlist,
       eventLog,
@@ -299,6 +303,7 @@ describe('wireRuleEngine', () => {
 
     const wired = await wireRuleEngine({
       rules,
+      oncePerBarLatch: new InMemoryOncePerBarLatchStore(),
       state,
       watchlist,
       eventLog,
@@ -369,6 +374,7 @@ describe('wireRuleEngine', () => {
 
     const wired = await wireRuleEngine({
       rules,
+      oncePerBarLatch: new InMemoryOncePerBarLatchStore(),
       state,
       watchlist,
       eventLog,
@@ -423,6 +429,7 @@ describe('wireRuleEngine', () => {
 
     const wired = await wireRuleEngine({
       rules,
+      oncePerBarLatch: new InMemoryOncePerBarLatchStore(),
       state,
       watchlist,
       eventLog,
@@ -467,6 +474,7 @@ describe('wireRuleEngine', () => {
 
     const wired = await wireRuleEngine({
       rules,
+      oncePerBarLatch: new InMemoryOncePerBarLatchStore(),
       state,
       watchlist,
       eventLog,
@@ -524,6 +532,7 @@ describe('wireRuleEngine', () => {
 
     const wired = await wireRuleEngine({
       rules,
+      oncePerBarLatch: new InMemoryOncePerBarLatchStore(),
       state,
       watchlist,
       eventLog,
@@ -624,6 +633,7 @@ describe('wireRuleEngine', () => {
 
     const wired = await wireRuleEngine({
       rules,
+      oncePerBarLatch: new InMemoryOncePerBarLatchStore(),
       state,
       watchlist,
       eventLog,
@@ -728,6 +738,7 @@ describe('wireRuleEngine', () => {
 
     const wired = await wireRuleEngine({
       rules,
+      oncePerBarLatch: new InMemoryOncePerBarLatchStore(),
       state,
       watchlist,
       eventLog,
@@ -796,6 +807,7 @@ describe('wireRuleEngine', () => {
 
     const wired = await wireRuleEngine({
       rules,
+      oncePerBarLatch: new InMemoryOncePerBarLatchStore(),
       state,
       watchlist,
       eventLog,
@@ -867,6 +879,7 @@ describe('wireRuleEngine', () => {
 
     const wired = await wireRuleEngine({
       rules,
+      oncePerBarLatch: new InMemoryOncePerBarLatchStore(),
       state,
       watchlist,
       eventLog,
@@ -896,6 +909,7 @@ describe('wireRuleEngine', () => {
   it('resolves cleanly with no rules persisted (no profiles to warm)', async () => {
     const wired = await wireRuleEngine({
       rules,
+      oncePerBarLatch: new InMemoryOncePerBarLatchStore(),
       state,
       watchlist,
       eventLog,
