@@ -125,4 +125,17 @@ describe('App shell', () => {
     const nav = screen.getByRole('navigation');
     expect(within(nav).getByRole('link', { name: 'Rules' })).toBeInTheDocument();
   });
+
+  it('surfaces the Backtesting nav link pointing to /backtesting', () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <AppRoutes />
+      </MemoryRouter>,
+    );
+    const nav = screen.getByRole('navigation');
+    expect(within(nav).getByRole('link', { name: 'Backtesting' })).toHaveAttribute(
+      'href',
+      '/backtesting',
+    );
+  });
 });

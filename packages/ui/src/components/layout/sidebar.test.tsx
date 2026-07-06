@@ -28,6 +28,28 @@ describe('Sidebar primary navigation', () => {
     );
     expect(screen.getByRole('link', { name: 'Rules' })).toHaveAttribute('aria-current', 'page');
   });
+
+  it('renders the Backtesting nav entry pointing to /backtesting', () => {
+    render(
+      <MemoryRouter>
+        <Sidebar collapsed={false} />
+      </MemoryRouter>,
+    );
+    const link = screen.getByRole('link', { name: 'Backtesting' });
+    expect(link).toHaveAttribute('href', '/backtesting');
+  });
+
+  it('marks the Backtesting link as the active page when the current route is /backtesting', () => {
+    render(
+      <MemoryRouter initialEntries={['/backtesting']}>
+        <Sidebar collapsed={false} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: 'Backtesting' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
 });
 
 describe('Sidebar brand mark', () => {
