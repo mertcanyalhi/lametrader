@@ -80,12 +80,15 @@ export {
   type WatchedSymbol,
   type WatchlistRepository,
 } from './types/market-data/symbol.types.js';
-export type { Notifier } from './types/notifications/notifier.types.js';
 export type {
-  TelegramDestination,
-  TelegramDestinationLookup,
-  TelegramDestinationSummary,
-} from './types/notifications/telegram-destination.types.js';
+  NotificationConfig,
+  NotificationConfigBase,
+  NotificationConfigSummary,
+  NotificationConfigView,
+  TelegramConfigLookup,
+  TelegramNotificationConfig,
+} from './types/notifications/notification-config.types.js';
+export type { Notifier } from './types/notifications/notifier.types.js';
 export {
   type AllScope,
   type IndicatorInstance,

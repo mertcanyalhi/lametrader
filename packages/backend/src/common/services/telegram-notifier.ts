@@ -1,7 +1,7 @@
-import { type Notifier, type TelegramDestinationLookup } from '@lametrader/core';
+import { type Notifier, type TelegramConfigLookup } from '@lametrader/core';
 import { Injectable } from '@nestjs/common';
 import { UnknownDestinationError } from '../domain/notifier.js';
-import { TelegramDestinationsService } from './telegram-destinations.service.js';
+import { NotificationConfigsService } from './notification-configs.service.js';
 
 /**
  * Thrown when the Telegram Bot API rejects a send or the transport itself
@@ -42,12 +42,12 @@ export interface TelegramNotifierOptions {
  * destinations lookup and POSTs to the Telegram Bot API's `sendMessage`
  * endpoint.
  *
- * Reads the destination on every send so an upsert / remove via the
- * `/config/notifications/telegram` API takes effect immediately —
+ * Reads the destination on every send so a create / update / remove via the
+ * `/config/notifications` API takes effect immediately —
  * no notifier restart required.
  *
- * Registered in the notifications module via a factory that injects the
- * {@link TelegramDestinationsService} as the lookup and uses the global
+ * Registered in the common module via a factory that injects the
+ * {@link NotificationConfigsService} as the lookup and uses the global
  * `fetch`; unit tests construct it directly with a fake transport.
  */
 @Injectable()
@@ -57,11 +57,11 @@ export class TelegramNotifier implements Notifier {
 
   /**
    * @param destinations - the lookup the notifier resolves names against
-   *   (typically the {@link TelegramDestinationsService}).
+   *   (typically the {@link NotificationConfigsService}).
    * @param options - injectable transport.
    */
   constructor(
-    private readonly destinations: TelegramDestinationLookup,
+    private readonly destinations: TelegramConfigLookup,
     options: TelegramNotifierOptions = {},
   ) {
     this.fetch = options.fetch ?? (globalThis.fetch as unknown as FetchLike);
@@ -91,10 +91,8 @@ export class TelegramNotifier implements Notifier {
 
 /**
  * Factory that builds the DI-managed {@link TelegramNotifier} from the injected
- * destinations service, using the global `fetch` transport.
+ * notification-configs service, using the global `fetch` transport.
  */
-export function telegramNotifierFactory(
-  destinations: TelegramDestinationsService,
-): TelegramNotifier {
-  return new TelegramNotifier(destinations);
+export function telegramNotifierFactory(configs: NotificationConfigsService): TelegramNotifier {
+  return new TelegramNotifier(configs);
 }

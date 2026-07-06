@@ -12,7 +12,7 @@ On boot it also runs the continuous market-data **poll loop** that drives the li
 - **Env config** (`src/config/env.validation.ts`, `app-config.types.ts`) — `@nestjs/config` with a `validate` hook (`validateEnv`) that resolves and validates the environment into a typed `AppConfig`.
   Same variables, defaults, and fail-fast behavior as the previous `packages/engine/src/settings.ts` (`loadSettings`).
 - **Config resource** (`src/config`) — the `ConfigModule`: `ConfigService` over a Mongoose-backed key-value store (`config` collection), behind the `/config` controller.
-- **Notifications** (`src/notifications`) — the `NotificationsModule`: `TelegramDestinationsService` (destinations CRUD, stored in the same config K/V store) and `TelegramNotifier` (Bot API sender), behind the `/config/notifications/telegram` controller.
+- **Notifications** (`src/common`) — `NotificationConfigsService` (generic notification-config CRUD, stored in the same config K/V store) and `TelegramNotifier` (Bot API sender), behind the `/config/notifications` controller.
 - **Symbols** (`src/symbols`) — the `SymbolsModule`: `SymbolService` over a Mongoose-backed watchlist (`watchlist` collection) and the market-data sources, behind the `/instruments` + `/symbols` controller.
   It imports the `ProfilesModule` and injects its `ProfileService` as the symbol-removal → profile-prune cascade (ADR-0009): removing a symbol prunes it from every profile's `symbols` scope.
 - **Profiles** (`src/profiles`) — the `ProfilesModule`: `ProfileService` over a Mongoose-backed profile store (`profiles` collection), behind the `/profiles` controller (CRUD + the attached-indicators sub-resource). Validates a `symbols` scope against the watchlist and attached-indicator inputs against the indicator registry.
@@ -38,9 +38,11 @@ On boot it also runs the continuous market-data **poll loop** that drives the li
 | `GET`    | `/config`                                   | —                              | Return the current config.                              |
 | `PUT`    | `/config`                                   | `{ periods, defaultPeriod }`   | Full replace (both required). 200 / 400.                |
 | `PATCH`  | `/config`                                   | `{ periods?, defaultPeriod? }` | Partial merge over the current. 200 / 400.              |
-| `GET`    | `/config/notifications/telegram`            | —                              | List destinations (name + chat id; no bot tokens). 200. |
-| `POST`   | `/config/notifications/telegram`            | `{ name, botToken, chatId }`   | Upsert by `name`; returns the summary. **200** / 400.   |
-| `DELETE` | `/config/notifications/telegram/:name`      | —                              | Remove by name. **204** / 404.                          |
+| `GET`    | `/config/notifications`                     | —                              | List notification configs (id + type + name). 200.     |
+| `POST`   | `/config/notifications`                     | `{ notificationType, name, botToken, chatId }` | Create a config; returns the view. **201** / 400 / 409. |
+| `GET`    | `/config/notifications/:id`                 | —                              | Get one config's view (no bot token). 200 / 404.        |
+| `PATCH`  | `/config/notifications/:id`                 | `{ name?, botToken?, chatId? }` | Partial update; `notificationType` is immutable. 200 / 400 / 404 / 409. |
+| `DELETE` | `/config/notifications/:id`                 | —                              | Delete a config. **204** / 404.                         |
 | `GET`    | `/instruments?q=&type=`                     | —                              | Discover instruments (optionally filtered by type). 200 / 400. |
 | `GET`    | `/symbols?enrich=`                          | —                              | List the watchlist; `?enrich=true` attaches a `quote` per symbol. 200. |
 | `POST`   | `/symbols`                                  | `{ id, periods? }`             | Add (validates existence). **201** / 400 / 404 / 409.   |
@@ -85,11 +87,14 @@ On boot it also runs the continuous market-data **poll loop** that drives the li
 
 Defaults, when nothing is stored: `periods` = `1h`, `1d`; `defaultPeriod` = `1d`.
 
-### Notification destinations
+### Notifications
 
-Telegram is the only channel today (the `/config/notifications` prefix leaves room for siblings).
-`botToken` is write-only — never listed or echoed back; reads return `{ name, chatId }` only.
-`POST` upserts by `name` (a repeat name replaces its token + chat id in place) and returns **200**; `DELETE` returns **204**, or **404** when the name is unknown.
+A generic notification-config resource keyed by a stable `id`, carrying a `notificationType` discriminator (reusing the rule engine's `NotificationChannel`) so more channels can be added behind one common shape.
+Telegram is the only channel today.
+`notificationType` is **immutable** — a `PATCH` body carrying it is rejected **400**.
+`botToken` is write-only — never listed or echoed back; the list returns `{ id, notificationType, name }` and the single-config view adds `chatId` (never the token).
+`POST` **creates** (a duplicate `name` → **409**); `DELETE` returns **204**, or **404** when the id is unknown.
+Rules resolve a destination by its `name`, so names stay unique.
 
 ### Symbols resource
 
@@ -271,7 +276,6 @@ Feature code takes values from `ConfigService`, never from `process.env` directl
 | `MONGODB_URI`           | `mongodb://lametrader:lametrader@localhost:27017/lametrader?authSource=admin` | Root Mongo connection string.                                         |
 | `PORT`                  | `3000`                                                                         | HTTP listen port; must be an integer in `1..65535`.                   |
 | `POLL_INTERVALS`        | per-period ladder (see `env.validation.ts`)                                   | JSON object of `period → ms` overrides, merged over the defaults.     |
-| `TELEGRAM_DESTINATIONS` | `[]`                                                                           | JSON array of `{ name, botToken, chatId }`; names must be unique.     |
 | `LOG_LEVEL`             | `info`                                                                         | One of `fatal, error, warn, info, debug, trace`.                      |
 | `LOG_SCOPES`            | `[]`                                                                           | Comma-separated `pattern:level` overrides (validated; applied later). |
 
@@ -298,7 +302,7 @@ npm run app:logs:server # tail the server's structured logs
 npm run app:down        # tear it down
 ```
 
-The compose `server` service passes `MONGODB_URI`, `PORT`, `POLL_INTERVALS`, `TELEGRAM_DESTINATIONS`, `LOG_LEVEL`, and `LOG_SCOPES` (all with sane defaults) and has a `GET /health` healthcheck the web service waits on.
+The compose `server` service passes `MONGODB_URI`, `PORT`, `POLL_INTERVALS`, `LOG_LEVEL`, and `LOG_SCOPES` (all with sane defaults) and has a `GET /health` healthcheck the web service waits on.
 
 ## Test
 

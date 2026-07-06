@@ -16,7 +16,6 @@ describe('validateEnv', () => {
         [Period.OneDay]: 1_800_000,
         [Period.OneWeek]: 3_600_000,
       },
-      telegramDestinations: [],
       logLevel: 'info',
       logScopes: [],
     });

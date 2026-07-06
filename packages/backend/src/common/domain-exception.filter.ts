@@ -13,6 +13,11 @@ import {
   IndicatorInstanceNotFoundError,
   IndicatorNotFoundError,
 } from './domain/indicator.js';
+import {
+  NotificationConfigConflictError,
+  NotificationConfigError,
+  NotificationConfigNotFoundError,
+} from './domain/notification-config.js';
 import { ProfileConflictError, ProfileError, ProfileNotFoundError } from './domain/profile.js';
 import { RuleError, RuleNotFoundError, TickRuleNotEligibleError } from './domain/rule.js';
 import {
@@ -21,10 +26,6 @@ import {
   SymbolError,
   SymbolNotFoundError,
 } from './domain/symbol.js';
-import {
-  TelegramDestinationError,
-  TelegramDestinationNotFoundError,
-} from './domain/telegram-destination.js';
 import type { ErrorResponse, FieldError } from './interfaces/error-response.types.js';
 
 /**
@@ -51,7 +52,7 @@ interface JsonResponse {
  *   unwatched symbol id.
  * - the domain client-input base errors ({@link ConfigError},
  *   {@link SymbolError}, {@link CandleError}, {@link ProfileError},
- *   {@link RuleError}, {@link IndicatorError}, {@link TelegramDestinationError})
+ *   {@link RuleError}, {@link IndicatorError}, {@link NotificationConfigError})
  *   → **400**.
  * - {@link MarketDataError} → **502** (upstream provider fault, not our bug).
  * - anything else → **500** `{ error: 'Unexpected error' }`.
@@ -81,7 +82,7 @@ export class DomainExceptionFilter implements ExceptionFilter {
     RuleNotFoundError,
     IndicatorNotFoundError,
     IndicatorInstanceNotFoundError,
-    TelegramDestinationNotFoundError,
+    NotificationConfigNotFoundError,
   ] as const;
 
   /**
@@ -92,6 +93,7 @@ export class DomainExceptionFilter implements ExceptionFilter {
     SymbolConflictError,
     BackfillConflictError,
     ProfileConflictError,
+    NotificationConfigConflictError,
   ] as const;
 
   /**
@@ -107,7 +109,7 @@ export class DomainExceptionFilter implements ExceptionFilter {
     ProfileError,
     RuleError,
     IndicatorError,
-    TelegramDestinationError,
+    NotificationConfigError,
   ] as const;
 
   /**

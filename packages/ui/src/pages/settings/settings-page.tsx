@@ -1,6 +1,16 @@
 import { yupResolver } from '@hookform/resolvers/yup';
 import type { Config, Period } from '@lametrader/core';
-import { Button, Callout, Card, Heading, Select, Skeleton, Text } from '@radix-ui/themes';
+import {
+  Box,
+  Button,
+  Callout,
+  Card,
+  Heading,
+  Select,
+  Skeleton,
+  Tabs,
+  Text,
+} from '@radix-ui/themes';
 import { type ReactNode, useEffect } from 'react';
 import { type Resolver, type SubmitHandler, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -11,7 +21,7 @@ import { configSchema, FIELD_LABELS } from '../../lib/config-schema.js';
 import { useConfig, useUpdateConfig } from '../../lib/hooks/use-config.js';
 import { getLogger } from '../../lib/log.js';
 import { PERIOD_ORDER } from '../../lib/periods.js';
-import { TelegramDestinationsSection } from './telegram-destinations-section.js';
+import { NotificationsSection } from './notifications-section.js';
 
 /**
  * Scoped logger for the settings page — form/save lifecycle events.
@@ -22,13 +32,39 @@ const log = getLogger('settings-page');
 /**
  * The `/settings` route component.
  *
- * Loads the platform config via `useConfig` and renders the appropriate state
- * (skeleton, error callout, or the bound form). The form itself lives in
- * `SettingsForm` so it can mount fresh once the initial GET resolves — react-
- * hook-form's `defaultValues` are captured on mount, so a fresh mount after
- * load is the cleanest way to hydrate them.
+ * Splits settings into **General** (the platform config form) and
+ * **Notifications** (the generic notification-config table) tabs. Each tab owns
+ * its own data-loading (the config query for General, the notifications query
+ * for Notifications), so the inactive tab's request doesn't fire until it is
+ * activated.
  */
 export function SettingsPage(): ReactNode {
+  return (
+    <Tabs.Root defaultValue="general">
+      <Tabs.List>
+        <Tabs.Trigger value="general">General</Tabs.Trigger>
+        <Tabs.Trigger value="notifications">Notifications</Tabs.Trigger>
+      </Tabs.List>
+      <Box pt="4">
+        <Tabs.Content value="general">
+          <GeneralTab />
+        </Tabs.Content>
+        <Tabs.Content value="notifications">
+          <NotificationsSection />
+        </Tabs.Content>
+      </Box>
+    </Tabs.Root>
+  );
+}
+
+/**
+ * The General tab — loads the platform config via `useConfig` and renders the
+ * appropriate state (skeleton, error callout, or the bound form). The form
+ * lives in `SettingsForm` so it can mount fresh once the initial GET resolves —
+ * react-hook-form's `defaultValues` are captured on mount, so a fresh mount
+ * after load is the cleanest way to hydrate them.
+ */
+function GeneralTab(): ReactNode {
   const query = useConfig();
 
   if (query.isPending) {
@@ -41,12 +77,7 @@ export function SettingsPage(): ReactNode {
       </Callout.Root>
     );
   }
-  return (
-    <div className="flex flex-col gap-4">
-      <SettingsForm initial={query.data} />
-      <TelegramDestinationsSection />
-    </div>
-  );
+  return <SettingsForm initial={query.data} />;
 }
 
 /**

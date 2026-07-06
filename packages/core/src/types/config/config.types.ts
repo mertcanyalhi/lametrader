@@ -47,12 +47,12 @@ export enum ConfigKey {
   /** Holds the `defaultPeriod` string. */
   DefaultPeriod = 'defaultPeriod',
   /**
-   * Holds the `TelegramDestination[]` array.
+   * Holds the `NotificationConfig[]` array.
    * Folded into the config K/V store instead of its own collection
    * (admin-edited, 1–10 entries, handful of writes per day) — see
    * `specs/config-layer.spec.md` for the storage trade-off.
    */
-  TelegramDestinations = 'telegramDestinations',
+  Notifications = 'notifications',
 }
 
 /**

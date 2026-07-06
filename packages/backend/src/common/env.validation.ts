@@ -1,10 +1,5 @@
 import { Period } from '@lametrader/core';
-import type {
-  AppConfig,
-  LogLevel,
-  LogScopeOverride,
-  TelegramDestination,
-} from './interfaces/app-config.types.js';
+import type { AppConfig, LogLevel, LogScopeOverride } from './interfaces/app-config.types.js';
 
 /**
  * Default MongoDB connection string (local dev infra in
@@ -56,7 +51,6 @@ export function validateEnv(env: Record<string, unknown>): AppConfig {
     mongoUri: asString(env.MONGODB_URI) ?? DEFAULT_MONGO_URI,
     port: parsePort(asString(env.PORT)),
     pollIntervals: resolvePollIntervals(asString(env.POLL_INTERVALS)),
-    telegramDestinations: parseTelegramDestinations(asString(env.TELEGRAM_DESTINATIONS)),
     logLevel: parseLogLevel(asString(env.LOG_LEVEL)),
     logScopes: parseLogScopes(asString(env.LOG_SCOPES)),
   };
@@ -149,40 +143,4 @@ function resolvePollIntervals(raw: string | undefined): Record<Period, number> {
     if (typeof value === 'number') resolved[period] = value;
   }
   return resolved;
-}
-
-/**
- * Parse the `TELEGRAM_DESTINATIONS` env value into the typed destination array.
- * Missing / empty → `[]`.
- * Throws on invalid shape or duplicate `name` so a typo fails fast at startup
- * rather than silently dropping a destination.
- */
-function parseTelegramDestinations(raw: string | undefined): TelegramDestination[] {
-  if (!raw) return [];
-  const parsed = JSON.parse(raw);
-  if (!Array.isArray(parsed)) {
-    throw new Error('TELEGRAM_DESTINATIONS must be a JSON array');
-  }
-  const result: TelegramDestination[] = [];
-  const seen = new Set<string>();
-  for (const entry of parsed) {
-    if (
-      entry === null ||
-      typeof entry !== 'object' ||
-      typeof (entry as Record<string, unknown>).name !== 'string' ||
-      typeof (entry as Record<string, unknown>).botToken !== 'string' ||
-      typeof (entry as Record<string, unknown>).chatId !== 'string'
-    ) {
-      throw new Error(
-        'TELEGRAM_DESTINATIONS entries must each be { name, botToken, chatId } strings',
-      );
-    }
-    const { name, botToken, chatId } = entry as TelegramDestination;
-    if (seen.has(name)) {
-      throw new Error(`TELEGRAM_DESTINATIONS contains duplicate name: ${name}`);
-    }
-    seen.add(name);
-    result.push({ name, botToken, chatId });
-  }
-  return result;
 }
