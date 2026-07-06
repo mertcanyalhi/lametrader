@@ -153,18 +153,19 @@ export function RuleEditorDialog({
       }
       onOpenChange(false);
     } catch (cause) {
-      if (cause instanceof ApiError && cause.status === 400) {
-        setInlineError(cause.message);
-        if (cause.fields !== undefined) {
-          const next: Record<string, string> = {};
-          for (const field of cause.fields) {
-            next[topLevelKey(field.path)] = field.message;
-          }
-          setFieldErrors(next);
+      // Any failure keeps the dialog open and surfaces the error inline — a
+      // closed dialog reads as success, so we never close on a rejected write.
+      // 400s additionally carry a per-field envelope we map onto the sections.
+      if (cause instanceof ApiError && cause.status === 400 && cause.fields !== undefined) {
+        const next: Record<string, string> = {};
+        for (const field of cause.fields) {
+          next[topLevelKey(field.path)] = field.message;
         }
-        return;
+        setFieldErrors(next);
       }
-      onOpenChange(false);
+      setInlineError(
+        cause instanceof ApiError ? cause.message : `Failed to ${submitLabel.toLowerCase()} rule`,
+      );
     }
   };
 

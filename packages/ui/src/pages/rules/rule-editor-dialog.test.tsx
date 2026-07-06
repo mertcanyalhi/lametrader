@@ -22,12 +22,18 @@ import type { RuleFormValues } from '../../lib/rule-form-schema.js';
 import { computeInstancePeriods, mergeInput, RuleEditorDialog } from './rule-editor-dialog';
 
 /** A wrapper that wires the dialog with a fresh TanStack client + Theme. */
-function Harness({ initial }: { initial: Rule }): ReactNode {
+function Harness({
+  initial,
+  onOpenChange = () => {},
+}: {
+  initial: Rule;
+  onOpenChange?: (open: boolean) => void;
+}): ReactNode {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
     <QueryClientProvider client={client}>
       <Theme>
-        <RuleEditorDialog open={true} onOpenChange={() => {}} mode="create" initial={initial} />
+        <RuleEditorDialog open={true} onOpenChange={onOpenChange} mode="create" initial={initial} />
       </Theme>
     </QueryClientProvider>
   );
@@ -203,6 +209,72 @@ describe('RuleEditorDialog', () => {
         (init as RequestInit | undefined)?.method === 'POST',
     );
     expect(postCall).toBeDefined();
+  });
+
+  it('keeps the dialog open and surfaces the error when the create POST fails with a 500', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    const seed = makeDraftRule({ profileId: 'p1', symbolId: 'crypto:BTCUSDT' });
+    seed.condition = {
+      kind: ConditionNodeKind.Leaf,
+      leaf: {
+        family: LeafConditionFamily.Comparison,
+        operator: ComparisonOperator.Gt,
+        left: { kind: OperandKind.Price },
+        right: {
+          kind: OperandKind.Literal,
+          value: { type: StateValueType.Number, value: 100 },
+        },
+      },
+    };
+    seed.actions = [
+      {
+        kind: ActionKind.Notification,
+        channel: NotificationChannel.Telegram,
+        destinationName: 'main',
+        template: 'hi',
+      },
+    ];
+    seed.name = 'My rule';
+
+    fetchSpy.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/api/rules' && init?.method === 'POST') {
+        return new Response(JSON.stringify({ error: 'boom' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (
+        url.endsWith('/api/symbols?enrich=true') ||
+        url.endsWith('/api/profiles') ||
+        url.endsWith('/api/config/notifications')
+      ) {
+        return new Response('[]', {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('{}', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    render(<Harness initial={seed} onOpenChange={onOpenChange} />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Create' })).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'Create' }));
+    });
+
+    // The error message surfaces inline and the dialog stays open.
+    await waitFor(() => {
+      expect(screen.getByText('boom')).toBeInTheDocument();
+    });
+    expect(onOpenChange).not.toHaveBeenCalled();
   });
 });
 
