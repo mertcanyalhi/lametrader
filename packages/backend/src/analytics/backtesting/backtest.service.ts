@@ -281,6 +281,7 @@ export class BacktestService {
     try {
       const result = await this.replay.replay(
         active.backtest.params,
+        active.backtest.strategy,
         active.profile,
         active.periods,
         {
@@ -298,6 +299,9 @@ export class BacktestService {
         ...active.backtest,
         status: BacktestStatus.Completed,
         updatedAt: this.now(),
+        trades: result.trades,
+        ...(result.openPosition === undefined ? {} : { openPosition: result.openPosition }),
+        summary: result.summary,
       };
       await this.backtests.save(completed);
       await this.events.append(completed.id, result.events);

@@ -1,5 +1,6 @@
 import {
   type BacktestParams,
+  type BacktestStrategy,
   Period,
   type Profile,
   ProfileScope,
@@ -19,6 +20,7 @@ import { InMemoryCandleRepository } from '../../market/persistence/in-memory-can
 import { InMemoryWatchlistRepository } from '../../market/persistence/in-memory-watchlist.repository.js';
 import { InMemoryProfileRepository } from '../persistence/in-memory-profile.repository.js';
 import { BacktestService } from './backtest.service.js';
+import { emptyBacktestSummary } from './backtest-executor.js';
 import type {
   BacktestReplayHooks,
   BacktestReplayPort,
@@ -41,12 +43,13 @@ class FakeReplay implements BacktestReplayPort {
   ) {}
   async replay(
     _params: BacktestParams,
+    _strategy: BacktestStrategy,
     _profile: Profile,
     _periods: Period[],
     _hooks?: BacktestReplayHooks,
   ): Promise<BacktestReplayResult> {
     if (this.hang) return new Promise<BacktestReplayResult>(() => {});
-    return { events: this.events, cancelled: false };
+    return { events: this.events, trades: [], summary: emptyBacktestSummary(), cancelled: false };
   }
 }
 

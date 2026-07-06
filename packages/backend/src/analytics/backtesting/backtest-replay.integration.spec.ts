@@ -1,6 +1,8 @@
 import {
   ActionKind,
   type BacktestParams,
+  type BacktestStrategy,
+  BacktestThresholdKind,
   type Candle,
   ComparisonOperator,
   ConditionNodeKind,
@@ -84,6 +86,17 @@ const params = (start: number, end: number): BacktestParams => ({
   commission: {},
 });
 
+/** A strategy whose signals never match these rules' state keys — these tests assert only the recorded events, not trades. */
+const strategy: BacktestStrategy = {
+  id: 'strat-1',
+  name: 'Inert',
+  description: '',
+  entry: { signal: { key: '__no_such_key__', value: { type: StateValueType.Bool, value: true } } },
+  exit: { profitTarget: { kind: BacktestThresholdKind.Percentage, amount: 5 } },
+  createdAt: 0,
+  updatedAt: 0,
+};
+
 /** Build a replay over in-memory stores; the indicator service is unused by these rules. */
 function buildReplay(candles: InMemoryCandleRepository, rules: Rule[], periods: Period[]) {
   const watchlist = new InMemoryWatchlistRepository([watched(periods)]);
@@ -128,7 +141,7 @@ describe('BacktestReplayService replay', () => {
     });
     const replay = buildReplay(candles, [everyTick], [Period.OneHour, Period.OneMinute]);
 
-    const result = await replay.replay(params(0, HOUR + 1), profile, [
+    const result = await replay.replay(params(0, HOUR + 1), strategy, profile, [
       Period.OneHour,
       Period.OneMinute,
     ]);
@@ -170,7 +183,9 @@ describe('BacktestReplayService replay', () => {
     });
     const replay = buildReplay(candles, [notifyRule], [Period.OneMinute]);
 
-    const result = await replay.replay(params(0, MINUTE + 1), profile, [Period.OneMinute]);
+    const result = await replay.replay(params(0, MINUTE + 1), strategy, profile, [
+      Period.OneMinute,
+    ]);
 
     expect(result.events.some((e) => e.type === RuleEventType.NotificationSent)).toBe(true);
   });
@@ -209,7 +224,9 @@ describe('BacktestReplayService replay', () => {
     });
     const replay = buildReplay(candles, [movingUp], [Period.OneMinute]);
 
-    const result = await replay.replay(params(0, MINUTE + 1), profile, [Period.OneMinute]);
+    const result = await replay.replay(params(0, MINUTE + 1), strategy, profile, [
+      Period.OneMinute,
+    ]);
 
     expect(result.events.some((e) => e.type === RuleEventType.StateSet && e.key === 'up')).toBe(
       true,

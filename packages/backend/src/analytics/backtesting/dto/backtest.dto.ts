@@ -1,4 +1,9 @@
-import { BacktestStatus, Period } from '@lametrader/core';
+import {
+  type BacktestOpenPosition,
+  BacktestStatus,
+  type BacktestTrade,
+  Period,
+} from '@lametrader/core';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BacktestCommissionDto } from './backtest-commission.dto.js';
 import { BacktestStrategyDto } from './backtest-strategy.dto.js';
@@ -136,13 +141,13 @@ export class BacktestDto {
   @ApiProperty({ type: BacktestStrategyDto })
   strategy!: BacktestStrategyDto;
 
-  /** Closed round trips (empty until the trading model lands). */
+  /** Closed round trips, in exit order. */
   @ApiProperty({ type: Object, isArray: true })
-  trades!: unknown[];
+  trades!: BacktestTrade[];
 
   /** The position still open at `end`, if any. */
   @ApiPropertyOptional({ type: Object })
-  openPosition?: unknown;
+  openPosition?: BacktestOpenPosition;
 
   /** Aggregate metrics over the closed trades. */
   @ApiProperty({ type: BacktestSummaryDto })

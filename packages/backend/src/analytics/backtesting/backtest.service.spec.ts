@@ -1,9 +1,13 @@
 import {
   type Backtest,
+  BacktestExitReason,
+  type BacktestOpenPosition,
   type BacktestParams,
   BacktestStatus,
   type BacktestStrategy,
+  type BacktestSummary,
   BacktestThresholdKind,
+  type BacktestTrade,
   type Candle,
   Period,
   type Profile,
@@ -19,6 +23,7 @@ import { InMemoryCandleRepository } from '../../market/persistence/in-memory-can
 import { InMemoryWatchlistRepository } from '../../market/persistence/in-memory-watchlist.repository.js';
 import { InMemoryProfileRepository } from '../persistence/in-memory-profile.repository.js';
 import { BacktestService } from './backtest.service.js';
+import { emptyBacktestSummary } from './backtest-executor.js';
 import type {
   BacktestReplayHooks,
   BacktestReplayPort,
@@ -34,17 +39,24 @@ const NOW = 1_700_200_000_000;
 const START = 1_700_000_000_000;
 const END = 1_700_086_400_000;
 
-/** A controllable replay fake: return canned events, hang forever, or observe cancel. */
+/** A controllable replay fake: return canned events / trading-model output, hang forever, or observe cancel. */
 class FakeReplay implements BacktestReplayPort {
   /** Events the run "recorded"; returned on a normal completion. */
   events: RuleEventEntry[] = [];
+  /** Closed trades the trading model "produced". */
+  trades: BacktestTrade[] = [];
+  /** The position still open at the end, if any. */
+  openPosition: BacktestOpenPosition | undefined = undefined;
+  /** The summary over the closed trades. */
+  summary: BacktestSummary = emptyBacktestSummary();
   /** When set, `replay` never resolves — the run stays in flight. */
   hang = false;
-  /** The last `(params, profile, periods)` a run was invoked with. */
+  /** The last `(params, periods)` a run was invoked with. */
   seen: { params: BacktestParams; periods: Period[] } | null = null;
 
   async replay(
     params: BacktestParams,
+    _strategy: BacktestStrategy,
     _profile: Profile,
     periods: Period[],
     hooks?: BacktestReplayHooks,
@@ -54,9 +66,15 @@ class FakeReplay implements BacktestReplayPort {
       return new Promise<BacktestReplayResult>(() => {});
     }
     if (hooks?.isCancelled?.()) {
-      return { events: [], cancelled: true };
+      return { events: [], trades: [], summary: emptyBacktestSummary(), cancelled: true };
     }
-    return { events: this.events, cancelled: false };
+    return {
+      events: this.events,
+      trades: this.trades,
+      ...(this.openPosition === undefined ? {} : { openPosition: this.openPosition }),
+      summary: this.summary,
+      cancelled: false,
+    };
   }
 }
 
@@ -349,6 +367,48 @@ describe('BacktestService run lifecycle', () => {
     await service.start(request());
     await waitFor(async () => (await backtests.get('bt-1')) !== null);
     expect(await events.list('bt-1')).toEqual([runEvent]);
+  });
+
+  it('persists the trading model output — trades, open position, and summary — on completion', async () => {
+    const trade: BacktestTrade = {
+      entryTs: START,
+      exitTs: START + 3_600_000,
+      entryPrice: 100,
+      exitPrice: 120,
+      quantity: 50,
+      commission: 2,
+      pnl: 998,
+      roiPct: 9.98,
+      exitReason: BacktestExitReason.ProfitTarget,
+    };
+    const openPosition: BacktestOpenPosition = {
+      entryTs: START + 7_200_000,
+      entryPrice: 120,
+      quantity: 25,
+      entryCommission: 1,
+      unrealizedPnl: 79,
+    };
+    const summary: BacktestSummary = {
+      totalPnl: 998,
+      roiPct: 9.98,
+      avgPnlPerTrade: 998,
+      tradeCount: 1,
+      winners: 1,
+      losers: 0,
+      avgRoiPct: 9.98,
+      avgDaysInTrade: 0.0416666667,
+    };
+    const replay = new FakeReplay();
+    replay.trades = [trade];
+    replay.openPosition = openPosition;
+    replay.summary = summary;
+    const { service, backtests, ready } = build({ replay });
+    await ready;
+    await service.start(request());
+    await waitFor(async () => (await backtests.get('bt-1')) !== null);
+    expect(await backtests.get('bt-1')).toEqual(
+      completed({ trades: [trade], openPosition, summary }),
+    );
   });
 
   it('leaves the saved snapshot unchanged when the source strategy is later edited', async () => {

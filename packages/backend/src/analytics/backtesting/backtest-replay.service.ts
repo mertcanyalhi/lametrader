@@ -1,7 +1,10 @@
 import {
-  type Backtest,
+  type BacktestOpenPosition,
   type BacktestParams,
   type BacktestProgress,
+  type BacktestStrategy,
+  type BacktestSummary,
+  type BacktestTrade,
   type Candle,
   type CandleRepository,
   type Notifier,
@@ -21,6 +24,7 @@ import { InMemoryRuleRepository } from '../rules/in-memory-rule.repository.js';
 import { IndicatorSeriesStore } from '../rules/indicator-series-store.js';
 import { registerIndicatorInstances } from '../rules/wire/register-indicator-instances.js';
 import { feedCandleIntoEngine, wireRuleEngine } from '../rules/wire/wire-rule-engine.js';
+import { BacktestExecutor, emptyBacktestSummary } from './backtest-executor.js';
 
 /** Milliseconds in a calendar day — the unit progress is reported in. */
 const DAY_MS = 86_400_000;
@@ -50,11 +54,18 @@ export interface BacktestReplayHooks {
 
 /**
  * The outcome of a completed replay — the run events its isolated engine
- * recorded, plus whether the run was cancelled before it finished.
+ * recorded, the trading model's closed trades / open position / summary over
+ * them, plus whether the run was cancelled before it finished.
  */
 export interface BacktestReplayResult {
   /** The run events, in engine emission (append) order. */
   events: RuleEventEntry[];
+  /** The closed round trips the trading model produced, in exit order. */
+  trades: BacktestTrade[];
+  /** The position still open when the replay ended, if any. */
+  openPosition?: BacktestOpenPosition;
+  /** Aggregate metrics over the closed trades. */
+  summary: BacktestSummary;
   /** `true` when {@link BacktestReplayHooks.isCancelled} stopped the replay early. */
   cancelled: boolean;
 }
@@ -71,11 +82,13 @@ export interface BacktestReplayResult {
 export interface BacktestReplayPort {
   /**
    * Replay `params`' window through a throwaway engine seeded with `profile`'s
-   * rules over its active `periods`, reporting progress + honouring cancellation
-   * through `hooks`.
+   * rules over its active `periods`, running `strategy`'s trading model over the
+   * candles + events, reporting progress + honouring cancellation through
+   * `hooks`.
    */
   replay(
     params: BacktestParams,
+    strategy: BacktestStrategy,
     profile: Profile,
     periods: Period[],
     hooks?: BacktestReplayHooks,
@@ -139,13 +152,15 @@ export class BacktestReplayService implements BacktestReplayPort {
    * `[start, end]` after each fed candle. When {@link BacktestReplayHooks.isCancelled}
    * returns `true` the replay stops and returns `cancelled: true` with no events.
    *
-   * @param params - the run parameters (symbol, window, period).
+   * @param params - the run parameters (symbol, window, period, capital, commission).
+   * @param strategy - the strategy snapshot whose trading model runs over the feed.
    * @param profile - the profile whose rules drive the run (enabled, in scope).
    * @param periods - the symbol's active periods to replay.
    * @param hooks - progress + cancellation callbacks.
    */
   async replay(
     params: BacktestParams,
+    strategy: BacktestStrategy,
     profile: Profile,
     periods: Period[],
     hooks: BacktestReplayHooks = {},
@@ -175,22 +190,47 @@ export class BacktestReplayService implements BacktestReplayPort {
       indicatorStore,
     });
 
-    for (const item of feed) {
-      if (hooks.isCancelled?.()) {
-        return { events: [], cancelled: true };
+    const executor = new BacktestExecutor(strategy, {
+      initialCapital: params.initialCapital,
+      commission: params.commission,
+    });
+    // Buffer the events each candle produces (its emission-order delta) so the
+    // trading model sees exactly the events of the candle it just processed.
+    const stepEvents: RuleEventEntry[] = [];
+    const unsubscribe = eventLog.onAppend((entry, target) => {
+      if (target.kind === 'symbol' && target.symbolId === params.symbolId) {
+        stepEvents.push(entry);
       }
-      feedCandleIntoEngine(wired, {
-        id: params.symbolId,
-        period: item.period,
-        candle: item.candle,
-        final: true,
-      });
-      await wired.drain();
-      hooks.onProgress?.(progressAt(item, params, totalDays));
+    });
+
+    try {
+      for (const item of feed) {
+        if (hooks.isCancelled?.()) {
+          return { events: [], trades: [], summary: emptyBacktestSummary(), cancelled: true };
+        }
+        feedCandleIntoEngine(wired, {
+          id: params.symbolId,
+          period: item.period,
+          candle: item.candle,
+          final: true,
+        });
+        await wired.drain();
+        executor.processStep(item.candle, stepEvents.splice(0));
+        hooks.onProgress?.(progressAt(item, params, totalDays));
+      }
+    } finally {
+      unsubscribe();
     }
 
     hooks.onProgress?.({ elapsedDays: totalDays, totalDays });
-    return { events: await eventLog.symbolEvents(params.symbolId), cancelled: false };
+    const outcome = executor.result();
+    return {
+      events: await eventLog.symbolEvents(params.symbolId),
+      trades: outcome.trades,
+      ...(outcome.openPosition === undefined ? {} : { openPosition: outcome.openPosition }),
+      summary: outcome.summary,
+      cancelled: false,
+    };
   }
 
   /** Load every active period's candles in `[start, end)` and order the merged feed. */
@@ -247,20 +287,4 @@ export function progressAt(
   return { elapsedDays: elapsedMs / DAY_MS, totalDays };
 }
 
-/**
- * The empty summary a run with no closed trades carries — every aggregate is
- * zero. (The trading model that populates trades + a real summary lands in the
- * follow-up slice; this keeps the persisted {@link Backtest} shape stable.)
- */
-export function emptyBacktestSummary(): Backtest['summary'] {
-  return {
-    totalPnl: 0,
-    roiPct: 0,
-    avgPnlPerTrade: 0,
-    tradeCount: 0,
-    winners: 0,
-    losers: 0,
-    avgRoiPct: 0,
-    avgDaysInTrade: 0,
-  };
-}
+export { emptyBacktestSummary };
