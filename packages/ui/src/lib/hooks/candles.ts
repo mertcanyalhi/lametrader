@@ -211,3 +211,36 @@ export function mergeCandlesByTime(paged: Candle[], latest: Candle[]): Candle[] 
   for (const candle of latest) byTime.set(candle.time, candle);
   return [...byTime.values()].sort((a, b) => a.time - b.time);
 }
+
+/**
+ * Fetch every stored candle for one symbol+period in the half-open window
+ * `[from, to)`, walking the keyset cursor forward until the range is exhausted.
+ *
+ * The `/symbols/:id/candles` endpoint paginates forward by `nextCursor`, so a
+ * window wider than one page (`CHART_CANDLE_LIMIT` bars) is assembled here by
+ * following the cursor. Used to catch a reattaching backtest chart up over REST:
+ * the elapsed run-period candles are read from the candle store rather than
+ * replayed through the socket. Returns candles ascending by `time`.
+ *
+ * @param id - canonical symbol id.
+ * @param period - candle period to read.
+ * @param from - inclusive lower bound, epoch ms.
+ * @param to - exclusive upper bound, epoch ms.
+ */
+export async function fetchRangeCandles(
+  id: string,
+  period: Period,
+  from: number,
+  to: number,
+): Promise<Candle[]> {
+  const candles: Candle[] = [];
+  let cursor: number | null = from;
+  while (cursor !== null && cursor < to) {
+    const page: CandlePage = await apiFetch<CandlePage>(
+      `/symbols/${id}/candles?period=${period}&from=${cursor}&to=${to}&limit=${CHART_CANDLE_LIMIT}`,
+    );
+    candles.push(...page.candles);
+    cursor = page.nextCursor;
+  }
+  return candles;
+}

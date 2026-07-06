@@ -32,11 +32,14 @@ export function PeriodRangeDialog({
   range,
   watchedPeriods,
   onApply,
+  disabled = false,
 }: {
   period: Period;
   range: ChartRange | null;
   watchedPeriods: Period[];
   onApply: (next: { period: Period; range: ChartRange | null }) => void;
+  /** When `true`, the trigger is locked (e.g. while a backtest run is active). */
+  disabled?: boolean;
 }): ReactNode {
   const [open, setOpen] = useState(false);
   const [draftPeriod, setDraftPeriod] = useState<Period>(period);
@@ -59,7 +62,7 @@ export function PeriodRangeDialog({
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger>
-        <Button variant="soft" color="gray" className="min-w-32 justify-center">
+        <Button variant="soft" color="gray" className="min-w-32 justify-center" disabled={disabled}>
           <Clock size={14} aria-hidden="true" />
           {triggerLabel}
         </Button>

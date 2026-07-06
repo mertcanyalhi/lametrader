@@ -26,10 +26,13 @@ export function SymbolPickerDialog({
   currentId,
   watched,
   onSelect,
+  disabled = false,
 }: {
   currentId: string;
   watched: EnrichedSymbol[];
   onSelect: (id: string) => void;
+  /** When `true`, the trigger is locked (e.g. while a backtest run is active). */
+  disabled?: boolean;
 }): ReactNode {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -59,7 +62,7 @@ export function SymbolPickerDialog({
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Trigger>
-        <Button variant="soft" color="gray" className="min-w-32 justify-center">
+        <Button variant="soft" color="gray" className="min-w-32 justify-center" disabled={disabled}>
           <CandlestickChart size={14} aria-hidden="true" />
           {currentId}
         </Button>
