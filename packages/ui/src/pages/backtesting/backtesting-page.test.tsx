@@ -71,6 +71,9 @@ describe('BacktestingPage', () => {
 
   beforeEach(() => {
     matchers = [];
+    // The panel's strategy manager lists strategies on mount; default it to an
+    // empty list so the pre-existing picker tests don't hit an unexpected fetch.
+    matchers.push({ includes: '/backtest-strategies', body: () => [] });
     const fetchSpy = vi.fn(async (url: string) => {
       const match = matchers.find((m) => String(url).includes(m.includes));
       if (!match) throw new Error(`unexpected fetch: ${url}`);
