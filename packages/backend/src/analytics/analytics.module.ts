@@ -1,4 +1,5 @@
 import type {
+  BacktestStrategyRepository,
   CandleRepository,
   EventLog,
   IndicatorStateEvent,
@@ -21,6 +22,14 @@ import type { StreamHub } from '../common/services/stream-hub.js';
 import { CANDLE_REPOSITORY } from '../market/interfaces/candle-repository.token.js';
 import { WATCHLIST_REPOSITORY } from '../market/interfaces/watchlist-repository.token.js';
 import { MarketModule } from '../market/market.module.js';
+import { BacktestStrategiesController } from './backtesting/backtest-strategies.controller.js';
+import { BacktestStrategyService } from './backtesting/backtest-strategy.service.js';
+import {
+  BacktestStrategyEntryDoc,
+  BacktestStrategyEntrySchema,
+} from './backtesting/backtest-strategy-entry.schema.js';
+import { BACKTEST_STRATEGY_REPOSITORY } from './backtesting/backtest-strategy-repository.token.js';
+import { MongooseBacktestStrategyRepository } from './backtesting/mongoose-backtest-strategy.repository.js';
 import { ProfilesController } from './controllers/profiles.controller.js';
 import { StateController } from './controllers/state.controller.js';
 import { defaultIndicators } from './indicators/default-indicators.js';
@@ -53,9 +62,9 @@ import { StateHistoryService } from './services/state-history.service.js';
  * (the `indicators/` computation library), profiles (`/profiles`), the rule
  * engine + rule store (the `rules/` engine subsystem — operators, bridges, wire,
  * orchestrator, dispatch, preserved whole), and the state store + history.
- * It binds its two owned stores (`RULE_REPOSITORY`, `STATE_REPOSITORY`) and the
- * profile store, and reads the shared `EVENT_LOG` / `SYMBOL_EVENT_LOG` from
- * {@link CommonModule}.
+ * It binds its owned stores (`RULE_REPOSITORY`, `STATE_REPOSITORY`, the profile
+ * store, and the backtesting subsystem's `BACKTEST_STRATEGY_REPOSITORY`), and
+ * reads the shared `EVENT_LOG` / `SYMBOL_EVENT_LOG` from {@link CommonModule}.
  *
  * It imports {@link MarketModule} through `forwardRef` — Analytics reads candles,
  * symbols, and the watchlist, while `SymbolService` (Market) injects
@@ -68,11 +77,18 @@ import { StateHistoryService } from './services/state-history.service.js';
       { name: ProfileEntry.name, schema: ProfileEntrySchema },
       { name: RuleEntry.name, schema: RuleEntrySchema },
       { name: StateEntry.name, schema: StateEntrySchema },
+      { name: BacktestStrategyEntryDoc.name, schema: BacktestStrategyEntrySchema },
     ]),
     CommonModule,
     forwardRef(() => MarketModule),
   ],
-  controllers: [IndicatorsController, ProfilesController, RulesController, StateController],
+  controllers: [
+    BacktestStrategiesController,
+    IndicatorsController,
+    ProfilesController,
+    RulesController,
+    StateController,
+  ],
   providers: [
     { provide: IndicatorRegistry, useFactory: () => defaultIndicators() },
     {
@@ -89,6 +105,13 @@ import { StateHistoryService } from './services/state-history.service.js';
       inject: [IndicatorRegistry, WATCHLIST_REPOSITORY, CANDLE_REPOSITORY, INDICATOR_STREAM],
     },
     { provide: PROFILE_REPOSITORY, useClass: MongooseProfileRepository },
+    { provide: BACKTEST_STRATEGY_REPOSITORY, useClass: MongooseBacktestStrategyRepository },
+    {
+      provide: BacktestStrategyService,
+      useFactory: (strategies: BacktestStrategyRepository) =>
+        new BacktestStrategyService(strategies),
+      inject: [BACKTEST_STRATEGY_REPOSITORY],
+    },
     {
       // The single indicator series store shared by the rule engine (reads) and
       // ProfileService (attach/detach registrations) — the #519 fix hinges on
@@ -139,6 +162,8 @@ import { StateHistoryService } from './services/state-history.service.js';
     },
   ],
   exports: [
+    BACKTEST_STRATEGY_REPOSITORY,
+    BacktestStrategyService,
     IndicatorRegistry,
     IndicatorService,
     ProfileService,

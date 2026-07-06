@@ -78,6 +78,11 @@ On boot it also runs the continuous market-data **poll loop** that drives the li
 | `GET`    | `/rules/:id/events?limit=&before=&from=&to=` | —                             | One rule's mirrored events log (newest-first). 200 / 404. |
 | `GET`    | `/symbols/:id/rule-events?limit=&before=&from=&to=&chartStates=` | —          | One symbol's mirrored events log (newest-first), optionally `chartStates`-filtered. 200 / 400. |
 | `GET`    | `/symbols/:id/rule-events/count`            | —                              | `{ count }` of the symbol's mirrored events. 200.       |
+| `GET`    | `/backtest-strategies`                      | —                              | List backtest strategies. 200.                          |
+| `POST`   | `/backtest-strategies`                      | `{ name, description?, entry, exit }` | Create a strategy. **201** / 400 / 409.          |
+| `GET`    | `/backtest-strategies/:id`                  | —                              | Get one strategy. 200 / 404.                            |
+| `PUT`    | `/backtest-strategies/:id`                  | `{ name, description?, entry, exit }` | Full replace. 200 / 400 / 404 / 409.             |
+| `DELETE` | `/backtest-strategies/:id`                  | —                              | Delete a strategy. **204** / 404.                       |
 | `WS`     | `/stream`                                   | —                              | Multiplexed live stream: subscribe/unsubscribe to candles, indicators, quotes, and rule events; receive live frames. |
 
 ### Config resource
@@ -213,6 +218,17 @@ Each fire mirrors its entries onto both the rule and the affected symbol; reads 
 - `GET /rules/:id/events?limit=&before=&from=&to=` — one rule's events log (**404** on an unknown rule). `limit` defaults to 50 (max 500); `from` is inclusive and `to` / `before` are exclusive bounds on the entry's source `ts` (epoch ms).
 - `GET /symbols/:id/rule-events?limit=&before=&from=&to=&chartStates=` — one symbol's mirrored events log. `chartStates` is a JSON-encoded array of state keys (e.g. `["price:trend"]`): when present the read keeps only `stateSet` / `stateRemoved` entries whose `key` is in the list (`[]` ⇒ none); when absent the read is unfiltered. A malformed `chartStates` or a non-numeric `from` / `to` is a **400**.
 - `GET /symbols/:id/rule-events/count` — `{ count }` of the symbol's mirrored events (backs the chart's Events badge).
+
+### Backtest strategies resource
+
+Plain CRUD over reusable, symbol-agnostic backtest strategies (`backtesting/` subsystem), mirroring `/profiles`.
+A strategy pairs a required `entry.signal` (an edge-triggered symbol-scoped state change `{ key, value }`, where `value.type` doubles as the key's declared type) with an `exit` that sets at least one of a `signal`, a `profitTarget`, or a `stopLoss` threshold (`{ kind: fixed | percentage, amount }`); the server stamps `id`, `createdAt`, `updatedAt`.
+
+- `GET /backtest-strategies` — list all strategies.
+- `POST /backtest-strategies` — create (**201**). A blank name, a missing entry signal, or an empty exit is a **400** `{ error }`; a duplicate name is a **409**.
+- `GET /backtest-strategies/:id` — get one (**404** on an unknown id).
+- `PUT /backtest-strategies/:id` — full replace; preserves `id` and `createdAt` (**200** / 400 / 404 / 409).
+- `DELETE /backtest-strategies/:id` — delete (**204** / 404). Deleting a strategy does **not** cascade to saved backtests — each backtest carries its own embedded strategy snapshot.
 
 ### Live stream
 
