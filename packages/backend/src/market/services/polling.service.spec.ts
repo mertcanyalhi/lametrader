@@ -57,6 +57,7 @@ class RecordingSource implements MarketDataSource {
   constructor(
     private readonly series: Record<string, Candle[]>,
     private readonly failing: string[] = [],
+    private readonly crashing: string[] = [],
   ) {}
 
   async search(): Promise<Instrument[]> {
@@ -67,6 +68,9 @@ class RecordingSource implements MarketDataSource {
   }
   async fetchCandles(id: string, period: Period, range?: BackfillRange): Promise<CandleBatch> {
     this.calls.push({ id, period, range });
+    if (this.crashing.includes(id)) {
+      throw new Error(`source crashed for ${id}`);
+    }
     if (this.failing.includes(id)) {
       throw new MarketDataError(`source failed for ${id}`);
     }
@@ -342,6 +346,34 @@ describe('PollingService start/stop', () => {
     await jest.advanceTimersByTimeAsync(10_000);
 
     expect(source.calls).toEqual([
+      { id: BTC.id, period: Period.OneHour, range: { from: 0, to: NOW } },
+    ]);
+  });
+
+  it('survives a non-market-data error mid-sweep and still reschedules the next tick', async () => {
+    const repo = new InMemoryCandleRepository();
+    await repo.save(BTC.id, Period.OneHour, [candle(0)]);
+    // A sweep that throws a non-MarketDataError (the real crash was a transient
+    // Mongo bulkWrite failure after the host slept): it must be caught, not
+    // escape the fire-and-forget scheduled tick and crash the process, and the
+    // loop must keep rescheduling so it recovers once the dependency is back.
+    const source = new RecordingSource({ [BTC.id]: [candle(0)] }, [], [BTC.id]);
+    const intervals = allIntervals(10_000);
+    intervals[Period.OneHour] = 1000;
+    const service = new PollingService(
+      [source],
+      repo,
+      new InMemoryWatchlistRepository([BTC]),
+      new SchedulerRegistry(),
+      { onCandle: () => {}, intervals, now: () => NOW, random: () => 0 },
+    );
+
+    service.start();
+    await jest.advanceTimersByTimeAsync(2500);
+    service.stop();
+
+    expect(source.calls).toEqual([
+      { id: BTC.id, period: Period.OneHour, range: { from: 0, to: NOW } },
       { id: BTC.id, period: Period.OneHour, range: { from: 0, to: NOW } },
     ]);
   });
