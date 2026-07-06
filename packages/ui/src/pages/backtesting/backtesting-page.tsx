@@ -8,6 +8,7 @@ import type { ChartRange } from '../chart/chart-range.js';
 import { PeriodRangeDialog } from '../chart/period-range-dialog.js';
 import { ProfilePickerDialog } from '../chart/profile-picker-dialog.js';
 import { SymbolPickerDialog } from '../chart/symbol-picker-dialog.js';
+import { StrategyManager } from './strategy-manager.js';
 
 /**
  * The `/backtesting` route — the empty-but-navigable home for the backtesting
@@ -66,7 +67,7 @@ function BacktestingLayout({
           <ChartPlaceholder />
         </section>
         <section aria-label="Backtest panel" className="min-h-0">
-          <PanelPlaceholder />
+          <BacktestPanel symbolId={symbolId ?? ''} />
         </section>
       </div>
       <Flex
@@ -110,19 +111,22 @@ function ChartPlaceholder(): ReactNode {
 }
 
 /**
- * The right ⅓ region: placeholder sections for the run setup and results that
- * later slices fill (strategy selector + run form, then Summary / Trades /
- * Daily P&L tabs and the saved-backtests list).
+ * The right ⅓ region: the run-setup and results sections.
+ *
+ * The setup section now hosts the strategy manager (selector + create / edit /
+ * delete dialog); the run form and the results tabs (Summary / Trades / Daily
+ * P&L) land in later slices. The strategy editor's signal comboboxes seed from
+ * the selected `symbolId`'s state-key catalog.
  */
-function PanelPlaceholder(): ReactNode {
+function BacktestPanel({ symbolId }: { symbolId: string }): ReactNode {
   return (
     <Card className="h-full">
       <Flex direction="column" gap="4" p="2">
         <section aria-label="Backtest setup">
-          <Heading size="3">Setup</Heading>
-          <Text size="2" color="gray">
-            Strategy selection and the run form land here.
-          </Text>
+          <Heading size="3" mb="2">
+            Setup
+          </Heading>
+          <StrategyManager symbolId={symbolId} />
         </section>
         <section aria-label="Backtest results">
           <Heading size="3">Results</Heading>
