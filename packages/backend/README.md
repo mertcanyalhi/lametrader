@@ -89,6 +89,7 @@ On boot it also runs the continuous market-data **poll loop** that drives the li
 | `PATCH`  | `/backtests/:id`                            | `{ name }`                     | Rename a completed backtest. 200 / 400 (running) / 404. |
 | `DELETE` | `/backtests/:id`                            | —                              | Running: cancel + discard; completed: delete + cascade events. **204** / 404. |
 | `GET`    | `/backtests/:id/events?from=&to=&limit=`    | —                              | A completed run's events, windowed newest-first. 200 / 400 (running) / 404. |
+| `WS`     | `/backtests/:id/stream`                     | —                              | Stream one run: a `snapshot` frame, then batched `delta` frames ending in a `Completed` frame. Unknown id → an `{ error }` frame then close. |
 | `WS`     | `/stream`                                   | —                              | Multiplexed live stream: subscribe/unsubscribe to candles, indicators, quotes, and rule events; receive live frames. |
 
 ### Config resource
@@ -252,6 +253,16 @@ On completion the run auto-persists under its id (auto-generated `{strategy} · 
 - `PATCH /backtests/:id` — rename a completed backtest (**400** while running; **404** unknown).
 - `DELETE /backtests/:id` — running: cancel + discard (nothing persisted); completed: delete + cascade its events. **204** either way; **404** unknown.
 - `GET /backtests/:id/events?from&to&limit` — a completed run's events windowed newest-first (same shape as the rule-events window); **400** while running; **404** unknown.
+
+**Per-run stream over WebSocket.**
+Connect to `/backtests/:id/stream` to follow a run as it replays.
+Like the backfill-progress and `/stream` sockets it is served by a raw `ws` server that handles the HTTP `upgrade` for exactly this URL (`BacktestStreamGateway`), coexisting with the other WebSockets on the one server.
+
+On subscribe the server sends one **snapshot** frame (`kind: "snapshot"`) — `status`, `progress`, `params`, the trades and running `summary` so far, `openPosition?`, and the events so far.
+Candles are deliberately omitted from the snapshot: a reattaching client reads the candle store over REST.
+It is then followed by batched **delta** frames (`kind: "delta"`, flushed every ~100 ms or every N candles), each carrying the new run-period `candles`, `events`, and `trades` since the last frame plus the current `progress`, `summary`, and `openPosition?`.
+The final delta reports `status: "completed"`; by the time it is sent the backtest is already persisted and immediately fetchable at `GET /backtests/:id`.
+Subscribing to an already-completed run yields one completed snapshot and then a close; subscribing to an unknown id yields a single `{ error }` frame and then a close.
 
 ### Live stream
 

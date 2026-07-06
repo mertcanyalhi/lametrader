@@ -1,13 +1,21 @@
 import {
   type Backtest,
   type BacktestCommission,
+  type BacktestDeltaFrame,
   type BacktestEventQuery,
   type BacktestEventRepository,
+  type BacktestFrame,
+  BacktestFrameKind,
+  type BacktestOpenPosition,
   type BacktestParams,
   type BacktestProgress,
   type BacktestRepository,
+  type BacktestSnapshotFrame,
   BacktestStatus,
   type BacktestStrategyRepository,
+  type BacktestStreamCandle,
+  type BacktestSummary,
+  type BacktestTrade,
   type CandleRepository,
   type Period,
   type Profile,
@@ -28,10 +36,20 @@ import {
   generateBacktestName,
   validateRunWindow,
 } from '../../common/domain/backtest.js';
-import { type BacktestReplayPort, emptyBacktestSummary } from './backtest-replay.service.js';
+import {
+  type BacktestReplayPort,
+  type BacktestReplayStep,
+  emptyBacktestSummary,
+} from './backtest-replay.service.js';
 
 /** Milliseconds in a calendar day — the unit progress is reported in. */
 const DAY_MS = 86_400_000;
+
+/** Default flush cadence: emit a delta at most every this many candles. */
+const DEFAULT_FLUSH_EVERY_CANDLES = 50;
+
+/** Default flush cadence: emit a delta at least every this many milliseconds. */
+const DEFAULT_FLUSH_EVERY_MS = 100;
 
 /**
  * A backtest served from the in-memory job while it runs: the running
@@ -48,6 +66,39 @@ export interface BacktestServiceOptions {
   newId?: () => string;
   /** Current epoch ms; defaults to `Date.now`. */
   now?: () => number;
+  /**
+   * Sink for per-run stream frames, keyed by backtest id — the transport hub's
+   * `publish` in production, a recorder in tests. Omitted when nothing streams.
+   */
+  onFrame?: (id: string, frame: BacktestFrame) => void;
+  /** Flush a delta once this many candles have queued (defaults to 50). */
+  flushEveryCandles?: number;
+  /** Flush a delta once this many ms have elapsed since the last flush (defaults to 100). */
+  flushEveryMs?: number;
+}
+
+/**
+ * The per-run streaming state accumulated as a replay advances: the full run
+ * state a late subscriber's snapshot needs, plus the not-yet-flushed batch the
+ * next delta frame carries.
+ */
+interface RunStreamState {
+  /** Every run event recorded so far, in emission order. */
+  events: RuleEventEntry[];
+  /** Every closed trade so far, in exit order. */
+  trades: BacktestTrade[];
+  /** The latest running summary over the closed trades. */
+  summary: BacktestSummary;
+  /** The latest open position, if any. */
+  openPosition?: BacktestOpenPosition;
+  /** Run-period candles fed since the last flushed delta. */
+  pendingCandles: BacktestStreamCandle[];
+  /** Run events recorded since the last flushed delta. */
+  pendingEvents: RuleEventEntry[];
+  /** Closed trades produced since the last flushed delta. */
+  pendingTrades: BacktestTrade[];
+  /** Wall clock (epoch ms) of the last flushed delta, for the time-based cadence. */
+  lastFlushAt: number;
 }
 
 /**
@@ -64,6 +115,8 @@ interface ActiveRun {
   profile: Profile;
   /** The symbol's active periods being replayed. */
   periods: Period[];
+  /** The accumulated stream state (snapshot source + pending delta batch). */
+  stream: RunStreamState;
 }
 
 /**
@@ -85,6 +138,12 @@ export class BacktestService {
   private readonly newId: () => string;
   /** Current clock (injectable; defaults to `Date.now`). */
   private readonly now: () => number;
+  /** Per-run stream-frame sink (transport hub in production), or `undefined`. */
+  private readonly onFrame?: (id: string, frame: BacktestFrame) => void;
+  /** Flush a delta once this many candles have queued. */
+  private readonly flushEveryCandles: number;
+  /** Flush a delta once this many ms have elapsed since the last flush. */
+  private readonly flushEveryMs: number;
   /** The single active run, or `null` when idle. */
   private active: ActiveRun | null = null;
 
@@ -110,6 +169,9 @@ export class BacktestService {
   ) {
     this.newId = options.newId ?? (() => nanoid());
     this.now = options.now ?? Date.now;
+    this.onFrame = options.onFrame;
+    this.flushEveryCandles = options.flushEveryCandles ?? DEFAULT_FLUSH_EVERY_CANDLES;
+    this.flushEveryMs = options.flushEveryMs ?? DEFAULT_FLUSH_EVERY_MS;
   }
 
   /**
@@ -171,6 +233,15 @@ export class BacktestService {
       cancelled: false,
       profile,
       periods,
+      stream: {
+        events: [],
+        trades: [],
+        summary: emptyBacktestSummary(),
+        pendingCandles: [],
+        pendingEvents: [],
+        pendingTrades: [],
+        lastFlushAt: ts,
+      },
     };
     this.active = active;
     void this.run(active);
@@ -288,6 +359,7 @@ export class BacktestService {
           onProgress: (progress) => {
             active.progress = progress;
           },
+          onStep: (step) => this.accumulateStep(active, step),
           isCancelled: () => active.cancelled,
         },
       );
@@ -303,8 +375,11 @@ export class BacktestService {
         ...(result.openPosition === undefined ? {} : { openPosition: result.openPosition }),
         summary: result.summary,
       };
+      // Persist BEFORE the final frame so a client receiving `Completed` can
+      // immediately fetch the saved result at the same id.
       await this.backtests.save(completed);
       await this.events.append(completed.id, result.events);
+      this.flush(active, BacktestStatus.Completed);
       this.clearActive(active);
     } catch (error) {
       this.logger.error(
@@ -325,6 +400,105 @@ export class BacktestService {
   /** The running backtest with its live progress attached. */
   private runningView(active: ActiveRun): RunningBacktestView {
     return { ...active.backtest, progress: active.progress };
+  }
+
+  /**
+   * The snapshot frame for the currently active run `id`, or `null` when `id` is
+   * not the active run.
+   *
+   * Synchronous by design: the stream gateway reads it and subscribes to the hub
+   * in one uninterrupted step, so a delta published between cannot slip ahead of
+   * the snapshot.
+   */
+  activeSnapshotFrame(id: string): BacktestSnapshotFrame | null {
+    if (this.active === null || this.active.backtest.id !== id) {
+      return null;
+    }
+    const stream = this.active.stream;
+    return {
+      kind: BacktestFrameKind.Snapshot,
+      status: BacktestStatus.Running,
+      progress: this.active.progress,
+      params: this.active.backtest.params,
+      trades: [...stream.trades],
+      summary: stream.summary,
+      ...(stream.openPosition === undefined ? {} : { openPosition: stream.openPosition }),
+      events: [...stream.events],
+    };
+  }
+
+  /**
+   * The snapshot frame for a persisted (completed) backtest `id`, or `null` when
+   * no such backtest exists — the frame a client gets when it subscribes after
+   * the run has already finished.
+   */
+  async persistedSnapshotFrame(id: string): Promise<BacktestSnapshotFrame | null> {
+    const backtest = await this.backtests.get(id);
+    if (backtest === null) {
+      return null;
+    }
+    const totalDays = (backtest.params.end - backtest.params.start) / DAY_MS;
+    const events = await this.events.list(id);
+    return {
+      kind: BacktestFrameKind.Snapshot,
+      status: backtest.status,
+      progress: { elapsedDays: totalDays, totalDays },
+      params: backtest.params,
+      trades: backtest.trades,
+      summary: backtest.summary,
+      ...(backtest.openPosition === undefined ? {} : { openPosition: backtest.openPosition }),
+      events,
+    };
+  }
+
+  /**
+   * Fold one replay step into the run's accumulated stream state, then flush a
+   * delta once the candle-count or time cadence trips.
+   */
+  private accumulateStep(active: ActiveRun, step: BacktestReplayStep): void {
+    const stream = active.stream;
+    stream.events.push(...step.events);
+    stream.trades.push(...step.trades);
+    stream.summary = step.summary;
+    if (step.openPosition === undefined) {
+      delete stream.openPosition;
+    } else {
+      stream.openPosition = step.openPosition;
+    }
+    stream.pendingCandles.push({ period: step.candle.period, candle: step.candle.candle });
+    stream.pendingEvents.push(...step.events);
+    stream.pendingTrades.push(...step.trades);
+    active.progress = step.progress;
+    if (
+      stream.pendingCandles.length >= this.flushEveryCandles ||
+      this.now() - stream.lastFlushAt >= this.flushEveryMs
+    ) {
+      this.flush(active, BacktestStatus.Running);
+    }
+  }
+
+  /**
+   * Publish a delta frame carrying the pending batch and the run's current
+   * `status`, then reset the batch. The final flush (`Completed`) always emits,
+   * even with an empty batch, so subscribers always see a terminal frame.
+   */
+  private flush(active: ActiveRun, status: BacktestStatus): void {
+    const stream = active.stream;
+    const frame: BacktestDeltaFrame = {
+      kind: BacktestFrameKind.Delta,
+      status,
+      progress: active.progress,
+      candles: stream.pendingCandles,
+      events: stream.pendingEvents,
+      trades: stream.pendingTrades,
+      summary: stream.summary,
+      ...(stream.openPosition === undefined ? {} : { openPosition: stream.openPosition }),
+    };
+    this.onFrame?.(active.backtest.id, frame);
+    stream.pendingCandles = [];
+    stream.pendingEvents = [];
+    stream.pendingTrades = [];
+    stream.lastFlushAt = this.now();
   }
 }
 

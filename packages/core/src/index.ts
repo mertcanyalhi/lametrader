@@ -44,6 +44,13 @@ export {
   BacktestThresholdKind,
 } from './types/backtesting/backtest-strategy.types.js';
 export {
+  type BacktestDeltaFrame,
+  type BacktestFrame,
+  BacktestFrameKind,
+  type BacktestSnapshotFrame,
+  type BacktestStreamCandle,
+} from './types/backtesting/backtest-stream.types.js';
+export {
   type Config,
   ConfigKey,
   type ConfigRepository,

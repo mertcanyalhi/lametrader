@@ -232,4 +232,46 @@ describe('BacktestReplayService replay', () => {
       true,
     );
   });
+
+  it('invokes onStep once per fed candle in completion order with the candle and progress', async () => {
+    const candles = new InMemoryCandleRepository();
+    // Same tie as the ordering test: a 1h bar at t=0 and a 1m bar at t=59m both
+    // complete at t=1h, so onStep must fire finest-first (the 1m before the 1h).
+    await candles.save(SYMBOL_ID, Period.OneHour, [candle(0, 150)]);
+    await candles.save(SYMBOL_ID, Period.OneMinute, [candle(59 * MINUTE, 150)]);
+    const replay = buildReplay(candles, [], [Period.OneHour, Period.OneMinute]);
+    const steps: Array<{ period: Period; time: number; elapsedDays: number; totalDays: number }> =
+      [];
+
+    await replay.replay(
+      params(0, HOUR + 1),
+      strategy,
+      profile,
+      [Period.OneHour, Period.OneMinute],
+      {
+        onStep: (step) =>
+          steps.push({
+            period: step.candle.period,
+            time: step.candle.candle.time,
+            elapsedDays: step.progress.elapsedDays,
+            totalDays: step.progress.totalDays,
+          }),
+      },
+    );
+
+    expect(steps).toEqual([
+      {
+        period: Period.OneMinute,
+        time: 59 * MINUTE,
+        elapsedDays: HOUR / 86_400_000,
+        totalDays: (HOUR + 1) / 86_400_000,
+      },
+      {
+        period: Period.OneHour,
+        time: 0,
+        elapsedDays: HOUR / 86_400_000,
+        totalDays: (HOUR + 1) / 86_400_000,
+      },
+    ]);
+  });
 });
