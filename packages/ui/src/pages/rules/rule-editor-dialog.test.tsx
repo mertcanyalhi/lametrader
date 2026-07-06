@@ -18,7 +18,8 @@ import { userEvent } from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeDraftRule } from '../../lib/draft-rule.js';
-import { computeInstancePeriods, RuleEditorDialog } from './rule-editor-dialog';
+import type { RuleFormValues } from '../../lib/rule-form-schema.js';
+import { computeInstancePeriods, mergeInput, RuleEditorDialog } from './rule-editor-dialog';
 
 /** A wrapper that wires the dialog with a fresh TanStack client + Theme. */
 function Harness({ initial }: { initial: Rule }): ReactNode {
@@ -217,5 +218,56 @@ describe('computeInstancePeriods', () => {
 
   it('returns an empty map when there are no indicator instances', () => {
     expect(computeInstancePeriods([])).toEqual({});
+  });
+});
+
+describe('mergeInput', () => {
+  it('omits the server-managed lastFiredAt and leaked events fields the write DTO would reject', () => {
+    const seed = {
+      ...makeDraftRule({ profileId: 'p1', symbolId: 'crypto:BTCUSDT' }),
+      id: 'r1',
+      createdAt: 100,
+      updatedAt: 200,
+      lastFiredAt: 300,
+      // The backend leaks the event-log array onto the rule payload; it must
+      // not ride back into the write body.
+      events: [{ ts: 1, ruleId: 'r1' }],
+    } as Rule;
+    const values: RuleFormValues = {
+      name: '  Golden cross  ',
+      description: 'buy signal',
+      scope: seed.scope,
+      trigger: seed.trigger,
+      condition: seed.condition,
+      actions: [
+        {
+          kind: ActionKind.Notification,
+          channel: NotificationChannel.Telegram,
+          destinationName: 'd1',
+          template: 'fire',
+        },
+      ],
+      enabled: false,
+    };
+
+    expect(mergeInput(seed, values)).toEqual({
+      profileId: 'p1',
+      name: 'Golden cross',
+      description: 'buy signal',
+      scope: seed.scope,
+      trigger: seed.trigger,
+      condition: seed.condition,
+      actions: [
+        {
+          kind: ActionKind.Notification,
+          channel: NotificationChannel.Telegram,
+          destinationName: 'd1',
+          template: 'fire',
+        },
+      ],
+      expiration: null,
+      enabled: false,
+      order: 1,
+    });
   });
 });
