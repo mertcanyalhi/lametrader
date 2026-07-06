@@ -83,6 +83,12 @@ On boot it also runs the continuous market-data **poll loop** that drives the li
 | `GET`    | `/backtest-strategies/:id`                  | —                              | Get one strategy. 200 / 404.                            |
 | `PUT`    | `/backtest-strategies/:id`                  | `{ name, description?, entry, exit }` | Full replace. 200 / 400 / 404 / 409.             |
 | `DELETE` | `/backtest-strategies/:id`                  | —                              | Delete a strategy. **204** / 404.                       |
+| `POST`   | `/backtests`                                | `{ strategyId, symbolId, profileId, period, start, end, initialCapital, commission? }` | Start a run **job**; returns **202** with the running backtest. 202 / 400 / 404 / 409. |
+| `GET`    | `/backtests?status=`                        | —                              | List backtests (the running one merged in); `?status=running\|completed` filters. 200. |
+| `GET`    | `/backtests/:id`                            | —                              | Get one backtest — running (params + `progress`) or the completed result. 200 / 404. |
+| `PATCH`  | `/backtests/:id`                            | `{ name }`                     | Rename a completed backtest. 200 / 400 (running) / 404. |
+| `DELETE` | `/backtests/:id`                            | —                              | Running: cancel + discard; completed: delete + cascade events. **204** / 404. |
+| `GET`    | `/backtests/:id/events?from=&to=&limit=`    | —                              | A completed run's events, windowed newest-first. 200 / 400 (running) / 404. |
 | `WS`     | `/stream`                                   | —                              | Multiplexed live stream: subscribe/unsubscribe to candles, indicators, quotes, and rule events; receive live frames. |
 
 ### Config resource
@@ -229,6 +235,21 @@ A strategy pairs a required `entry.signal` (an edge-triggered symbol-scoped stat
 - `GET /backtest-strategies/:id` — get one (**404** on an unknown id).
 - `PUT /backtest-strategies/:id` — full replace; preserves `id` and `createdAt` (**200** / 400 / 404 / 409).
 - `DELETE /backtest-strategies/:id` — delete (**204** / 404). Deleting a strategy does **not** cascade to saved backtests — each backtest carries its own embedded strategy snapshot.
+
+### Backtests resource
+
+One resource with a run lifecycle (`backtesting/` subsystem).
+`POST /backtests` validates synchronously — `start < end`, `end ≤ now`, `initialCapital > 0`, non-negative commissions, a complete strategy, an enabled + in-scope profile, and at least one stored candle in `[start, end)` across the symbol's active periods (else a **400** with a "backfill first" hint); unknown strategy / symbol / profile ids are **404** — then starts a server-side run **job** and returns **202** with the running backtest (`status: running`, plus `progress`).
+Only one run is active at a time; a second start is a **409**.
+The job replays every stored candle of all the symbol's active periods within the window through an **isolated** rule engine (its own in-memory state store, event log, indicator series store, and once-per-bar latch, seeded with the profile's rules and a no-op notifier) — it never touches the live state store, live event log, or the notifier, and a `NotificationSent` is recorded in the run's own log without a send.
+Candles are ordered by completion time (`time + periodMillis`), ties finest-period-first, and rule/indicator lookbacks reaching before `start` resolve on demand from stored history.
+On completion the run auto-persists under its id (auto-generated `{strategy} · {symbol} · {period} · {start}→{end}` name, `params`, `strategyId`, a full strategy snapshot, `profileId` + `profileName`) with its events in their **own** collection keyed by `backtestId`.
+
+- `GET /backtests` — list every backtest, the in-memory running one merged in; `?status=running|completed` filters.
+- `GET /backtests/:id` — running: params + `progress`; completed: the full saved result. **404** on an unknown id.
+- `PATCH /backtests/:id` — rename a completed backtest (**400** while running; **404** unknown).
+- `DELETE /backtests/:id` — running: cancel + discard (nothing persisted); completed: delete + cascade its events. **204** either way; **404** unknown.
+- `GET /backtests/:id/events?from&to&limit` — a completed run's events windowed newest-first (same shape as the rule-events window); **400** while running; **404** unknown.
 
 ### Live stream
 

@@ -1,4 +1,6 @@
 import type {
+  BacktestEventRepository,
+  BacktestRepository,
   BacktestStrategyRepository,
   CandleRepository,
   EventLog,
@@ -22,6 +24,12 @@ import type { StreamHub } from '../common/services/stream-hub.js';
 import { CANDLE_REPOSITORY } from '../market/interfaces/candle-repository.token.js';
 import { WATCHLIST_REPOSITORY } from '../market/interfaces/watchlist-repository.token.js';
 import { MarketModule } from '../market/market.module.js';
+import { BacktestDoc, BacktestSchema } from './backtesting/backtest.schema.js';
+import { BacktestService } from './backtesting/backtest.service.js';
+import { BacktestEventDoc, BacktestEventSchema } from './backtesting/backtest-event.schema.js';
+import { BACKTEST_EVENT_REPOSITORY } from './backtesting/backtest-event-repository.token.js';
+import { BacktestReplayService } from './backtesting/backtest-replay.service.js';
+import { BACKTEST_REPOSITORY } from './backtesting/backtest-repository.token.js';
 import { BacktestStrategiesController } from './backtesting/backtest-strategies.controller.js';
 import { BacktestStrategyService } from './backtesting/backtest-strategy.service.js';
 import {
@@ -29,6 +37,9 @@ import {
   BacktestStrategyEntrySchema,
 } from './backtesting/backtest-strategy-entry.schema.js';
 import { BACKTEST_STRATEGY_REPOSITORY } from './backtesting/backtest-strategy-repository.token.js';
+import { BacktestsController } from './backtesting/backtests.controller.js';
+import { MongooseBacktestRepository } from './backtesting/mongoose-backtest.repository.js';
+import { MongooseBacktestEventRepository } from './backtesting/mongoose-backtest-event.repository.js';
 import { MongooseBacktestStrategyRepository } from './backtesting/mongoose-backtest-strategy.repository.js';
 import { ProfilesController } from './controllers/profiles.controller.js';
 import { StateController } from './controllers/state.controller.js';
@@ -78,12 +89,15 @@ import { StateHistoryService } from './services/state-history.service.js';
       { name: RuleEntry.name, schema: RuleEntrySchema },
       { name: StateEntry.name, schema: StateEntrySchema },
       { name: BacktestStrategyEntryDoc.name, schema: BacktestStrategyEntrySchema },
+      { name: BacktestDoc.name, schema: BacktestSchema },
+      { name: BacktestEventDoc.name, schema: BacktestEventSchema },
     ]),
     CommonModule,
     forwardRef(() => MarketModule),
   ],
   controllers: [
     BacktestStrategiesController,
+    BacktestsController,
     IndicatorsController,
     ProfilesController,
     RulesController,
@@ -106,11 +120,44 @@ import { StateHistoryService } from './services/state-history.service.js';
     },
     { provide: PROFILE_REPOSITORY, useClass: MongooseProfileRepository },
     { provide: BACKTEST_STRATEGY_REPOSITORY, useClass: MongooseBacktestStrategyRepository },
+    { provide: BACKTEST_REPOSITORY, useClass: MongooseBacktestRepository },
+    { provide: BACKTEST_EVENT_REPOSITORY, useClass: MongooseBacktestEventRepository },
     {
       provide: BacktestStrategyService,
       useFactory: (strategies: BacktestStrategyRepository) =>
         new BacktestStrategyService(strategies),
       inject: [BACKTEST_STRATEGY_REPOSITORY],
+    },
+    {
+      provide: BacktestReplayService,
+      useFactory: (
+        candles: CandleRepository,
+        rules: RuleRepository,
+        watchlist: WatchlistRepository,
+        indicators: IndicatorService,
+      ) => new BacktestReplayService(candles, rules, watchlist, indicators),
+      inject: [CANDLE_REPOSITORY, RULE_REPOSITORY, WATCHLIST_REPOSITORY, IndicatorService],
+    },
+    {
+      provide: BacktestService,
+      useFactory: (
+        backtests: BacktestRepository,
+        events: BacktestEventRepository,
+        strategies: BacktestStrategyRepository,
+        profiles: ProfileRepository,
+        watchlist: WatchlistRepository,
+        candles: CandleRepository,
+        replay: BacktestReplayService,
+      ) => new BacktestService(backtests, events, strategies, profiles, watchlist, candles, replay),
+      inject: [
+        BACKTEST_REPOSITORY,
+        BACKTEST_EVENT_REPOSITORY,
+        BACKTEST_STRATEGY_REPOSITORY,
+        PROFILE_REPOSITORY,
+        WATCHLIST_REPOSITORY,
+        CANDLE_REPOSITORY,
+        BacktestReplayService,
+      ],
     },
     {
       // The single indicator series store shared by the rule engine (reads) and
@@ -163,7 +210,10 @@ import { StateHistoryService } from './services/state-history.service.js';
   ],
   exports: [
     BACKTEST_STRATEGY_REPOSITORY,
+    BACKTEST_REPOSITORY,
+    BACKTEST_EVENT_REPOSITORY,
     BacktestStrategyService,
+    BacktestService,
     IndicatorRegistry,
     IndicatorService,
     ProfileService,
