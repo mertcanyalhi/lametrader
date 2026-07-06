@@ -15,6 +15,7 @@ import { STATE_REPOSITORY } from '../interfaces/state-repository.token.js';
 import { InMemoryProfileRepository } from '../persistence/in-memory-profile.repository.js';
 import { InMemoryStateRepository } from '../persistence/in-memory-state.repository.js';
 import { InMemoryRuleRepository } from './in-memory-rule.repository.js';
+import { IndicatorSeriesStore } from './indicator-series-store.js';
 import { RuleEngineService } from './rule-engine.service.js';
 import { RULE_REPOSITORY } from './rule-repository.token.js';
 
@@ -49,8 +50,11 @@ describe('RuleEngineService dormancy', () => {
         { provide: TelegramNotifier, useValue: notifier },
         { provide: PROFILE_REPOSITORY, useValue: new InMemoryProfileRepository() },
         {
-          provide: IndicatorService,
-          useValue: new IndicatorService(defaultIndicators(), watchlist, candles),
+          provide: IndicatorSeriesStore,
+          useValue: new IndicatorSeriesStore(
+            candles,
+            new IndicatorService(defaultIndicators(), watchlist, candles),
+          ),
         },
       ],
     }).compile();

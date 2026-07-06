@@ -59,6 +59,16 @@ export class IndicatorSeriesStore {
   }
 
   /**
+   * Drop one instance's config so its {@link series} resolves empty again.
+   *
+   * The mirror of {@link register}, called when a profile detaches an instance
+   * (#519). A no-op for an unknown `instanceId`. Pure bookkeeping — no I/O.
+   */
+  unregister(instanceId: string): void {
+    this.configs.delete(instanceId);
+  }
+
+  /**
    * A lazy backward series view for the `(symbolId, period, instanceId, stateKey)`
    * slot, bounded above by the exclusive `before` timestamp.
    *

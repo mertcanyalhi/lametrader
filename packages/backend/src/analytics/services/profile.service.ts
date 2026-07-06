@@ -23,6 +23,7 @@ import {
 import { IndicatorRegistry } from '../indicators/indicator-registry.js';
 import type {
   IndicatorInstanceInput,
+  ProfileCascadeIndicatorStore,
   ProfileCascadeRules,
   ProfileServiceOptions,
 } from '../interfaces/profile.service.types.js';
@@ -45,6 +46,8 @@ export class ProfileService {
   private readonly now: () => number;
   /** Rule store consulted by the profile-delete cascade (optional). */
   private readonly rules?: ProfileCascadeRules;
+  /** Indicator series store the indicator mutations push into (optional in tests, always wired in production). */
+  private readonly indicatorStore?: ProfileCascadeIndicatorStore;
 
   /**
    * @param profiles - the profile persistence port.
@@ -61,6 +64,7 @@ export class ProfileService {
     this.newId = options.newId ?? (() => nanoid());
     this.now = options.now ?? Date.now;
     this.rules = options.rules;
+    this.indicatorStore = options.indicatorStore;
   }
 
   /**
@@ -220,6 +224,9 @@ export class ProfileService {
    *
    * Validates the input against the indicator's descriptors and records the definition's current `version`.
    *
+   * Registers the new instance's config into the shared indicator store so a
+   * running rule engine can resolve its series without a restart (#519).
+   *
    * @throws {@link ProfileNotFoundError} when the profile is unknown.
    * @throws {@link IndicatorError} when `indicatorKey` is unknown or `inputs` are invalid.
    */
@@ -232,11 +239,15 @@ export class ProfileService {
       updatedAt: this.now(),
     };
     await this.profiles.save(updated);
+    this.registerInstance(instance);
     return this.enrichInstance(instance);
   }
 
   /**
    * Replace an attached indicator instance (PUT) — full-replace, preserves the id.
+   *
+   * Re-registers the instance's config into the shared indicator store, so the
+   * replacement's `inputs` overwrite the prior config a running engine reads (#519).
    *
    * @throws {@link ProfileNotFoundError} when the profile is unknown.
    * @throws {@link IndicatorInstanceNotFoundError} when the instance is unknown.
@@ -258,11 +269,15 @@ export class ProfileService {
       updatedAt: this.now(),
     };
     await this.profiles.save(updated);
+    this.registerInstance(replacement);
     return this.enrichInstance(replacement);
   }
 
   /**
    * Detach an indicator instance from a profile.
+   *
+   * Unregisters the instance's config from the shared indicator store so a
+   * running engine stops resolving its series (#519).
    *
    * @throws {@link ProfileNotFoundError} when the profile is unknown.
    * @throws {@link IndicatorInstanceNotFoundError} when the instance is unknown.
@@ -276,6 +291,20 @@ export class ProfileService {
       updatedAt: this.now(),
     };
     await this.profiles.save(updated);
+    this.indicatorStore?.unregister(instanceId);
+  }
+
+  /**
+   * Push one instance's `(instanceId, indicatorKey, inputs)` config into the
+   * shared indicator store, if one is wired. Shared by attach + replace — both
+   * register the same config shape, keyed by the instance's id.
+   */
+  private registerInstance(instance: IndicatorInstance): void {
+    this.indicatorStore?.register({
+      instanceId: instance.id,
+      indicatorKey: instance.indicatorKey,
+      inputs: instance.inputs,
+    });
   }
 
   /**
