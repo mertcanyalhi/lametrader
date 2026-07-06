@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+  BacktestExitReason,
   type BacktestFrame,
   BacktestFrameKind,
   BacktestStatus,
@@ -11,7 +12,7 @@ import {
 import { Theme } from '@radix-ui/themes';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createElement as h } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -50,6 +51,13 @@ if (typeof Element.prototype.scrollIntoView !== 'function') {
 vi.mock('../../src/pages/chart/candle-chart.js', () => ({
   CandleChart: ({ candles }: { candles: Candle[] }) =>
     h('div', { 'data-testid': 'backtest-chart' }, `${candles.length} candles`),
+}));
+
+// The Daily P&L histogram also loads lightweight-charts; render it as a double
+// exposing the bucketed bar count so exit-day bucketing is observable.
+vi.mock('../../src/pages/backtesting/daily-pnl-chart.js', () => ({
+  DailyPnlChart: ({ bars }: { bars: unknown[] }) =>
+    h('div', { 'data-testid': 'daily-pnl-chart' }, `${bars.length} bars`),
 }));
 
 // The run stream stands in for the per-run WebSocket: capture the frame handler
@@ -108,6 +116,9 @@ const EMPTY_SUMMARY = {
   avgRoiPct: 0,
   avgDaysInTrade: 0,
 };
+
+/** `2021-01-01T00:00:00Z` — a UTC-midnight anchor for the completed run's trade timestamps. */
+const DAY_0 = Date.UTC(2021, 0, 1);
 
 function candle(time: number, close: number): Candle {
   return { type: SymbolType.Fx, time, open: close, high: close, low: close, close };
@@ -254,20 +265,72 @@ describe('backtesting run flow (e2e)', () => {
     expect(screen.getByText('Running — 50%')).toBeInTheDocument();
     expect(screen.getByTestId('backtest-chart')).toHaveTextContent('1 candles');
 
-    // Final frame completes the run.
+    // Final frame completes the run with one closed trade plus an open position.
     push({
       kind: BacktestFrameKind.Delta,
       status: BacktestStatus.Completed,
       progress: { elapsedDays: 2, totalDays: 2 },
       candles: [{ period: Period.OneHour, candle: candle(4_600, 108) }],
       events: [],
-      trades: [],
-      summary: EMPTY_SUMMARY,
-      openPosition: undefined,
+      trades: [
+        {
+          entryTs: DAY_0 + 1_000,
+          exitTs: DAY_0 + 3_600_000,
+          entryPrice: 100,
+          exitPrice: 110,
+          quantity: 2,
+          commission: 1,
+          pnl: 19,
+          roiPct: 9.5,
+          exitReason: BacktestExitReason.ProfitTarget,
+        },
+      ],
+      summary: {
+        totalPnl: 19,
+        roiPct: 0.19,
+        avgPnlPerTrade: 19,
+        tradeCount: 1,
+        winners: 1,
+        losers: 0,
+        avgRoiPct: 9.5,
+        avgDaysInTrade: 0.5,
+      },
+      openPosition: {
+        entryTs: DAY_0 + 7_200_000,
+        entryPrice: 108,
+        quantity: 1,
+        entryCommission: 1,
+        unrealizedPnl: 4,
+      },
     });
 
     expect(screen.getByText('Run complete')).toBeInTheDocument();
     expect(screen.getByTestId('backtest-chart')).toHaveTextContent('2 candles');
     expect(screen.getByRole('button', { name: 'New run' })).toBeInTheDocument();
+
+    // The three result tabs render the completed run. Summary is active first.
+    const summary = screen.getByLabelText('Summary');
+    expect(within(summary).getByText('Total P/L').nextElementSibling?.textContent).toBe('+19.00');
+    expect(
+      within(summary).getByText('Open position (unrealized)').nextElementSibling?.textContent,
+    ).toBe('+4.00');
+
+    // Trades tab: the closed trade plus the open position as an unrealized row.
+    await user.click(screen.getByRole('tab', { name: /Trades/ }));
+    const tradeRows = within(screen.getByLabelText('Trades')).getAllByRole('row');
+    expect(within(tradeRows[1] as HTMLElement).getByText('Profit target')).toBeInTheDocument();
+    expect(within(tradeRows[2] as HTMLElement).getByText('unrealized')).toBeInTheDocument();
+    expect(within(tradeRows[2] as HTMLElement).getByText('Open')).toBeInTheDocument();
+
+    // Daily P&L tab: the exit-day histogram plus the five-item summary block.
+    await user.click(screen.getByRole('tab', { name: /Daily P&L/ }));
+    expect(screen.getByTestId('daily-pnl-chart')).toHaveTextContent('1 bars');
+    const block = screen.getByLabelText('Daily P&L summary');
+    expect(within(block).getByText('Winners / losers').nextElementSibling?.textContent).toBe(
+      '1 / 0',
+    );
+    expect(within(block).getByText('Avg days in trade').nextElementSibling?.textContent).toBe(
+      '0.50',
+    );
   });
 });

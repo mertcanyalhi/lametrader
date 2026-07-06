@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+  BacktestExitReason,
   type BacktestFrame,
   BacktestFrameKind,
   BacktestStatus,
@@ -9,6 +10,9 @@ import {
   Period,
   type Profile,
   ProfileScope,
+  RuleEventType,
+  StateScope,
+  StateValueType,
   SymbolType,
 } from '@lametrader/core';
 import { Theme } from '@radix-ui/themes';
@@ -26,8 +30,22 @@ import { BacktestingPage } from './backtesting-page.js';
 // loads under jsdom; the double exposes the candle count so incremental fill is
 // observable.
 vi.mock('../chart/candle-chart.js', () => ({
-  CandleChart: ({ candles }: { candles: Candle[] }) => (
-    <div data-testid="backtest-chart">{candles.length} candles</div>
+  CandleChart: ({
+    candles,
+    eventMarkers = [],
+    stateOverlays = [],
+  }: {
+    candles: Candle[];
+    eventMarkers?: unknown[];
+    stateOverlays?: unknown[];
+  }) => (
+    <div
+      data-testid="backtest-chart"
+      data-markers={eventMarkers.length}
+      data-overlays={stateOverlays.length}
+    >
+      {candles.length} candles
+    </div>
   ),
 }));
 
@@ -247,6 +265,53 @@ describe('BacktestingPage run flow', () => {
     });
 
     expect(screen.getByTestId('backtest-chart')).toHaveTextContent('1 candles');
+  });
+
+  it('draws trade markers and run-event state overlays on the chart from the frames', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: 'Alpha' });
+
+    await selectStrategyAndRun(user);
+    push(snapshot(0));
+    push({
+      kind: BacktestFrameKind.Delta,
+      status: BacktestStatus.Running,
+      progress: { elapsedDays: 1, totalDays: 2 },
+      candles: [],
+      events: [
+        {
+          type: RuleEventType.StateSet,
+          ts: 2_000,
+          ruleId: 'r-1',
+          symbolId: BTC.id,
+          scope: StateScope.Symbol,
+          key: 'go_long',
+          value: { type: StateValueType.Bool, value: true },
+        },
+      ],
+      trades: [
+        {
+          entryTs: 2_000,
+          exitTs: 5_000,
+          entryPrice: 100,
+          exitPrice: 110,
+          quantity: 1,
+          commission: 0,
+          pnl: 10,
+          roiPct: 10,
+          exitReason: BacktestExitReason.Signal,
+        },
+      ],
+      summary: EMPTY_SUMMARY,
+      openPosition: undefined,
+    });
+
+    const chart = screen.getByTestId('backtest-chart');
+    expect({
+      markers: chart.getAttribute('data-markers'),
+      overlays: chart.getAttribute('data-overlays'),
+    }).toEqual({ markers: '2', overlays: '1' });
   });
 
   it('reports completion on the final frame', async () => {

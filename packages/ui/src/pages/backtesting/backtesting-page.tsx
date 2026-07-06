@@ -1,6 +1,6 @@
 import { BacktestStatus, type Config, type EnrichedSymbol, type Period } from '@lametrader/core';
 import { Button, Callout, Card, Flex, Heading, Progress, Text } from '@radix-ui/themes';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useCancelBacktest, useRunningBacktest } from '../../lib/hooks/backtests.js';
 import { useWatchlist } from '../../lib/hooks/symbols.js';
 import {
@@ -11,14 +11,18 @@ import {
 import { useConfig } from '../../lib/hooks/use-config.js';
 import { getLogger } from '../../lib/log.js';
 import { useSelectedProfile } from '../../lib/selected-profile-context.js';
+import { useTheme } from '../../lib/theme-context.js';
 import { CandleChart } from '../chart/candle-chart.js';
 import { ChartLoading } from '../chart/chart-loading.js';
 import type { ChartRange } from '../chart/chart-range.js';
 import { PeriodRangeDialog } from '../chart/period-range-dialog.js';
 import { ProfilePickerDialog } from '../chart/profile-picker-dialog.js';
 import { SymbolPickerDialog } from '../chart/symbol-picker-dialog.js';
+import { ResultsTabs } from './results-tabs.js';
 import { RunForm } from './run-form.js';
+import { stateOverlaysFromEvents } from './run-state-overlays.js';
 import { StrategyManager } from './strategy-manager.js';
+import { buildTradeMarkers } from './trade-markers.js';
 
 /** Scoped logger for run-cancel failures. */
 const log = getLogger('backtesting-page');
@@ -83,11 +87,23 @@ function BacktestingLayout({
   }, [hydrated, runningQuery.isPending, runningQuery.data]);
 
   const run = useBacktestRun(activeRun);
+  const { theme } = useTheme();
   const locked = activeRun !== null;
   const chartPeriod = run?.params.period ?? period;
 
   const selected = symbols.find((symbol) => symbol.id === symbolId) ?? null;
   const watchedPeriods = selected?.periods ?? [];
+
+  // The run's trades draw entry/exit markers and its events drive the chart's
+  // state overlays — both sourced from the run frames, never the live endpoints.
+  const tradeMarkers = useMemo(
+    () => (run ? buildTradeMarkers(run.trades, run.openPosition) : []),
+    [run],
+  );
+  const runStateOverlays = useMemo(
+    () => (run ? stateOverlaysFromEvents(run.events, theme) : []),
+    [run, theme],
+  );
 
   return (
     <div className="grid h-full grid-rows-[minmax(0,1fr)_auto] gap-3">
@@ -102,6 +118,8 @@ function BacktestingLayout({
                 range={null}
                 loadOlder={noop}
                 hasMore={false}
+                eventMarkers={tradeMarkers}
+                stateOverlays={runStateOverlays}
               />
             </Card>
           ) : (
@@ -212,6 +230,18 @@ function BacktestPanel({
             <RunProgress run={run} runId={runId} onDismiss={onDismiss} />
           )}
         </section>
+        {run ? (
+          <section aria-label="Backtest results">
+            <Heading size="3" mb="2">
+              Results
+            </Heading>
+            <ResultsTabs
+              trades={run.trades}
+              summary={run.summary}
+              openPosition={run.openPosition}
+            />
+          </section>
+        ) : null}
       </Flex>
     </Card>
   );
