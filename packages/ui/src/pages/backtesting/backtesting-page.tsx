@@ -1,7 +1,18 @@
-import { BacktestStatus, type Config, type EnrichedSymbol, type Period } from '@lametrader/core';
+import {
+  type Backtest,
+  BacktestStatus,
+  type Config,
+  type EnrichedSymbol,
+  type Period,
+} from '@lametrader/core';
 import { Button, Callout, Card, Flex, Heading, Progress, Text } from '@radix-ui/themes';
+import { useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { useCancelBacktest, useRunningBacktest } from '../../lib/hooks/backtests.js';
+import {
+  COMPLETED_BACKTESTS_QUERY_KEY,
+  useCancelBacktest,
+  useRunningBacktest,
+} from '../../lib/hooks/backtests.js';
 import { useWatchlist } from '../../lib/hooks/symbols.js';
 import {
   type ActiveBacktest,
@@ -9,6 +20,7 @@ import {
   useBacktestRun,
 } from '../../lib/hooks/use-backtest-run.js';
 import { useConfig } from '../../lib/hooks/use-config.js';
+import { useLoadedBacktest } from '../../lib/hooks/use-loaded-backtest.js';
 import { getLogger } from '../../lib/log.js';
 import { useSelectedProfile } from '../../lib/selected-profile-context.js';
 import { useTheme } from '../../lib/theme-context.js';
@@ -21,6 +33,7 @@ import { SymbolPickerDialog } from '../chart/symbol-picker-dialog.js';
 import { ResultsTabs } from './results-tabs.js';
 import { RunForm } from './run-form.js';
 import { stateOverlaysFromEvents } from './run-state-overlays.js';
+import { SavedBacktestsList } from './saved-backtests-list.js';
 import { StrategyManager } from './strategy-manager.js';
 import { buildTradeMarkers } from './trade-markers.js';
 
@@ -70,7 +83,9 @@ function BacktestingLayout({
   const [range, setRange] = useState<ChartRange | null>(null);
   const [strategyId, setStrategyId] = useState<string | null>(null);
   const [activeRun, setActiveRun] = useState<ActiveBacktest | null>(null);
+  const [loaded, setLoaded] = useState<Backtest | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const queryClient = useQueryClient();
 
   const runningQuery = useRunningBacktest();
   // Reattach once on first load: the single running run (if any) is the active
@@ -87,32 +102,55 @@ function BacktestingLayout({
   }, [hydrated, runningQuery.isPending, runningQuery.data]);
 
   const run = useBacktestRun(activeRun);
+  const loadedView = useLoadedBacktest(loaded);
+  // A run and a loaded backtest are mutually exclusive, so at most one view is
+  // ever non-null; the live run takes precedence while it is active.
+  const view = run ?? loadedView;
   const { theme } = useTheme();
-  const locked = activeRun !== null;
-  const chartPeriod = run?.params.period ?? period;
+  const locked = activeRun !== null || loaded !== null;
+  const chartPeriod = view?.params.period ?? period;
+
+  // When a run finishes, refresh the saved-backtests list so the just-persisted
+  // backtest is there once the page returns to idle.
+  const runCompleted = run?.status === BacktestStatus.Completed;
+  useEffect(() => {
+    if (runCompleted) {
+      queryClient.invalidateQueries({ queryKey: COMPLETED_BACKTESTS_QUERY_KEY });
+    }
+  }, [runCompleted, queryClient]);
+
+  // Reload a saved backtest into the finished-run view without starting a run:
+  // align the (now locked) pickers to its stored symbol / period.
+  function loadBacktest(backtest: Backtest): void {
+    setActiveRun(null);
+    setLoaded(backtest);
+    setSymbolId(backtest.params.symbolId);
+    setPeriod(backtest.params.period);
+  }
 
   const selected = symbols.find((symbol) => symbol.id === symbolId) ?? null;
   const watchedPeriods = selected?.periods ?? [];
 
-  // The run's trades draw entry/exit markers and its events drive the chart's
-  // state overlays — both sourced from the run frames, never the live endpoints.
+  // The view's trades draw entry/exit markers and its events drive the chart's
+  // state overlays — sourced from the run frames while live, or the persisted
+  // document plus its windowed events once a saved backtest is loaded.
   const tradeMarkers = useMemo(
-    () => (run ? buildTradeMarkers(run.trades, run.openPosition) : []),
-    [run],
+    () => (view ? buildTradeMarkers(view.trades, view.openPosition) : []),
+    [view],
   );
   const runStateOverlays = useMemo(
-    () => (run ? stateOverlaysFromEvents(run.events, theme) : []),
-    [run, theme],
+    () => (view ? stateOverlaysFromEvents(view.events, theme) : []),
+    [view, theme],
   );
 
   return (
     <div className="grid h-full grid-rows-[minmax(0,1fr)_auto] gap-3">
       <div className="grid min-h-0 grid-cols-1 gap-3 lg:grid-cols-3">
         <section aria-label="Backtest chart" className="min-h-0 lg:col-span-2">
-          {run && selected ? (
+          {view && selected ? (
             <Card className="h-full">
               <CandleChart
-                candles={run.chartCandles}
+                candles={view.chartCandles}
                 symbol={selected}
                 period={chartPeriod}
                 range={null}
@@ -133,10 +171,16 @@ function BacktestingLayout({
             period={chartPeriod}
             strategyId={strategyId}
             onStrategyIdChange={setStrategyId}
-            run={run}
+            view={view}
             runId={activeRun?.id ?? null}
-            onStarted={(id) => setActiveRun({ id, reattach: false })}
+            loaded={loaded}
+            onStarted={(id) => {
+              setLoaded(null);
+              setActiveRun({ id, reattach: false });
+            }}
             onDismiss={() => setActiveRun(null)}
+            onLoad={loadBacktest}
+            onCloseLoaded={() => setLoaded(null)}
           />
         </section>
       </div>
@@ -173,11 +217,13 @@ function BacktestingLayout({
 function noop(): void {}
 
 /**
- * The right ⅓ region: the strategy manager and the run section (form when idle,
- * progress + cancel while a run is active).
+ * The right ⅓ region across the page's three states: **loaded** (a saved
+ * backtest's finished-run view with a Close control), **running** (progress +
+ * cancel over the results), and **idle** (the strategy manager, the run form,
+ * and the saved-backtests list).
  *
- * The results tabs (Summary / Trades / Daily P&L) land in the results slice; this
- * slice renders the run controls and the live progress.
+ * The results tabs (Summary / Trades / Daily P&L) render from the unified `view`
+ * — the live run while it streams, or the reloaded backtest once one is loaded.
  */
 function BacktestPanel({
   symbolId,
@@ -185,21 +231,50 @@ function BacktestPanel({
   period,
   strategyId,
   onStrategyIdChange,
-  run,
+  view,
   runId,
+  loaded,
   onStarted,
   onDismiss,
+  onLoad,
+  onCloseLoaded,
 }: {
   symbolId: string;
   profileId: string | null;
   period: Period;
   strategyId: string | null;
   onStrategyIdChange: (id: string | null) => void;
-  run: BacktestRunView | null;
+  view: BacktestRunView | null;
   runId: string | null;
+  loaded: Backtest | null;
   onStarted: (backtestId: string) => void;
   onDismiss: () => void;
+  onLoad: (backtest: Backtest) => void;
+  onCloseLoaded: () => void;
 }): ReactNode {
+  if (loaded !== null) {
+    return (
+      <Card className="h-full">
+        <Flex direction="column" gap="4" p="2">
+          <section aria-label="Loaded backtest">
+            <Flex justify="between" align="center" gap="2" mb="1">
+              <Heading size="3" className="truncate">
+                {loaded.name}
+              </Heading>
+              <Button type="button" variant="soft" color="gray" onClick={onCloseLoaded}>
+                Close
+              </Button>
+            </Flex>
+            <Text size="1" color="gray">
+              Saved backtest
+            </Text>
+          </section>
+          {view ? <ResultsSection view={view} /> : null}
+        </Flex>
+      </Card>
+    );
+  }
+
   const idle = runId === null;
   return (
     <Card className="h-full">
@@ -227,23 +302,32 @@ function BacktestPanel({
               onStarted={onStarted}
             />
           ) : (
-            <RunProgress run={run} runId={runId} onDismiss={onDismiss} />
+            <RunProgress run={view} runId={runId} onDismiss={onDismiss} />
           )}
         </section>
-        {run ? (
-          <section aria-label="Backtest results">
+        {view ? <ResultsSection view={view} /> : null}
+        {idle ? (
+          <section aria-label="Saved backtests">
             <Heading size="3" mb="2">
-              Results
+              Saved backtests
             </Heading>
-            <ResultsTabs
-              trades={run.trades}
-              summary={run.summary}
-              openPosition={run.openPosition}
-            />
+            <SavedBacktestsList onLoad={onLoad} />
           </section>
         ) : null}
       </Flex>
     </Card>
+  );
+}
+
+/** The Summary / Trades / Daily P&L tabs over the unified run view. */
+function ResultsSection({ view }: { view: BacktestRunView }): ReactNode {
+  return (
+    <section aria-label="Backtest results">
+      <Heading size="3" mb="2">
+        Results
+      </Heading>
+      <ResultsTabs trades={view.trades} summary={view.summary} openPosition={view.openPosition} />
+    </section>
   );
 }
 
