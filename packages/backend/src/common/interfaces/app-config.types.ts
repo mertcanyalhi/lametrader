@@ -39,6 +39,11 @@ export interface AppConfig {
    */
   mongoUri: string;
   /**
+   * Redis connection string backing the persistent `OncePerBar` latch (#513,
+   * ADR-0020). Defaults to `redis://localhost:6379` (the local dev infra).
+   */
+  redisUrl: string;
+  /**
    * Port the HTTP server listens on.
    */
   port: number;

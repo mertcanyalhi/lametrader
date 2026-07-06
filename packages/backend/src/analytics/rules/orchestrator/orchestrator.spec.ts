@@ -28,6 +28,7 @@ import { InMemoryNotifier } from '../../../common/services/in-memory-notifier.js
 import { InMemoryWatchlistRepository } from '../../../market/persistence/in-memory-watchlist.repository.js';
 import { InMemoryStateRepository } from '../../persistence/in-memory-state.repository.js';
 import { TriggerDispatcher } from '../dispatch/dispatcher.js';
+import { InMemoryOncePerBarLatchStore } from '../dispatch/in-memory-once-per-bar-latch.store.js';
 import { barSeriesKey, buildEvaluationContext } from '../evaluation-context.js';
 import type { EvaluationContext } from '../evaluation-context.types.js';
 import { InMemoryRuleRepository } from '../in-memory-rule.repository.js';
@@ -155,7 +156,11 @@ async function buildOrchestrator(opts: {
       getSymbolState: (pid, symbolId, key) => lookups.getSymbolState(pid, symbolId, key),
       getGlobalState: (pid, key) => lookups.getGlobalState(pid, key),
     });
-  const dispatcher = new TriggerDispatcher({ rules: repo, buildContext });
+  const dispatcher = new TriggerDispatcher({
+    rules: repo,
+    latchStore: new InMemoryOncePerBarLatchStore(),
+    buildContext,
+  });
   const actions = new ActionRunner(state, notifier, lookups);
   const orchestrator = new RuleOrchestrator({
     rules: repo,

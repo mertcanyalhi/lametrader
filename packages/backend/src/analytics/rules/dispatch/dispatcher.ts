@@ -4,6 +4,7 @@ import {
   EvaluationTriggerKind,
   type GlobalStateChangedEvent,
   type IndicatorChangedEvent,
+  periodMillis,
   type Rule,
   type RuleEvent,
   type RuleEventContext,
@@ -16,6 +17,7 @@ import {
 import { getLogger } from '../engine-log.js';
 import type { EvaluationContext } from '../evaluation-context.types.js';
 import { evaluateCondition } from './evaluate-condition.js';
+import type { OncePerBarLatchStore } from './once-per-bar-latch.types.js';
 import { referencesSlot } from './references-slot.js';
 import { routes } from './routes.js';
 import type { RuleListSource } from './tick-rule-cache.js';
@@ -50,6 +52,14 @@ interface DroppedCandidate {
 export interface TriggerDispatcherDeps {
   /** Read enabled rules + atomically claim a `Once` rule's lifetime fire. */
   rules: RuleRepository;
+  /**
+   * The persistent `OncePerBar` latch — the gate check, record-fire, and
+   * `BarOpened` re-arm that used to be a private in-memory `Set`, now
+   * out-of-process (Redis) so it survives a restart and is shared across
+   * instances (#513, ADR-0020). `OncePerInterval`'s last-fire map stays in
+   * memory (its timestamp-compare gate is not a presence latch).
+   */
+  latchStore: OncePerBarLatchStore;
   /**
    * Build a fresh {@link EvaluationContext} for one
    * `(event, firingSymbolId, profileId)` triple — the dispatcher needs one
@@ -133,9 +143,11 @@ export interface FireRecord {
  *      recording it; a caller that loses the claim skips silently, so the
  *      rule fires exactly once even across concurrent chains (#462). The
  *      next dispatch's `listEnabledForSymbol` then drops the disabled rule.
- *    - `OncePerBar` — in-memory latch per `(ruleId, firingSymbolId,
- *      barStart)` records the last-fire bar; gate suppresses repeats
- *      until a `BarOpened(period)` clears the latch.
+ *    - `OncePerBar` — a persistent latch (`deps.latchStore`) per `(ruleId,
+ *      firingSymbolId, period)` records that the rule fired this bar; gate
+ *      suppresses repeats until a `BarOpened(period)` clears the latch. The
+ *      store is out-of-process (Redis) so the latch survives restart and is
+ *      shared across instances (#513).
  *    - `OncePerBarOpen` / `OncePerBarClose` — admitted only by `routes`,
  *      no extra gate (one fire per matching bar event by definition).
  *    - `OncePerInterval` — in-memory last-fire ts per
@@ -147,22 +159,14 @@ export interface FireRecord {
  */
 export class TriggerDispatcher {
   /**
-   * Per-`(ruleId, firingSymbolId, period)` boolean latch for `OncePerBar`
-   * rules — `true` once the rule has fired within the current bar window.
-   * The `BarOpened(period)` re-arm path clears matching entries; the gate
-   * suppresses repeats while the entry is `true`.
-   *
-   * Per ADR 0016 / CONTEXT.md: "latch resets on the next BarOpened for that
-   * period" — i.e. only an explicit BarOpened of the matching period
-   * re-arms. A tick that crosses a bar boundary without an explicit
-   * BarOpened doesn't itself re-arm (the bridges emit BarOpened exactly at
-   * the boundary so in production both happen simultaneously).
-   */
-  private readonly oncePerBarLatch = new Set<string>();
-  /**
    * Per-`(ruleId, firingSymbolId)` last-fire timestamp for
    * `OncePerInterval` rules. The gate compares against `event.ts -
    * lastFireTs >= intervalMs`.
+   *
+   * Still in-memory (unlike the now-persistent `OncePerBar` latch): its
+   * gate is an event-time comparison, not a presence latch, so it does not
+   * reduce to the store's `exists` / TTL model — persisting it is a separate
+   * follow-up (#513 notes).
    */
   private readonly lastIntervalFireTs = new Map<string, number>();
 
@@ -184,7 +188,7 @@ export class TriggerDispatcher {
     // routing. (BarOpened doesn't itself fire OncePerBar rules, but it clears
     // their latches so the next matching tick can fire.)
     if (event.kind === EvaluationTriggerKind.BarOpened) {
-      this.rearmOncePerBarLatches(event);
+      await this.rearmOncePerBarLatches(event);
     }
 
     const candidates = await this.candidates(event, options);
@@ -203,7 +207,7 @@ export class TriggerDispatcher {
         droppedCandidates.push({ ruleId: rule.id, reason: 'condition-false' });
         continue;
       }
-      if (!this.gateAllows(rule, event, firingSymbolId)) {
+      if (!(await this.gateAllows(rule, event, firingSymbolId))) {
         droppedCandidates.push({ ruleId: rule.id, reason: 'gate-blocked' });
         continue;
       }
@@ -220,7 +224,7 @@ export class TriggerDispatcher {
         droppedCandidates.push({ ruleId: rule.id, reason: 'gate-blocked' });
         continue;
       }
-      this.recordFire(rule, event, firingSymbolId);
+      await this.recordFire(rule, event, firingSymbolId);
       eligibleIds.push(rule.id);
       fires.push({ ruleId: rule.id, firingSymbolId, event });
     }
@@ -303,21 +307,27 @@ export class TriggerDispatcher {
    * ensured kind + period match); `OncePerBar` checks the latch; and
    * `OncePerInterval` checks the elapsed time since last fire.
    */
-  private gateAllows(rule: Rule, event: EvaluationTriggerEvent, firingSymbolId: string): boolean {
+  private async gateAllows(
+    rule: Rule,
+    event: EvaluationTriggerEvent,
+    firingSymbolId: string,
+  ): Promise<boolean> {
     switch (rule.trigger.kind) {
       case TriggerKind.EveryTime:
       case TriggerKind.Once:
       case TriggerKind.OncePerBarOpen:
       case TriggerKind.OncePerBarClose:
         return true;
-      case TriggerKind.OncePerBar: {
-        // Latch is cleared on BarOpened for the matching period; if the
-        // entry isn't set, this is the first fire of the current bar window.
-        const key = latchKey(rule.id, firingSymbolId, rule.trigger.period);
-        return !this.oncePerBarLatch.has(key);
-      }
+      case TriggerKind.OncePerBar:
+        // The persistent latch is cleared on BarOpened for the matching period;
+        // if it isn't set, this is the first fire of the current bar window.
+        return !(await this.deps.latchStore.isLatched(
+          rule.id,
+          firingSymbolId,
+          rule.trigger.period,
+        ));
       case TriggerKind.OncePerInterval: {
-        const key = latchKey(rule.id, firingSymbolId);
+        const key = intervalKey(rule.id, firingSymbolId);
         const last = this.lastIntervalFireTs.get(key);
         if (last === undefined) return true;
         return event.ts - last >= rule.trigger.intervalMs;
@@ -326,15 +336,27 @@ export class TriggerDispatcher {
   }
 
   /**
-   * Update internal gate state after a fire — sets the OncePerBar latch and
-   * stamps the OncePerInterval last-fire timestamp.
+   * Update gate state after a fire — sets the persistent OncePerBar latch (with
+   * a `periodMillis(period) * 2` TTL backstop) and stamps the in-memory
+   * OncePerInterval last-fire timestamp.
    */
-  private recordFire(rule: Rule, event: EvaluationTriggerEvent, firingSymbolId: string): void {
+  private async recordFire(
+    rule: Rule,
+    event: EvaluationTriggerEvent,
+    firingSymbolId: string,
+  ): Promise<void> {
     if (rule.trigger.kind === TriggerKind.OncePerBar) {
-      const key = latchKey(rule.id, firingSymbolId, rule.trigger.period);
-      this.oncePerBarLatch.add(key);
+      // TTL of ~one bar plus slop: a latch only matters within its bar, so it
+      // auto-expires and there is no cleanup path to maintain — the explicit
+      // BarOpened re-arm is the primary clear, the TTL only a restart backstop.
+      await this.deps.latchStore.latch(
+        rule.id,
+        firingSymbolId,
+        rule.trigger.period,
+        periodMillis(rule.trigger.period) * 2,
+      );
     } else if (rule.trigger.kind === TriggerKind.OncePerInterval) {
-      const key = latchKey(rule.id, firingSymbolId);
+      const key = intervalKey(rule.id, firingSymbolId);
       this.lastIntervalFireTs.set(key, event.ts);
     }
   }
@@ -343,17 +365,14 @@ export class TriggerDispatcher {
    * Drop any OncePerBar latches for the BarOpened event's `(symbol, period)`
    * — the next matching tick on that symbol+period will re-fire.
    *
-   * Both symbol and period are baked into the latch key
-   * (`<ruleId>|<sym>|<period>`); the re-arm matches on the `|<sym>|<period>`
-   * suffix so a BarOpened for one symbol never clears another symbol's latch
-   * of the same period. The leading `|` before `<sym>` keeps the match exact
-   * even when one symbol id is a suffix of another (`BTC` / `WBTC`).
+   * Per ADR 0016 / CONTEXT.md only an explicit BarOpened of the matching period
+   * re-arms: a tick that merely crosses a bar boundary does not (the bridges
+   * emit BarOpened exactly at the boundary, so in production both happen
+   * together). The store scopes the clear to the one `(symbol, period)`, so a
+   * BarOpened for one symbol never re-arms another's latch of the same period.
    */
-  private rearmOncePerBarLatches(event: BarOpenedEvent): void {
-    const suffix = `${LATCH_KEY_SEP}${event.symbolId}${LATCH_KEY_SEP}${event.period}`;
-    for (const key of this.oncePerBarLatch) {
-      if (key.endsWith(suffix)) this.oncePerBarLatch.delete(key);
-    }
+  private async rearmOncePerBarLatches(event: BarOpenedEvent): Promise<void> {
+    await this.deps.latchStore.rearm(event.symbolId, event.period);
   }
 
   /**
@@ -388,13 +407,9 @@ export class TriggerDispatcher {
   }
 }
 
-/** Composite key for the OncePerBar latch / OncePerInterval timestamps. */
-const LATCH_KEY_SEP = '|';
-
-function latchKey(ruleId: string, firingSymbolId: string, period?: string): string {
-  return period === undefined
-    ? `${ruleId}${LATCH_KEY_SEP}${firingSymbolId}`
-    : `${ruleId}${LATCH_KEY_SEP}${firingSymbolId}${LATCH_KEY_SEP}${period}`;
+/** Composite key for the in-memory OncePerInterval last-fire timestamps. */
+function intervalKey(ruleId: string, firingSymbolId: string): string {
+  return `${ruleId}|${firingSymbolId}`;
 }
 
 /** Whether the event carries a symbol (i.e. is symbol-scoped). */
