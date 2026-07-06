@@ -15,6 +15,8 @@ import { WATCHLIST_REPOSITORY } from '../../market/interfaces/watchlist-reposito
 import { IndicatorService } from '../indicators/indicator.service.js';
 import { PROFILE_REPOSITORY } from '../interfaces/profile-repository.token.js';
 import { STATE_REPOSITORY } from '../interfaces/state-repository.token.js';
+import { ONCE_PER_BAR_LATCH_STORE } from './dispatch/once-per-bar-latch.token.js';
+import type { OncePerBarLatchStore } from './dispatch/once-per-bar-latch.types.js';
 import { IndicatorSeriesStore } from './indicator-series-store.js';
 import { RULE_REPOSITORY } from './rule-repository.token.js';
 import { registerIndicatorInstances } from './wire/register-indicator-instances.js';
@@ -64,6 +66,7 @@ export class RuleEngineService {
    * @param candles - the shared candle store (OHLCV operand resolution).
    * @param notifier - the notification sink the action-runner dispatches through.
    * @param profiles - the profile store; enumerated at {@link start} to register each attached indicator-instance config.
+   * @param oncePerBarLatch - the persistent OncePerBar latch store (Redis; #513) the dispatcher's gate reads/writes.
    * @param indicators - the ad-hoc indicator compute use-case the series store wraps.
    */
   constructor(
@@ -74,6 +77,7 @@ export class RuleEngineService {
     @Inject(CANDLE_REPOSITORY) private readonly candles: CandleRepository,
     @Inject(TelegramNotifier) private readonly notifier: Notifier,
     @Inject(PROFILE_REPOSITORY) private readonly profiles: ProfileRepository,
+    @Inject(ONCE_PER_BAR_LATCH_STORE) private readonly oncePerBarLatch: OncePerBarLatchStore,
     indicators: IndicatorService,
   ) {
     this.indicatorStore = new IndicatorSeriesStore(this.candles, indicators);
@@ -109,6 +113,7 @@ export class RuleEngineService {
     });
     this.wired = await wireRuleEngine({
       rules: this.rules,
+      oncePerBarLatch: this.oncePerBarLatch,
       state: this.state,
       watchlist: this.watchlist,
       notifier: this.notifier,

@@ -20,6 +20,7 @@ import {
 import { type BarAxis, FallbackSeriesView } from '../bar-series-view.js';
 import { BarLifecycleBridge, IndicatorCascadeBridge } from '../bridges/index.js';
 import { TriggerDispatcher } from '../dispatch/dispatcher.js';
+import type { OncePerBarLatchStore } from '../dispatch/once-per-bar-latch.types.js';
 import { getLogger } from '../engine-log.js';
 import { buildBarSeriesPagers, buildEvaluationContext } from '../evaluation-context.js';
 import type { IndicatorSeriesStore } from '../indicator-series-store.js';
@@ -45,6 +46,12 @@ const log = getLogger('engine.rules.wire');
 export interface RuleEngineDeps {
   /** Rule persistence port. */
   rules: RuleRepository;
+  /**
+   * Persistent `OncePerBar` latch store — the dispatcher's gate reads/writes it
+   * so the latch survives restart and is shared across instances (#513). Redis
+   * in production; the in-memory fake in unit wiring.
+   */
+  oncePerBarLatch: OncePerBarLatchStore;
   /** State port — read by the dispatcher's context + written by actions. */
   state: StateRepository;
   /** Watchlist port — drives `AllSymbols` fan-out on symbol-less events. */
@@ -100,6 +107,7 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
   const actions = new ActionRunner(deps.state, deps.notifier, lookups);
   const dispatcher = new TriggerDispatcher({
     rules: deps.rules,
+    latchStore: deps.oncePerBarLatch,
     buildContext: async (event, firingSymbolId, profileId) => {
       // Cascade events (`SymbolStateChanged` / `GlobalStateChanged`) already
       // carry the slot's `prev` value on their payload — thread it through so

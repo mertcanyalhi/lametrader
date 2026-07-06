@@ -14,6 +14,8 @@ import { PROFILE_REPOSITORY } from '../interfaces/profile-repository.token.js';
 import { STATE_REPOSITORY } from '../interfaces/state-repository.token.js';
 import { InMemoryProfileRepository } from '../persistence/in-memory-profile.repository.js';
 import { InMemoryStateRepository } from '../persistence/in-memory-state.repository.js';
+import { InMemoryOncePerBarLatchStore } from './dispatch/in-memory-once-per-bar-latch.store.js';
+import { ONCE_PER_BAR_LATCH_STORE } from './dispatch/once-per-bar-latch.token.js';
 import { InMemoryRuleRepository } from './in-memory-rule.repository.js';
 import { RuleEngineService } from './rule-engine.service.js';
 import { RULE_REPOSITORY } from './rule-repository.token.js';
@@ -48,6 +50,7 @@ describe('RuleEngineService dormancy', () => {
         { provide: CANDLE_REPOSITORY, useValue: candles },
         { provide: TelegramNotifier, useValue: notifier },
         { provide: PROFILE_REPOSITORY, useValue: new InMemoryProfileRepository() },
+        { provide: ONCE_PER_BAR_LATCH_STORE, useValue: new InMemoryOncePerBarLatchStore() },
         {
           provide: IndicatorService,
           useValue: new IndicatorService(defaultIndicators(), watchlist, candles),

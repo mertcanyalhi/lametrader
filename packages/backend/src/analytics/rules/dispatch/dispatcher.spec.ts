@@ -28,6 +28,8 @@ import type { EvaluationContext } from '../evaluation-context.types.js';
 import { InMemoryRuleRepository } from '../in-memory-rule.repository.js';
 import type { SeriesView } from '../series.types.js';
 import { TriggerDispatcher } from './dispatcher.js';
+import { InMemoryOncePerBarLatchStore } from './in-memory-once-per-bar-latch.store.js';
+import type { OncePerBarLatchStore } from './once-per-bar-latch.types.js';
 
 const EMPTY_SERIES: SeriesView = {
   length: 0,
@@ -103,16 +105,24 @@ interface SetupOptions {
   rules: Rule[];
   /** Defaults to a price=120 context for every event. */
   buildContext?: (event: RuleEvent, firingSymbolId: string) => EvaluationContext;
+  /**
+   * Shared OncePerBar latch store — pass an existing one to model a restart
+   * (a fresh dispatcher over a store that already holds the latch). Defaults to
+   * a fresh in-memory fake.
+   */
+  latchStore?: OncePerBarLatchStore;
 }
 
 async function setup(opts: SetupOptions) {
   const repo = new InMemoryRuleRepository();
   for (const r of opts.rules) await repo.save(r);
+  const latchStore = opts.latchStore ?? new InMemoryOncePerBarLatchStore();
   const dispatcher = new TriggerDispatcher({
     rules: repo,
+    latchStore,
     buildContext: opts.buildContext ?? (() => priceContext(120)),
   });
-  return { repo, dispatcher };
+  return { repo, dispatcher, latchStore };
 }
 
 const TICK_EVENT_AT = (ts: number, price = 120): TickEvent => ({
@@ -262,6 +272,34 @@ describe('TriggerDispatcher — OncePerBar latch', () => {
       price: 120,
     });
     expect(fires).toEqual([]);
+  });
+
+  it('suppresses a OncePerBar rule on a fresh dispatcher whose shared store already holds the latch (restart)', async () => {
+    // A restart wipes process memory but not the shared latch store: a second
+    // dispatcher built over the SAME store must still see this bar's latch and
+    // not re-fire (#513).
+    const r = rule({
+      trigger: { kind: TriggerKind.OncePerBar, period: Period.OneMinute },
+    });
+    const { dispatcher, latchStore } = await setup({ rules: [r] });
+    await dispatcher.dispatch(TICK_EVENT_AT(1_000));
+    const restarted = await setup({ rules: [r], latchStore });
+    const fires = await restarted.dispatcher.dispatch(TICK_EVENT_AT(2_000));
+    expect(fires).toEqual([]);
+  });
+
+  it('fires on a fresh dispatcher once the shared store has been re-armed', async () => {
+    // After an explicit BarOpened clears the shared latch, a restarted
+    // dispatcher fires again on the next tick — the re-arm survives too (#513).
+    const r = rule({
+      trigger: { kind: TriggerKind.OncePerBar, period: Period.OneMinute },
+    });
+    const { dispatcher, latchStore } = await setup({ rules: [r] });
+    await dispatcher.dispatch(TICK_EVENT_AT(1_000));
+    await dispatcher.dispatch(BAR_OPENED(60_000, Period.OneMinute));
+    const restarted = await setup({ rules: [r], latchStore });
+    const fires = await restarted.dispatcher.dispatch(TICK_EVENT_AT(61_000));
+    expect(fires.map((f) => f.ruleId)).toEqual(['r1']);
   });
 });
 
