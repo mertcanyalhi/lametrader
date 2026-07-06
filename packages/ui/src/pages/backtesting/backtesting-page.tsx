@@ -1,22 +1,31 @@
-import type { Config, EnrichedSymbol, Period } from '@lametrader/core';
-import { Callout, Card, Flex, Heading, Text } from '@radix-ui/themes';
-import { type ReactNode, useState } from 'react';
+import { BacktestStatus, type Config, type EnrichedSymbol, type Period } from '@lametrader/core';
+import { Button, Callout, Card, Flex, Heading, Progress, Text } from '@radix-ui/themes';
+import { type ReactNode, useEffect, useState } from 'react';
+import { useCancelBacktest, useRunningBacktest } from '../../lib/hooks/backtests.js';
 import { useWatchlist } from '../../lib/hooks/symbols.js';
+import {
+  type ActiveBacktest,
+  type BacktestRunView,
+  useBacktestRun,
+} from '../../lib/hooks/use-backtest-run.js';
 import { useConfig } from '../../lib/hooks/use-config.js';
+import { getLogger } from '../../lib/log.js';
+import { useSelectedProfile } from '../../lib/selected-profile-context.js';
+import { CandleChart } from '../chart/candle-chart.js';
 import { ChartLoading } from '../chart/chart-loading.js';
 import type { ChartRange } from '../chart/chart-range.js';
 import { PeriodRangeDialog } from '../chart/period-range-dialog.js';
 import { ProfilePickerDialog } from '../chart/profile-picker-dialog.js';
 import { SymbolPickerDialog } from '../chart/symbol-picker-dialog.js';
+import { RunForm } from './run-form.js';
 import { StrategyManager } from './strategy-manager.js';
 
+/** Scoped logger for run-cancel failures. */
+const log = getLogger('backtesting-page');
+
 /**
- * The `/backtesting` route — the empty-but-navigable home for the backtesting
- * feature.
- *
- * This slice establishes the page, its split layout, and the selected-context
- * state (symbol / profile / period) that later slices (strategy management, run
- * form, results) bind to. There is no strategy management or run capability yet.
+ * The `/backtesting` route — define a strategy, run it against a symbol's stored
+ * history, and watch the run fill the chart live (spec: *UI — run flow*).
  *
  * Loads the enriched watchlist (for the symbol picker) and the config (for the
  * default period), then defers to {@link BacktestingLayout}. Unlike `/chart`,
@@ -35,16 +44,14 @@ export function BacktestingPage(): ReactNode {
 }
 
 /**
- * The page's split layout plus its selected-context state.
+ * The page's split layout plus its selected-context and run state.
  *
- * The selected symbol and period live in local component state (profile lives in
- * the shared {@link ProfilePickerDialog} context); later slices read this
- * context to seed the run form and lock the pickers during a run. The symbol
- * defaults to the first watched symbol and the period to the config default.
- *
- * The `range` is tracked only to satisfy the reused {@link PeriodRangeDialog}'s
- * contract; the backtest range comes from the run form's start/end dates in a
- * later slice, so it does not drive anything here.
+ * The layout owns the run lifecycle: {@link useBacktestRun} streams the active
+ * run's frames, the pickers lock while a run is active, and the chart fills from
+ * the run's incremental candles. On first load it reattaches to any run already
+ * in flight (surviving a navigation away): the running-backtest discovery query
+ * seeds `activeRun` once, and the stream's snapshot restores progress + results
+ * while REST catches the chart up.
  */
 function BacktestingLayout({
   symbols,
@@ -53,9 +60,31 @@ function BacktestingLayout({
   symbols: EnrichedSymbol[];
   config: Config;
 }): ReactNode {
+  const { profileId } = useSelectedProfile();
   const [symbolId, setSymbolId] = useState<string | null>(() => symbols[0]?.id ?? null);
   const [period, setPeriod] = useState<Period>(config.defaultPeriod);
   const [range, setRange] = useState<ChartRange | null>(null);
+  const [strategyId, setStrategyId] = useState<string | null>(null);
+  const [activeRun, setActiveRun] = useState<ActiveBacktest | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  const runningQuery = useRunningBacktest();
+  // Reattach once on first load: the single running run (if any) is the active
+  // one; align the locked pickers to its symbol / period.
+  useEffect(() => {
+    if (hydrated || runningQuery.isPending) return;
+    const running = runningQuery.data?.[0];
+    if (running) {
+      setActiveRun({ id: running.id, reattach: true });
+      setSymbolId(running.params.symbolId);
+      setPeriod(running.params.period);
+    }
+    setHydrated(true);
+  }, [hydrated, runningQuery.isPending, runningQuery.data]);
+
+  const run = useBacktestRun(activeRun);
+  const locked = activeRun !== null;
+  const chartPeriod = run?.params.period ?? period;
 
   const selected = symbols.find((symbol) => symbol.id === symbolId) ?? null;
   const watchedPeriods = selected?.periods ?? [];
@@ -64,10 +93,33 @@ function BacktestingLayout({
     <div className="grid h-full grid-rows-[minmax(0,1fr)_auto] gap-3">
       <div className="grid min-h-0 grid-cols-1 gap-3 lg:grid-cols-3">
         <section aria-label="Backtest chart" className="min-h-0 lg:col-span-2">
-          <ChartPlaceholder />
+          {run && selected ? (
+            <Card className="h-full">
+              <CandleChart
+                candles={run.chartCandles}
+                symbol={selected}
+                period={chartPeriod}
+                range={null}
+                loadOlder={noop}
+                hasMore={false}
+              />
+            </Card>
+          ) : (
+            <ChartPlaceholder />
+          )}
         </section>
         <section aria-label="Backtest panel" className="min-h-0">
-          <BacktestPanel symbolId={symbolId ?? ''} />
+          <BacktestPanel
+            symbolId={symbolId ?? ''}
+            profileId={profileId}
+            period={chartPeriod}
+            strategyId={strategyId}
+            onStrategyIdChange={setStrategyId}
+            run={run}
+            runId={activeRun?.id ?? null}
+            onStarted={(id) => setActiveRun({ id, reattach: false })}
+            onDismiss={() => setActiveRun(null)}
+          />
         </section>
       </div>
       <Flex
@@ -77,12 +129,18 @@ function BacktestingLayout({
         role="group"
         aria-label="Backtesting actions"
       >
-        <ProfilePickerDialog />
-        <SymbolPickerDialog currentId={symbolId ?? ''} watched={symbols} onSelect={setSymbolId} />
+        <ProfilePickerDialog disabled={locked} />
+        <SymbolPickerDialog
+          currentId={symbolId ?? ''}
+          watched={symbols}
+          onSelect={setSymbolId}
+          disabled={locked}
+        />
         <PeriodRangeDialog
           period={period}
           range={range}
           watchedPeriods={watchedPeriods}
+          disabled={locked}
           onApply={(next) => {
             setPeriod(next.period);
             setRange(next.range);
@@ -93,9 +151,134 @@ function BacktestingLayout({
   );
 }
 
+/** No-op passed to the reused chart's paging hook — a backtest never scrolls back. */
+function noop(): void {}
+
 /**
- * The left ⅔ region: empty until a run exists. Later slices mount the reused
- * `CandleChart` here, filled incrementally from run frames.
+ * The right ⅓ region: the strategy manager and the run section (form when idle,
+ * progress + cancel while a run is active).
+ *
+ * The results tabs (Summary / Trades / Daily P&L) land in the results slice; this
+ * slice renders the run controls and the live progress.
+ */
+function BacktestPanel({
+  symbolId,
+  profileId,
+  period,
+  strategyId,
+  onStrategyIdChange,
+  run,
+  runId,
+  onStarted,
+  onDismiss,
+}: {
+  symbolId: string;
+  profileId: string | null;
+  period: Period;
+  strategyId: string | null;
+  onStrategyIdChange: (id: string | null) => void;
+  run: BacktestRunView | null;
+  runId: string | null;
+  onStarted: (backtestId: string) => void;
+  onDismiss: () => void;
+}): ReactNode {
+  const idle = runId === null;
+  return (
+    <Card className="h-full">
+      <Flex direction="column" gap="4" p="2">
+        <section aria-label="Backtest setup">
+          <Heading size="3" mb="2">
+            Setup
+          </Heading>
+          <StrategyManager
+            symbolId={symbolId}
+            selectedId={strategyId}
+            onSelectedIdChange={onStrategyIdChange}
+          />
+        </section>
+        <section aria-label="Backtest run">
+          <Heading size="3" mb="2">
+            Run
+          </Heading>
+          {idle ? (
+            <RunForm
+              strategyId={strategyId}
+              symbolId={symbolId}
+              profileId={profileId}
+              period={period}
+              onStarted={onStarted}
+            />
+          ) : (
+            <RunProgress run={run} runId={runId} onDismiss={onDismiss} />
+          )}
+        </section>
+      </Flex>
+    </Card>
+  );
+}
+
+/** Clamp a run's elapsed-days / total-days progress to a whole 0–100 percentage. */
+function progressPercent(run: BacktestRunView | null): number {
+  if (!run || run.progress.totalDays <= 0) return 0;
+  const pct = (run.progress.elapsedDays / run.progress.totalDays) * 100;
+  return Math.max(0, Math.min(100, Math.round(pct)));
+}
+
+/**
+ * The active-run view: a progress bar plus Cancel (while running) or New run
+ * (once completed). Cancelling discards the run and returns the page to idle.
+ */
+function RunProgress({
+  run,
+  runId,
+  onDismiss,
+}: {
+  run: BacktestRunView | null;
+  runId: string | null;
+  onDismiss: () => void;
+}): ReactNode {
+  const cancel = useCancelBacktest();
+  const completed = run?.status === BacktestStatus.Completed;
+  const percent = completed ? 100 : progressPercent(run);
+
+  async function handleCancel(): Promise<void> {
+    if (runId !== null) {
+      try {
+        await cancel.mutateAsync(runId);
+      } catch (error) {
+        log.warn({ err: error }, 'failed to cancel backtest');
+      }
+    }
+    onDismiss();
+  }
+
+  return (
+    <Flex direction="column" gap="3" aria-label="Backtest progress">
+      <Progress value={percent} aria-label="Run progress" />
+      <Text size="2" color="gray">
+        {completed ? 'Run complete' : run ? `Running — ${percent}%` : 'Starting run…'}
+      </Text>
+      {completed ? (
+        <Button type="button" onClick={onDismiss}>
+          New run
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          color="red"
+          variant="soft"
+          loading={cancel.isPending}
+          onClick={() => void handleCancel()}
+        >
+          Cancel run
+        </Button>
+      )}
+    </Flex>
+  );
+}
+
+/**
+ * The empty chart region shown before any run: a hint to pick a context and run.
  */
 function ChartPlaceholder(): ReactNode {
   return (
@@ -105,35 +288,6 @@ function ChartPlaceholder(): ReactNode {
         <Text size="2" color="gray" align="center">
           Pick a symbol, profile, and period below, then run a backtest to see the chart.
         </Text>
-      </Flex>
-    </Card>
-  );
-}
-
-/**
- * The right ⅓ region: the run-setup and results sections.
- *
- * The setup section now hosts the strategy manager (selector + create / edit /
- * delete dialog); the run form and the results tabs (Summary / Trades / Daily
- * P&L) land in later slices. The strategy editor's signal comboboxes seed from
- * the selected `symbolId`'s state-key catalog.
- */
-function BacktestPanel({ symbolId }: { symbolId: string }): ReactNode {
-  return (
-    <Card className="h-full">
-      <Flex direction="column" gap="4" p="2">
-        <section aria-label="Backtest setup">
-          <Heading size="3" mb="2">
-            Setup
-          </Heading>
-          <StrategyManager symbolId={symbolId} />
-        </section>
-        <section aria-label="Backtest results">
-          <Heading size="3">Results</Heading>
-          <Text size="2" color="gray">
-            Summary, trades, and daily P&amp;L appear here after a run.
-          </Text>
-        </section>
       </Flex>
     </Card>
   );

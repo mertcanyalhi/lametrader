@@ -74,6 +74,9 @@ describe('BacktestingPage', () => {
     // The panel's strategy manager lists strategies on mount; default it to an
     // empty list so the pre-existing picker tests don't hit an unexpected fetch.
     matchers.push({ includes: '/backtest-strategies', body: () => [] });
+    // The layout discovers any active run on mount (reattach); default it to none
+    // so the picker tests start idle with unlocked pickers.
+    matchers.push({ includes: '/backtests?status=', body: () => [] });
     const fetchSpy = vi.fn(async (url: string) => {
       const match = matchers.find((m) => String(url).includes(m.includes));
       if (!match) throw new Error(`unexpected fetch: ${url}`);

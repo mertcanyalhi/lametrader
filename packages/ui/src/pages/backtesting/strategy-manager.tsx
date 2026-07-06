@@ -23,18 +23,35 @@ type DialogState =
  * strategies plus New / Edit / Delete controls that round-trip through the
  * `/backtest-strategies` API and refresh the selector.
  *
- * Selection lives here (the run form in a later slice reads it); creating a
- * strategy selects it, and deleting the selected one clears the selection so the
- * selector falls back to its placeholder.
+ * Selection is **controlled or uncontrolled**: when the page passes `selectedId`
+ * + `onSelectedIdChange` the run form and the manager share one selection;
+ * otherwise the manager keeps its own. Creating a strategy selects it, and
+ * deleting the selected one clears the selection so the selector falls back to
+ * its placeholder.
  *
  * @param symbolId - The selected symbol whose state-key catalog seeds the signal
  *                     editors in the dialog.
+ * @param selectedId - The controlled selected strategy id (omit for uncontrolled).
+ * @param onSelectedIdChange - Called when the selection changes (controlled mode).
  */
-export function StrategyManager({ symbolId }: { symbolId: string }): ReactNode {
+export function StrategyManager({
+  symbolId,
+  selectedId: controlledId,
+  onSelectedIdChange,
+}: {
+  symbolId: string;
+  selectedId?: string | null;
+  onSelectedIdChange?: (id: string | null) => void;
+}): ReactNode {
   const strategiesQuery = useBacktestStrategies();
   const strategies = strategiesQuery.data ?? [];
   const del = useDeleteBacktestStrategy();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [internalId, setInternalId] = useState<string | null>(null);
+  const selectedId = controlledId !== undefined ? controlledId : internalId;
+  const setSelectedId = (id: string | null): void => {
+    if (onSelectedIdChange) onSelectedIdChange(id);
+    else setInternalId(id);
+  };
   const [dialog, setDialog] = useState<DialogState>({ open: false });
   const [toDelete, setToDelete] = useState<BacktestStrategy | null>(null);
 

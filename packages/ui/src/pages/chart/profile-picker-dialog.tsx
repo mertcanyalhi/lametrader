@@ -50,8 +50,10 @@ type View = { kind: 'list' } | { kind: 'create' } | { kind: 'edit'; profile: Pro
  *
  * Modeled on `symbol-picker-dialog.tsx`. The delete confirmation is a nested
  * `AlertDialog` (per project rule "Confirmation prompt → `<AlertDialog>`").
+ *
+ * @param disabled - when `true`, the trigger is locked (e.g. while a backtest run is active).
  */
-export function ProfilePickerDialog(): ReactNode {
+export function ProfilePickerDialog({ disabled = false }: { disabled?: boolean } = {}): ReactNode {
   const { profileId, setProfileId } = useSelectedProfile();
   const profilesQuery = useProfiles();
   const profiles = profilesQuery.data ?? [];
@@ -107,7 +109,12 @@ export function ProfilePickerDialog(): ReactNode {
     <>
       <Dialog.Root open={open} onOpenChange={handleOpenChange}>
         <Dialog.Trigger>
-          <Button variant="soft" color="gray" className="min-w-32 justify-center">
+          <Button
+            variant="soft"
+            color="gray"
+            className="min-w-32 justify-center"
+            disabled={disabled}
+          >
             <User size={14} aria-hidden="true" />
             {triggerLabel}
           </Button>
