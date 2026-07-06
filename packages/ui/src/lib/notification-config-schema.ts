@@ -14,7 +14,7 @@ export const NOTIFICATION_CONFIG_LABELS = {
   notificationType: 'Notification type',
   name: 'Name',
   botToken: 'Bot token',
-  chatId: 'Chat id',
+  chatId: 'Chat ID',
 } as const;
 
 /**

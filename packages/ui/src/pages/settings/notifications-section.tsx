@@ -8,6 +8,7 @@ import {
   Card,
   Dialog,
   Flex,
+  Grid,
   Heading,
   IconButton,
   Select,
@@ -69,7 +70,7 @@ export function NotificationsSection(): ReactNode {
 
         {query.isPending ? (
           <Skeleton height="2rem" />
-        ) : query.isError ? (
+        ) : query.isError && !(query.error instanceof ApiError && query.error.status === 404) ? (
           <Callout.Root color="red" role="alert">
             <Callout.Text>{query.error.message}</Callout.Text>
           </Callout.Root>
@@ -192,32 +193,31 @@ function AddNotificationDialog({
       <Dialog.Content maxWidth="480px">
         <Dialog.Title>Add notification</Dialog.Title>
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
-          <Flex direction="column" gap="3" mt="3">
+          <Grid columns="max-content 1fr" gapX="3" gapY="3" align="center" mt="3">
+            <Text as="label" size="2" weight="medium">
+              {NOTIFICATION_CONFIG_LABELS.notificationType}
+            </Text>
+            <Controller
+              control={control}
+              name="notificationType"
+              render={({ field }) => (
+                <Select.Root value={field.value} onValueChange={field.onChange}>
+                  <Select.Trigger aria-label={NOTIFICATION_CONFIG_LABELS.notificationType} />
+                  <Select.Content>
+                    {Object.values(NotificationChannel).map((channel) => (
+                      <Select.Item key={channel} value={channel}>
+                        {NOTIFICATION_CHANNEL_LABELS[channel]}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
+              )}
+            />
+
+            <Text as="label" htmlFor="notification-name" size="2" weight="medium">
+              {NOTIFICATION_CONFIG_LABELS.name}
+            </Text>
             <Box>
-              <Text as="label" size="2" weight="medium">
-                {NOTIFICATION_CONFIG_LABELS.notificationType}
-              </Text>
-              <Controller
-                control={control}
-                name="notificationType"
-                render={({ field }) => (
-                  <Select.Root value={field.value} onValueChange={field.onChange}>
-                    <Select.Trigger aria-label={NOTIFICATION_CONFIG_LABELS.notificationType} />
-                    <Select.Content>
-                      {Object.values(NotificationChannel).map((channel) => (
-                        <Select.Item key={channel} value={channel}>
-                          {NOTIFICATION_CHANNEL_LABELS[channel]}
-                        </Select.Item>
-                      ))}
-                    </Select.Content>
-                  </Select.Root>
-                )}
-              />
-            </Box>
-            <Box>
-              <Text as="label" htmlFor="notification-name" size="2" weight="medium">
-                {NOTIFICATION_CONFIG_LABELS.name}
-              </Text>
               <TextField.Root
                 id="notification-name"
                 aria-label={NOTIFICATION_CONFIG_LABELS.name}
@@ -231,10 +231,11 @@ function AddNotificationDialog({
                 </Text>
               ) : null}
             </Box>
+
+            <Text as="label" htmlFor="notification-bot-token" size="2" weight="medium">
+              {NOTIFICATION_CONFIG_LABELS.botToken}
+            </Text>
             <Box>
-              <Text as="label" htmlFor="notification-bot-token" size="2" weight="medium">
-                {NOTIFICATION_CONFIG_LABELS.botToken}
-              </Text>
               <TextField.Root
                 id="notification-bot-token"
                 aria-label={NOTIFICATION_CONFIG_LABELS.botToken}
@@ -249,10 +250,11 @@ function AddNotificationDialog({
                 </Text>
               ) : null}
             </Box>
+
+            <Text as="label" htmlFor="notification-chat-id" size="2" weight="medium">
+              {NOTIFICATION_CONFIG_LABELS.chatId}
+            </Text>
             <Box>
-              <Text as="label" htmlFor="notification-chat-id" size="2" weight="medium">
-                {NOTIFICATION_CONFIG_LABELS.chatId}
-              </Text>
               <TextField.Root
                 id="notification-chat-id"
                 aria-label={NOTIFICATION_CONFIG_LABELS.chatId}
@@ -265,12 +267,15 @@ function AddNotificationDialog({
                 </Text>
               ) : null}
             </Box>
+
             {submitError ? (
-              <Callout.Root color="red" role="alert">
-                <Callout.Text>{submitError}</Callout.Text>
-              </Callout.Root>
+              <Box gridColumn="1 / -1">
+                <Callout.Root color="red" role="alert">
+                  <Callout.Text>{submitError}</Callout.Text>
+                </Callout.Root>
+              </Box>
             ) : null}
-          </Flex>
+          </Grid>
           <Flex gap="3" mt="4" justify="end">
             <Dialog.Close>
               <Button type="button" variant="soft" color="gray" disabled={create.isPending}>
@@ -358,11 +363,11 @@ function EditNotificationForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate>
-      <Flex direction="column" gap="3" mt="3">
+      <Grid columns="max-content 1fr" gapX="3" gapY="3" align="center" mt="3">
+        <Text as="label" htmlFor="edit-notification-name" size="2" weight="medium">
+          {NOTIFICATION_CONFIG_LABELS.name}
+        </Text>
         <Box>
-          <Text as="label" htmlFor="edit-notification-name" size="2" weight="medium">
-            {NOTIFICATION_CONFIG_LABELS.name}
-          </Text>
           <TextField.Root
             id="edit-notification-name"
             aria-label={NOTIFICATION_CONFIG_LABELS.name}
@@ -376,10 +381,11 @@ function EditNotificationForm({
             </Text>
           ) : null}
         </Box>
+
+        <Text as="label" htmlFor="edit-notification-bot-token" size="2" weight="medium">
+          {NOTIFICATION_CONFIG_LABELS.botToken}
+        </Text>
         <Box>
-          <Text as="label" htmlFor="edit-notification-bot-token" size="2" weight="medium">
-            {NOTIFICATION_CONFIG_LABELS.botToken}
-          </Text>
           <TextField.Root
             id="edit-notification-bot-token"
             aria-label={NOTIFICATION_CONFIG_LABELS.botToken}
@@ -395,10 +401,11 @@ function EditNotificationForm({
             </Text>
           ) : null}
         </Box>
+
+        <Text as="label" htmlFor="edit-notification-chat-id" size="2" weight="medium">
+          {NOTIFICATION_CONFIG_LABELS.chatId}
+        </Text>
         <Box>
-          <Text as="label" htmlFor="edit-notification-chat-id" size="2" weight="medium">
-            {NOTIFICATION_CONFIG_LABELS.chatId}
-          </Text>
           <TextField.Root
             id="edit-notification-chat-id"
             aria-label={NOTIFICATION_CONFIG_LABELS.chatId}
@@ -411,12 +418,15 @@ function EditNotificationForm({
             </Text>
           ) : null}
         </Box>
+
         {submitError ? (
-          <Callout.Root color="red" role="alert">
-            <Callout.Text>{submitError}</Callout.Text>
-          </Callout.Root>
+          <Box gridColumn="1 / -1">
+            <Callout.Root color="red" role="alert">
+              <Callout.Text>{submitError}</Callout.Text>
+            </Callout.Root>
+          </Box>
         ) : null}
-      </Flex>
+      </Grid>
       <Flex gap="3" mt="4" justify="end">
         <Dialog.Close>
           <Button type="button" variant="soft" color="gray" disabled={update.isPending}>

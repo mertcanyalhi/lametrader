@@ -54,7 +54,7 @@ describe('notification config schemas', () => {
       ).toEqual({
         name: 'Name is required.',
         botToken: 'Bot token is required.',
-        chatId: 'Chat id is required.',
+        chatId: 'Chat ID is required.',
       });
     });
   });
@@ -88,7 +88,7 @@ describe('notification config schemas', () => {
       expect(await fieldMessages({ name: ' ', botToken: '', chatId: '' })).toEqual({
         name: 'Name is required.',
         botToken: undefined,
-        chatId: 'Chat id is required.',
+        chatId: 'Chat ID is required.',
       });
     });
   });

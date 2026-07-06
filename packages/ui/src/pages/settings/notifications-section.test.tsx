@@ -89,6 +89,13 @@ describe('NotificationsSection', () => {
     expect(await screen.findByText('No notifications configured.')).toBeInTheDocument();
   });
 
+  it('renders the empty state, not a red error, when the list request 404s', async () => {
+    fetchSpy = vi.fn(async () => json({ error: 'Not found' }, 404));
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    renderSection();
+    expect(await screen.findByText('No notifications configured.')).toBeInTheDocument();
+  });
+
   it('renders a row per config showing its notification type and name', async () => {
     installFetch({ list: [{ id: 'a', notificationType: 'telegram', name: 'main' }] });
     renderSection();
@@ -113,7 +120,7 @@ describe('NotificationsSection', () => {
     await user.click(await screen.findByRole('button', { name: 'Add notification' }));
     await user.type(await screen.findByLabelText('Name'), 'main');
     await user.type(screen.getByLabelText('Bot token'), 'TOKEN-1');
-    await user.type(screen.getByLabelText('Chat id'), '123');
+    await user.type(screen.getByLabelText('Chat ID'), '123');
     await act(async () => {
       await user.click(screen.getByRole('button', { name: 'Add' }));
     });
@@ -160,7 +167,7 @@ describe('NotificationsSection', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Edit main' }));
     // The dialog prefills name + chat id from the detail GET.
-    const chatId = await screen.findByLabelText('Chat id');
+    const chatId = await screen.findByLabelText('Chat ID');
     await waitFor(() => expect((chatId as HTMLInputElement).value).toBe('123'));
     await user.clear(chatId);
     await user.type(chatId, '456');
