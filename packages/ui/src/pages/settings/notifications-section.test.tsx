@@ -86,14 +86,14 @@ describe('NotificationsSection', () => {
   it('renders the empty state when no notifications are configured', async () => {
     installFetch({ list: [] });
     renderSection();
-    expect(await screen.findByText('No notifications configured.')).toBeInTheDocument();
+    expect(await screen.findByText('No notification targets configured.')).toBeInTheDocument();
   });
 
   it('renders the empty state, not a red error, when the list request 404s', async () => {
     fetchSpy = vi.fn(async () => json({ error: 'Not found' }, 404));
     globalThis.fetch = fetchSpy as unknown as typeof fetch;
     renderSection();
-    expect(await screen.findByText('No notifications configured.')).toBeInTheDocument();
+    expect(await screen.findByText('No notification targets configured.')).toBeInTheDocument();
   });
 
   it('renders a row per config showing its notification type and name', async () => {
@@ -117,7 +117,7 @@ describe('NotificationsSection', () => {
     renderSection();
     const user = userEvent.setup();
 
-    await user.click(await screen.findByRole('button', { name: 'Add notification' }));
+    await user.click(await screen.findByRole('button', { name: 'Add notification target' }));
     await user.type(await screen.findByLabelText('Name'), 'main');
     await user.type(screen.getByLabelText('Bot token'), 'TOKEN-1');
     await user.type(screen.getByLabelText('Chat ID'), '123');
@@ -143,7 +143,7 @@ describe('NotificationsSection', () => {
     renderSection();
     const user = userEvent.setup();
 
-    await user.click(await screen.findByRole('button', { name: 'Add notification' }));
+    await user.click(await screen.findByRole('button', { name: 'Add notification target' }));
     await act(async () => {
       await user.click(await screen.findByRole('button', { name: 'Add' }));
     });

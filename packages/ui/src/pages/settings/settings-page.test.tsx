@@ -409,7 +409,7 @@ describe('SettingsPage', () => {
     expect({
       general: screen.getByRole('tab', { name: /General/ }).getAttribute('aria-selected'),
       notifications: screen
-        .getByRole('tab', { name: /Notifications/ })
+        .getByRole('tab', { name: /Notification Targets/ })
         .getAttribute('aria-selected'),
     }).toEqual({ general: 'true', notifications: 'false' });
   });
@@ -423,8 +423,8 @@ describe('SettingsPage', () => {
     const user = userEvent.setup();
 
     await screen.findByRole('button', { name: '1h' });
-    await user.click(screen.getByRole('tab', { name: /Notifications/ }));
+    await user.click(screen.getByRole('tab', { name: /Notification Targets/ }));
 
-    expect(await screen.findByText('No notifications configured.')).toBeInTheDocument();
+    expect(await screen.findByText('No notification targets configured.')).toBeInTheDocument();
   });
 });
