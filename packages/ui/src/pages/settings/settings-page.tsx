@@ -43,7 +43,7 @@ export function SettingsPage(): ReactNode {
     <Tabs.Root defaultValue="general">
       <Tabs.List>
         <Tabs.Trigger value="general">General</Tabs.Trigger>
-        <Tabs.Trigger value="notifications">Notifications</Tabs.Trigger>
+        <Tabs.Trigger value="notifications">Notification Targets</Tabs.Trigger>
       </Tabs.List>
       <Box pt="4">
         <Tabs.Content value="general">

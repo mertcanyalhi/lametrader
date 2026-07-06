@@ -44,7 +44,7 @@ import {
 const log = getLogger('notifications-section');
 
 /**
- * The settings page's Notifications section — a generic table (Notification
+ * The settings page's Notification Targets section — a generic table (Notification
  * type / Name / Actions) over every configured channel, with create / edit /
  * delete dialogs. Telegram is the only channel today; the table and dialogs are
  * channel-agnostic where they can be. Bot tokens are never read back.
@@ -60,11 +60,11 @@ export function NotificationsSection(): ReactNode {
       <div className="flex flex-col gap-4 p-2">
         <Flex justify="between" align="center">
           <Heading as="h2" size="3">
-            Notifications
+            Notification Targets
           </Heading>
           <Button type="button" variant="soft" onClick={() => setAddOpen(true)}>
             <Plus size={14} aria-hidden="true" />
-            Add notification
+            Add notification target
           </Button>
         </Flex>
 
@@ -76,7 +76,7 @@ export function NotificationsSection(): ReactNode {
           </Callout.Root>
         ) : !Array.isArray(query.data) || query.data.length === 0 ? (
           <Text size="2" color="gray" role="status">
-            No notifications configured.
+            No notification targets configured.
           </Text>
         ) : (
           <Table.Root variant="surface" size="1">
@@ -178,7 +178,8 @@ function AddNotificationDialog({
       onOpenChange(false);
     } catch (cause) {
       log.warn({ err: cause, name: values.name }, 'add notification failed');
-      const message = cause instanceof ApiError ? cause.message : 'Failed to save notification';
+      const message =
+        cause instanceof ApiError ? cause.message : 'Failed to save notification target';
       setError('root', { type: 'server', message });
     }
   };
@@ -191,7 +192,7 @@ function AddNotificationDialog({
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Content maxWidth="480px">
-        <Dialog.Title>Add notification</Dialog.Title>
+        <Dialog.Title>Add notification target</Dialog.Title>
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
           <Grid columns="max-content 1fr" gapX="3" gapY="3" align="center" mt="3">
             <Text as="label" size="2" weight="medium">
@@ -304,7 +305,7 @@ function EditNotificationDialog({
   return (
     <Dialog.Root open={true} onOpenChange={onOpenChange}>
       <Dialog.Content maxWidth="480px">
-        <Dialog.Title>Edit notification</Dialog.Title>
+        <Dialog.Title>Edit notification target</Dialog.Title>
         {query.isPending ? (
           <Skeleton height="8rem" />
         ) : query.isError ? (
@@ -356,7 +357,8 @@ function EditNotificationForm({
       onOpenChange(false);
     } catch (cause) {
       log.warn({ err: cause, id }, 'edit notification failed');
-      const message = cause instanceof ApiError ? cause.message : 'Failed to save notification';
+      const message =
+        cause instanceof ApiError ? cause.message : 'Failed to save notification target';
       setError('root', { type: 'server', message });
     }
   };
@@ -457,7 +459,8 @@ function DeleteNotificationDialog({
       onOpenChange(false);
     } catch (cause) {
       log.warn({ err: cause, id: summary.id }, 'delete notification failed');
-      const message = cause instanceof ApiError ? cause.message : 'Failed to delete notification';
+      const message =
+        cause instanceof ApiError ? cause.message : 'Failed to delete notification target';
       toast.error(message);
     }
   }
@@ -465,10 +468,11 @@ function DeleteNotificationDialog({
   return (
     <AlertDialog.Root open={true} onOpenChange={onOpenChange}>
       <AlertDialog.Content maxWidth="420px">
-        <AlertDialog.Title>Delete notification</AlertDialog.Title>
+        <AlertDialog.Title>Delete notification target</AlertDialog.Title>
         <AlertDialog.Description size="2">
           <Text>
-            Delete notification "{summary.name}"? Rules sending to it will fail until you re-add it.
+            Delete notification target "{summary.name}"? Rules sending to it will fail until you
+            re-add it.
           </Text>
         </AlertDialog.Description>
         <Flex gap="3" mt="4" justify="end">

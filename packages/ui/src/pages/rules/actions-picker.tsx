@@ -201,19 +201,16 @@ function NotificationBody({
     <Flex direction="column" gap="2">
       <Flex gap="2" align="center">
         <Text size="2" color="gray">
-          Channel
-        </Text>
-        <Text size="2">Telegram</Text>
-      </Flex>
-      <Flex gap="2" align="center">
-        <Text size="2" color="gray">
-          Destination
+          Target
         </Text>
         <Select.Root
           value={value.destinationName === '' ? undefined : value.destinationName}
           onValueChange={(destinationName) => onChange({ ...value, destinationName })}
         >
-          <Select.Trigger aria-label="Telegram destination" placeholder="Pick a destination" />
+          <Select.Trigger
+            aria-label="Notification target"
+            placeholder="Pick a notification target"
+          />
           <Select.Content>
             {options.map((option) => (
               <Select.Item key={option.name} value={option.name}>
