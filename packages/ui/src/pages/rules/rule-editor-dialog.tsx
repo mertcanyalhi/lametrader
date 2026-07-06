@@ -472,21 +472,27 @@ function defaultValuesFor(initial: Rule): RuleFormValues {
 
 /**
  * Patch the form's basic-field changes onto the initial rule (preserving
- * `order` + `expiration` which the editor doesn't bind), strip the
- * persistence-only fields, and return a {@link RuleInput} body the API
- * accepts for both create + patch.
+ * `profileId`, `order`, and `expiration`, which the editor doesn't bind), and
+ * return a {@link RuleInput} body the API accepts for both create + patch.
+ *
+ * Built field-by-field on purpose: the seed {@link Rule} also carries
+ * server-managed fields (`lastFiredAt`, and the event-log `events` array the
+ * backend leaks onto the rule payload), which the write DTO rejects
+ * (`forbidNonWhitelisted`). Naming each writable field keeps those — and any
+ * future read-only field — out of the body.
  */
-function mergeInput(initial: Rule, values: RuleFormValues): RuleInput {
-  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = initial;
+export function mergeInput(initial: Rule, values: RuleFormValues): RuleInput {
   return {
-    ...rest,
+    profileId: initial.profileId,
     name: values.name.trim(),
     description: values.description,
     scope: values.scope,
     trigger: values.trigger,
     condition: values.condition,
     actions: values.actions,
+    expiration: initial.expiration,
     enabled: values.enabled,
+    order: initial.order,
   };
 }
 

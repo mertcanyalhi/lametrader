@@ -63,11 +63,12 @@ export function symbolRuleEventsRangeKey(
 /**
  * The body `POST /rules` / `PATCH /rules/:id` accept.
  *
- * Same shape as the persisted {@link Rule} minus server-generated
- * identity / timestamps; the controller (#395) re-validates this against the
- * boundary schema before persisting.
+ * Same shape as the persisted {@link Rule} minus the server-managed fields —
+ * identity / timestamps and `lastFiredAt` (stamped by the orchestrator on
+ * fire); the controller (#395) re-validates this against the boundary schema
+ * before persisting.
  */
-export type RuleInput = Omit<Rule, 'id' | 'createdAt' | 'updatedAt'>;
+export type RuleInput = Omit<Rule, 'id' | 'createdAt' | 'updatedAt' | 'lastFiredAt'>;
 
 /**
  * Filter set for `GET /rules`.
