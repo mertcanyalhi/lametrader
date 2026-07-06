@@ -20,6 +20,20 @@ export {
 } from './limits.js';
 export { periodMillis } from './period.js';
 export {
+  type Backtest,
+  type BacktestCommission,
+  type BacktestEventQuery,
+  type BacktestEventRepository,
+  BacktestExitReason,
+  type BacktestOpenPosition,
+  type BacktestParams,
+  type BacktestProgress,
+  type BacktestRepository,
+  BacktestStatus,
+  type BacktestSummary,
+  type BacktestTrade,
+} from './types/backtesting/backtest.types.js';
+export {
   type BacktestSignal,
   type BacktestStrategy,
   type BacktestStrategyEntry,

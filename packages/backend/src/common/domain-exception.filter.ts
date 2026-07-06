@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { BacktestConflictError, BacktestError, BacktestNotFoundError } from './domain/backtest.js';
 import {
   BacktestStrategyConflictError,
   BacktestStrategyError,
@@ -89,6 +90,7 @@ export class DomainExceptionFilter implements ExceptionFilter {
     IndicatorInstanceNotFoundError,
     NotificationConfigNotFoundError,
     BacktestStrategyNotFoundError,
+    BacktestNotFoundError,
   ] as const;
 
   /**
@@ -101,6 +103,7 @@ export class DomainExceptionFilter implements ExceptionFilter {
     ProfileConflictError,
     NotificationConfigConflictError,
     BacktestStrategyConflictError,
+    BacktestConflictError,
   ] as const;
 
   /**
@@ -118,6 +121,7 @@ export class DomainExceptionFilter implements ExceptionFilter {
     IndicatorError,
     NotificationConfigError,
     BacktestStrategyError,
+    BacktestError,
   ] as const;
 
   /**
