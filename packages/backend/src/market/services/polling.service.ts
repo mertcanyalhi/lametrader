@@ -9,6 +9,7 @@ import {
   type WatchedSymbol,
   type WatchlistRepository,
 } from '@lametrader/core';
+import { Logger } from '@nestjs/common';
 import type { SchedulerRegistry } from '@nestjs/schedule';
 import { MarketDataError, symbolType } from '../../common/domain/symbol.js';
 import type { PollingOptions } from '../interfaces/polling.service.types.js';
@@ -46,6 +47,8 @@ const TIMEOUT_PREFIX = 'polling:';
  * still the deployed backend.
  */
 export class PollingService {
+  /** Scoped logger for a poll sweep that fails on the fire-and-forget tick. */
+  private readonly logger = new Logger(PollingService.name);
   /** Current clock (injectable). */
   private readonly now: () => number;
   /** Jitter source (injectable). */
@@ -174,7 +177,19 @@ export class PollingService {
    */
   private async fire(period: Period): Promise<void> {
     this.registry.deleteTimeout(timeoutName(period));
-    await this.pollPeriod(period);
+    try {
+      await this.pollPeriod(period);
+    } catch (error) {
+      // This runs fire-and-forget from the scheduled timeout (`void this.fire`),
+      // so an escaping rejection is unhandled and crashes the process. A transient
+      // fault mid-sweep — e.g. Mongo clearing the connection pool after the host
+      // sleeps/wakes — must not take the loop down: log it and fall through to
+      // reschedule, so the next tick resumes once the dependency recovers.
+      this.logger.error(
+        `poll sweep failed for period ${period}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
     if (this.running) this.schedule(period);
   }
 

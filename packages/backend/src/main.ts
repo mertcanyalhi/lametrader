@@ -35,7 +35,34 @@ const { version: SERVER_VERSION } = createRequire(import.meta.url)('../package.j
  */
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
-  app.useLogger(app.get(Logger));
+  const logger = app.get(Logger);
+  app.useLogger(logger);
+
+  // Last-resort net for faults that escaped every source-level guard (the
+  // background loops each catch their own). The two events are not equivalent:
+  //
+  // - `uncaughtException` leaves the process in an undefined state — Node's own
+  //   docs say you must not resume. Log it, attempt a graceful `app.close()`,
+  //   then exit non-zero so the supervisor restarts on a clean boot; a 5s
+  //   force-exit covers `close()` hanging on a lingering keep-alive connection.
+  // - `unhandledRejection` does NOT corrupt process state (registering this
+  //   handler already suppresses Node's default crash). It is a bug to fix, not
+  //   a reason to kill a server still happily serving HTTP — so log it loudly
+  //   and keep running. Killing the app alive is the source guards' job, not this.
+  process.on('uncaughtException', (error) => {
+    logger.error(
+      'fatal uncaughtException — shutting down',
+      error instanceof Error ? error.stack : error,
+    );
+    setTimeout(() => process.exit(1), 5000).unref();
+    void app.close().finally(() => process.exit(1));
+  });
+  process.on('unhandledRejection', (reason) => {
+    logger.error(
+      'unhandledRejection — a promise rejected with no handler (bug: keeping process alive)',
+      reason instanceof Error ? reason.stack : reason,
+    );
+  });
 
   // The global exception filter + validation pipe are wired as APP_FILTER /
   // APP_PIPE providers in AppModule, so they apply here and in the e2e tests
