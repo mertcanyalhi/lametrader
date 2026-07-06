@@ -41,13 +41,40 @@ export interface FeedCandle {
 }
 
 /**
+ * One replayed candle's incremental outcome, handed to
+ * {@link BacktestReplayHooks.onStep} after the candle is processed so the job
+ * layer can stream batched deltas without the replay knowing about transport.
+ *
+ * `candle` and `events` are the just-processed candle and the events it
+ * produced; `trades` are the closed trades this candle newly produced (not the
+ * cumulative set); `summary`, `openPosition`, and `progress` are the run's
+ * current values after this candle.
+ */
+export interface BacktestReplayStep {
+  /** The candle just processed, tagged with its period, in completion order. */
+  candle: FeedCandle;
+  /** The symbol-scoped run events this candle produced, in emission order. */
+  events: RuleEventEntry[];
+  /** The closed trades this candle produced (new since the previous step). */
+  trades: BacktestTrade[];
+  /** The running summary over all closed trades so far. */
+  summary: BacktestSummary;
+  /** The position open after this candle, if any. */
+  openPosition?: BacktestOpenPosition;
+  /** Replay progress after this candle. */
+  progress: BacktestProgress;
+}
+
+/**
  * Hooks the {@link BacktestReplayService} calls back into during a replay so the
- * job layer can track progress and cancel mid-run without the replay knowing
- * about the job at all.
+ * job layer can track progress, stream deltas, and cancel mid-run without the
+ * replay knowing about the job at all.
  */
 export interface BacktestReplayHooks {
   /** Reports replay progress after each fed candle (and once at the ends). */
   onProgress?: (progress: BacktestProgress) => void;
+  /** Reports one candle's incremental outcome after it is processed (for streaming). */
+  onStep?: (step: BacktestReplayStep) => void;
   /** Polled before each candle; when it returns `true` the replay stops early. */
   isCancelled?: () => boolean;
 }
@@ -203,6 +230,9 @@ export class BacktestReplayService implements BacktestReplayPort {
       }
     });
 
+    // How many closed trades have already been reported through onStep, so each
+    // step emits only the trades that candle newly produced.
+    let reportedTrades = 0;
     try {
       for (const item of feed) {
         if (hooks.isCancelled?.()) {
@@ -215,8 +245,23 @@ export class BacktestReplayService implements BacktestReplayPort {
           final: true,
         });
         await wired.drain();
-        executor.processStep(item.candle, stepEvents.splice(0));
-        hooks.onProgress?.(progressAt(item, params, totalDays));
+        const candleEvents = stepEvents.splice(0);
+        executor.processStep(item.candle, candleEvents);
+        const progress = progressAt(item, params, totalDays);
+        const stepResult = executor.result();
+        const newTrades = stepResult.trades.slice(reportedTrades);
+        reportedTrades = stepResult.trades.length;
+        hooks.onStep?.({
+          candle: item,
+          events: candleEvents,
+          trades: newTrades,
+          summary: stepResult.summary,
+          ...(stepResult.openPosition === undefined
+            ? {}
+            : { openPosition: stepResult.openPosition }),
+          progress,
+        });
+        hooks.onProgress?.(progress);
       }
     } finally {
       unsubscribe();

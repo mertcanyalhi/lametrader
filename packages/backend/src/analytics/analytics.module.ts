@@ -1,5 +1,6 @@
 import type {
   BacktestEventRepository,
+  BacktestFrame,
   BacktestRepository,
   BacktestStrategyRepository,
   CandleRepository,
@@ -20,7 +21,7 @@ import { EVENT_LOG } from '../common/interfaces/event-log.token.js';
 import { INDICATOR_STREAM } from '../common/interfaces/stream.tokens.js';
 import { SYMBOL_EVENT_LOG } from '../common/interfaces/symbol-event-log.token.js';
 import type { SymbolEventLog } from '../common/interfaces/symbol-event-log.types.js';
-import type { StreamHub } from '../common/services/stream-hub.js';
+import { StreamHub } from '../common/services/stream-hub.js';
 import { CANDLE_REPOSITORY } from '../market/interfaces/candle-repository.token.js';
 import { WATCHLIST_REPOSITORY } from '../market/interfaces/watchlist-repository.token.js';
 import { MarketModule } from '../market/market.module.js';
@@ -37,6 +38,8 @@ import {
   BacktestStrategyEntrySchema,
 } from './backtesting/backtest-strategy-entry.schema.js';
 import { BACKTEST_STRATEGY_REPOSITORY } from './backtesting/backtest-strategy-repository.token.js';
+import { BacktestStreamGateway } from './backtesting/backtest-stream.gateway.js';
+import { BACKTEST_STREAM } from './backtesting/backtest-stream.token.js';
 import { BacktestsController } from './backtesting/backtests.controller.js';
 import { MongooseBacktestRepository } from './backtesting/mongoose-backtest.repository.js';
 import { MongooseBacktestEventRepository } from './backtesting/mongoose-backtest-event.repository.js';
@@ -122,6 +125,8 @@ import { StateHistoryService } from './services/state-history.service.js';
     { provide: BACKTEST_STRATEGY_REPOSITORY, useClass: MongooseBacktestStrategyRepository },
     { provide: BACKTEST_REPOSITORY, useClass: MongooseBacktestRepository },
     { provide: BACKTEST_EVENT_REPOSITORY, useClass: MongooseBacktestEventRepository },
+    { provide: BACKTEST_STREAM, useFactory: () => new StreamHub<BacktestFrame>() },
+    BacktestStreamGateway,
     {
       provide: BacktestStrategyService,
       useFactory: (strategies: BacktestStrategyRepository) =>
@@ -148,7 +153,11 @@ import { StateHistoryService } from './services/state-history.service.js';
         watchlist: WatchlistRepository,
         candles: CandleRepository,
         replay: BacktestReplayService,
-      ) => new BacktestService(backtests, events, strategies, profiles, watchlist, candles, replay),
+        stream: StreamHub<BacktestFrame>,
+      ) =>
+        new BacktestService(backtests, events, strategies, profiles, watchlist, candles, replay, {
+          onFrame: (id, frame) => stream.publish(id, frame),
+        }),
       inject: [
         BACKTEST_REPOSITORY,
         BACKTEST_EVENT_REPOSITORY,
@@ -157,6 +166,7 @@ import { StateHistoryService } from './services/state-history.service.js';
         WATCHLIST_REPOSITORY,
         CANDLE_REPOSITORY,
         BacktestReplayService,
+        BACKTEST_STREAM,
       ],
     },
     {
