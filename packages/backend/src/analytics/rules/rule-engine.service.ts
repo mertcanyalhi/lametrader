@@ -12,7 +12,6 @@ import { EVENT_LOG } from '../../common/interfaces/event-log.token.js';
 import { TelegramNotifier } from '../../common/services/telegram-notifier.js';
 import { CANDLE_REPOSITORY } from '../../market/interfaces/candle-repository.token.js';
 import { WATCHLIST_REPOSITORY } from '../../market/interfaces/watchlist-repository.token.js';
-import { IndicatorService } from '../indicators/indicator.service.js';
 import { PROFILE_REPOSITORY } from '../interfaces/profile-repository.token.js';
 import { STATE_REPOSITORY } from '../interfaces/state-repository.token.js';
 import { ONCE_PER_BAR_LATCH_STORE } from './dispatch/once-per-bar-latch.token.js';
@@ -31,9 +30,10 @@ import { type WiredRuleEngine, wireRuleEngine } from './wire/wire-rule-engine.js
  * watchlist ({@link WATCHLIST_REPOSITORY}), the shared event log
  * ({@link EVENT_LOG}), the candle store ({@link CANDLE_REPOSITORY}), the
  * {@link TelegramNotifier} (the action-runner's notification sink), and the
- * {@link IndicatorService} (wrapped here in the {@link IndicatorSeriesStore} the
- * evaluation context reads indicator series from). Constructing the store is pure
- * (no I/O, no timers).
+ * shared {@link IndicatorSeriesStore} the evaluation context reads indicator
+ * series from — the single instance `ProfileService` also pushes attach/detach
+ * registrations into, so an instance added after {@link start} is usable without
+ * a restart (#519).
  *
  * **DORMANT.** This service implements no lifecycle hook, so nothing runs at
  * application bootstrap: {@link start} is never invoked, so
@@ -45,13 +45,6 @@ import { type WiredRuleEngine, wireRuleEngine } from './wire/wire-rule-engine.js
  */
 @Injectable()
 export class RuleEngineService {
-  /**
-   * The indicator series store shared with the evaluation context. Constructed
-   * idle; its instance configs are registered from {@link start}, not the
-   * constructor, and each series is paged + computed on demand at read time.
-   */
-  private readonly indicatorStore: IndicatorSeriesStore;
-
   /**
    * The composed live engine, or `null` until {@link start} runs. Kept nullable
    * so callers (and the dormancy test) can observe that boot leaves it un-wired.
@@ -67,7 +60,7 @@ export class RuleEngineService {
    * @param notifier - the notification sink the action-runner dispatches through.
    * @param profiles - the profile store; enumerated at {@link start} to register each attached indicator-instance config.
    * @param oncePerBarLatch - the persistent OncePerBar latch store (Redis; #513) the dispatcher's gate reads/writes.
-   * @param indicators - the ad-hoc indicator compute use-case the series store wraps.
+   * @param indicatorStore - the shared indicator series store; `start` warms it from persisted profiles and `ProfileService` keeps it live on mutation (#519).
    */
   constructor(
     @Inject(RULE_REPOSITORY) private readonly rules: RuleRepository,
@@ -78,10 +71,8 @@ export class RuleEngineService {
     @Inject(TelegramNotifier) private readonly notifier: Notifier,
     @Inject(PROFILE_REPOSITORY) private readonly profiles: ProfileRepository,
     @Inject(ONCE_PER_BAR_LATCH_STORE) private readonly oncePerBarLatch: OncePerBarLatchStore,
-    indicators: IndicatorService,
-  ) {
-    this.indicatorStore = new IndicatorSeriesStore(this.candles, indicators);
-  }
+    private readonly indicatorStore: IndicatorSeriesStore,
+  ) {}
 
   /**
    * Whether the live engine has been composed. `false` until {@link start} runs —

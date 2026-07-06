@@ -35,6 +35,7 @@ import { ProfileEntry, ProfileEntrySchema } from './persistence/profile-entry.sc
 import { StateEntry, StateEntrySchema } from './persistence/state-entry.schema.js';
 import { ONCE_PER_BAR_LATCH_STORE } from './rules/dispatch/once-per-bar-latch.token.js';
 import { RedisOncePerBarLatchStore } from './rules/dispatch/redis-once-per-bar-latch.store.js';
+import { IndicatorSeriesStore } from './rules/indicator-series-store.js';
 import { MongooseRuleRepository } from './rules/mongoose-rule.repository.js';
 import { RuleService } from './rules/rule.service.js';
 import { RuleEngineService } from './rules/rule-engine.service.js';
@@ -89,13 +90,23 @@ import { StateHistoryService } from './services/state-history.service.js';
     },
     { provide: PROFILE_REPOSITORY, useClass: MongooseProfileRepository },
     {
+      // The single indicator series store shared by the rule engine (reads) and
+      // ProfileService (attach/detach registrations) — the #519 fix hinges on
+      // both resolving this one instance.
+      provide: IndicatorSeriesStore,
+      useFactory: (candles: CandleRepository, indicators: IndicatorService) =>
+        new IndicatorSeriesStore(candles, indicators),
+      inject: [CANDLE_REPOSITORY, IndicatorService],
+    },
+    {
       provide: ProfileService,
       useFactory: (
         profiles: ProfileRepository,
         watchlist: WatchlistRepository,
         indicators: IndicatorRegistry,
-      ) => new ProfileService(profiles, watchlist, indicators),
-      inject: [PROFILE_REPOSITORY, WATCHLIST_REPOSITORY, IndicatorRegistry],
+        indicatorStore: IndicatorSeriesStore,
+      ) => new ProfileService(profiles, watchlist, indicators, { indicatorStore }),
+      inject: [PROFILE_REPOSITORY, WATCHLIST_REPOSITORY, IndicatorRegistry, IndicatorSeriesStore],
     },
     {
       provide: RULE_REPOSITORY,

@@ -1,7 +1,9 @@
 import {
+  type Candle,
   Period,
   type Profile,
   ProfileScope,
+  StateValueType,
   SymbolType,
   type WatchedSymbol,
 } from '@lametrader/core';
@@ -11,11 +13,20 @@ import {
   ProfileError,
   ProfileNotFoundError,
 } from '../../common/domain/profile.js';
+import { InMemoryCandleRepository } from '../../market/persistence/in-memory-candle.repository.js';
 import { InMemoryWatchlistRepository } from '../../market/persistence/in-memory-watchlist.repository.js';
 import { defaultIndicators } from '../indicators/default-indicators.js';
+import { IndicatorService } from '../indicators/indicator.service.js';
 import type { IndicatorRegistry } from '../indicators/indicator-registry.js';
-import type { ProfileCascadeRules } from '../interfaces/profile.service.types.js';
+import type {
+  ProfileCascadeIndicatorStore,
+  ProfileCascadeRules,
+} from '../interfaces/profile.service.types.js';
 import { InMemoryProfileRepository } from '../persistence/in-memory-profile.repository.js';
+import {
+  type IndicatorInstanceConfig,
+  IndicatorSeriesStore,
+} from '../rules/indicator-series-store.js';
 import { ProfileService } from './profile.service.js';
 
 /** A watched crypto symbol for scope-validation tests. */
@@ -61,6 +72,87 @@ function build(
     now: () => clock.value,
   });
   return { service, profiles, watchlist };
+}
+
+/** Symbol the shared-store cascade tests seed candles + compute the SMA for. */
+const STORE_SYMBOL = 'crypto:BTCUSDT';
+/** Period the shared-store cascade tests watch + compute on. */
+const STORE_PERIOD = Period.OneMinute;
+/** Upper bound that admits every seeded bar. */
+const NO_UPPER_BOUND = Number.MAX_SAFE_INTEGER;
+
+/** One-minute crypto candle with uniform OHLC around `close`. */
+const storeCandle = (time: number, close: number): Candle => ({
+  type: SymbolType.Crypto,
+  time,
+  open: close,
+  high: close,
+  low: close,
+  close,
+  volume: 1,
+  quoteVolume: close,
+  trades: 1,
+});
+
+/**
+ * Build a {@link ProfileService} sharing one real {@link IndicatorSeriesStore} —
+ * exactly how production wires them — over a candle repo seeded with `closes`, so
+ * an attached SMA instance's series resolves through the same store instance.
+ *
+ * No boot-time registration is run: only the profile mutations feed the store,
+ * which is the #519 path under test.
+ */
+async function buildWithStore(
+  closes: number[],
+): Promise<{ service: ProfileService; store: IndicatorSeriesStore }> {
+  const registry = defaultIndicators();
+  const candles = new InMemoryCandleRepository();
+  await candles.save(
+    STORE_SYMBOL,
+    STORE_PERIOD,
+    closes.map((close, i) => storeCandle((i + 1) * 60_000, close)),
+  );
+  const watchlist = new InMemoryWatchlistRepository([
+    {
+      id: STORE_SYMBOL,
+      type: SymbolType.Crypto,
+      description: 'BTC',
+      exchange: 'Binance',
+      periods: [STORE_PERIOD],
+    },
+  ]);
+  const store = new IndicatorSeriesStore(
+    candles,
+    new IndicatorService(registry, watchlist, candles),
+  );
+  const service = new ProfileService(new InMemoryProfileRepository(), watchlist, registry, {
+    newId: sequentialIds(),
+    now: () => 1000,
+    indicatorStore: store,
+  });
+  return { service, store };
+}
+
+/**
+ * A {@link ProfileCascadeIndicatorStore} fake recording every register /
+ * unregister call — the store-cascade parallel of {@link RecordingCascadeRules}.
+ *
+ * Used where the observable outcome (an empty series) can't distinguish an
+ * unregister from the never-registered baseline, so the call itself is asserted.
+ */
+class RecordingIndicatorStore implements ProfileCascadeIndicatorStore {
+  /** Configs registered, in call order. */
+  readonly registered: IndicatorInstanceConfig[] = [];
+  /** Instance ids unregistered, in call order. */
+  readonly unregistered: string[] = [];
+
+  register(config: IndicatorInstanceConfig): void {
+    this.registered.push(config);
+  }
+
+  unregister(instanceId: string): void {
+    this.unregistered.push(instanceId);
+  }
 }
 
 describe('ProfileService.create', () => {
@@ -337,5 +429,62 @@ describe('ProfileService.removeIndicator', () => {
     await expect(service.removeIndicator('p1', 'unknown')).rejects.toBeInstanceOf(
       IndicatorInstanceNotFoundError,
     );
+  });
+});
+
+describe('ProfileService indicator-store cascade', () => {
+  it('registers an added instance so the shared store resolves a non-empty series without boot-time registration', async () => {
+    const { service, store } = await buildWithStore([10, 20, 30]);
+    await service.create({ name: 'Scalper' });
+    const instance = await service.addIndicator('p1', {
+      indicatorKey: 'sma',
+      inputs: { length: 3 },
+    });
+
+    // SMA(3) over [10,20,30] = 20 at the newest bar; before #519's fix the store
+    // never learned of the attach, so this resolved EMPTY_SERIES → null.
+    expect(
+      await store
+        .series(STORE_SYMBOL, STORE_PERIOD, instance.id, 'value', NO_UPPER_BOUND)
+        .asOf(NO_UPPER_BOUND),
+    ).toEqual({ ts: 180_000, value: { type: StateValueType.Number, value: 20 } });
+  });
+
+  it('re-registers a replaced instance so the shared store reflects the replacement inputs', async () => {
+    const { service, store } = await buildWithStore([10, 20, 30, 40, 50]);
+    await service.create({ name: 'Scalper' });
+    const added = await service.addIndicator('p1', { indicatorKey: 'sma', inputs: { length: 3 } });
+    await service.replaceIndicator('p1', added.id, { indicatorKey: 'sma', inputs: { length: 5 } });
+
+    // SMA(5) over [10..50] = 30 at the newest bar — the replacement overwrote the
+    // prior SMA(3) config, which would instead resolve 40.
+    expect(
+      await store
+        .series(STORE_SYMBOL, STORE_PERIOD, added.id, 'value', NO_UPPER_BOUND)
+        .asOf(NO_UPPER_BOUND),
+    ).toEqual({ ts: 300_000, value: { type: StateValueType.Number, value: 30 } });
+  });
+
+  it('unregisters a removed instance from the shared store', async () => {
+    const store = new RecordingIndicatorStore();
+    const service = new ProfileService(
+      new InMemoryProfileRepository(),
+      new InMemoryWatchlistRepository(),
+      defaultIndicators(),
+      { newId: sequentialIds(), now: () => 1000, indicatorStore: store },
+    );
+    await service.create({ name: 'Scalper' });
+    const added = await service.addIndicator('p1', { indicatorKey: 'sma' });
+
+    await service.removeIndicator('p1', added.id);
+
+    // The empty series after a remove can't be told apart from never-registered,
+    // so assert the cascade calls: add registered the config, remove dropped it.
+    expect({ registered: store.registered, unregistered: store.unregistered }).toEqual({
+      registered: [
+        { instanceId: added.id, indicatorKey: 'sma', inputs: { length: 14, source: 'close' } },
+      ],
+      unregistered: [added.id],
+    });
   });
 });

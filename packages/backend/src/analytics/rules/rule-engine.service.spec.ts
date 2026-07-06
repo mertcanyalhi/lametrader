@@ -17,6 +17,7 @@ import { InMemoryStateRepository } from '../persistence/in-memory-state.reposito
 import { InMemoryOncePerBarLatchStore } from './dispatch/in-memory-once-per-bar-latch.store.js';
 import { ONCE_PER_BAR_LATCH_STORE } from './dispatch/once-per-bar-latch.token.js';
 import { InMemoryRuleRepository } from './in-memory-rule.repository.js';
+import { IndicatorSeriesStore } from './indicator-series-store.js';
 import { RuleEngineService } from './rule-engine.service.js';
 import { RULE_REPOSITORY } from './rule-repository.token.js';
 
@@ -52,8 +53,11 @@ describe('RuleEngineService dormancy', () => {
         { provide: PROFILE_REPOSITORY, useValue: new InMemoryProfileRepository() },
         { provide: ONCE_PER_BAR_LATCH_STORE, useValue: new InMemoryOncePerBarLatchStore() },
         {
-          provide: IndicatorService,
-          useValue: new IndicatorService(defaultIndicators(), watchlist, candles),
+          provide: IndicatorSeriesStore,
+          useValue: new IndicatorSeriesStore(
+            candles,
+            new IndicatorService(defaultIndicators(), watchlist, candles),
+          ),
         },
       ],
     }).compile();

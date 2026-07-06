@@ -102,6 +102,14 @@ describe('IndicatorSeriesStore', () => {
     expect(await collect(view.backwardWalk())).toEqual([]);
   });
 
+  it('drops a registered config on unregister so its series returns an empty view again', async () => {
+    const { store } = await setup();
+    store.unregister(INSTANCE_ID);
+    const view = store.series(SYMBOL, PERIOD, INSTANCE_ID, 'value', NO_UPPER_BOUND);
+
+    expect(await collect(view.backwardWalk())).toEqual([]);
+  });
+
   it('bounds the resolved series above by before, excluding a bar stored at or after it', async () => {
     const { store } = await setup();
     // Bound below the 300s bar — only bars with time < 300_000 are read.
