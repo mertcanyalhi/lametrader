@@ -2,6 +2,7 @@ import {
   ActionKind,
   type BacktestStrategy,
   type BacktestStrategyRepository,
+  BacktestThresholdKind,
   type Candle,
   type CandleRepository,
   ComparisonOperator,
@@ -49,6 +50,12 @@ const START = 1_600_000_000_000;
 /** Enough 1m candles that a run stays in-flight while a sibling request fires. */
 const MINUTE_BARS = 600;
 const END = START + MINUTE_BARS * MINUTE;
+/** The half-way boundary (an exact hour) where the price steps from 100 to 200. */
+const MID_MINUTE = MINUTE_BARS / 2;
+const MID = START + MID_MINUTE * MINUTE;
+/** The pre-step price (before `MID`) and post-step price (from `MID`). */
+const LOW_PRICE = 100;
+const HIGH_PRICE = 200;
 
 /** A crypto candle at `time` with a flat OHLC at `close`. */
 const candle = (time: number, close: number): Candle => ({
@@ -63,13 +70,17 @@ const candle = (time: number, close: number): Candle => ({
   trades: 3,
 });
 
-/** The strategy keyed to the state change the profile's rule sets. */
+/**
+ * The strategy: enter when the rule's `signal` becomes true (on the first
+ * candle), exit at a +50 % profit target — hit once the price steps up to
+ * `HIGH_PRICE`, filling at the `LOW_PRICE × 1.5` level.
+ */
 const strategy: BacktestStrategy = {
   id: STRATEGY_ID,
   name: 'E2E Breakout',
   description: '',
   entry: { signal: { key: 'signal', value: { type: StateValueType.Bool, value: true } } },
-  exit: { signal: { key: 'signal', value: { type: StateValueType.Bool, value: false } } },
+  exit: { profitTarget: { kind: BacktestThresholdKind.Percentage, amount: 50 } },
   createdAt: 1,
   updatedAt: 1,
 };
@@ -86,7 +97,7 @@ const profile: Profile = {
   updatedAt: 1,
 };
 
-/** An `EveryTime` `Price > 100` rule setting `signal = true` — fires on each fed candle. */
+/** An `EveryTime` `Price > 50` rule setting `signal = true` — fires on each fed candle. */
 const rule: Rule = {
   id: 'rule-e2e-backtest',
   profileId: PROFILE_ID,
@@ -98,7 +109,7 @@ const rule: Rule = {
       family: LeafConditionFamily.Comparison,
       operator: ComparisonOperator.Gt,
       left: { kind: OperandKind.Price },
-      right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 100 } },
+      right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 50 } },
     },
   },
   trigger: { kind: TriggerKind.EveryTime },
@@ -125,7 +136,7 @@ const body = () => ({
   start: START,
   end: END,
   initialCapital: 10_000,
-  commission: { rate: 0.1 },
+  commission: {},
 });
 
 /**
@@ -169,15 +180,22 @@ describe('backtests API (e2e)', () => {
       periods: [Period.OneMinute, Period.OneHour],
     });
     const candles = app.get<CandleRepository>(CANDLE_REPOSITORY);
+    // Price steps 100 → 200 at MID: the entry signal fires on the first candle
+    // (100), and the +50 % profit target (level 150) fills on the first candle
+    // after the step, yielding exactly one closed trade.
     await candles.save(
       SYMBOL_ID,
       Period.OneMinute,
-      Array.from({ length: MINUTE_BARS }, (_, i) => candle(START + i * MINUTE, 150)),
+      Array.from({ length: MINUTE_BARS }, (_, i) =>
+        candle(START + i * MINUTE, i < MID_MINUTE ? LOW_PRICE : HIGH_PRICE),
+      ),
     );
     await candles.save(
       SYMBOL_ID,
       Period.OneHour,
-      Array.from({ length: MINUTE_BARS / 60 }, (_, i) => candle(START + i * HOUR, 150)),
+      Array.from({ length: MINUTE_BARS / 60 }, (_, i) =>
+        candle(START + i * HOUR, START + i * HOUR < MID ? LOW_PRICE : HIGH_PRICE),
+      ),
     );
     await app.get<ProfileRepository>(PROFILE_REPOSITORY).save(profile);
     await app.get<RuleRepository>(RULE_REPOSITORY).save(rule);
@@ -218,7 +236,8 @@ describe('backtests API (e2e)', () => {
       strategyId: got.body.strategyId,
       strategyName: got.body.strategy.name,
       trades: got.body.trades,
-      tradeCount: got.body.summary.tradeCount,
+      openPosition: got.body.openPosition,
+      summary: got.body.summary,
       eventsStatus: events.status,
       hasStateSetEvent: (events.body as RuleEventEntry[]).some((e) => e.type === 'stateSet'),
       liveSymbolState,
@@ -231,8 +250,30 @@ describe('backtests API (e2e)', () => {
       profileName: 'E2E Momentum',
       strategyId: STRATEGY_ID,
       strategyName: 'E2E Breakout',
-      trades: [],
-      tradeCount: 0,
+      trades: [
+        {
+          entryTs: START,
+          exitTs: MID,
+          entryPrice: LOW_PRICE,
+          exitPrice: LOW_PRICE * 1.5,
+          quantity: 100,
+          commission: 0,
+          pnl: 5000,
+          roiPct: 50,
+          exitReason: 'profitTarget',
+        },
+      ],
+      openPosition: undefined,
+      summary: {
+        totalPnl: 5000,
+        roiPct: 50,
+        avgPnlPerTrade: 5000,
+        tradeCount: 1,
+        winners: 1,
+        losers: 0,
+        avgRoiPct: 50,
+        avgDaysInTrade: expect.closeTo((MID - START) / 86_400_000, 5),
+      },
       eventsStatus: 200,
       hasStateSetEvent: true,
       liveSymbolState: {},
