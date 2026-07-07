@@ -5,8 +5,21 @@ import {
   type EnrichedSymbol,
   type Period,
 } from '@lametrader/core';
-import { Button, Callout, Card, Flex, Heading, Progress, Text } from '@radix-ui/themes';
+import {
+  Button,
+  Callout,
+  Card,
+  Flex,
+  Heading,
+  IconButton,
+  Popover,
+  Progress,
+  Switch,
+  Text,
+  Tooltip,
+} from '@radix-ui/themes';
 import { useQueryClient } from '@tanstack/react-query';
+import { Settings } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   COMPLETED_BACKTESTS_QUERY_KEY,
@@ -85,6 +98,10 @@ function BacktestingLayout({
   const [activeRun, setActiveRun] = useState<ActiveBacktest | null>(null);
   const [loaded, setLoaded] = useState<Backtest | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  // Trade markers clutter the chart, so they stay hidden until the trader opts
+  // in through the chart-settings cog. Lazy: session-scoped state — the ceiling
+  // is "resets on reload"; a lib/* preference module would persist it if asked.
+  const [showMarkers, setShowMarkers] = useState(false);
   const queryClient = useQueryClient();
 
   const runningQuery = useRunningBacktest();
@@ -149,17 +166,22 @@ function BacktestingLayout({
         <section aria-label="Backtest chart" className="min-h-0 lg:col-span-2">
           {view && selected ? (
             <Card className="h-full">
-              <CandleChart
-                candles={view.chartCandles}
-                symbol={selected}
-                period={chartPeriod}
-                range={null}
-                loadOlder={noop}
-                hasMore={false}
-                follow
-                eventMarkers={tradeMarkers}
-                stateOverlays={runStateOverlays}
-              />
+              <div className="relative h-full">
+                <div className="absolute right-2 top-2 z-10">
+                  <ChartSettings showMarkers={showMarkers} onShowMarkersChange={setShowMarkers} />
+                </div>
+                <CandleChart
+                  candles={view.chartCandles}
+                  symbol={selected}
+                  period={chartPeriod}
+                  range={null}
+                  loadOlder={noop}
+                  hasMore={false}
+                  follow
+                  eventMarkers={showMarkers ? tradeMarkers : []}
+                  stateOverlays={runStateOverlays}
+                />
+              </div>
             </Card>
           ) : (
             <ChartPlaceholder />
@@ -216,6 +238,39 @@ function BacktestingLayout({
 
 /** No-op passed to the reused chart's paging hook — a backtest never scrolls back. */
 function noop(): void {}
+
+/**
+ * The chart's top-right settings cog: a {@link Popover} holding the per-chart
+ * display toggles. For now the only knob is "Show trade markers", which gates
+ * the entry/exit annotations on the backtesting chart (default off).
+ */
+function ChartSettings({
+  showMarkers,
+  onShowMarkersChange,
+}: {
+  showMarkers: boolean;
+  onShowMarkersChange: (next: boolean) => void;
+}): ReactNode {
+  return (
+    <Popover.Root>
+      <Tooltip content="Chart settings">
+        <Popover.Trigger>
+          <IconButton type="button" variant="soft" color="gray" aria-label="Chart settings">
+            <Settings size={16} />
+          </IconButton>
+        </Popover.Trigger>
+      </Tooltip>
+      <Popover.Content size="1">
+        <Text as="label" size="2">
+          <Flex align="center" gap="2">
+            <Switch checked={showMarkers} onCheckedChange={onShowMarkersChange} />
+            Show trade markers
+          </Flex>
+        </Text>
+      </Popover.Content>
+    </Popover.Root>
+  );
+}
 
 /**
  * The right ⅓ region across the page's three states: **loaded** (a saved

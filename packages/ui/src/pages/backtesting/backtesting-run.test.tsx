@@ -307,7 +307,13 @@ describe('BacktestingPage run flow', () => {
       openPosition: undefined,
     });
 
+    // Markers are gated behind the chart-settings toggle (default off); enable
+    // them so the frame's trades draw, while overlays render ungated.
+    await user.click(screen.getByRole('button', { name: 'Chart settings' }));
+    await user.click(await screen.findByRole('switch', { name: 'Show trade markers' }));
+
     const chart = screen.getByTestId('backtest-chart');
+    await waitFor(() => expect(chart.getAttribute('data-markers')).toEqual('2'));
     expect({
       markers: chart.getAttribute('data-markers'),
       overlays: chart.getAttribute('data-overlays'),

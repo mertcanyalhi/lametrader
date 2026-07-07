@@ -193,7 +193,7 @@ describe('BacktestingPage saved backtests', () => {
     );
   }
 
-  it('loads a saved backtest, locking the pickers and rendering its chart, markers, overlays, and results without a run', async () => {
+  it('loads a saved backtest, locking the pickers and rendering its chart, overlays, and results without a run', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole('button', { name: 'Alpha' });
@@ -209,6 +209,7 @@ describe('BacktestingPage saved backtests', () => {
     const bar = screen.getByRole('group', { name: 'Backtesting actions' });
     const summary = screen.getByLabelText('Summary');
     expect({
+      // Markers default off; overlays are never gated by the toggle.
       markers: chart.getAttribute('data-markers'),
       overlays: chart.getAttribute('data-overlays'),
       symbolLocked: within(bar).getByRole('button', { name: BTC.id }).hasAttribute('disabled'),
@@ -219,7 +220,7 @@ describe('BacktestingPage saved backtests', () => {
       totalPnl: within(summary).getByText('Total P/L').previousElementSibling?.textContent,
       noRunForm: screen.queryByRole('button', { name: 'Run backtest' }) === null,
     }).toEqual({
-      markers: '2',
+      markers: '0',
       overlays: '1',
       symbolLocked: true,
       periodLocked: true,
@@ -227,6 +228,40 @@ describe('BacktestingPage saved backtests', () => {
       totalPnl: '+10.00',
       noRunForm: true,
     });
+  });
+
+  it('shows a Chart settings cog button once a saved backtest chart is rendered', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: 'Alpha' });
+
+    await user.click(await screen.findByRole('button', { name: 'Previous runs (1)' }));
+    await user.click(await screen.findByRole('button', { name: 'Saved BTC run' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('backtest-chart')).toHaveTextContent('1 candles'),
+    );
+
+    expect(screen.queryByRole('button', { name: 'Chart settings' }) !== null).toEqual(true);
+  });
+
+  it('passes the trade markers to the chart after toggling Show trade markers on', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: 'Alpha' });
+
+    await user.click(await screen.findByRole('button', { name: 'Previous runs (1)' }));
+    await user.click(await screen.findByRole('button', { name: 'Saved BTC run' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('backtest-chart')).toHaveTextContent('1 candles'),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Chart settings' }));
+    await user.click(await screen.findByRole('switch', { name: 'Show trade markers' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('backtest-chart').getAttribute('data-markers')).toEqual('2'),
+    );
+    expect(screen.getByTestId('backtest-chart').getAttribute('data-markers')).toEqual('2');
   });
 
   it('unlocks the pickers and re-enables the previous-runs trigger when the loaded backtest is closed', async () => {
