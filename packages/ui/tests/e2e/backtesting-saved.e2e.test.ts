@@ -336,7 +336,9 @@ describe('backtesting saved-reload flow (e2e)', () => {
       expect(screen.getByTestId('backtest-chart')).toHaveTextContent('1 candles'),
     );
     const summary = screen.getByLabelText('Summary');
-    expect(within(summary).getByText('Total P/L').nextElementSibling?.textContent).toBe('+19.00');
+    expect(within(summary).getByText('Total P/L').previousElementSibling?.textContent).toBe(
+      '+19.00',
+    );
     expect(screen.queryByRole('button', { name: 'Run backtest' })).toBeNull();
 
     // Trades tab: the closed trade with its exit reason.
@@ -348,7 +350,7 @@ describe('backtesting saved-reload flow (e2e)', () => {
     await user.click(screen.getByRole('tab', { name: /Daily P&L/ }));
     expect(screen.getByTestId('daily-pnl-chart')).toHaveTextContent('1 bars');
     const block = screen.getByLabelText('Daily P&L summary');
-    expect(within(block).getByText('Winners / losers').nextElementSibling?.textContent).toBe(
+    expect(within(block).getByText('Winners / losers').previousElementSibling?.textContent).toBe(
       '1 / 0',
     );
   });

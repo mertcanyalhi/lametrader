@@ -122,10 +122,10 @@ describe('ResultsTabs', () => {
 
     const summary = screen.getByLabelText('Summary');
     expect({
-      totalPnl: within(summary).getByText('Total P/L').nextElementSibling?.textContent,
-      roiPct: within(summary).getByText('ROI %').nextElementSibling?.textContent,
-      avgPnl: within(summary).getByText('Avg P/L per trade').nextElementSibling?.textContent,
-      unrealized: within(summary).getByText('Open position (unrealized)').nextElementSibling
+      totalPnl: within(summary).getByText('Total P/L').previousElementSibling?.textContent,
+      roiPct: within(summary).getByText('ROI %').previousElementSibling?.textContent,
+      avgPnl: within(summary).getByText('Avg P/L per trade').previousElementSibling?.textContent,
+      unrealized: within(summary).getByText('Open position (unrealized)').previousElementSibling
         ?.textContent,
     }).toEqual({
       totalPnl: '+8.00',
@@ -171,11 +171,12 @@ describe('ResultsTabs', () => {
     const block = screen.getByLabelText('Daily P&L summary');
     expect({
       bars: screen.getByTestId('daily-pnl-chart').textContent,
-      trades: within(block).getByText('Trades').nextElementSibling?.textContent,
-      winnersLosers: within(block).getByText('Winners / losers').nextElementSibling?.textContent,
-      avgRoi: within(block).getByText('Avg ROI per trade').nextElementSibling?.textContent,
-      totalPnl: within(block).getByText('Total P/L').nextElementSibling?.textContent,
-      avgDays: within(block).getByText('Avg days in trade').nextElementSibling?.textContent,
+      trades: within(block).getByText('Trades').previousElementSibling?.textContent,
+      winnersLosers:
+        within(block).getByText('Winners / losers').previousElementSibling?.textContent,
+      avgRoi: within(block).getByText('Avg ROI per trade').previousElementSibling?.textContent,
+      totalPnl: within(block).getByText('Total P/L').previousElementSibling?.textContent,
+      avgDays: within(block).getByText('Avg days in trade').previousElementSibling?.textContent,
     }).toEqual({
       bars: '2 bars',
       trades: '2',
@@ -189,21 +190,21 @@ describe('ResultsTabs', () => {
   it('colors a positive Summary metric value with the green accent', () => {
     renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: undefined });
 
-    const value = screen.getByText('Total P/L').nextElementSibling;
+    const value = screen.getByText('Total P/L').previousElementSibling;
     expect(value?.getAttribute('data-accent-color')).toEqual('grass');
   });
 
   it('colors a negative Summary metric value with the red accent', () => {
     renderTabs({ trades: TRADES, summary: SUMMARY_NEG, openPosition: undefined });
 
-    const value = screen.getByText('Total P/L').nextElementSibling;
+    const value = screen.getByText('Total P/L').previousElementSibling;
     expect(value?.getAttribute('data-accent-color')).toEqual('red');
   });
 
   it('colors a zero Summary metric value with the neutral gray accent', () => {
     renderTabs({ trades: TRADES, summary: SUMMARY_ZERO, openPosition: undefined });
 
-    const value = screen.getByText('Total P/L').nextElementSibling;
+    const value = screen.getByText('Total P/L').previousElementSibling;
     expect(value?.getAttribute('data-accent-color')).toEqual('gray');
   });
 
@@ -213,7 +214,7 @@ describe('ResultsTabs', () => {
     await user.click(screen.getByRole('tab', { name: /Daily P&L/ }));
 
     const block = screen.getByLabelText('Daily P&L summary');
-    const value = within(block).getByText('Total P/L').nextElementSibling;
+    const value = within(block).getByText('Total P/L').previousElementSibling;
     expect(value?.getAttribute('data-accent-color')).toEqual('red');
   });
 

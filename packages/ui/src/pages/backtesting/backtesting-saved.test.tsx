@@ -216,7 +216,7 @@ describe('BacktestingPage saved backtests', () => {
         .getByRole('button', { name: Period.OneHour })
         .hasAttribute('disabled'),
       profileLocked: within(bar).getByRole('button', { name: 'Alpha' }).hasAttribute('disabled'),
-      totalPnl: within(summary).getByText('Total P/L').nextElementSibling?.textContent,
+      totalPnl: within(summary).getByText('Total P/L').previousElementSibling?.textContent,
       noRunForm: screen.queryByRole('button', { name: 'Run backtest' }) === null,
     }).toEqual({
       markers: '2',

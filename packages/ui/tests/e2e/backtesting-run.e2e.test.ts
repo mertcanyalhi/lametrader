@@ -310,9 +310,11 @@ describe('backtesting run flow (e2e)', () => {
 
     // The three result tabs render the completed run. Summary is active first.
     const summary = screen.getByLabelText('Summary');
-    expect(within(summary).getByText('Total P/L').nextElementSibling?.textContent).toBe('+19.00');
+    expect(within(summary).getByText('Total P/L').previousElementSibling?.textContent).toBe(
+      '+19.00',
+    );
     expect(
-      within(summary).getByText('Open position (unrealized)').nextElementSibling?.textContent,
+      within(summary).getByText('Open position (unrealized)').previousElementSibling?.textContent,
     ).toBe('+4.00');
 
     // Trades tab: the closed trade plus the open position as an unrealized row.
@@ -326,10 +328,10 @@ describe('backtesting run flow (e2e)', () => {
     await user.click(screen.getByRole('tab', { name: /Daily P&L/ }));
     expect(screen.getByTestId('daily-pnl-chart')).toHaveTextContent('1 bars');
     const block = screen.getByLabelText('Daily P&L summary');
-    expect(within(block).getByText('Winners / losers').nextElementSibling?.textContent).toBe(
+    expect(within(block).getByText('Winners / losers').previousElementSibling?.textContent).toBe(
       '1 / 0',
     );
-    expect(within(block).getByText('Avg days in trade').nextElementSibling?.textContent).toBe(
+    expect(within(block).getByText('Avg days in trade').previousElementSibling?.textContent).toBe(
       '0.50',
     );
   });

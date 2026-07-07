@@ -1,5 +1,5 @@
 import type { BacktestOpenPosition, BacktestSummary, BacktestTrade } from '@lametrader/core';
-import { Badge, Box, Button, Card, Flex, Table, Tabs, Text } from '@radix-ui/themes';
+import { Badge, Box, Button, Card, Flex, Grid, Table, Tabs, Text } from '@radix-ui/themes';
 import { type ReactNode, useMemo, useState } from 'react';
 import { formatChange, formatPrice, formatTimestamp } from '../../lib/format.js';
 import { exitReasonLabel, formatPercent } from './backtest-format.js';
@@ -93,7 +93,7 @@ function SummaryTab({
   openPosition: BacktestOpenPosition | undefined;
 }): ReactNode {
   return (
-    <Flex direction="column" gap="2" aria-label="Summary">
+    <Grid columns={{ initial: '2', sm: '3' }} gap="2" aria-label="Summary">
       <Metric label="Total P/L" value={formatChange(summary.totalPnl)} amount={summary.totalPnl} />
       <Metric label="ROI %" value={formatPercent(summary.roiPct)} amount={summary.roiPct} />
       <Metric
@@ -108,7 +108,7 @@ function SummaryTab({
           amount={openPosition.unrealizedPnl}
         />
       ) : null}
-    </Flex>
+    </Grid>
   );
 }
 
@@ -271,7 +271,7 @@ function DailyPnlTab({
       <div className="h-40 w-full">
         <DailyPnlChart bars={bars} />
       </div>
-      <Flex direction="column" gap="2" aria-label="Daily P&L summary">
+      <Grid columns={{ initial: '2', sm: '3' }} gap="2" aria-label="Daily P&L summary">
         <Metric label="Trades" value={String(summary.tradeCount)} />
         <Metric label="Winners / losers" value={`${summary.winners} / ${summary.losers}`} />
         <Metric
@@ -285,15 +285,17 @@ function DailyPnlTab({
           amount={summary.totalPnl}
         />
         <Metric label="Avg days in trade" value={summary.avgDaysInTrade.toFixed(2)} />
-      </Flex>
+      </Grid>
     </Flex>
   );
 }
 
 /**
- * One metric as a color-coded card: its label beside its value, the card tinted
- * and the value accented by the sign of `amount` (green positive, red negative,
- * neutral zero). A metric with no signed value (`amount` omitted) stays neutral.
+ * One metric as a color-coded card in the grid: a centered vertical stack with
+ * the value on top as the larger, sign-accented text and the label below it as
+ * smaller muted text. The card is tinted and the value accented by the sign of
+ * `amount` (green positive, red negative, neutral zero); a metric with no signed
+ * value (`amount` omitted) stays neutral.
  */
 function Metric({
   label,
@@ -307,12 +309,12 @@ function Metric({
   const tone = amount === undefined ? 'gray' : signTone(amount);
   return (
     <Card size="1" style={{ background: TONE_BG[tone] }}>
-      <Flex justify="between" align="center" gap="4">
-        <Text size="2" color="gray">
-          {label}
-        </Text>
-        <Text size="2" weight="medium" color={tone}>
+      <Flex direction="column" align="center" gap="1">
+        <Text size="4" weight="bold" color={tone}>
           {value}
+        </Text>
+        <Text size="1" color="gray">
+          {label}
         </Text>
       </Flex>
     </Card>
