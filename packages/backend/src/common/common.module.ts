@@ -70,6 +70,12 @@ import { buildValidationPipe } from './validation.pipe.js';
         pinoHttp: {
           level: config.get('logLevel', { infer: true }),
           base: { app: 'server' },
+          // ponytail: LOG_PRETTY gates pino-pretty as a transport (worker
+          // thread), the debugger-friendly equivalent of the CLI pipe in
+          // package.json — a plain `| pino-pretty` can't attach a debugger.
+          ...(process.env.LOG_PRETTY === 'true'
+            ? { transport: { target: 'pino-pretty', options: { ignore: 'pid,hostname' } } }
+            : {}),
         },
       }),
     }),
