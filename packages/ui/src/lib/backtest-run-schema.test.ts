@@ -6,14 +6,18 @@ import {
   toBacktestRunInput,
 } from './backtest-run-schema.js';
 
-/** A far-future date so `end ≤ now` fails deterministically regardless of clock. */
-const FUTURE_DATE = '2999-01-01';
+/** A concrete window well in the past so `to ≤ now` holds regardless of clock. */
+const FROM = Date.UTC(2024, 0, 1);
+const TO = Date.UTC(2024, 2, 1);
+
+/** A far-future instant so `to ≤ now` fails deterministically regardless of clock. */
+const FUTURE = Date.UTC(2999, 0, 1);
 
 function values(overrides: Partial<BacktestRunFormValues> = {}): BacktestRunFormValues {
   return {
     initialCapital: 1_000,
-    start: '2024-01-01',
-    end: '2024-02-01',
+    from: FROM,
+    to: TO,
     commissionRateEnabled: false,
     commissionRate: 0,
     commissionFixedEnabled: false,
@@ -43,13 +47,11 @@ describe('backtestRunFormSchema', () => {
   });
 
   it('rejects a start on or after the end', async () => {
-    expect(await validate(values({ start: '2024-02-01', end: '2024-02-01' }))).toEqual([
-      'Start must be before end.',
-    ]);
+    expect(await validate(values({ from: TO, to: TO }))).toEqual(['Start must be before end.']);
   });
 
-  it('rejects an end date in the future', async () => {
-    expect(await validate(values({ start: '2024-01-01', end: FUTURE_DATE }))).toEqual([
+  it('rejects an end in the future', async () => {
+    expect(await validate(values({ from: FROM, to: FUTURE }))).toEqual([
       'End must not be in the future.',
     ]);
   });
@@ -74,13 +76,13 @@ describe('backtestRunFormSchema', () => {
 });
 
 describe('toBacktestRunInput', () => {
-  it('maps enabled commissions and UTC-midnight dates into the run input', () => {
+  it('maps the window bounds and enabled commissions into the run input', () => {
     expect(
       toBacktestRunInput(
         values({
           initialCapital: 2_500,
-          start: '2024-01-01',
-          end: '2024-03-01',
+          from: FROM,
+          to: TO,
           commissionRateEnabled: true,
           commissionRate: 0.1,
           commissionFixedEnabled: true,
@@ -98,8 +100,8 @@ describe('toBacktestRunInput', () => {
       symbolId: 'crypto:BTCUSDT',
       profileId: 'p-1',
       period: Period.OneHour,
-      start: Date.UTC(2024, 0, 1),
-      end: Date.UTC(2024, 2, 1),
+      start: FROM,
+      end: TO,
       initialCapital: 2_500,
       commission: { rate: 0.1, fixed: 1.5 },
     });

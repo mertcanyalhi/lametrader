@@ -93,17 +93,16 @@ describe('RunForm', () => {
     return { onStarted };
   }
 
-  it('renders the capital, date, and commission fields plus the Run button', () => {
+  it('renders the capital, Period picker, and commission fields plus the Run button', () => {
     renderForm();
 
     expect({
       capital: screen.getByLabelText('Initial capital') !== null,
-      start: screen.getByLabelText('Start') !== null,
-      end: screen.getByLabelText('End') !== null,
+      period: screen.getByRole('button', { name: 'Period' }) !== null,
       rate: screen.getByLabelText('Commission rate') !== null,
       fixed: screen.getByLabelText('Fixed commission') !== null,
       run: screen.getByRole('button', { name: 'Run backtest' }) !== null,
-    }).toEqual({ capital: true, start: true, end: true, rate: true, fixed: true, run: true });
+    }).toEqual({ capital: true, period: true, rate: true, fixed: true, run: true });
   });
 
   it('rejects a non-positive initial capital client-side without posting', async () => {
@@ -119,20 +118,18 @@ describe('RunForm', () => {
     expect(posted).toEqual([]);
   });
 
-  it('rejects a start on or after the end client-side without posting', async () => {
+  it('applies a preset from the Period picker and posts that window', async () => {
     const user = userEvent.setup();
-    renderForm();
+    const { onStarted } = renderForm();
 
-    const start = screen.getByLabelText('Start');
-    const end = screen.getByLabelText('End');
-    await user.clear(start);
-    await user.type(start, '2024-02-01');
-    await user.clear(end);
-    await user.type(end, '2024-01-01');
+    await user.click(screen.getByRole('button', { name: 'Period' }));
+    await user.click(screen.getByRole('button', { name: '1 Week' }));
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
     await user.click(screen.getByRole('button', { name: 'Run backtest' }));
 
-    expect(await screen.findByText('Start must be before end.')).toBeInTheDocument();
-    expect(posted).toEqual([]);
+    await waitFor(() => expect(onStarted).toHaveBeenCalledWith('b-1'));
+    const run = posted[0] as { start: number; end: number };
+    expect(run.end - run.start).toEqual(7 * 86_400_000);
   });
 
   it('disables Run and hints when no strategy is selected', () => {
@@ -144,7 +141,7 @@ describe('RunForm', () => {
     }).toEqual({ disabled: true, hint: true });
   });
 
-  it('posts the run and reports the new run id on a valid submit', async () => {
+  it('posts the run with the default 90-day window on a valid submit', async () => {
     const user = userEvent.setup();
     const { onStarted } = renderForm();
 
@@ -163,6 +160,8 @@ describe('RunForm', () => {
         commission: {},
       },
     ]);
+    const run = posted[0] as { start: number; end: number };
+    expect(run.end - run.start).toEqual(90 * 86_400_000);
   });
 
   it('surfaces a server 409 conflict as a form-level error', async () => {

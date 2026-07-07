@@ -18,28 +18,24 @@ import {
 } from '../../lib/backtest-run-schema.js';
 import { useStartBacktest } from '../../lib/hooks/backtests.js';
 import { getLogger } from '../../lib/log.js';
+import { PeriodPicker } from './period-picker.js';
 
 /** Scoped logger for run-form submission failures. */
 const log = getLogger('backtest-run-form');
-
-/** Format an epoch ms as a `yyyy-mm-dd` string in UTC for the date inputs. */
-function toDateValue(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10);
-}
 
 /** Milliseconds in one day. */
 const MS_PER_DAY = 86_400_000;
 
 /**
  * The run form's initial values: a positive starting capital, a trailing
- * ~90-day window ending today (UTC), and both commissions off.
+ * 90-day window ending now, and both commissions off.
  */
 function defaultValues(): BacktestRunFormValues {
   const now = Date.now();
   return {
     initialCapital: 10_000,
-    start: toDateValue(now - 90 * MS_PER_DAY),
-    end: toDateValue(now),
+    from: now - 90 * MS_PER_DAY,
+    to: now,
     commissionRateEnabled: false,
     commissionRate: 0,
     commissionFixedEnabled: false,
@@ -48,9 +44,9 @@ function defaultValues(): BacktestRunFormValues {
 }
 
 /**
- * The `/backtesting` run form: initial capital, start/end dates, and Rate / Fixed
- * commission checkboxes with amount fields, plus the Run action (spec: *UI — run
- * flow*).
+ * The `/backtesting` run form: initial capital, the Period range picker, and
+ * Rate / Fixed commission checkboxes with amount fields, plus the Run action
+ * (spec: *UI — run flow*).
  *
  * Validation is the client mirror of the API's numeric / date rules
  * ({@link backtestRunFormSchema}) for immediate feedback; the server re-validates
@@ -87,6 +83,7 @@ export function RunForm({
     handleSubmit,
     control,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<BacktestRunFormValues>({
     resolver: yupResolver(backtestRunFormSchema),
@@ -95,6 +92,9 @@ export function RunForm({
 
   const rateEnabled = watch('commissionRateEnabled');
   const fixedEnabled = watch('commissionFixedEnabled');
+  const from = watch('from');
+  const to = watch('to');
+  const periodError = errors.from?.message ?? errors.to?.message;
   const canRun = strategyId !== null && profileId !== null;
 
   const onSubmit: SubmitHandler<BacktestRunFormValues> = async (values) => {
@@ -134,14 +134,23 @@ export function RunForm({
           />
         </Field>
 
-        <Flex gap="3">
-          <Field label="Start" htmlFor="bt-start" error={errors.start} className="grow">
-            <TextField.Root id="bt-start" type="date" {...register('start')} />
-          </Field>
-          <Field label="End" htmlFor="bt-end" error={errors.end} className="grow">
-            <TextField.Root id="bt-end" type="date" {...register('end')} />
-          </Field>
-        </Flex>
+        <div>
+          <Text as="div" size="2" weight="medium" mb="1">
+            Period
+          </Text>
+          <PeriodPicker
+            value={{ from, to }}
+            onChange={(bounds) => {
+              setValue('from', bounds.from, { shouldValidate: true });
+              setValue('to', bounds.to, { shouldValidate: true });
+            }}
+          />
+          {periodError ? (
+            <Text size="1" color="red" mt="1" className="block" role="alert">
+              {periodError}
+            </Text>
+          ) : null}
+        </div>
 
         <CommissionRow
           control={control}
