@@ -11,6 +11,7 @@ import {
   Flex,
   IconButton,
   Skeleton,
+  Spinner,
   Table,
   Text,
   Tooltip,
@@ -142,12 +143,12 @@ export function SymbolRuleEventsDialog({ symbolId }: { symbolId: string }): Reac
           variant="soft"
           color="gray"
           className="min-w-32 justify-center"
-          aria-label={`Events (${renderCount(count)})`}
+          aria-label={countQuery.isPending ? 'Events (loading)' : `Events (${renderCount(count)})`}
         >
           <History size={14} aria-hidden="true" />
           Events
           <Badge variant="soft" color="gray" radius="full">
-            {renderCount(count)}
+            {countQuery.isPending ? <Spinner size="1" /> : renderCount(count)}
           </Badge>
         </Button>
       </Dialog.Trigger>
