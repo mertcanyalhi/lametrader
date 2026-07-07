@@ -5,8 +5,9 @@
 
 ## Goal
 
-Replace the run form's raw Start/End date inputs with a single **Period** date-range picker in the classic daterangepicker layout: a left sidebar of relative presets and a right dual-month calendar (`react-day-picker`) with From / To datetime fields and Apply / Cancel.
-A preset or freely-picked range resolves to concrete `from`/`to` epoch-ms bounds on Apply, and those are what the form submits — so the run the server stores still carries concrete timestamps.
+Give the run form a single **Period** date-range picker in the classic daterangepicker layout: a left sidebar of relative presets and a right dual-month range calendar, built on `react-date-range` (MIT), which manages its own sizing so the dual-month view never clips.
+The widget is wide, so it opens in a Radix **Dialog** (modal, viewport-centred) rather than a trigger-anchored popover.
+A preset or a freely-picked range resolves to concrete `from`/`to` epoch-ms bounds on Apply, and those are what the form submits — so the run the server stores still carries concrete timestamps.
 
 ## Acceptance criteria
 
@@ -17,8 +18,8 @@ Each bullet maps to exactly one test.
 - [ ] `presetRange` resolves each trailing preset (3 Days … 1 Year) to `{ from: now - span, to: now }`.
 - [ ] `toBacktestRunInput` maps the form's `from`/`to` bounds to the run's `start`/`end`.
 - [ ] The schema rejects a `from` on or after `to`, and a `to` in the future.
-- [ ] The picker renders a Period trigger and, when opened, lists all ten presets.
-- [ ] Choosing a preset locks the From/To fields; choosing Custom Range unlocks them for free picking.
+- [ ] The picker renders a Period trigger and, when opened, lists all ten presets by name in the sidebar.
+- [ ] Choosing a preset selects its concrete window on the calendar; Custom Range is listed and the calendar is freely pickable.
 - [ ] Apply commits the chosen preset window (its concrete `from`/`to`) to the parent; Cancel commits nothing.
 - [ ] The run form applies a preset picked in the popover and posts a run whose window spans that preset.
 
@@ -32,7 +33,8 @@ Failure mode: an invalid range (`from ≥ to`) is blocked client-side by the sch
 
 - Resolving presets against the dataset's latest candle (uses wall-clock `now`; see the report's decision note).
 - Sharing the preset enum with the backend (UI-only; the API only sees concrete `from`/`to`).
-- A bespoke calendar — the dual-month grid is `react-day-picker` (MIT).
+- A bespoke calendar — the dual-month grid + preset sidebar are `react-date-range`'s `DateRangePicker` (MIT).
+- Sub-day time-of-day precision — the classic picker is date-granular; bounds resolve to day-aligned epoch-ms (presets still carry `now`'s time on the open bound).
 
 ## Surprises
 

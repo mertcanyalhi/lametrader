@@ -46,31 +46,16 @@ describe('PeriodPicker', () => {
     ).toEqual(RANGE_OPTIONS.map(() => true));
   });
 
-  it('locks the From and To fields when a preset is chosen', async () => {
+  it('renders a freely-pickable dual-month calendar when opened', async () => {
     const user = userEvent.setup();
     renderPicker();
 
     await user.click(screen.getByRole('button', { name: 'Period' }));
-    await user.click(screen.getByRole('button', { name: '1 Week' }));
 
-    expect({
-      from: (screen.getByLabelText('From Date') as HTMLInputElement).disabled,
-      to: (screen.getByLabelText('To Date') as HTMLInputElement).disabled,
-    }).toEqual({ from: true, to: true });
-  });
-
-  it('unlocks the From and To fields when Custom Range is chosen', async () => {
-    const user = userEvent.setup();
-    renderPicker();
-
-    await user.click(screen.getByRole('button', { name: 'Period' }));
-    await user.click(screen.getByRole('button', { name: '1 Week' }));
-    await user.click(screen.getByRole('button', { name: 'Custom Range' }));
-
-    expect({
-      from: (screen.getByLabelText('From Date') as HTMLInputElement).disabled,
-      to: (screen.getByLabelText('To Date') as HTMLInputElement).disabled,
-    }).toEqual({ from: false, to: false });
+    // react-date-range day cells are bare <button.rdrDay> with only their day
+    // number as an accessible name, so there is no better semantic anchor.
+    const enabledDays = document.querySelectorAll('button.rdrDay:not([disabled])');
+    expect(enabledDays.length > 0).toEqual(true);
   });
 
   it('applies the chosen preset as a concrete window on Apply', async () => {

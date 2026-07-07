@@ -1,0 +1,119 @@
+/*
+ * Theme bridge for react-date-range inside the Period Dialog.
+ *
+ * The library ships a light-only stylesheet (dist/styles.css + theme/default.css);
+ * these scoped overrides remap its surfaces, text, borders, and hover states onto
+ * Radix Themes scale vars so the widget follows the app's light/dark appearance
+ * instead of rendering as a bright out-of-place panel. No hard-coded colours.
+ */
+
+.lm-daterange .rdrCalendarWrapper,
+.lm-daterange .rdrDateRangePickerWrapper,
+.lm-daterange .rdrDefinedRangesWrapper,
+.lm-daterange .rdrStaticRange,
+.lm-daterange .rdrInputRanges,
+.lm-daterange .rdrMonthAndYearWrapper,
+.lm-daterange .rdrMonths {
+  background: transparent;
+  color: var(--gray-12);
+}
+
+/* Preset sidebar: a subtle panel with a divider from the calendar. */
+.lm-daterange .rdrDefinedRangesWrapper {
+  border-right: 1px solid var(--gray-a5);
+}
+
+.lm-daterange .rdrStaticRange {
+  border-bottom: 1px solid var(--gray-a3);
+}
+
+.lm-daterange .rdrStaticRangeLabel {
+  color: var(--gray-12);
+}
+
+.lm-daterange .rdrStaticRange:hover .rdrStaticRangeLabel,
+.lm-daterange .rdrStaticRange:focus .rdrStaticRangeLabel {
+  background: var(--gray-a4);
+}
+
+.lm-daterange .rdrStaticRangeSelected .rdrStaticRangeLabel {
+  color: var(--accent-11);
+  font-weight: 600;
+}
+
+/* Day grid text: full contrast for the month, muted for spill-over days. */
+.lm-daterange .rdrDayNumber span {
+  color: var(--gray-12);
+}
+
+.lm-daterange .rdrDayPassive .rdrDayNumber span,
+.lm-daterange .rdrDayDisabled .rdrDayNumber span {
+  color: var(--gray-8);
+}
+
+.lm-daterange .rdrDayDisabled {
+  background: transparent;
+}
+
+.lm-daterange .rdrDayToday .rdrDayNumber span::after {
+  background: var(--accent-9);
+}
+
+/* Weekday headers + month/year labels. */
+.lm-daterange .rdrWeekDay,
+.lm-daterange .rdrMonthName,
+.lm-daterange .rdrMonthAndYearPickers select {
+  color: var(--gray-11);
+}
+
+.lm-daterange .rdrMonthAndYearPickers select {
+  background: var(--color-surface);
+}
+
+.lm-daterange .rdrMonthAndYearPickers select option {
+  background: var(--color-panel-solid);
+  color: var(--gray-12);
+}
+
+/* Prev/next month arrows. */
+.lm-daterange .rdrNextPrevButton {
+  background: var(--gray-a3);
+}
+
+.lm-daterange .rdrNextPrevButton:hover {
+  background: var(--gray-a5);
+}
+
+.lm-daterange .rdrPprevButton i {
+  border-color: transparent var(--gray-11) transparent transparent;
+}
+
+.lm-daterange .rdrNextButton i {
+  border-color: transparent transparent transparent var(--gray-11);
+}
+
+/* Date-display input boxes at the top of the calendars. */
+.lm-daterange .rdrDateDisplayWrapper {
+  background: transparent;
+}
+
+.lm-daterange .rdrDateDisplayItem {
+  background: var(--color-surface);
+  border: 1px solid var(--gray-a5);
+  box-shadow: none;
+}
+
+.lm-daterange .rdrDateDisplayItem input {
+  color: var(--gray-12);
+}
+
+.lm-daterange .rdrDateDisplayItemActive {
+  border-color: var(--accent-8);
+}
+
+/* Selected day contrast against the accent range fill. */
+.lm-daterange .rdrStartEdge ~ .rdrDayNumber span,
+.lm-daterange .rdrEndEdge ~ .rdrDayNumber span,
+.lm-daterange .rdrSelected ~ .rdrDayNumber span {
+  color: var(--accent-contrast);
+}
