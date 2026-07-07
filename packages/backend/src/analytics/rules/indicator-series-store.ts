@@ -1,5 +1,6 @@
 import type { CandleRepository, Period } from '@lametrader/core';
 import type { IndicatorService } from '../indicators/indicator.service.js';
+import type { IndicatorComputeCache } from './indicator-compute-cache.types.js';
 import { PagedIndicatorSeriesView } from './indicator-series-view.js';
 import type { SeriesPoint, SeriesView } from './series.types.js';
 
@@ -76,6 +77,10 @@ export class IndicatorSeriesStore {
    * read an empty walk and treat the operand as "no data yet" rather than
    * crashing. Building the view does no I/O; a page is fetched + computed only
    * when an operator walks or `asOf`-queries it.
+   *
+   * `computeCache` is the optional per-observation memo threaded from the rule
+   * engine: when present, every trigger event of one observation that resolves
+   * this slot shares a single `IndicatorService.compute` per page window (#548).
    */
   series(
     symbolId: string,
@@ -83,6 +88,7 @@ export class IndicatorSeriesStore {
     instanceId: string,
     stateKey: string,
     before: number,
+    computeCache?: IndicatorComputeCache,
   ): SeriesView {
     const config = this.configs.get(instanceId);
     if (config === undefined) return EMPTY_SERIES;
@@ -95,6 +101,7 @@ export class IndicatorSeriesStore {
       config.inputs,
       stateKey,
       before,
+      computeCache,
     );
   }
 }

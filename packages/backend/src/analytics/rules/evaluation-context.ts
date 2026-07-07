@@ -1,6 +1,7 @@
 import { type CandleRepository, OperandKind, type Period, type StateValue } from '@lametrader/core';
 import { type BarAxis, PagedBarSeriesView } from './bar-series-view.js';
 import type { EvaluationContext } from './evaluation-context.types.js';
+import type { IndicatorComputeCache } from './indicator-compute-cache.types.js';
 import { ArraySeriesView, type IndicatorSeriesStore } from './indicator-series-store.js';
 import type { SeriesPoint, SeriesView } from './series.types.js';
 
@@ -30,6 +31,14 @@ export interface EvaluationContextDeps {
    * point, mirroring the bar pagers (which bake the same `+ 1` in when built).
    */
   before: number;
+  /**
+   * Optional per-observation memo over `IndicatorService.compute`, threaded from
+   * the rule-engine wire-up so a shared `IndicatorRef` operand resolved by
+   * several trigger events of one observation computes once, not once per event
+   * (#548). Omitted (the default) means each read goes straight to the service —
+   * the earlier behaviour, kept for callers that build a one-off context.
+   */
+  computeCache?: IndicatorComputeCache;
   /** Read for `SymbolStateRef` operands; `null` when the key isn't set. */
   getSymbolState(profileId: string, symbolId: string, key: string): StateValue | null;
   /** Read for `GlobalStateRef` operands; `null` when the key isn't set. */
@@ -104,6 +113,7 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
             operand.instanceId,
             operand.stateKey,
             deps.before,
+            deps.computeCache,
           );
           return (await view.asOf(Number.MAX_SAFE_INTEGER))?.value ?? null;
         }
@@ -137,6 +147,7 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
             operand.instanceId,
             operand.stateKey,
             deps.before,
+            deps.computeCache,
           );
           // A series with a second-newest point yields it (walk-and-count, since
           // the view carries no length); otherwise fall to the optional hook for
@@ -172,6 +183,7 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
             operand.instanceId,
             operand.stateKey,
             deps.before,
+            deps.computeCache,
           );
         case OperandKind.SymbolStateRef: {
           const v = deps.getSymbolState(deps.profileId, deps.symbolId, operand.key);
