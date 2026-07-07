@@ -113,6 +113,7 @@ function BacktestingLayout({
       setActiveRun({ id: running.id, reattach: true });
       setSymbolId(running.params.symbolId);
       setPeriod(running.params.period);
+      setStrategyId(running.strategyId);
     }
     setHydrated(true);
   }, [hydrated, runningQuery.isPending, runningQuery.data]);

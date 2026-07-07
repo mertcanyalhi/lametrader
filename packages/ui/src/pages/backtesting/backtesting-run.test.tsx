@@ -32,15 +32,18 @@ import { BacktestingPage } from './backtesting-page.js';
 vi.mock('../chart/candle-chart.js', () => ({
   CandleChart: ({
     candles,
+    follow = false,
     eventMarkers = [],
     stateOverlays = [],
   }: {
     candles: Candle[];
+    follow?: boolean;
     eventMarkers?: unknown[];
     stateOverlays?: unknown[];
   }) => (
     <div
       data-testid="backtest-chart"
+      data-follow={String(follow)}
       data-markers={eventMarkers.length}
       data-overlays={stateOverlays.length}
     >
@@ -137,11 +140,13 @@ describe('BacktestingPage run flow', () => {
   let queryClient: QueryClient;
   let runningList: unknown[];
   let deleted: string[];
+  let storeCandles: Candle[];
 
   beforeEach(() => {
     onFrame = null;
     runningList = [];
     deleted = [];
+    storeCandles = [candle(1_000, 100)];
     const fetchSpy = vi.fn(async (url: string, init?: RequestInit) => {
       const method = init?.method ?? 'GET';
       const target = String(url);
@@ -173,7 +178,12 @@ describe('BacktestingPage run flow', () => {
       if (target.includes('/config')) return json(CONFIG, 200);
       if (target.includes('/profiles')) return json([ALPHA], 200);
       if (target.includes('/candles')) {
-        return json({ candles: [candle(1_000, 100)], nextCursor: null, latestTime: 1_000 }, 200);
+        const query = target.slice(target.indexOf('?'));
+        const params = new URLSearchParams(query);
+        const from = Number(params.get('from'));
+        const to = Number(params.get('to'));
+        const windowed = storeCandles.filter((c) => c.time >= from && c.time < to);
+        return json({ candles: windowed, nextCursor: null, latestTime: 1_000 }, 200);
       }
       throw new Error(`unexpected fetch: ${method} ${target}`);
     });
@@ -417,5 +427,118 @@ describe('BacktestingPage run flow', () => {
       progress: screen.getByText('Running — 50%') !== null,
       symbolLocked: within(bar).getByRole('button', { name: BTC.id }).hasAttribute('disabled'),
     }).toEqual({ progress: true, symbolLocked: true });
+  });
+
+  it("restores the running run's strategy selection when reattaching on load", async () => {
+    runningList = [
+      {
+        id: 'b-9',
+        name: 'existing',
+        status: BacktestStatus.Running,
+        createdAt: 1,
+        updatedAt: 1,
+        params: PARAMS,
+        strategyId: 's-1',
+        strategy: STRATEGY,
+        trades: [],
+        summary: EMPTY_SUMMARY,
+      },
+    ];
+    renderPage();
+
+    await waitFor(() => expect(onFrame).not.toBeNull());
+    push(snapshot(1));
+
+    const trigger = await screen.findByRole('combobox', { name: 'Selected strategy' });
+    await waitFor(() => expect(trigger).toHaveTextContent('Breakout'));
+    expect(trigger).toHaveTextContent('Breakout');
+  });
+
+  it('catches the reattached chart up only to the replay frontier, not the whole run window', async () => {
+    const DAY = 86_400_000;
+    const reattachParams = { ...PARAMS, period: Period.OneDay, start: 0, end: 10 * DAY };
+    storeCandles = Array.from({ length: 10 }, (_, i) => candle(i * DAY, 100 + i));
+    runningList = [
+      {
+        id: 'b-9',
+        name: 'existing',
+        status: BacktestStatus.Running,
+        createdAt: 1,
+        updatedAt: 1,
+        params: reattachParams,
+        strategyId: 's-1',
+        strategy: STRATEGY,
+        trades: [],
+        summary: EMPTY_SUMMARY,
+      },
+    ];
+    renderPage();
+    await waitFor(() => expect(onFrame).not.toBeNull());
+
+    // Frontier at reattach = 3 elapsed days → catch-up reads only [0, 3·DAY): 3 bars.
+    push({
+      kind: BacktestFrameKind.Snapshot,
+      status: BacktestStatus.Running,
+      progress: { elapsedDays: 3, totalDays: 10 },
+      params: reattachParams,
+      trades: [],
+      summary: EMPTY_SUMMARY,
+      events: [],
+    });
+
+    const chart = await screen.findByTestId('backtest-chart');
+    await waitFor(() => expect(chart).toHaveTextContent('3 candles'));
+    expect(chart).toHaveTextContent('3 candles');
+  });
+
+  it('keeps following the frontier as a delta frame extends the reattached chart', async () => {
+    const DAY = 86_400_000;
+    const reattachParams = { ...PARAMS, period: Period.OneDay, start: 0, end: 10 * DAY };
+    storeCandles = Array.from({ length: 10 }, (_, i) => candle(i * DAY, 100 + i));
+    runningList = [
+      {
+        id: 'b-9',
+        name: 'existing',
+        status: BacktestStatus.Running,
+        createdAt: 1,
+        updatedAt: 1,
+        params: reattachParams,
+        strategyId: 's-1',
+        strategy: STRATEGY,
+        trades: [],
+        summary: EMPTY_SUMMARY,
+      },
+    ];
+    renderPage();
+    await waitFor(() => expect(onFrame).not.toBeNull());
+    push({
+      kind: BacktestFrameKind.Snapshot,
+      status: BacktestStatus.Running,
+      progress: { elapsedDays: 3, totalDays: 10 },
+      params: reattachParams,
+      trades: [],
+      summary: EMPTY_SUMMARY,
+      events: [],
+    });
+    const chart = await screen.findByTestId('backtest-chart');
+    await waitFor(() => expect(chart).toHaveTextContent('3 candles'));
+
+    // A delta frame past the frontier extends the caught-up window, so the chart
+    // grows and stays in follow mode instead of freezing on the fetched tail.
+    push({
+      kind: BacktestFrameKind.Delta,
+      status: BacktestStatus.Running,
+      progress: { elapsedDays: 4, totalDays: 10 },
+      candles: [{ period: Period.OneDay, candle: candle(3 * DAY, 200) }],
+      events: [],
+      trades: [],
+      summary: EMPTY_SUMMARY,
+      openPosition: undefined,
+    });
+
+    expect({
+      candles: chart.textContent,
+      follow: chart.getAttribute('data-follow'),
+    }).toEqual({ candles: '4 candles', follow: 'true' });
   });
 });
