@@ -46,6 +46,7 @@ import {
 } from '../../lib/chart-viewport.js';
 import { priceDecimals } from '../../lib/format.js';
 import { liveCandleForPeriod } from '../../lib/hooks/candles.js';
+import { getLogger } from '../../lib/log.js';
 import { StreamKind } from '../../lib/stream/stream-client.types.js';
 import { useStreamSubscription } from '../../lib/stream/use-stream-subscription.js';
 import { useTheme } from '../../lib/theme-context.js';
@@ -59,6 +60,8 @@ import {
   stateOverlayToLineData,
   stateOverlayToMarkers,
 } from './states/state-overlay.js';
+
+const log = getLogger('chart-paging');
 
 /** No-op callback used when no `onToggleLegendVisible` is passed (read-only legend). */
 const noop = (): void => {};
@@ -322,7 +325,11 @@ export function CandleChart({
       chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
     }
     const onRange = (logical: LogicalRange | null): void => {
-      if (logical && logical.from < 1 && paging.current.hasMore) paging.current.loadOlder();
+      if (logical && logical.from < 1 && paging.current.hasMore) {
+        // ponytail: debug loop instrumentation, remove once diagnosed
+        log.debug({ logicalFrom: logical.from, logicalTo: logical.to }, 'onRange → loadOlder');
+        paging.current.loadOlder();
+      }
     };
     chart.timeScale().subscribeVisibleLogicalRangeChange(onRange);
     // Persist the user's scroll/pinch window so the next chart restores it —
@@ -488,6 +495,19 @@ export function CandleChart({
     const now = Date.now();
     const earliestNeeded = now - rangeMillis(range, now);
     const earliestLoaded = candles[0]?.time ?? now;
+    // ponytail: debug loop instrumentation, remove once diagnosed
+    log.debug(
+      {
+        source: 'range-preset-effect',
+        range,
+        earliestLoaded,
+        earliestNeeded,
+        gapMs: earliestLoaded - earliestNeeded,
+        hasMore: paging.current.hasMore,
+        willPage: earliestLoaded > earliestNeeded && paging.current.hasMore,
+      },
+      'range/candles effect',
+    );
     if (earliestLoaded > earliestNeeded && paging.current.hasMore) {
       paging.current.loadOlder();
       return;
@@ -519,6 +539,19 @@ export function CandleChart({
     }
     if (stored.mode === 'fixed') {
       const earliestLoaded = candles[0]?.time ?? stored.to;
+      // ponytail: debug loop instrumentation, remove once diagnosed
+      log.debug(
+        {
+          source: 'viewport-restore-effect',
+          storedFrom: stored.from,
+          storedTo: stored.to,
+          earliestLoaded,
+          gapMs: earliestLoaded - stored.from,
+          hasMore: paging.current.hasMore,
+          willPage: earliestLoaded > stored.from && paging.current.hasMore,
+        },
+        'fixed viewport restore',
+      );
       if (earliestLoaded > stored.from && paging.current.hasMore) {
         paging.current.loadOlder();
         return;

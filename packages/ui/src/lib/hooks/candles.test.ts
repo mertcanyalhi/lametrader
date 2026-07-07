@@ -131,6 +131,76 @@ describe('usePagedCandles', () => {
     });
   });
 
+  it('does not issue a second older-window request while the first is still in flight', async () => {
+    windows.set(NOW, { candles: [candle(NOW - HOUR)], nextCursor: null });
+    windows.set(NOW - SPAN, { candles: [candle(NOW - SPAN - HOUR)], nextCursor: null });
+
+    // Hang the older-window fetch so it stays in flight, and count how many times
+    // that window is requested — a runaway re-entrant loadOlder would stack more.
+    const olderRequests: string[] = [];
+    let releaseOlder: () => void = () => {};
+    fetchSpy.mockImplementation(async (url: string) => {
+      const to = Number(new URL(String(url), 'http://x').searchParams.get('to'));
+      if (to === NOW - SPAN) {
+        olderRequests.push(String(url));
+        await new Promise<void>((resolve) => {
+          releaseOlder = resolve;
+        });
+      }
+      const window = windows.get(to) ?? { candles: [], nextCursor: null };
+      const times = [...windows.values()].flatMap((w) => w.candles.map((c) => c.time));
+      const page: CandlePage = {
+        ...window,
+        latestTime: times.length > 0 ? Math.max(...times) : null,
+      };
+      return new Response(JSON.stringify(page), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    const { result, rerender } = renderHook(
+      () => usePagedCandles({ id: ID, period: Period.OneHour }),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.candles).toHaveLength(1));
+    act(() => result.current.loadOlder());
+    await waitFor(() => expect(result.current.isFetchingOlder).toBe(true));
+    // A viewport effect re-running (re-render) then re-invoking loadOlder must not
+    // stack a second request while the first older fetch is still in flight.
+    rerender();
+    act(() => result.current.loadOlder());
+    act(() => result.current.loadOlder());
+
+    expect({
+      olderRequests: olderRequests.length,
+      isFetchingOlder: result.current.isFetchingOlder,
+    }).toEqual({ olderRequests: 1, isFetchingOlder: true });
+    releaseOlder();
+  });
+
+  it('does not fetch another window once history is exhausted', async () => {
+    windows.set(NOW, { candles: [candle(NOW - HOUR)], nextCursor: null });
+    windows.set(NOW - SPAN, { candles: [], nextCursor: null });
+
+    const { result } = renderHook(() => usePagedCandles({ id: ID, period: Period.OneHour }), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.candles).toHaveLength(1));
+    act(() => result.current.loadOlder());
+    await waitFor(() => expect(result.current.hasMore).toBe(false));
+    const callsAtStop = fetchSpy.mock.calls.length;
+    // Repeated triggers past the end of history (as scroll-back / range effects
+    // would fire) must be inert — no further requests.
+    act(() => result.current.loadOlder());
+    act(() => result.current.loadOlder());
+
+    expect({ hasMore: result.current.hasMore, calls: fetchSpy.mock.calls.length }).toEqual({
+      hasMore: false,
+      calls: callsAtStop,
+    });
+  });
+
   it('reloads a fresh series when the period changes', async () => {
     const DAY = periodMillis(Period.OneDay);
     windows.set(NOW, { candles: [candle(NOW - HOUR)], nextCursor: null });
