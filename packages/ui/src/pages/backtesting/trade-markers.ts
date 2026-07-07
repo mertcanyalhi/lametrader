@@ -18,9 +18,9 @@ const { upColor: BUY_COLOR, downColor: SELL_COLOR } = chartColors(Theme.Dark);
  * Each closed trade contributes two markers: a **Buy** at its entry (a down-arrow
  * above the bar, green) and a **Sell** at its exit (an up-arrow below the bar,
  * red) — each arrow points at its bar. A still-open position contributes only its
- * entry Buy marker (it has no exit fill). Every label carries the trade's amount
- * as `<quantity> @ <fill price>`. The result is sorted ascending by `time`, as
- * the `createSeriesMarkers` plugin requires.
+ * entry Buy marker (it has no exit fill). Every label carries the fill price as
+ * `@ <fill price>`. The result is sorted ascending by `time`, as the
+ * `createSeriesMarkers` plugin requires.
  *
  * Times are converted from epoch ms to the chart's second-resolution scale.
  *
@@ -33,34 +33,34 @@ export function buildTradeMarkers(
 ): SeriesMarker<Time>[] {
   const markers: SeriesMarker<Time>[] = [];
   for (const trade of trades) {
-    markers.push(entryMarker(trade.entryTs, trade.quantity, trade.entryPrice));
-    markers.push(exitMarker(trade.exitTs, trade.quantity, trade.exitPrice));
+    markers.push(entryMarker(trade.entryTs, trade.entryPrice));
+    markers.push(exitMarker(trade.exitTs, trade.exitPrice));
   }
   if (openPosition) {
-    markers.push(entryMarker(openPosition.entryTs, openPosition.quantity, openPosition.entryPrice));
+    markers.push(entryMarker(openPosition.entryTs, openPosition.entryPrice));
   }
   markers.sort((a, b) => (a.time as number) - (b.time as number));
   return markers;
 }
 
-/** A Buy marker — green down-arrow above the entry bar, labelled with the amount. */
-function entryMarker(ts: number, quantity: number, price: number): SeriesMarker<Time> {
+/** A Buy marker — green down-arrow above the entry bar, labelled with the fill price. */
+function entryMarker(ts: number, price: number): SeriesMarker<Time> {
   return {
     time: (ts / 1000) as Time,
     position: 'aboveBar',
     shape: 'arrowDown',
     color: BUY_COLOR,
-    text: `Buy ${quantity} @ ${price}`,
+    text: `Buy @ ${price}`,
   };
 }
 
-/** A Sell marker — red up-arrow below the exit bar, labelled with the amount. */
-function exitMarker(ts: number, quantity: number, price: number): SeriesMarker<Time> {
+/** A Sell marker — red up-arrow below the exit bar, labelled with the fill price. */
+function exitMarker(ts: number, price: number): SeriesMarker<Time> {
   return {
     time: (ts / 1000) as Time,
     position: 'belowBar',
     shape: 'arrowUp',
     color: SELL_COLOR,
-    text: `Sell ${quantity} @ ${price}`,
+    text: `Sell @ ${price}`,
   };
 }

@@ -35,8 +35,8 @@ describe('buildTradeMarkers', () => {
     const markers = buildTradeMarkers([trade(2_000, 5_000)]);
 
     expect(markers).toEqual([
-      { time: 2, position: 'aboveBar', shape: 'arrowDown', color: BUY_COLOR, text: 'Buy 1 @ 100' },
-      { time: 5, position: 'belowBar', shape: 'arrowUp', color: SELL_COLOR, text: 'Sell 1 @ 110' },
+      { time: 2, position: 'aboveBar', shape: 'arrowDown', color: BUY_COLOR, text: 'Buy @ 100' },
+      { time: 5, position: 'belowBar', shape: 'arrowUp', color: SELL_COLOR, text: 'Sell @ 110' },
     ]);
   });
 
@@ -44,9 +44,9 @@ describe('buildTradeMarkers', () => {
     const markers = buildTradeMarkers([trade(6_000, 9_000)], openPosition(3_000));
 
     expect(markers).toEqual([
-      { time: 3, position: 'aboveBar', shape: 'arrowDown', color: BUY_COLOR, text: 'Buy 1 @ 120' },
-      { time: 6, position: 'aboveBar', shape: 'arrowDown', color: BUY_COLOR, text: 'Buy 1 @ 100' },
-      { time: 9, position: 'belowBar', shape: 'arrowUp', color: SELL_COLOR, text: 'Sell 1 @ 110' },
+      { time: 3, position: 'aboveBar', shape: 'arrowDown', color: BUY_COLOR, text: 'Buy @ 120' },
+      { time: 6, position: 'aboveBar', shape: 'arrowDown', color: BUY_COLOR, text: 'Buy @ 100' },
+      { time: 9, position: 'belowBar', shape: 'arrowUp', color: SELL_COLOR, text: 'Sell @ 110' },
     ]);
   });
 
