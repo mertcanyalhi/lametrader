@@ -1,6 +1,7 @@
 import { yupResolver } from '@hookform/resolvers/yup';
 import type { Period } from '@lametrader/core';
 import { Button, Callout, Checkbox, Flex, Text, TextField } from '@radix-ui/themes';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import {
   type Control,
@@ -124,16 +125,6 @@ export function RunForm({
           </Callout.Root>
         ) : null}
 
-        <Field label="Initial capital" htmlFor="bt-initial-capital" error={errors.initialCapital}>
-          <TextField.Root
-            id="bt-initial-capital"
-            type="number"
-            inputMode="decimal"
-            step="any"
-            {...register('initialCapital', { valueAsNumber: true })}
-          />
-        </Field>
-
         <div>
           <Text as="div" size="2" weight="medium" mb="1">
             Period
@@ -152,28 +143,42 @@ export function RunForm({
           ) : null}
         </div>
 
-        <CommissionRow
-          control={control}
-          enabledName="commissionRateEnabled"
-          amountName="commissionRate"
-          label="Rate"
-          amountLabel="Commission rate"
-          suffix="%"
-          enabled={rateEnabled}
-          register={register}
-          error={errors.commissionRate}
-        />
-        <CommissionRow
-          control={control}
-          enabledName="commissionFixedEnabled"
-          amountName="commissionFixed"
-          label="Fixed"
-          amountLabel="Fixed commission"
-          suffix=""
-          enabled={fixedEnabled}
-          register={register}
-          error={errors.commissionFixed}
-        />
+        <CollapsibleGroup title="Capital">
+          <Field label="Initial capital" htmlFor="bt-initial-capital" error={errors.initialCapital}>
+            <TextField.Root
+              id="bt-initial-capital"
+              type="number"
+              inputMode="decimal"
+              step="any"
+              {...register('initialCapital', { valueAsNumber: true })}
+            />
+          </Field>
+        </CollapsibleGroup>
+
+        <CollapsibleGroup title="Commission">
+          <CommissionRow
+            control={control}
+            enabledName="commissionRateEnabled"
+            amountName="commissionRate"
+            label="Rate"
+            amountLabel="Commission rate"
+            suffix="%"
+            enabled={rateEnabled}
+            register={register}
+            error={errors.commissionRate}
+          />
+          <CommissionRow
+            control={control}
+            enabledName="commissionFixedEnabled"
+            amountName="commissionFixed"
+            label="Fixed"
+            amountLabel="Fixed commission"
+            suffix=""
+            enabled={fixedEnabled}
+            register={register}
+            error={errors.commissionFixed}
+          />
+        </CollapsibleGroup>
 
         {!canRun ? (
           <Text size="1" color="gray">
@@ -186,6 +191,45 @@ export function RunForm({
         </Button>
       </Flex>
     </form>
+  );
+}
+
+/**
+ * A collapsible, collapsed-by-default option group: a ghost `<Button>` disclosure
+ * toggle titled by `title`, its children mounted only while open.
+ *
+ * Radix Themes ships no Accordion, so this is a plain React disclosure — a Radix
+ * `Button` (keyboard-accessible, `aria-expanded`-annotated) over conditionally
+ * rendered children. Children render only when open rather than relying on CSS
+ * collapse, so a collapsed group truly removes its fields from the tree;
+ * react-hook-form keeps the unmounted fields' values (its default
+ * `shouldUnregister: false`).
+ *
+ * @param title - the group's disclosure label, always visible on the toggle.
+ * @param children - the option fields, shown only while the group is open.
+ */
+function CollapsibleGroup({ title, children }: { title: string; children: ReactNode }): ReactNode {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <Button
+        type="button"
+        variant="ghost"
+        color="gray"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        <Text size="2" weight="medium">
+          {title}
+        </Text>
+      </Button>
+      {open ? (
+        <Flex direction="column" gap="3" mt="2">
+          {children}
+        </Flex>
+      ) : null}
+    </div>
   );
 }
 

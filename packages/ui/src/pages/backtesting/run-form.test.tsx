@@ -93,22 +93,44 @@ describe('RunForm', () => {
     return { onStarted };
   }
 
-  it('renders the capital, Period picker, and commission fields plus the Run button', () => {
+  it('renders the Period picker and Run button with the option groups collapsed by default', () => {
     renderForm();
 
     expect({
-      capital: screen.getByLabelText('Initial capital') !== null,
-      period: screen.getByRole('button', { name: 'Period' }) !== null,
-      rate: screen.getByLabelText('Commission rate') !== null,
-      fixed: screen.getByLabelText('Fixed commission') !== null,
-      run: screen.getByRole('button', { name: 'Run backtest' }) !== null,
-    }).toEqual({ capital: true, period: true, rate: true, fixed: true, run: true });
+      period: screen.queryByRole('button', { name: 'Period' }) !== null,
+      run: screen.queryByRole('button', { name: 'Run backtest' }) !== null,
+      capital: screen.queryByLabelText('Initial capital') !== null,
+      rate: screen.queryByLabelText('Commission rate') !== null,
+      fixed: screen.queryByLabelText('Fixed commission') !== null,
+    }).toEqual({ period: true, run: true, capital: false, rate: false, fixed: false });
+  });
+
+  it('reveals the commission rate and fixed inputs when the Commission group is opened', async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.click(screen.getByText('Commission'));
+
+    expect({
+      rate: screen.queryByLabelText('Commission rate') !== null,
+      fixed: screen.queryByLabelText('Fixed commission') !== null,
+    }).toEqual({ rate: true, fixed: true });
+  });
+
+  it('reveals the initial capital input when the Capital group is opened', async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.click(screen.getByText('Capital'));
+
+    expect(screen.queryByLabelText('Initial capital') !== null).toEqual(true);
   });
 
   it('rejects a non-positive initial capital client-side without posting', async () => {
     const user = userEvent.setup();
     renderForm();
 
+    await user.click(screen.getByText('Capital'));
     const capital = screen.getByLabelText('Initial capital');
     await user.clear(capital);
     await user.type(capital, '0');
