@@ -71,6 +71,34 @@ const SUMMARY: BacktestSummary = {
   avgDaysInTrade: 0.5,
 };
 
+/** A losing run — every signed metric flips negative for the red-accent tests. */
+const SUMMARY_NEG: BacktestSummary = {
+  totalPnl: -8,
+  roiPct: -0.08,
+  avgPnlPerTrade: -4,
+  tradeCount: 2,
+  winners: 1,
+  losers: 1,
+  avgRoiPct: -2.25,
+  avgDaysInTrade: 0.5,
+};
+
+/** A break-even run — Total P/L is exactly zero for the neutral-accent test. */
+const SUMMARY_ZERO: BacktestSummary = { ...SUMMARY, totalPnl: 0 };
+
+/** Twelve closed winners spanning distinct exit days — enough to overflow one page. */
+const MANY_TRADES: BacktestTrade[] = Array.from({ length: 12 }, (_, i) => ({
+  entryTs: DAY_0 + i * 3_600_000,
+  exitTs: DAY_0 + i * 3_600_000 + 60_000,
+  entryPrice: 100,
+  exitPrice: 110,
+  quantity: 1,
+  commission: 1,
+  pnl: i + 1,
+  roiPct: 1,
+  exitReason: BacktestExitReason.ProfitTarget,
+}));
+
 function renderTabs(props: {
   trades: readonly BacktestTrade[];
   summary: BacktestSummary;
@@ -156,5 +184,87 @@ describe('ResultsTabs', () => {
       totalPnl: '+8.00',
       avgDays: '0.50',
     });
+  });
+
+  it('colors a positive Summary metric value with the green accent', () => {
+    renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: undefined });
+
+    const value = screen.getByText('Total P/L').nextElementSibling;
+    expect(value?.getAttribute('data-accent-color')).toEqual('grass');
+  });
+
+  it('colors a negative Summary metric value with the red accent', () => {
+    renderTabs({ trades: TRADES, summary: SUMMARY_NEG, openPosition: undefined });
+
+    const value = screen.getByText('Total P/L').nextElementSibling;
+    expect(value?.getAttribute('data-accent-color')).toEqual('red');
+  });
+
+  it('colors a zero Summary metric value with the neutral gray accent', () => {
+    renderTabs({ trades: TRADES, summary: SUMMARY_ZERO, openPosition: undefined });
+
+    const value = screen.getByText('Total P/L').nextElementSibling;
+    expect(value?.getAttribute('data-accent-color')).toEqual('gray');
+  });
+
+  it('colors a negative Daily P&L block metric value with the red accent', async () => {
+    const user = userEvent.setup();
+    renderTabs({ trades: TRADES, summary: SUMMARY_NEG, openPosition: undefined });
+    await user.click(screen.getByRole('tab', { name: /Daily P&L/ }));
+
+    const block = screen.getByLabelText('Daily P&L summary');
+    const value = within(block).getByText('Total P/L').nextElementSibling;
+    expect(value?.getAttribute('data-accent-color')).toEqual('red');
+  });
+
+  it('colors a winning trade row P/L amount and ROI percentage with the green accent', async () => {
+    const user = userEvent.setup();
+    renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: undefined });
+    await user.click(screen.getByRole('tab', { name: /Trades/ }));
+
+    const rows = within(screen.getByLabelText('Trades')).getAllByRole('row');
+    const winner = rows[1] as HTMLElement;
+    expect({
+      pnlText: within(winner).getByText('+19.00').textContent,
+      pnlAccent: within(winner).getByText('+19.00').getAttribute('data-accent-color'),
+      roiText: within(winner).getByText('+9.50%').textContent,
+      roiAccent: within(winner).getByText('+9.50%').getAttribute('data-accent-color'),
+    }).toEqual({
+      pnlText: '+19.00',
+      pnlAccent: 'grass',
+      roiText: '+9.50%',
+      roiAccent: 'grass',
+    });
+  });
+
+  it('sorts the trades table by P/L ascending then descending when the P/L header is clicked', async () => {
+    const user = userEvent.setup();
+    renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: undefined });
+    await user.click(screen.getByRole('tab', { name: /Trades/ }));
+
+    await user.click(screen.getByRole('button', { name: 'P/L' }));
+    const ascFirst = (within(screen.getByLabelText('Trades')).getAllByRole('row')[1] as HTMLElement)
+      .textContent;
+    await user.click(screen.getByRole('button', { name: 'P/L' }));
+    const descFirst = (
+      within(screen.getByLabelText('Trades')).getAllByRole('row')[1] as HTMLElement
+    ).textContent;
+
+    expect({
+      ascFirstHasStopLoss: ascFirst?.includes('Stop loss'),
+      descFirstHasProfitTarget: descFirst?.includes('Profit target'),
+    }).toEqual({ ascFirstHasStopLoss: true, descFirstHasProfitTarget: true });
+  });
+
+  it('paginates the trades table, advancing to the remaining trades on Next', async () => {
+    const user = userEvent.setup();
+    renderTabs({ trades: MANY_TRADES, summary: SUMMARY, openPosition: undefined });
+    await user.click(screen.getByRole('tab', { name: /Trades/ }));
+
+    const firstPageRows = within(screen.getByLabelText('Trades')).getAllByRole('row').length;
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    const secondPageRows = within(screen.getByLabelText('Trades')).getAllByRole('row').length;
+
+    expect({ firstPageRows, secondPageRows }).toEqual({ firstPageRows: 11, secondPageRows: 3 });
   });
 });
