@@ -83,6 +83,47 @@ class SteppingReplay implements BacktestReplayPort {
   }
 }
 
+/**
+ * A replay fake that emits `before` steps synchronously, then awaits a
+ * test-controlled `gate` (so the test can observe the run paused with items
+ * pending), then emits `after` steps and returns `result`. Lets a mid-run
+ * reattach be simulated at an exact, deterministic point.
+ */
+class GatedReplay implements BacktestReplayPort {
+  /**
+   * @param before - steps emitted before the gate opens.
+   * @param gate - resolves to release the `after` steps.
+   * @param after - steps emitted once the gate opens.
+   * @param result - the completed outcome returned after the last step.
+   */
+  constructor(
+    private readonly before: BacktestReplayStep[],
+    private readonly gate: Promise<void>,
+    private readonly after: BacktestReplayStep[],
+    private readonly result: BacktestReplayResult,
+  ) {}
+
+  async replay(
+    _params: unknown,
+    _strategy: unknown,
+    _profile: unknown,
+    _periods: unknown,
+    hooks?: BacktestReplayHooks,
+  ): Promise<BacktestReplayResult> {
+    for (const step of this.before) {
+      hooks?.onStep?.(step);
+      hooks?.onProgress?.(step.progress);
+    }
+    await this.gate;
+    for (const step of this.after) {
+      hooks?.onStep?.(step);
+      hooks?.onProgress?.(step.progress);
+    }
+    hooks?.onProgress?.({ elapsedDays: (END - START) / DAY_MS, totalDays: (END - START) / DAY_MS });
+    return this.result;
+  }
+}
+
 /** A complete strategy snapshot. */
 const strategy: BacktestStrategy = {
   id: 'strat-1',
@@ -235,7 +276,7 @@ describe('BacktestService per-run stream snapshot', () => {
     expect(service.activeSnapshotFrame('bt-1')).toBeNull();
   });
 
-  it('exposes a snapshot reflecting everything the run has produced so far', async () => {
+  it('exposes a snapshot reflecting the run state flushed into deltas so far', async () => {
     const steps: BacktestReplayStep[] = [
       {
         candle: { period: Period.OneMinute, candle: candle(START, 100) },
@@ -252,7 +293,10 @@ describe('BacktestService per-run stream snapshot', () => {
         progress: progressAt(60_000),
       },
     ];
-    const { service, ready } = build(new SteppingReplay(steps, emptyResult(), true));
+    // Flush after both candles so the snapshot's flushed prefix holds them.
+    const { service, ready } = build(new SteppingReplay(steps, emptyResult(), true), {
+      flushEveryCandles: 2,
+    });
     await ready;
     await service.start(request());
     await waitFor(() => (service.activeSnapshotFrame('bt-1')?.events.length ?? 0) === 2);
@@ -324,10 +368,9 @@ describe('BacktestService per-run stream deltas', () => {
           kind: BacktestFrameKind.Delta,
           status: BacktestStatus.Running,
           progress: progressAt(60_000),
-          candles: [
-            { period: Period.OneMinute, candle: candle(START, 100) },
-            { period: Period.OneMinute, candle: candle(START + 60_000, 105) },
-          ],
+          // Both processed candles are 1m; the run period is 1h, so neither
+          // enters the streamed batch even though they drive events/trades.
+          candles: [],
           events: [stateEvent(START), stateEvent(START + 60_000)],
           trades: [t1],
           summary: summaryOf([t1]),
@@ -396,6 +439,145 @@ describe('BacktestService per-run stream deltas', () => {
       status: 'completed',
       trades: [t1],
     });
+  });
+});
+
+describe('BacktestService per-run stream exactly-once on reattach', () => {
+  it('delivers each trade and event exactly once across a mid-run subscriber snapshot and the deltas that follow it', async () => {
+    // Distinct trades/events so a duplicate is visible in the full-payload union.
+    const tA = trade(START, START + 60_000);
+    const tB = trade(START + 60_000, START + 120_000);
+    const tC = trade(START + 120_000, START + 180_000);
+    const eA = stateEvent(START);
+    const eB = stateEvent(START + 60_000);
+    const eC = stateEvent(START + 120_000);
+    const eD = stateEvent(START + 180_000);
+    // `before`: steps 1-2 flush (count 2), step 3 leaves eC + tB pending; the
+    // reattaching subscriber must NOT see the pending items in its snapshot but
+    // MUST receive them once in the delta that flushes them.
+    const before: BacktestReplayStep[] = [
+      {
+        candle: { period: Period.OneHour, candle: candle(START, 100) },
+        events: [eA],
+        trades: [],
+        summary: summaryOf([]),
+        progress: progressAt(0),
+      },
+      {
+        candle: { period: Period.OneHour, candle: candle(START + 3_600_000, 105) },
+        events: [eB],
+        trades: [tA],
+        summary: summaryOf([tA]),
+        progress: progressAt(3_600_000),
+      },
+      {
+        candle: { period: Period.OneHour, candle: candle(START + 7_200_000, 110) },
+        events: [eC],
+        trades: [tB],
+        summary: summaryOf([tA, tB]),
+        progress: progressAt(7_200_000),
+      },
+    ];
+    const after: BacktestReplayStep[] = [
+      {
+        candle: { period: Period.OneHour, candle: candle(START + 10_800_000, 115) },
+        events: [eD],
+        trades: [tC],
+        summary: summaryOf([tA, tB, tC]),
+        progress: progressAt(10_800_000),
+      },
+    ];
+    const result: BacktestReplayResult = {
+      events: [eA, eB, eC, eD],
+      trades: [tA, tB, tC],
+      summary: summaryOf([tA, tB, tC]),
+      cancelled: false,
+    };
+    let openGate!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+    const { service, frames, ready } = build(new GatedReplay(before, gate, after, result), {
+      flushEveryCandles: 2,
+    });
+    await ready;
+    // `start` kicks the replay off; the synchronous `before` steps run before it
+    // returns, so the run is now paused at the gate with eC + tB pending.
+    await service.start(request());
+
+    // Reattach: capture the snapshot and the count of deltas already emitted (the
+    // ones a late subscriber would never receive).
+    const snapshot = service.activeSnapshotFrame('bt-1');
+    const deltasBeforeReattach = frames.length;
+
+    openGate();
+    await waitFor(async () => (await service.get('bt-1')).status === 'completed');
+    const laterDeltas = frames
+      .slice(deltasBeforeReattach)
+      .map((f) => f.frame)
+      .filter((f): f is Extract<BacktestFrame, { kind: 'delta' }> => f.kind === 'delta');
+
+    expect({
+      trades: [...(snapshot?.trades ?? []), ...laterDeltas.flatMap((d) => d.trades)],
+      events: [...(snapshot?.events ?? []), ...laterDeltas.flatMap((d) => d.events)],
+    }).toEqual({
+      trades: [tA, tB, tC],
+      events: [eA, eB, eC, eD],
+    });
+  });
+});
+
+describe('BacktestService per-run stream candle scope', () => {
+  it('carries only run-period candles in deltas though all active periods are processed', async () => {
+    const runPeriodOne = candle(START, 200);
+    const runPeriodTwo = candle(START + 3_600_000, 210);
+    // Interleave finer-period (1m) candles with the run-period (1h) ones; the run
+    // period is 1h, so only the 1h candles may appear in the streamed deltas.
+    const steps: BacktestReplayStep[] = [
+      {
+        candle: { period: Period.OneMinute, candle: candle(START, 100) },
+        events: [],
+        trades: [],
+        summary: summaryOf([]),
+        progress: progressAt(0),
+      },
+      {
+        candle: { period: Period.OneHour, candle: runPeriodOne },
+        events: [],
+        trades: [],
+        summary: summaryOf([]),
+        progress: progressAt(3_600_000),
+      },
+      {
+        candle: { period: Period.OneMinute, candle: candle(START + 60_000, 110) },
+        events: [],
+        trades: [],
+        summary: summaryOf([]),
+        progress: progressAt(60_000),
+      },
+      {
+        candle: { period: Period.OneHour, candle: runPeriodTwo },
+        events: [],
+        trades: [],
+        summary: summaryOf([]),
+        progress: progressAt(7_200_000),
+      },
+    ];
+    const { service, frames, ready } = build(new SteppingReplay(steps, emptyResult()), {
+      flushEveryCandles: 2,
+    });
+    await ready;
+    await service.start(request());
+    await waitFor(async () => (await service.get('bt-1')).status === 'completed');
+
+    const streamedCandles = frames
+      .map((f) => f.frame)
+      .filter((f): f is Extract<BacktestFrame, { kind: 'delta' }> => f.kind === 'delta')
+      .flatMap((d) => d.candles);
+    expect(streamedCandles).toEqual([
+      { period: Period.OneHour, candle: runPeriodOne },
+      { period: Period.OneHour, candle: runPeriodTwo },
+    ]);
   });
 });
 

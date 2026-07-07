@@ -78,25 +78,46 @@ export interface BacktestServiceOptions {
 }
 
 /**
- * The per-run streaming state accumulated as a replay advances: the full run
- * state a late subscriber's snapshot needs, plus the not-yet-flushed batch the
- * next delta frame carries.
+ * The per-run streaming state accumulated as a replay advances, split into the
+ * **flushed prefix** a late subscriber's snapshot is built from and the
+ * **not-yet-flushed batch** the next delta frame carries.
+ *
+ * The split is what guarantees exactly-once delivery across a subscriber's
+ * snapshot and the deltas that follow it: the snapshot fields hold only items
+ * that have *already* been emitted in a delta, so the next delta — which carries
+ * the pending items — re-sends nothing the snapshot already contained (no
+ * duplication), while the subscriber, having subscribed before that delta fired,
+ * still receives every pending item (no gap). On each flush the pending batch is
+ * emitted, then folded into the flushed prefix and cleared.
  */
 interface RunStreamState {
-  /** Every run event recorded so far, in emission order. */
+  /** Already-flushed run events — the snapshot's events prefix, in emission order. */
   events: RuleEventEntry[];
-  /** Every closed trade so far, in exit order. */
+  /** Already-flushed closed trades — the snapshot's trades prefix, in exit order. */
   trades: BacktestTrade[];
-  /** The latest running summary over the closed trades. */
+  /** Summary over the already-flushed trades — the snapshot's summary. */
   summary: BacktestSummary;
-  /** The latest open position, if any. */
+  /** Open position as of the last flush — the snapshot's open position, if any. */
   openPosition?: BacktestOpenPosition;
+  /** Progress as of the last flush — the snapshot's progress. */
+  progress: BacktestProgress;
   /** Run-period candles fed since the last flushed delta. */
   pendingCandles: BacktestStreamCandle[];
   /** Run events recorded since the last flushed delta. */
   pendingEvents: RuleEventEntry[];
   /** Closed trades produced since the last flushed delta. */
   pendingTrades: BacktestTrade[];
+  /** Latest running summary over all closed trades (flushed + pending) — the next delta's summary. */
+  latestSummary: BacktestSummary;
+  /** Latest open position (flushed + pending) — the next delta's open position, if any. */
+  latestOpenPosition?: BacktestOpenPosition;
+  /**
+   * Replayed candles processed since the last flush, driving the candle-count
+   * cadence. Counts every processed candle (all active periods), not just the
+   * run-period ones the delta carries, so the flush pacing is unchanged by the
+   * run-period candle filter.
+   */
+  stepsSinceFlush: number;
   /** Wall clock (epoch ms) of the last flushed delta, for the time-based cadence. */
   lastFlushAt: number;
 }
@@ -237,9 +258,12 @@ export class BacktestService {
         events: [],
         trades: [],
         summary: emptyBacktestSummary(),
+        progress: { elapsedDays: 0, totalDays: (params.end - params.start) / DAY_MS },
         pendingCandles: [],
         pendingEvents: [],
         pendingTrades: [],
+        latestSummary: emptyBacktestSummary(),
+        stepsSinceFlush: 0,
         lastFlushAt: ts,
       },
     };
@@ -409,6 +433,13 @@ export class BacktestService {
    * Synchronous by design: the stream gateway reads it and subscribes to the hub
    * in one uninterrupted step, so a delta published between cannot slip ahead of
    * the snapshot.
+   *
+   * Reflects only the **flushed prefix** — the trades, events, summary, open
+   * position, and progress as of the last emitted delta. Items produced since
+   * (still pending) are deliberately excluded: the subscriber, having subscribed
+   * before the next flush, receives them once in that delta, so the union of the
+   * snapshot and the deltas that follow it contains each trade and event exactly
+   * once.
    */
   activeSnapshotFrame(id: string): BacktestSnapshotFrame | null {
     if (this.active === null || this.active.backtest.id !== id) {
@@ -418,7 +449,7 @@ export class BacktestService {
     return {
       kind: BacktestFrameKind.Snapshot,
       status: BacktestStatus.Running,
-      progress: this.active.progress,
+      progress: stream.progress,
       params: this.active.backtest.params,
       trades: [...stream.trades],
       summary: stream.summary,
@@ -452,25 +483,33 @@ export class BacktestService {
   }
 
   /**
-   * Fold one replay step into the run's accumulated stream state, then flush a
-   * delta once the candle-count or time cadence trips.
+   * Fold one replay step into the run's **pending** batch, then flush a delta
+   * once the candle-count or time cadence trips.
+   *
+   * The step's events and trades join only the pending batch (never the flushed
+   * prefix directly) so a snapshot taken before the next flush cannot contain
+   * them — {@link flush} folds them into the prefix as it emits them. Every
+   * active period's candle is processed, but only a **run-period** candle enters
+   * the streamed batch (spec: *Stream protocol* — deltas carry new run-period
+   * candles); the candle-count cadence still counts every processed candle.
    */
   private accumulateStep(active: ActiveRun, step: BacktestReplayStep): void {
     const stream = active.stream;
-    stream.events.push(...step.events);
-    stream.trades.push(...step.trades);
-    stream.summary = step.summary;
-    if (step.openPosition === undefined) {
-      delete stream.openPosition;
-    } else {
-      stream.openPosition = step.openPosition;
-    }
-    stream.pendingCandles.push({ period: step.candle.period, candle: step.candle.candle });
     stream.pendingEvents.push(...step.events);
     stream.pendingTrades.push(...step.trades);
+    stream.latestSummary = step.summary;
+    if (step.openPosition === undefined) {
+      delete stream.latestOpenPosition;
+    } else {
+      stream.latestOpenPosition = step.openPosition;
+    }
+    if (step.candle.period === active.backtest.params.period) {
+      stream.pendingCandles.push({ period: step.candle.period, candle: step.candle.candle });
+    }
+    stream.stepsSinceFlush += 1;
     active.progress = step.progress;
     if (
-      stream.pendingCandles.length >= this.flushEveryCandles ||
+      stream.stepsSinceFlush >= this.flushEveryCandles ||
       this.now() - stream.lastFlushAt >= this.flushEveryMs
     ) {
       this.flush(active, BacktestStatus.Running);
@@ -479,8 +518,14 @@ export class BacktestService {
 
   /**
    * Publish a delta frame carrying the pending batch and the run's current
-   * `status`, then reset the batch. The final flush (`Completed`) always emits,
-   * even with an empty batch, so subscribers always see a terminal frame.
+   * `status`, then fold that batch into the flushed prefix and reset it. The
+   * final flush (`Completed`) always emits, even with an empty batch, so
+   * subscribers always see a terminal frame.
+   *
+   * The order is load-bearing: the delta is emitted **before** the pending items
+   * move into the flushed prefix, so a subscriber that reads the snapshot after
+   * this flush sees the items in its snapshot (flushed) rather than twice (once
+   * in the snapshot and again in this delta).
    */
   private flush(active: ActiveRun, status: BacktestStatus): void {
     const stream = active.stream;
@@ -491,13 +536,25 @@ export class BacktestService {
       candles: stream.pendingCandles,
       events: stream.pendingEvents,
       trades: stream.pendingTrades,
-      summary: stream.summary,
-      ...(stream.openPosition === undefined ? {} : { openPosition: stream.openPosition }),
+      summary: stream.latestSummary,
+      ...(stream.latestOpenPosition === undefined
+        ? {}
+        : { openPosition: stream.latestOpenPosition }),
     };
     this.onFrame?.(active.backtest.id, frame);
+    stream.events.push(...stream.pendingEvents);
+    stream.trades.push(...stream.pendingTrades);
+    stream.summary = stream.latestSummary;
+    if (stream.latestOpenPosition === undefined) {
+      delete stream.openPosition;
+    } else {
+      stream.openPosition = stream.latestOpenPosition;
+    }
+    stream.progress = active.progress;
     stream.pendingCandles = [];
     stream.pendingEvents = [];
     stream.pendingTrades = [];
+    stream.stepsSinceFlush = 0;
     stream.lastFlushAt = this.now();
   }
 }
