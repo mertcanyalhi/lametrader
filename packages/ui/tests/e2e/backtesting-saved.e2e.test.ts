@@ -327,7 +327,9 @@ describe('backtesting saved-reload flow (e2e)', () => {
     renderPage();
     await screen.findByRole('button', { name: 'Alpha' });
 
-    // Load the saved backtest from the panel — no run is started.
+    // Saved backtests now live behind the "Previous runs" bottom-bar modal —
+    // open it before the saved run is reachable. No run is started.
+    await user.click(await screen.findByRole('button', { name: /Previous runs/ }));
     await user.click(await screen.findByRole('button', { name: 'Saved run' }));
 
     await waitFor(() =>
