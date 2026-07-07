@@ -149,6 +149,21 @@ describe('BacktestingPage', () => {
     }).toEqual({ symbol: true, period: true, profile: true });
   });
 
+  it('hosts the previous-runs trigger in the bottom action bar', async () => {
+    onRequest('/symbols?enrich=true', () => [BTC]);
+    onRequest('/config', () => CONFIG);
+    onRequest('/profiles', () => [ALPHA]);
+
+    renderPage();
+
+    const bar = await screen.findByRole('group', { name: 'Backtesting actions' });
+    // The count query resolves to the default empty saved-backtests list.
+    await waitFor(() => {
+      expect(within(bar).queryByRole('button', { name: 'Previous runs (0)' })).not.toBeNull();
+    });
+    expect(within(bar).queryByRole('button', { name: 'Previous runs (0)' }) !== null).toEqual(true);
+  });
+
   it('updates the selected symbol in the picker when a watched symbol is picked', async () => {
     onRequest('/symbols?enrich=true', () => [BTC, ETH]);
     onRequest('/config', () => CONFIG);

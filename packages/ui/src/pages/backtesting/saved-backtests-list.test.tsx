@@ -10,10 +10,10 @@ import {
 import { Theme } from '@radix-ui/themes';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SavedBacktestsList } from './saved-backtests-list.js';
+import { PreviousRunsDialog, SavedBacktestsList } from './saved-backtests-list.js';
 
 const STRATEGY: BacktestStrategy = {
   id: 's-1',
@@ -172,5 +172,75 @@ describe('SavedBacktestsList', () => {
 
     await waitFor(() => expect(screen.queryByRole('button', { name: 'First run' })).toBeNull());
     expect(deleted).toEqual(['b-1']);
+  });
+});
+
+describe('PreviousRunsDialog', () => {
+  let queryClient: QueryClient;
+  let store: Backtest[];
+
+  beforeEach(() => {
+    store = [backtest('b-1', 'First run'), backtest('b-2', 'Second run')];
+    const fetchSpy = vi.fn(async (url: string) => {
+      const target = String(url);
+      if (target.includes('/backtests?status=')) {
+        return new Response(JSON.stringify(store), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      throw new Error(`unexpected fetch: ${target}`);
+    });
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  function renderDialog(onLoad: (bt: Backtest) => void = () => {}): void {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Theme>
+          <PreviousRunsDialog onLoad={onLoad} />
+        </Theme>
+      </QueryClientProvider>,
+    );
+  }
+
+  it('renders a Previous runs trigger labelled with the saved-backtests count', async () => {
+    renderDialog();
+
+    const trigger = await screen.findByRole('button', { name: 'Previous runs (2)' });
+
+    expect({ label: trigger.getAttribute('aria-label') }).toEqual({
+      label: 'Previous runs (2)',
+    });
+  });
+
+  it('opens a modal listing the saved backtests when the trigger is clicked', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.click(await screen.findByRole('button', { name: 'Previous runs (2)' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect({
+      first: within(dialog).queryByRole('button', { name: 'First run' }) !== null,
+      second: within(dialog).queryByRole('button', { name: 'Second run' }) !== null,
+    }).toEqual({ first: true, second: true });
+  });
+
+  it('renders a loading indicator instead of a 0 count while the count query is pending', async () => {
+    // The count request never resolves, so the query stays pending.
+    globalThis.fetch = vi.fn(() => new Promise<Response>(() => {})) as unknown as typeof fetch;
+    renderDialog();
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Previous runs (loading)' })).not.toBeNull(),
+    );
+    expect(screen.queryByRole('button', { name: 'Previous runs (0)' })).toEqual(null);
   });
 });

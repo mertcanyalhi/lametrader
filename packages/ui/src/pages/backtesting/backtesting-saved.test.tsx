@@ -198,6 +198,7 @@ describe('BacktestingPage saved backtests', () => {
     renderPage();
     await screen.findByRole('button', { name: 'Alpha' });
 
+    await user.click(await screen.findByRole('button', { name: 'Previous runs (1)' }));
     await user.click(await screen.findByRole('button', { name: 'Saved BTC run' }));
 
     // The chart fills from the candle store and the persisted trades/events.
@@ -228,18 +229,21 @@ describe('BacktestingPage saved backtests', () => {
     });
   });
 
-  it('unlocks the pickers and returns to the saved list when the loaded backtest is closed', async () => {
+  it('unlocks the pickers and re-enables the previous-runs trigger when the loaded backtest is closed', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole('button', { name: 'Alpha' });
 
+    await user.click(await screen.findByRole('button', { name: 'Previous runs (1)' }));
     await user.click(await screen.findByRole('button', { name: 'Saved BTC run' }));
     await user.click(await screen.findByRole('button', { name: 'Close' }));
 
     const bar = screen.getByRole('group', { name: 'Backtesting actions' });
     expect({
       symbolUnlocked: !within(bar).getByRole('button', { name: BTC.id }).hasAttribute('disabled'),
-      backToList: screen.getByRole('button', { name: 'Saved BTC run' }) !== null,
-    }).toEqual({ symbolUnlocked: true, backToList: true });
+      previousRunsEnabled: !within(bar)
+        .getByRole('button', { name: 'Previous runs (1)' })
+        .hasAttribute('disabled'),
+    }).toEqual({ symbolUnlocked: true, previousRunsEnabled: true });
   });
 });

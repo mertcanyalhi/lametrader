@@ -33,7 +33,7 @@ import { SymbolPickerDialog } from '../chart/symbol-picker-dialog.js';
 import { ResultsTabs } from './results-tabs.js';
 import { RunForm } from './run-form.js';
 import { stateOverlaysFromEvents } from './run-state-overlays.js';
-import { SavedBacktestsList } from './saved-backtests-list.js';
+import { PreviousRunsDialog } from './saved-backtests-list.js';
 import { StrategyManager } from './strategy-manager.js';
 import { buildTradeMarkers } from './trade-markers.js';
 
@@ -156,6 +156,7 @@ function BacktestingLayout({
                 range={null}
                 loadOlder={noop}
                 hasMore={false}
+                follow
                 eventMarkers={tradeMarkers}
                 stateOverlays={runStateOverlays}
               />
@@ -179,7 +180,6 @@ function BacktestingLayout({
               setActiveRun({ id, reattach: false });
             }}
             onDismiss={() => setActiveRun(null)}
-            onLoad={loadBacktest}
             onCloseLoaded={() => setLoaded(null)}
           />
         </section>
@@ -208,6 +208,7 @@ function BacktestingLayout({
             setRange(next.range);
           }}
         />
+        <PreviousRunsDialog onLoad={loadBacktest} disabled={locked} />
       </Flex>
     </div>
   );
@@ -219,8 +220,9 @@ function noop(): void {}
 /**
  * The right ⅓ region across the page's three states: **loaded** (a saved
  * backtest's finished-run view with a Close control), **running** (progress +
- * cancel over the results), and **idle** (the strategy manager, the run form,
- * and the saved-backtests list).
+ * cancel over the results), and **idle** (the strategy manager and the run
+ * form). The saved-backtests list now lives in the bottom bar's "Previous runs"
+ * modal ({@link PreviousRunsDialog}), not inline here.
  *
  * The results tabs (Summary / Trades / Daily P&L) render from the unified `view`
  * — the live run while it streams, or the reloaded backtest once one is loaded.
@@ -236,7 +238,6 @@ function BacktestPanel({
   loaded,
   onStarted,
   onDismiss,
-  onLoad,
   onCloseLoaded,
 }: {
   symbolId: string;
@@ -249,7 +250,6 @@ function BacktestPanel({
   loaded: Backtest | null;
   onStarted: (backtestId: string) => void;
   onDismiss: () => void;
-  onLoad: (backtest: Backtest) => void;
   onCloseLoaded: () => void;
 }): ReactNode {
   if (loaded !== null) {
@@ -306,14 +306,6 @@ function BacktestPanel({
           )}
         </section>
         {view ? <ResultsSection view={view} /> : null}
-        {idle ? (
-          <section aria-label="Saved backtests">
-            <Heading size="3" mb="2">
-              Saved backtests
-            </Heading>
-            <SavedBacktestsList onLoad={onLoad} />
-          </section>
-        ) : null}
       </Flex>
     </Card>
   );

@@ -1,15 +1,17 @@
 import type { Backtest } from '@lametrader/core';
 import {
   AlertDialog,
+  Badge,
   Button,
   Dialog,
   Flex,
   IconButton,
+  Spinner,
   Text,
   TextField,
   Tooltip,
 } from '@radix-ui/themes';
-import { Pencil, Trash2 } from 'lucide-react';
+import { History, Pencil, Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -146,6 +148,69 @@ export function SavedBacktestsList({
         </AlertDialog.Content>
       </AlertDialog.Root>
     </Flex>
+  );
+}
+
+/**
+ * The backtesting bottom-bar "Previous runs" trigger + modal — mirrors the chart
+ * page's count-badge dialogs (States / Rules).
+ *
+ * A soft button labelled with the saved-backtests count opens a modal hosting
+ * the {@link SavedBacktestsList}. The count reuses {@link useCompletedBacktests}
+ * — the same query the list runs, so TanStack Query dedupes the fetch — and
+ * shows a {@link Spinner} while the query is pending so the badge never flashes
+ * a misleading `0` (matching the chart badges' loading precedent).
+ *
+ * @param onLoad - forwarded to the list; also closes the modal so the loaded
+ *   backtest takes over the page.
+ * @param disabled - disables the trigger while the page is locked (a run active
+ *   or a backtest already loaded), matching the sibling pickers.
+ */
+export function PreviousRunsDialog({
+  onLoad,
+  disabled = false,
+}: {
+  onLoad: (backtest: Backtest) => void;
+  disabled?: boolean;
+}): ReactNode {
+  const query = useCompletedBacktests();
+  const [open, setOpen] = useState(false);
+  const count = query.data?.length ?? 0;
+
+  return (
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <Dialog.Trigger>
+        <Button
+          variant="soft"
+          color="gray"
+          className="min-w-32 justify-center"
+          disabled={disabled}
+          aria-label={query.isPending ? 'Previous runs (loading)' : `Previous runs (${count})`}
+        >
+          <History size={14} aria-hidden="true" />
+          Previous runs
+          <Badge variant="soft" color="gray" radius="full">
+            {query.isPending ? <Spinner size="1" /> : count}
+          </Badge>
+        </Button>
+      </Dialog.Trigger>
+      <Dialog.Content maxWidth="640px">
+        <Dialog.Title>Previous runs</Dialog.Title>
+        <SavedBacktestsList
+          onLoad={(backtest) => {
+            setOpen(false);
+            onLoad(backtest);
+          }}
+        />
+        <Flex gap="3" mt="4" justify="end">
+          <Dialog.Close>
+            <Button variant="soft" color="gray">
+              Close
+            </Button>
+          </Dialog.Close>
+        </Flex>
+      </Dialog.Content>
+    </Dialog.Root>
   );
 }
 
