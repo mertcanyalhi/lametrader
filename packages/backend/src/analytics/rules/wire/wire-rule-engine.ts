@@ -23,6 +23,7 @@ import { TriggerDispatcher } from '../dispatch/dispatcher.js';
 import type { OncePerBarLatchStore } from '../dispatch/once-per-bar-latch.types.js';
 import { getLogger } from '../engine-log.js';
 import { buildBarSeriesPagers, buildEvaluationContext } from '../evaluation-context.js';
+import { createIndicatorComputeCache } from '../indicator-compute-cache.js';
 import type { IndicatorSeriesStore } from '../indicator-series-store.js';
 import { ActionRunner } from '../orchestrator/action-runner.js';
 import { RuleOrchestrator } from '../orchestrator/orchestrator.js';
@@ -108,7 +109,7 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
   const dispatcher = new TriggerDispatcher({
     rules: deps.rules,
     latchStore: deps.oncePerBarLatch,
-    buildContext: async (event, firingSymbolId, profileId) => {
+    buildContext: async (event, firingSymbolId, profileId, computeCache) => {
       // Cascade events (`SymbolStateChanged` / `GlobalStateChanged`) already
       // carry the slot's `prev` value on their payload — thread it through so
       // `ChangesTo` / `ChangesFrom` see the real prior value instead of `null`
@@ -141,6 +142,11 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
         profileId,
         candleRepository: deps.candleRepository,
         indicatorStore: deps.indicatorStore,
+        // The per-observation compute memo the serializer created for this batch
+        // (undefined on paths that don't thread one) — so a shared indicator
+        // operand read by every trigger event of this observation computes once
+        // instead of once per event (#548).
+        computeCache,
         // Bound the lazy `IndicatorRef` view to `time < event.ts + 1` — the same
         // exclusive upper bound the bar pagers bake in (`upperTs + 1`), so a
         // candle stored after this observation can't become the indicator's
@@ -172,9 +178,18 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
   // chain (no symbol).
   const serializer = createPerSymbolSerializer<EventBatch>(async (batch) => {
     batch.record();
+    // One fresh indicator-compute memo per observation (per batch): every
+    // trigger event this batch fans out shares a single `IndicatorService.compute`
+    // per `(symbolId, indicatorKey, inputs, period, window)`, instead of
+    // recomputing byte-identical values once per event (#548). A fresh object
+    // per batch is required — `createPerSymbolSerializer` runs different symbols'
+    // batches concurrently on separate chains, so a shared, cleared-between-
+    // batches instance would race and leak across symbols. The memo's advancing
+    // window keys the next bar's reads separately, so nothing leaks across bars.
+    const computeCache = createIndicatorComputeCache();
     for (const event of batch.events) {
       try {
-        await orchestrator.process(event);
+        await orchestrator.process(event, computeCache);
       } catch (error) {
         // Keep the per-symbol chain alive; the orchestrator already handles
         // CycleOverflow by recording an event and returning — bubbling here

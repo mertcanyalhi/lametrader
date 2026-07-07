@@ -14,18 +14,28 @@ import {
   StateOperator,
   StateScope,
   StateValueType,
+  SymbolType,
+  type Trigger,
   TriggerKind,
 } from '@lametrader/core';
 import { InMemoryEventLog } from '../../../common/persistence/in-memory-event-log.js';
 import { InMemoryNotifier } from '../../../common/services/in-memory-notifier.js';
 import { InMemoryCandleRepository } from '../../../market/persistence/in-memory-candle.repository.js';
 import { InMemoryWatchlistRepository } from '../../../market/persistence/in-memory-watchlist.repository.js';
+import { IndicatorService } from '../../indicators/indicator.service.js';
+import { IndicatorRegistry } from '../../indicators/indicator-registry.js';
+import { movingAverage } from '../../indicators/sma.js';
 import { InMemoryStateRepository } from '../../persistence/in-memory-state.repository.js';
 import { InMemoryOncePerBarLatchStore } from '../dispatch/in-memory-once-per-bar-latch.store.js';
 import { _resetLogRoot, _setLogLevel } from '../engine-log.js';
 import { InMemoryRuleRepository } from '../in-memory-rule.repository.js';
 import { IndicatorSeriesStore } from '../indicator-series-store.js';
 import { wireRuleEngine } from './wire-rule-engine.js';
+
+/** Registered SMA instance id every #548 memo test references. */
+const SMA_INSTANCE_ID = 'sma-3-inst';
+/** The SMA inputs — one shared operand identity across every fanned event. */
+const SMA_INPUTS = { length: 3, source: 'close' } as const;
 
 describe('wireRuleEngine', () => {
   let rules: InMemoryRuleRepository;
@@ -921,5 +931,200 @@ describe('wireRuleEngine', () => {
     // Sanity: the engine is usable and the mirror is empty.
     expect(wired.lookups.getSymbolState('profile-1', 'AAPL', 'anything')).toBeNull();
     expect(wired.lookups.getGlobalState('profile-1', 'anything')).toBeNull();
+  });
+
+  /**
+   * Build one 1m crypto candle at `time` whose OHLC are all `close` — the SMA
+   * memo tests only care about the close series.
+   */
+  const smaCandle = (time: number, close: number) => ({
+    type: SymbolType.Crypto,
+    time,
+    open: close,
+    high: close,
+    low: close,
+    close,
+    volume: 1,
+    quoteVolume: close,
+    trades: 1,
+  });
+
+  /**
+   * A `BTC` rule whose condition compares the shared SMA operand against 0 on
+   * the 1m interval, so evaluating it always reads the indicator operand (and
+   * therefore drives one `IndicatorService.compute`).
+   */
+  const indicatorRule = (id: string, order: number, trigger: Trigger): Rule => ({
+    id,
+    profileId: 'profile-1',
+    name: id,
+    scope: { kind: RuleScopeKind.Symbol, symbolId: 'BTC' },
+    condition: {
+      kind: ConditionNodeKind.Leaf,
+      leaf: {
+        family: LeafConditionFamily.Comparison,
+        operator: ComparisonOperator.Gt,
+        left: {
+          kind: OperandKind.IndicatorRef,
+          instanceId: SMA_INSTANCE_ID,
+          stateKey: 'value',
+          valueType: StateValueType.Number,
+        },
+        right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 0 } },
+        interval: Period.OneMinute,
+      },
+    },
+    trigger,
+    expiration: null,
+    actions: [],
+    enabled: true,
+    order,
+    createdAt: 0,
+    updatedAt: 0,
+  });
+
+  /**
+   * Wire a live engine over a real SMA(3) instance for `BTC`, seeding `closes`
+   * as 1m candles and recording every `IndicatorService.compute` call so a test
+   * can assert how many times the shared operand was computed.
+   */
+  const wireIndicatorEngine = async (
+    closes: ReadonlyArray<[number, number]>,
+  ): Promise<{
+    wired: Awaited<ReturnType<typeof wireRuleEngine>>;
+    computeCalls: unknown[][];
+  }> => {
+    const repo = new InMemoryCandleRepository();
+    await repo.save(
+      'BTC',
+      Period.OneMinute,
+      closes.map(([time, close]) => smaCandle(time, close)),
+    );
+    const cryptoWatchlist = new InMemoryWatchlistRepository([
+      {
+        id: 'BTC',
+        type: SymbolType.Crypto,
+        description: 'BTC',
+        exchange: 'Binance',
+        periods: [Period.OneMinute],
+      },
+    ]);
+    const registry = new IndicatorRegistry();
+    registry.register(movingAverage);
+    const realService = new IndicatorService(registry, cryptoWatchlist, repo);
+    const computeCalls: unknown[][] = [];
+    // Record every compute call while delegating to the real service — the
+    // `Object.create` + method-override idiom this file already uses for the
+    // corrupt-repository regression test.
+    const recordingService: IndicatorService = Object.create(realService);
+    recordingService.compute = (...args: Parameters<IndicatorService['compute']>) => {
+      computeCalls.push(args);
+      return realService.compute(...args);
+    };
+    const store = new IndicatorSeriesStore(repo, recordingService);
+    store.register({ instanceId: SMA_INSTANCE_ID, indicatorKey: 'sma', inputs: { ...SMA_INPUTS } });
+
+    const wired = await wireRuleEngine({
+      rules,
+      oncePerBarLatch: new InMemoryOncePerBarLatchStore(),
+      state,
+      watchlist: cryptoWatchlist,
+      eventLog,
+      notifier,
+      candleRepository: repo,
+      indicatorStore: store,
+    });
+    return { wired, computeCalls };
+  };
+
+  it('computes a shared indicator operand once for a candle that fans into BarOpened, BarClosed, and a Tick (regression #548)', async () => {
+    // Three rules reference the same SMA operand, one per fanned event kind:
+    // BarOpened, BarClosed, and the per-poll Tick. Each evaluation reads the
+    // operand; the per-observation memo collapses all three to one compute.
+    await rules.save(
+      indicatorRule('r-open', 1, { kind: TriggerKind.OncePerBarOpen, period: Period.OneMinute }),
+    );
+    await rules.save(
+      indicatorRule('r-close', 2, { kind: TriggerKind.OncePerBarClose, period: Period.OneMinute }),
+    );
+    await rules.save(indicatorRule('r-tick', 3, { kind: TriggerKind.EveryTime }));
+
+    const { wired, computeCalls } = await wireIndicatorEngine([
+      [60_000, 10],
+      [120_000, 20],
+      [180_000, 30],
+    ]);
+
+    wired.barBridge.handleCandle({
+      id: 'BTC',
+      period: Period.OneMinute,
+      candle: { time: 180_000, open: 30, high: 30, low: 30, close: 30, volume: 1 },
+      final: true,
+    });
+    await wired.drain();
+
+    expect(computeCalls).toEqual([
+      [
+        'BTC',
+        'sma',
+        { length: 3, source: 'close' },
+        Period.OneMinute,
+        { from: 60_000, to: 180_001 },
+      ],
+    ]);
+  });
+
+  it('recomputes the shared indicator operand on the next bar because the memo is scoped to one observation (regression #548)', async () => {
+    // The same three fanned rules as above, fed two consecutive bars. Within a
+    // bar the memo collapses BarOpened + BarClosed + Tick to one compute; across
+    // bars the first memo dies with its batch and the wider window keys a fresh
+    // compute — so exactly one compute per bar, each over its own window, and no
+    // stale value leaks across bars.
+    await rules.save(
+      indicatorRule('r-open', 1, { kind: TriggerKind.OncePerBarOpen, period: Period.OneMinute }),
+    );
+    await rules.save(
+      indicatorRule('r-close', 2, { kind: TriggerKind.OncePerBarClose, period: Period.OneMinute }),
+    );
+    await rules.save(indicatorRule('r-tick', 3, { kind: TriggerKind.EveryTime }));
+
+    const { wired, computeCalls } = await wireIndicatorEngine([
+      [60_000, 10],
+      [120_000, 20],
+      [180_000, 30],
+      [240_000, 40],
+    ]);
+
+    wired.barBridge.handleCandle({
+      id: 'BTC',
+      period: Period.OneMinute,
+      candle: { time: 180_000, open: 30, high: 30, low: 30, close: 30, volume: 1 },
+      final: true,
+    });
+    await wired.drain();
+    wired.barBridge.handleCandle({
+      id: 'BTC',
+      period: Period.OneMinute,
+      candle: { time: 240_000, open: 40, high: 40, low: 40, close: 40, volume: 1 },
+      final: true,
+    });
+    await wired.drain();
+
+    expect(computeCalls).toEqual([
+      [
+        'BTC',
+        'sma',
+        { length: 3, source: 'close' },
+        Period.OneMinute,
+        { from: 60_000, to: 180_001 },
+      ],
+      [
+        'BTC',
+        'sma',
+        { length: 3, source: 'close' },
+        Period.OneMinute,
+        { from: 60_000, to: 240_001 },
+      ],
+    ]);
   });
 });

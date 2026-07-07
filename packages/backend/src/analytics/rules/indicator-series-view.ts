@@ -7,6 +7,7 @@ import {
 } from '@lametrader/core';
 import type { IndicatorService } from '../indicators/indicator.service.js';
 import { getLogger } from './engine-log.js';
+import type { IndicatorComputeCache } from './indicator-compute-cache.types.js';
 import type { SeriesPoint, SeriesView } from './series.types.js';
 
 /**
@@ -66,6 +67,11 @@ export class PagedIndicatorSeriesView implements SeriesView {
    * @param before - exclusive upper bound: only candles with `time < before`
    *   are ever read, so a candle stored after the observation under evaluation
    *   (a later bar, or leftover cross-run data) never becomes the newest point.
+   * @param computeCache - optional per-observation memo over
+   *   `IndicatorService.compute`: when present, a page's compute over the same
+   *   `(symbolId, indicatorKey, inputs, period, window)` runs once across every
+   *   trigger event of one observation instead of once per event (#548). Absent
+   *   (the default) reads go straight to the service.
    * @param pageSize - candles paged per step; defaults to
    *   {@link INDICATOR_SERIES_PAGE_SIZE}.
    */
@@ -78,6 +84,7 @@ export class PagedIndicatorSeriesView implements SeriesView {
     private readonly inputs: Record<string, unknown>,
     private readonly stateKey: string,
     private readonly before: number,
+    private readonly computeCache?: IndicatorComputeCache,
     private readonly pageSize: number = INDICATOR_SERIES_PAGE_SIZE,
   ) {}
 
@@ -104,13 +111,7 @@ export class PagedIndicatorSeriesView implements SeriesView {
 
       let result: IndicatorComputeResult;
       try {
-        result = await this.indicators.compute(
-          this.symbolId,
-          this.indicatorKey,
-          this.inputs,
-          this.period,
-          { from: oldest.time, to: newest.time + 1 },
-        );
+        result = await this.computePage(oldest.time, newest.time + 1);
       } catch (error) {
         log.debug(
           {
@@ -141,6 +142,35 @@ export class PagedIndicatorSeriesView implements SeriesView {
       if (page.length < this.pageSize) return;
       cursor = oldest.time;
     }
+  }
+
+  /**
+   * Compute one candle page's indicator rows over `[from, to)`.
+   *
+   * Routes through the per-observation {@link IndicatorComputeCache} when one was
+   * threaded in, so every trigger event of one observation that reads this
+   * operand shares a single `IndicatorService.compute` over the identical
+   * `(symbolId, indicatorKey, inputs, period, from, to)` identity (#548); without
+   * a cache the read goes straight to the service (the earlier behaviour).
+   */
+  private computePage(from: number, to: number): Promise<IndicatorComputeResult> {
+    const load = (): Promise<IndicatorComputeResult> =>
+      this.indicators.compute(this.symbolId, this.indicatorKey, this.inputs, this.period, {
+        from,
+        to,
+      });
+    if (this.computeCache === undefined) return load();
+    return this.computeCache.compute(
+      {
+        symbolId: this.symbolId,
+        indicatorKey: this.indicatorKey,
+        inputs: this.inputs,
+        period: this.period,
+        from,
+        to,
+      },
+      load,
+    );
   }
 
   /**

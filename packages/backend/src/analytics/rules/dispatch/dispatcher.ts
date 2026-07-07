@@ -16,6 +16,7 @@ import {
 
 import { getLogger } from '../engine-log.js';
 import type { EvaluationContext } from '../evaluation-context.types.js';
+import type { IndicatorComputeCache } from '../indicator-compute-cache.types.js';
 import { evaluateCondition } from './evaluate-condition.js';
 import type { OncePerBarLatchStore } from './once-per-bar-latch.types.js';
 import { referencesSlot } from './references-slot.js';
@@ -77,11 +78,17 @@ export interface TriggerDispatcherDeps {
    * pre-warms a real multi-bar OHLCV series from the async candle repository
    * before returning it (#499), while unit fakes stay synchronous. The
    * dispatcher awaits either shape.
+   *
+   * `computeCache` is the optional per-observation indicator-compute memo the
+   * orchestrator threads through from the serializer batch; the wire-up hands it
+   * to {@link buildEvaluationContext} so a shared operand resolved by several of
+   * this observation's trigger events computes once (#548).
    */
   buildContext: (
     event: RuleEvent,
     firingSymbolId: string,
     profileId: string,
+    computeCache?: IndicatorComputeCache,
   ) => EvaluationContext | Promise<EvaluationContext>;
 }
 
@@ -102,6 +109,12 @@ export interface DispatchOptions {
    * most one query. Omit it and reads go straight to the repository.
    */
   ruleListCache?: RuleListSource;
+  /**
+   * Per-observation indicator-compute memo, threaded into every `buildContext`
+   * call so all candidates of this event share one `IndicatorService.compute`
+   * per operand window (#548). Omit it and each context computes independently.
+   */
+  computeCache?: IndicatorComputeCache;
 }
 
 /**
@@ -202,7 +215,12 @@ export class TriggerDispatcher {
 
     for (const { rule, firingSymbolId } of candidates) {
       candidateIds.push(rule.id);
-      const ctx = await this.deps.buildContext(event, firingSymbolId, rule.profileId);
+      const ctx = await this.deps.buildContext(
+        event,
+        firingSymbolId,
+        rule.profileId,
+        options.computeCache,
+      );
       if (!(await evaluateCondition(rule.condition, ctx, rule.id))) {
         droppedCandidates.push({ ruleId: rule.id, reason: 'condition-false' });
         continue;

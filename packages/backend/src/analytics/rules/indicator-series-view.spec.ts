@@ -150,6 +150,7 @@ describe('PagedIndicatorSeriesView', () => {
       { length: 1, source: 'close' },
       'value',
       NO_UPPER_BOUND,
+      undefined, // no per-observation compute cache
       2, // page size
     );
     const walked = await collect(view.backwardWalk());

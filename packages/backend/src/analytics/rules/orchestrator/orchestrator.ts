@@ -15,6 +15,7 @@ import { StateCascadeBridge } from '../bridges/state-cascade-bridge.js';
 import type { TriggerDispatcher } from '../dispatch/dispatcher.js';
 import { TickRuleCache } from '../dispatch/tick-rule-cache.js';
 import { getLogger } from '../engine-log.js';
+import type { IndicatorComputeCache } from '../indicator-compute-cache.types.js';
 import type { ActionRunner } from './action-runner.js';
 import { CycleGuard, CycleOverflowError } from './cycle-guard.js';
 import { RuleOutcome } from './orchestrator-trace.types.js';
@@ -96,8 +97,17 @@ export class RuleOrchestrator {
    * Drive one external event through the engine; returns when the tick's
    * queue (including any cascaded state events) is fully drained or the
    * cycle limit is breached.
+   *
+   * `computeCache` is the optional per-observation indicator-compute memo the
+   * wire-up creates fresh per event batch and threads down to the evaluation
+   * context, so a shared operand read across this observation's trigger events
+   * (and its in-tick cascades) computes once, not once per event (#548). Omit it
+   * and every context computes independently.
    */
-  async process(initialEvent: EvaluationTriggerEvent): Promise<void> {
+  async process(
+    initialEvent: EvaluationTriggerEvent,
+    computeCache?: IndicatorComputeCache,
+  ): Promise<void> {
     const guard = new CycleGuard(this.cycleLimit);
     // One rule-list cache spans the whole tick (initial event + cascades), so
     // repeated (symbolId, profileId) lookups hit it instead of re-querying.
@@ -134,7 +144,7 @@ export class RuleOrchestrator {
           },
           'event_received',
         );
-        await this.processOneEvent(next.event, ruleListCache);
+        await this.processOneEvent(next.event, ruleListCache, computeCache);
         for (const c of cascaded.splice(0)) {
           queue.push({ event: c, cascadeDepth: next.cascadeDepth + 1 });
         }
@@ -150,9 +160,14 @@ export class RuleOrchestrator {
   private async processOneEvent(
     event: EvaluationTriggerEvent,
     ruleListCache: TickRuleCache,
+    computeCache: IndicatorComputeCache | undefined,
   ): Promise<void> {
     const watchedSymbolIds = await this.watchedSymbolIds(event);
-    const fires = await this.deps.dispatcher.dispatch(event, { watchedSymbolIds, ruleListCache });
+    const fires = await this.deps.dispatcher.dispatch(event, {
+      watchedSymbolIds,
+      ruleListCache,
+      computeCache,
+    });
     for (const fire of fires) {
       await this.runOneFire(fire, event);
     }
