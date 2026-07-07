@@ -11,12 +11,10 @@ import {
   Card,
   Flex,
   Heading,
-  IconButton,
   Popover,
   Progress,
   Switch,
   Text,
-  Tooltip,
 } from '@radix-ui/themes';
 import { useQueryClient } from '@tanstack/react-query';
 import { Settings } from 'lucide-react';
@@ -98,10 +96,11 @@ function BacktestingLayout({
   const [activeRun, setActiveRun] = useState<ActiveBacktest | null>(null);
   const [loaded, setLoaded] = useState<Backtest | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  // Trade markers clutter the chart, so they stay hidden until the trader opts
-  // in through the chart-settings cog. Lazy: session-scoped state — the ceiling
-  // is "resets on reload"; a lib/* preference module would persist it if asked.
-  const [showMarkers, setShowMarkers] = useState(false);
+  // Rule-event overlays clutter the chart, so they stay hidden until the trader
+  // opts in through the bottom-bar chart settings. Trade (Buy/Sell) markers, by
+  // contrast, show by default. Lazy: session-scoped state — the ceiling is
+  // "resets on reload"; a lib/* preference module would persist it if asked.
+  const [showRuleEvents, setShowRuleEvents] = useState(false);
   const queryClient = useQueryClient();
 
   const runningQuery = useRunningBacktest();
@@ -166,22 +165,17 @@ function BacktestingLayout({
         <section aria-label="Backtest chart" className="min-h-0 lg:col-span-2">
           {view && selected ? (
             <Card className="h-full">
-              <div className="relative h-full">
-                <div className="absolute right-2 top-2 z-10">
-                  <ChartSettings showMarkers={showMarkers} onShowMarkersChange={setShowMarkers} />
-                </div>
-                <CandleChart
-                  candles={view.chartCandles}
-                  symbol={selected}
-                  period={chartPeriod}
-                  range={null}
-                  loadOlder={noop}
-                  hasMore={false}
-                  follow
-                  eventMarkers={showMarkers ? tradeMarkers : []}
-                  stateOverlays={runStateOverlays}
-                />
-              </div>
+              <CandleChart
+                candles={view.chartCandles}
+                symbol={selected}
+                period={chartPeriod}
+                range={null}
+                loadOlder={noop}
+                hasMore={false}
+                follow
+                eventMarkers={tradeMarkers}
+                stateOverlays={showRuleEvents ? runStateOverlays : []}
+              />
             </Card>
           ) : (
             <ChartPlaceholder />
@@ -231,6 +225,7 @@ function BacktestingLayout({
           }}
         />
         <PreviousRunsDialog onLoad={loadBacktest} disabled={locked} />
+        <ChartSettings showRuleEvents={showRuleEvents} onShowRuleEventsChange={setShowRuleEvents} />
       </Flex>
     </div>
   );
@@ -240,31 +235,35 @@ function BacktestingLayout({
 function noop(): void {}
 
 /**
- * The chart's top-right settings cog: a {@link Popover} holding the per-chart
- * display toggles. For now the only knob is "Show trade markers", which gates
- * the entry/exit annotations on the backtesting chart (default off).
+ * The bottom bar's chart-settings control: a text {@link Button} (cog icon +
+ * "Chart settings") opening a {@link Popover} of per-chart display toggles.
+ *
+ * For now the only knob is "Show rule events", which gates the run's recorded
+ * rule-event overlays on the backtesting chart (default off). Trade (Buy/Sell)
+ * markers are not gated here — they show by default. Living in the bottom bar
+ * (rather than floating over the chart) keeps the control clear of the chart's
+ * right-hand price scale.
  */
 function ChartSettings({
-  showMarkers,
-  onShowMarkersChange,
+  showRuleEvents,
+  onShowRuleEventsChange,
 }: {
-  showMarkers: boolean;
-  onShowMarkersChange: (next: boolean) => void;
+  showRuleEvents: boolean;
+  onShowRuleEventsChange: (next: boolean) => void;
 }): ReactNode {
   return (
     <Popover.Root>
-      <Tooltip content="Chart settings">
-        <Popover.Trigger>
-          <IconButton type="button" variant="soft" color="gray" aria-label="Chart settings">
-            <Settings size={16} />
-          </IconButton>
-        </Popover.Trigger>
-      </Tooltip>
+      <Popover.Trigger>
+        <Button type="button" variant="soft" color="gray" ml="auto">
+          <Settings size={16} />
+          Chart settings
+        </Button>
+      </Popover.Trigger>
       <Popover.Content size="1">
         <Text as="label" size="2">
           <Flex align="center" gap="2">
-            <Switch checked={showMarkers} onCheckedChange={onShowMarkersChange} />
-            Show trade markers
+            <Switch checked={showRuleEvents} onCheckedChange={onShowRuleEventsChange} />
+            Show rule events
           </Flex>
         </Text>
       </Popover.Content>

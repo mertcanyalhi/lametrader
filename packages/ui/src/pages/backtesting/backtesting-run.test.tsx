@@ -267,7 +267,7 @@ describe('BacktestingPage run flow', () => {
     expect(screen.getByTestId('backtest-chart')).toHaveTextContent('1 candles');
   });
 
-  it('draws trade markers and run-event state overlays on the chart from the frames', async () => {
+  it('draws trade markers on the chart by default from the frames, without any toggle', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole('button', { name: 'Alpha' });
@@ -307,17 +307,48 @@ describe('BacktestingPage run flow', () => {
       openPosition: undefined,
     });
 
-    // Markers are gated behind the chart-settings toggle (default off); enable
-    // them so the frame's trades draw, while overlays render ungated.
-    await user.click(screen.getByRole('button', { name: 'Chart settings' }));
-    await user.click(await screen.findByRole('switch', { name: 'Show trade markers' }));
-
+    // Trade markers show by default; rule-event overlays are gated off.
     const chart = screen.getByTestId('backtest-chart');
-    await waitFor(() => expect(chart.getAttribute('data-markers')).toEqual('2'));
     expect({
       markers: chart.getAttribute('data-markers'),
       overlays: chart.getAttribute('data-overlays'),
-    }).toEqual({ markers: '2', overlays: '1' });
+    }).toEqual({ markers: '2', overlays: '0' });
+  });
+
+  it('draws run-event state overlays on the chart after toggling Show rule events on', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: 'Alpha' });
+
+    await selectStrategyAndRun(user);
+    push(snapshot(0));
+    push({
+      kind: BacktestFrameKind.Delta,
+      status: BacktestStatus.Running,
+      progress: { elapsedDays: 1, totalDays: 2 },
+      candles: [],
+      events: [
+        {
+          type: RuleEventType.StateSet,
+          ts: 2_000,
+          ruleId: 'r-1',
+          symbolId: BTC.id,
+          scope: StateScope.Symbol,
+          key: 'go_long',
+          value: { type: StateValueType.Bool, value: true },
+        },
+      ],
+      trades: [],
+      summary: EMPTY_SUMMARY,
+      openPosition: undefined,
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Chart settings' }));
+    await user.click(await screen.findByRole('switch', { name: 'Show rule events' }));
+
+    const chart = screen.getByTestId('backtest-chart');
+    await waitFor(() => expect(chart.getAttribute('data-overlays')).toEqual('1'));
+    expect(chart.getAttribute('data-overlays')).toEqual('1');
   });
 
   it('reports completion on the final frame', async () => {
