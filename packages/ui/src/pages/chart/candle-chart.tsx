@@ -41,6 +41,7 @@ import {
   DEFAULT_VISIBLE_BARS,
   getStoredViewport,
   liveLogicalRange,
+  rollingWindowBars,
   setStoredViewport,
 } from '../../lib/chart-viewport.js';
 import { priceDecimals } from '../../lib/format.js';
@@ -120,6 +121,10 @@ function toVolume(candle: Candle, colors: ChartColors): HistogramData {
  * the visible window stays fed. Range is a viewport hint — scroll-back beyond
  * the preset keeps working through the existing paging mechanism.
  *
+ * When `follow` is set (backtest replay), each candle growth re-frames the visible
+ * scale to a rolling fixed-width window on the newest bar instead of restoring or
+ * persisting the shared viewport — see the `follow` prop.
+ *
  * @param candles - the series to render, ascending by time.
  * @param symbol - the enriched symbol the chart is rendering (drives the overlay).
  * @param period - the current charted period (the middle of the summary line).
@@ -139,6 +144,7 @@ export function CandleChart({
   range,
   loadOlder,
   hasMore,
+  follow = false,
   overlays = [],
   stateOverlays = [],
   legendOverlays = [],
@@ -152,6 +158,14 @@ export function CandleChart({
   range: ChartRange | null;
   loadOlder: () => void;
   hasMore: boolean;
+  /**
+   * Backtest-replay rolling window: when set, each candle growth re-frames the
+   * visible scale to a fixed-width window ending on the newest bar (default
+   * `ROLLING_WINDOW_BARS`, or the user's current width if wider), instead of
+   * restoring/persisting the shared `chart-viewport`. The `/chart` page leaves
+   * this off and keeps its restore/capture behaviour.
+   */
+  follow?: boolean;
   overlays?: ReadonlyArray<IndicatorOverlay>;
   /**
    * One row per state key currently selected on the chart's States panel —
@@ -493,7 +507,9 @@ export function CandleChart({
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart || candles.length === 0 || settledRef.current) return;
-    if (range !== null) return;
+    // Follow mode owns the viewport (rolling window below) and must not touch the
+    // shared persisted window — skip restore/capture entirely.
+    if (range !== null || follow) return;
     const stored = getStoredViewport();
     if (!stored) {
       // Nothing to restore — accept the default view and start capturing.
@@ -525,7 +541,18 @@ export function CandleChart({
         captureEnabledRef.current = true;
       });
     });
-  }, [range, candles]);
+  }, [range, candles, follow]);
+
+  // Backtest replay: on each candle growth, keep a rolling fixed-width window on
+  // the newest bar (default 20, or the user's current width if they've widened
+  // it) so the chart follows the replay instead of zooming out to fit everything.
+  useEffect(() => {
+    if (!follow) return;
+    const chart = chartRef.current;
+    if (!chart || candles.length === 0) return;
+    const bars = rollingWindowBars(chart.timeScale().getVisibleLogicalRange());
+    chart.timeScale().setVisibleLogicalRange(liveLogicalRange(candles.length, bars));
+  }, [candles, follow]);
 
   // Resolve the candle to inspect in the overlay: the one at the crosshair, or
   // the latest as a stable fallback when no hover is active. The live bar (when

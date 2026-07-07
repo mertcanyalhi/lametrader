@@ -9,6 +9,9 @@ const STORAGE_KEY = 'chart-viewport';
 /** Visible-bar count to assume when the chart can't report one (capture fallback). */
 export const DEFAULT_VISIBLE_BARS = 120;
 
+/** Default rolling-window width (bars) for backtest replay follow mode — "~20 candles". */
+export const ROLLING_WINDOW_BARS = 20;
+
 /**
  * The chart's persisted visible window. Two modes, because "show this exact date
  * range" and "follow the latest bar" need different restores:
@@ -56,6 +59,22 @@ export function captureViewport(args: {
  */
 export function liveLogicalRange(barCount: number, bars: number): { from: number; to: number } {
   return { from: Math.max(0, barCount - bars), to: barCount - 1 };
+}
+
+/**
+ * How many bars a replay follow-window should span this frame: the user's current
+ * visible width when they've widened past the default, otherwise {@link ROLLING_WINDOW_BARS}.
+ *
+ * The visible logical range spans *inclusive* bar indices, so its width in bars is
+ * `to - from + 1`; the `+1` cancels the `bars - 1` span {@link liveLogicalRange}
+ * produces, so re-feeding the read-back width doesn't drift the window narrower each
+ * frame. `null` (the chart can't report a range yet) falls back to the default.
+ *
+ * @param visible - the chart's current visible logical (bar-index) range, or `null`.
+ */
+export function rollingWindowBars(visible: { from: number; to: number } | null): number {
+  if (!visible) return ROLLING_WINDOW_BARS;
+  return Math.max(ROLLING_WINDOW_BARS, Math.round(visible.to - visible.from) + 1);
 }
 
 /** Whether a parsed value is a well-formed {@link ChartViewport}. */
