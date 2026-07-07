@@ -159,6 +159,17 @@ describe('SymbolRuleEventsDialog', () => {
     );
   });
 
+  it('renders a loading indicator instead of a 0 count while the count query is pending', async () => {
+    // The count request never resolves, so the query stays pending.
+    globalThis.fetch = vi.fn(() => new Promise<Response>(() => {})) as unknown as typeof fetch;
+    const { wrapper } = makeWrapper();
+    render(<SymbolRuleEventsDialog symbolId={SYMBOL} />, { wrapper });
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Events (loading)' })).not.toBeNull(),
+    );
+    expect(screen.queryByRole('button', { name: 'Events (0)' })).toEqual(null);
+  });
+
   it('renders the trigger badge as 0 when the symbol has no events', async () => {
     matchers.push({ includes: '/rule-events/count', body: () => ({ count: 0 }) });
     const { wrapper } = makeWrapper();

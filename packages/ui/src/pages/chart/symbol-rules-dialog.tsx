@@ -1,5 +1,5 @@
 import type { Rule } from '@lametrader/core';
-import { Badge, Button, Callout, Dialog, Flex, Skeleton, Text } from '@radix-ui/themes';
+import { Badge, Button, Callout, Dialog, Flex, Skeleton, Spinner, Text } from '@radix-ui/themes';
 import { ListChecks, Plus, TriangleAlert } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { makeDraftRule } from '../../lib/draft-rule.js';
@@ -87,12 +87,14 @@ function ScopedDialog({ profileId, symbolId }: { profileId: string; symbolId: st
             variant="soft"
             color="gray"
             className="min-w-32 justify-center"
-            aria-label={`Rules (${renderCount(rules.length)})`}
+            aria-label={
+              rulesQuery.isPending ? 'Rules (loading)' : `Rules (${renderCount(rules.length)})`
+            }
           >
             <ListChecks size={14} aria-hidden="true" />
             Rules
             <Badge variant="soft" color="gray" radius="full">
-              {renderCount(rules.length)}
+              {rulesQuery.isPending ? <Spinner size="1" /> : renderCount(rules.length)}
             </Badge>
           </Button>
         </Dialog.Trigger>

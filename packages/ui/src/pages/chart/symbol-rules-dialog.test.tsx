@@ -134,6 +134,38 @@ describe('SymbolRulesDialog', () => {
     expect(screen.queryByRole('columnheader', { name: 'Name' })).toEqual(null);
   });
 
+  it('renders a loading indicator instead of a 0 count while the rules query is pending', async () => {
+    globalThis.fetch = vi.fn(async (url: unknown) => {
+      const u = String(url);
+      if (u.includes('/profiles')) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 'profile-1',
+              name: 'Scalper',
+              description: '',
+              enabled: true,
+              scope: { type: 'All' },
+              createdAt: 1,
+              updatedAt: 1,
+              indicators: [],
+            },
+          ]),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      // The rules request never resolves, so the query stays pending.
+      return new Promise<Response>(() => {});
+    }) as unknown as typeof fetch;
+
+    render(<Harness />);
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Rules (loading)' })).not.toBeNull(),
+    );
+    expect(screen.queryByRole('button', { name: 'Rules (0)' })).toEqual(null);
+  });
+
   it('renders the count as 0 when the server returns no rules for the symbol', async () => {
     onRequest('/profiles', () => [
       {
