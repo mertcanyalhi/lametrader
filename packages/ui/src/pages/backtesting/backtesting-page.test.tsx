@@ -130,6 +130,21 @@ describe('BacktestingPage', () => {
     }).toEqual({ chartHasPlaceholder: true, panelPresent: true });
   });
 
+  it('drops the Setup and Run section headings while keeping the Strategy label in the panel', async () => {
+    onRequest('/symbols?enrich=true', () => [BTC]);
+    onRequest('/config', () => CONFIG);
+    onRequest('/profiles', () => [ALPHA]);
+
+    renderPage();
+
+    const panel = await screen.findByRole('region', { name: 'Backtest panel' });
+    expect({
+      setupHeading: within(panel).queryByRole('heading', { name: 'Setup' }) !== null,
+      runHeading: within(panel).queryByRole('heading', { name: 'Run' }) !== null,
+      strategyLabel: within(panel).queryByText('Strategy') !== null,
+    }).toEqual({ setupHeading: false, runHeading: false, strategyLabel: true });
+  });
+
   it('hosts the symbol, profile, and period pickers in the bottom action bar', async () => {
     onRequest('/symbols?enrich=true', () => [BTC]);
     onRequest('/config', () => CONFIG);

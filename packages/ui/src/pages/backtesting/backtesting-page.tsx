@@ -280,9 +280,6 @@ function BacktestPanel({
     <Card className="h-full">
       <Flex direction="column" gap="4" p="2">
         <section aria-label="Backtest setup">
-          <Heading size="3" mb="2">
-            Setup
-          </Heading>
           <StrategyManager
             symbolId={symbolId}
             selectedId={strategyId}
@@ -290,9 +287,6 @@ function BacktestPanel({
           />
         </section>
         <section aria-label="Backtest run">
-          <Heading size="3" mb="2">
-            Run
-          </Heading>
           {idle ? (
             <RunForm
               strategyId={strategyId}

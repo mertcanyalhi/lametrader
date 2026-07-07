@@ -143,7 +143,10 @@ export function RunForm({
           ) : null}
         </div>
 
-        <CollapsibleGroup title="Capital">
+        <div>
+          <Text as="div" size="2" weight="medium" mb="1">
+            Capital
+          </Text>
           <Field label="Initial capital" htmlFor="bt-initial-capital" error={errors.initialCapital}>
             <TextField.Root
               id="bt-initial-capital"
@@ -153,7 +156,7 @@ export function RunForm({
               {...register('initialCapital', { valueAsNumber: true })}
             />
           </Field>
-        </CollapsibleGroup>
+        </div>
 
         <CollapsibleGroup title="Commission">
           <CommissionRow
@@ -180,15 +183,15 @@ export function RunForm({
           />
         </CollapsibleGroup>
 
+        <Button type="submit" disabled={!canRun} loading={start.isPending}>
+          Run backtest
+        </Button>
+
         {!canRun ? (
           <Text size="1" color="gray">
             Select a strategy and a profile to run.
           </Text>
         ) : null}
-
-        <Button type="submit" disabled={!canRun} loading={start.isPending}>
-          Run backtest
-        </Button>
       </Flex>
     </form>
   );

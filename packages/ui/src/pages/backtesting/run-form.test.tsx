@@ -93,7 +93,7 @@ describe('RunForm', () => {
     return { onStarted };
   }
 
-  it('renders the Period picker and Run button with the option groups collapsed by default', () => {
+  it('renders the Period picker, always-visible Capital field, and Run button with the Commission group collapsed by default', () => {
     renderForm();
 
     expect({
@@ -102,7 +102,16 @@ describe('RunForm', () => {
       capital: screen.queryByLabelText('Initial capital') !== null,
       rate: screen.queryByLabelText('Commission rate') !== null,
       fixed: screen.queryByLabelText('Fixed commission') !== null,
-    }).toEqual({ period: true, run: true, capital: false, rate: false, fixed: false });
+    }).toEqual({ period: true, run: true, capital: true, rate: false, fixed: false });
+  });
+
+  it('shows the Capital title above the always-visible Initial capital field', () => {
+    renderForm();
+
+    expect({
+      title: screen.queryByText('Capital') !== null,
+      field: screen.queryByLabelText('Initial capital') !== null,
+    }).toEqual({ title: true, field: true });
   });
 
   it('reveals the commission rate and fixed inputs when the Commission group is opened', async () => {
@@ -117,20 +126,10 @@ describe('RunForm', () => {
     }).toEqual({ rate: true, fixed: true });
   });
 
-  it('reveals the initial capital input when the Capital group is opened', async () => {
-    const user = userEvent.setup();
-    renderForm();
-
-    await user.click(screen.getByText('Capital'));
-
-    expect(screen.queryByLabelText('Initial capital') !== null).toEqual(true);
-  });
-
   it('rejects a non-positive initial capital client-side without posting', async () => {
     const user = userEvent.setup();
     renderForm();
 
-    await user.click(screen.getByText('Capital'));
     const capital = screen.getByLabelText('Initial capital');
     await user.clear(capital);
     await user.type(capital, '0');
@@ -161,6 +160,17 @@ describe('RunForm', () => {
       disabled: screen.getByRole('button', { name: 'Run backtest' }).hasAttribute('disabled'),
       hint: screen.getByText('Select a strategy and a profile to run.') !== null,
     }).toEqual({ disabled: true, hint: true });
+  });
+
+  it('renders the hint after the Run button in DOM order when no strategy is selected', () => {
+    renderForm({ strategyId: null });
+
+    const run = screen.getByRole('button', { name: 'Run backtest' });
+    const hint = screen.getByText('Select a strategy and a profile to run.');
+    const buttonPrecedesHint = Boolean(
+      run.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(buttonPrecedesHint).toEqual(true);
   });
 
   it('posts the run with the default 90-day window on a valid submit', async () => {
