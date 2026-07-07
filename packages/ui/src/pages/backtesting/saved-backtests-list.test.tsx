@@ -36,12 +36,16 @@ const SUMMARY = {
   avgDaysInTrade: 0,
 };
 
-function backtest(id: string, name: string): Backtest {
+function backtest(
+  id: string,
+  name: string,
+  overrides: { createdAt?: number; tradeCount?: number; totalPnl?: number } = {},
+): Backtest {
   return {
     id,
     name,
     status: BacktestStatus.Completed,
-    createdAt: 1,
+    createdAt: overrides.createdAt ?? 1,
     updatedAt: 1,
     params: {
       symbolId: 'crypto:BTCUSDT',
@@ -56,8 +60,25 @@ function backtest(id: string, name: string): Backtest {
     strategyId: 's-1',
     strategy: STRATEGY,
     trades: [],
-    summary: SUMMARY,
+    summary: {
+      ...SUMMARY,
+      tradeCount: overrides.tradeCount ?? SUMMARY.tradeCount,
+      totalPnl: overrides.totalPnl ?? SUMMARY.totalPnl,
+    },
   };
+}
+
+/** Build `count` saved backtests named `Run 01`, `Run 02`, … for pagination tests. */
+function manyBacktests(count: number): Backtest[] {
+  return Array.from({ length: count }, (_, i) =>
+    backtest(`b-${i}`, `Run ${String(i + 1).padStart(2, '0')}`, { createdAt: i + 1 }),
+  );
+}
+
+/** The name cell text of each rendered table row, top to bottom (header row dropped). */
+function renderedNameOrder(): (string | null)[] {
+  const rows = within(screen.getByRole('table')).getAllByRole('row').slice(1);
+  return rows.map((row) => within(row).getAllByRole('cell')[0]?.textContent ?? null);
 }
 
 describe('SavedBacktestsList', () => {
@@ -172,6 +193,75 @@ describe('SavedBacktestsList', () => {
 
     await waitFor(() => expect(screen.queryByRole('button', { name: 'First run' })).toBeNull());
     expect(deleted).toEqual(['b-1']);
+  });
+
+  it('renders a table row per backtest carrying its name, trade count, and P/L', async () => {
+    store = [backtest('b-1', 'First run', { tradeCount: 3, totalPnl: 10 })];
+    renderList();
+
+    await screen.findByRole('button', { name: 'First run' });
+    const row = within(screen.getByRole('table')).getAllByRole('row')[1];
+    const cells = within(row as HTMLElement).getAllByRole('cell');
+    expect({
+      name: cells[0]?.textContent,
+      trades: cells[2]?.textContent,
+      pnl: cells[3]?.textContent,
+    }).toEqual({ name: 'First run', trades: '3', pnl: '+10.00' });
+  });
+
+  it('orders the rows by created date descending by default', async () => {
+    store = [
+      backtest('b-1', 'Older run', { createdAt: 1 }),
+      backtest('b-2', 'Newer run', { createdAt: 2 }),
+    ];
+    renderList();
+
+    await screen.findByRole('button', { name: 'Older run' });
+    expect(renderedNameOrder()).toEqual(['Newer run', 'Older run']);
+  });
+
+  it('sorts the rows by name ascending when the Name header is clicked', async () => {
+    const user = userEvent.setup();
+    store = [backtest('b-1', 'Bravo'), backtest('b-2', 'Alpha')];
+    renderList();
+
+    await screen.findByRole('button', { name: 'Bravo' });
+    await user.click(screen.getByRole('button', { name: 'Name' }));
+
+    expect(renderedNameOrder()).toEqual(['Alpha', 'Bravo']);
+  });
+
+  it('toggles the name sort to descending on a second Name header click', async () => {
+    const user = userEvent.setup();
+    store = [backtest('b-1', 'Bravo'), backtest('b-2', 'Alpha')];
+    renderList();
+
+    await screen.findByRole('button', { name: 'Bravo' });
+    await user.click(screen.getByRole('button', { name: 'Name' }));
+    await user.click(screen.getByRole('button', { name: 'Name' }));
+
+    expect(renderedNameOrder()).toEqual(['Bravo', 'Alpha']);
+  });
+
+  it('reveals a second-page run after clicking Next', async () => {
+    const user = userEvent.setup();
+    store = manyBacktests(12);
+    renderList();
+
+    await screen.findByRole('button', { name: 'Run 12' });
+    // Default created-desc order puts Run 01 (oldest) on the second page.
+    expect(screen.queryByRole('button', { name: 'Run 01' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(screen.queryByRole('button', { name: 'Run 01' })).not.toBeNull();
+  });
+
+  it('shows no pagination controls with a single page of runs', async () => {
+    store = [backtest('b-1', 'First run'), backtest('b-2', 'Second run')];
+    renderList();
+
+    await screen.findByRole('button', { name: 'First run' });
+    expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
   });
 });
 
