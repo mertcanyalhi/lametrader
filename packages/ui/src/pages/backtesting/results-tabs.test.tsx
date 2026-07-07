@@ -163,6 +163,19 @@ describe('ResultsTabs', () => {
     });
   });
 
+  it('renders trade entry and exit timestamps as date plus HH:mm to the minute', async () => {
+    const user = userEvent.setup();
+    renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: undefined });
+    await user.click(screen.getByRole('tab', { name: /Trades/ }));
+
+    const rows = within(screen.getByLabelText('Trades')).getAllByRole('row');
+    const newest = rows[1] as HTMLElement;
+    expect({
+      entry: within(newest).getByText('2021-01-02 00:00').textContent,
+      exit: within(newest).getByText('2021-01-02 01:00').textContent,
+    }).toEqual({ entry: '2021-01-02 00:00', exit: '2021-01-02 01:00' });
+  });
+
   it('renders the Daily P&L histogram bucketed by exit day plus the five-item summary block', async () => {
     const user = userEvent.setup();
     renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: OPEN_POSITION });

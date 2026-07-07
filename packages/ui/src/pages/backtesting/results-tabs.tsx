@@ -1,13 +1,22 @@
 import type { BacktestOpenPosition, BacktestSummary, BacktestTrade } from '@lametrader/core';
 import { Badge, Box, Button, Card, Flex, Grid, Table, Tabs, Text } from '@radix-ui/themes';
 import { type ReactNode, useMemo, useState } from 'react';
-import { formatChange, formatPrice, formatTimestamp } from '../../lib/format.js';
+import { formatChange, formatPrice } from '../../lib/format.js';
 import { exitReasonLabel, formatPercent } from './backtest-format.js';
 import { bucketDailyPnl } from './daily-pnl.js';
 import { DailyPnlChart } from './daily-pnl-chart.js';
 
 /** The em-dash placeholder for a cell a row has no value for (the open row's exit columns). */
 const EMPTY_CELL = '—';
+
+/**
+ * Format an epoch-ms timestamp as `YYYY-MM-DD HH:mm` (UTC) for the Trades table —
+ * the date plus 24-hour time, dropping the seconds/ms noise of the app's shared
+ * timestamp formatter since a trade's entry/exit reads clearly to the minute.
+ */
+function formatTradeTime(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 16).replace('T', ' ');
+}
 
 /** How many closed trades fill one page of the Trades table before pagination kicks in. */
 const PAGE_SIZE = 10;
@@ -189,8 +198,8 @@ function TradesTab({
         <Table.Body>
           {pageTrades.map((trade) => (
             <Table.Row key={`${trade.entryTs}-${trade.exitTs}`}>
-              <Table.Cell>{formatTimestamp(trade.entryTs)}</Table.Cell>
-              <Table.Cell>{formatTimestamp(trade.exitTs)}</Table.Cell>
+              <Table.Cell>{formatTradeTime(trade.entryTs)}</Table.Cell>
+              <Table.Cell>{formatTradeTime(trade.exitTs)}</Table.Cell>
               <Table.Cell>{formatPrice(trade.entryPrice)}</Table.Cell>
               <Table.Cell>{formatPrice(trade.exitPrice)}</Table.Cell>
               <Table.Cell>
@@ -204,7 +213,7 @@ function TradesTab({
           ))}
           {showOpen && openPosition ? (
             <Table.Row>
-              <Table.Cell>{formatTimestamp(openPosition.entryTs)}</Table.Cell>
+              <Table.Cell>{formatTradeTime(openPosition.entryTs)}</Table.Cell>
               <Table.Cell>{EMPTY_CELL}</Table.Cell>
               <Table.Cell>{formatPrice(openPosition.entryPrice)}</Table.Cell>
               <Table.Cell>{EMPTY_CELL}</Table.Cell>
