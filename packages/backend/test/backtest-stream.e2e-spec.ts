@@ -268,6 +268,11 @@ describe('backtest stream WebSocket (e2e)', () => {
       firstStatus: first && 'kind' in first ? first.status : null,
       snapshotHasNoCandles: first !== undefined && 'kind' in first && !('candles' in first),
       someDeltaHasCandles: deltas.some((d) => d.candles.length > 0),
+      // The symbol has a finer 1m period that is processed, but the run period is
+      // 1h, so no delta may carry a non-1h candle (spec: deltas carry run-period candles).
+      allDeltaCandlesAreRunPeriod: deltas.every((d) =>
+        d.candles.every((c) => c.period === Period.OneHour),
+      ),
       lastKind: last && 'kind' in last ? last.kind : null,
       lastStatus: last && 'kind' in last ? last.status : null,
       completedStatus: got.body.status,
@@ -278,11 +283,74 @@ describe('backtest stream WebSocket (e2e)', () => {
       firstStatus: 'running',
       snapshotHasNoCandles: true,
       someDeltaHasCandles: true,
+      allDeltaCandlesAreRunPeriod: true,
       lastKind: 'delta',
       lastStatus: 'completed',
       completedStatus: 'completed',
       completedTradeCount: 1,
       hasClosedTrade: true,
+    });
+  }, 30_000);
+
+  it('delivers each trade and event exactly once to a client reattaching mid-run', async () => {
+    const server = app.getHttpServer();
+    const started = await request(server).post('/backtests').send(body());
+    const id = started.body.id as string;
+
+    // A subscribes from the start; once it has a running delta the run is in
+    // flight, so B reattaches mid-run (its snapshot holds the flushed prefix and
+    // the deltas that follow must carry the rest, each item exactly once).
+    const first = await connect(id);
+    await first.until((frames) =>
+      frames.some((f) => 'kind' in f && f.kind === 'delta' && f.status === 'running'),
+    );
+    const reattached = await connect(id);
+    await reattached.until((frames) =>
+      frames.some((f) => 'kind' in f && f.kind === 'delta' && f.status === 'completed'),
+    );
+
+    // A third client attaches after completion: its single completed snapshot is
+    // the authoritative full run state to size the reattacher's reconstruction against.
+    const afterDone = await connect(id);
+    await afterDone.closed();
+    const authoritative = afterDone.frames[0];
+    const authoritativeTradeCount =
+      authoritative && 'kind' in authoritative && authoritative.kind === 'snapshot'
+        ? authoritative.trades.length
+        : -1;
+    const authoritativeEventCount =
+      authoritative && 'kind' in authoritative && authoritative.kind === 'snapshot'
+        ? authoritative.events.length
+        : -1;
+
+    const snapshot = reattached.frames[0];
+    const reattachedDeltas = reattached.frames.filter(
+      (f): f is Extract<BacktestFrame, { kind: 'delta' }> => 'kind' in f && f.kind === 'delta',
+    );
+    const reconstructedTrades =
+      snapshot && 'kind' in snapshot && snapshot.kind === 'snapshot'
+        ? [...snapshot.trades, ...reattachedDeltas.flatMap((d) => d.trades)]
+        : [];
+    const reconstructedEvents =
+      snapshot && 'kind' in snapshot && snapshot.kind === 'snapshot'
+        ? [...snapshot.events, ...reattachedDeltas.flatMap((d) => d.events)]
+        : [];
+
+    expect({
+      reattachSnapshotKind: snapshot && 'kind' in snapshot ? snapshot.kind : null,
+      // Exactly-once in cardinality: a snapshot that overlaps a following delta
+      // (the reattach bug) makes the reconstruction longer than the truth, while a
+      // gap would make it shorter — equality on both counts pins exactly-once.
+      reconstructedTradeCount: reconstructedTrades.length,
+      reconstructedEventCount: reconstructedEvents.length,
+      reattachDeltaCandlesAllRunPeriod: reattachedDeltas.every((d) =>
+        d.candles.every((c) => c.period === Period.OneHour),
+      ),
+    }).toEqual({
+      reattachSnapshotKind: 'snapshot',
+      reconstructedTradeCount: authoritativeTradeCount,
+      reconstructedEventCount: authoritativeEventCount,
+      reattachDeltaCandlesAllRunPeriod: true,
     });
   }, 30_000);
 
