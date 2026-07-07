@@ -1,7 +1,7 @@
 import type { BacktestOpenPosition, BacktestSummary, BacktestTrade } from '@lametrader/core';
 import { Badge, Box, Button, Card, Flex, Grid, Table, Tabs, Text } from '@radix-ui/themes';
 import { type ReactNode, useMemo, useState } from 'react';
-import { formatChange, formatPrice } from '../../lib/format.js';
+import { formatChange, formatDuration, formatPrice } from '../../lib/format.js';
 import { exitReasonLabel, formatPercent } from './backtest-format.js';
 import { bucketDailyPnl } from './daily-pnl.js';
 import { DailyPnlChart } from './daily-pnl-chart.js';
@@ -123,9 +123,9 @@ function SummaryTab({
 
 /**
  * The Trades tab: one sortable, paginated row per closed trade (entry/exit times,
- * buy/sell prices, per-trade P/L amount and ROI %, and exit reason), with the open
- * position pinned as the final row on the last page — its exit columns blank and its
- * P/L flagged unrealized.
+ * holding duration, buy/sell prices, per-trade P/L amount and ROI %, and exit
+ * reason), with the open position pinned as the final row on the last page — its
+ * exit columns blank and its P/L flagged unrealized.
  */
 function TradesTab({
   trades,
@@ -181,6 +181,7 @@ function TradesTab({
               />
             </Table.ColumnHeaderCell>
             <Table.ColumnHeaderCell>Exit</Table.ColumnHeaderCell>
+            <Table.ColumnHeaderCell>Duration</Table.ColumnHeaderCell>
             <Table.ColumnHeaderCell>Buy</Table.ColumnHeaderCell>
             <Table.ColumnHeaderCell>Sell</Table.ColumnHeaderCell>
             <Table.ColumnHeaderCell>
@@ -200,6 +201,7 @@ function TradesTab({
             <Table.Row key={`${trade.entryTs}-${trade.exitTs}`}>
               <Table.Cell>{formatTradeTime(trade.entryTs)}</Table.Cell>
               <Table.Cell>{formatTradeTime(trade.exitTs)}</Table.Cell>
+              <Table.Cell>{formatDuration(trade.exitTs - trade.entryTs)}</Table.Cell>
               <Table.Cell>{formatPrice(trade.entryPrice)}</Table.Cell>
               <Table.Cell>{formatPrice(trade.exitPrice)}</Table.Cell>
               <Table.Cell>
@@ -214,6 +216,7 @@ function TradesTab({
           {showOpen && openPosition ? (
             <Table.Row>
               <Table.Cell>{formatTradeTime(openPosition.entryTs)}</Table.Cell>
+              <Table.Cell>{EMPTY_CELL}</Table.Cell>
               <Table.Cell>{EMPTY_CELL}</Table.Cell>
               <Table.Cell>{formatPrice(openPosition.entryPrice)}</Table.Cell>
               <Table.Cell>{EMPTY_CELL}</Table.Cell>

@@ -176,6 +176,18 @@ describe('ResultsTabs', () => {
     }).toEqual({ entry: '2021-01-02 00:00', exit: '2021-01-02 01:00' });
   });
 
+  it('renders a Duration column showing each closed trade holding span', async () => {
+    const user = userEvent.setup();
+    renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: undefined });
+    await user.click(screen.getByRole('tab', { name: /Trades/ }));
+
+    const rows = within(screen.getByLabelText('Trades')).getAllByRole('row');
+    expect({
+      header: within(rows[0] as HTMLElement).getByText('Duration').textContent,
+      firstDuration: within(rows[1] as HTMLElement).getByText('<1 hour').textContent,
+    }).toEqual({ header: 'Duration', firstDuration: '<1 hour' });
+  });
+
   it('renders the Daily P&L histogram bucketed by exit day plus the five-item summary block', async () => {
     const user = userEvent.setup();
     renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: OPEN_POSITION });

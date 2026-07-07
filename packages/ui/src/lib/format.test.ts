@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatChange,
   formatChangePct,
+  formatDuration,
   formatPrice,
   formatTimestamp,
   formatVolume,
@@ -122,6 +123,26 @@ describe('formatVolume', () => {
       fractional: '0.34',
       smallInteger: '258',
       hundreds: '742.5',
+    });
+  });
+});
+
+describe('formatDuration', () => {
+  it('renders a friendly, pluralized span rounded to the nearest coarse unit across the hour and day tiers', () => {
+    expect({
+      subHour: formatDuration(45 * 60_000),
+      oneHour: formatDuration(3_600_000),
+      hours: formatDuration(4 * 3_600_000),
+      oneDay: formatDuration(24 * 3_600_000),
+      days: formatDuration(3 * 24 * 3_600_000),
+      roundedDays: formatDuration(50 * 3_600_000),
+    }).toEqual({
+      subHour: '<1 hour',
+      oneHour: '1 hour',
+      hours: '4 hours',
+      oneDay: '1 day',
+      days: '3 days',
+      roundedDays: '2 days',
     });
   });
 });

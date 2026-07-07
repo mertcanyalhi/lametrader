@@ -94,6 +94,27 @@ export function formatTimestamp(ms: number): string {
   return new Date(ms).toISOString().replace('T', ' ').replace('Z', '');
 }
 
+/** Milliseconds in one hour — the sub-day tier boundary for {@link formatDuration}. */
+const HOUR_MS = 3_600_000;
+/** Milliseconds in one day — the day tier boundary for {@link formatDuration}. */
+const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * Format an elapsed span (in ms) as friendly, coarse-grained text for the Trades
+ * table's Duration column — `"<1 hour"` under an hour, then `"N hours"` up to a
+ * day, then `"N days"`, each pluralized and rounded to the nearest whole unit so
+ * a trade's holding period reads at a glance without false precision.
+ */
+export function formatDuration(ms: number): string {
+  if (ms < HOUR_MS) return '<1 hour';
+  if (ms < DAY_MS) {
+    const hours = Math.round(ms / HOUR_MS);
+    return `${hours} hour${hours === 1 ? '' : 's'}`;
+  }
+  const days = Math.round(ms / DAY_MS);
+  return `${days} day${days === 1 ? '' : 's'}`;
+}
+
 /**
  * Format a volume with K / M / B suffixes (two decimals), so chart legends stay
  * readable across the magnitude range typical of crypto, equities, and ETFs.
