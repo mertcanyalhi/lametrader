@@ -91,6 +91,30 @@ describe('StrategyManager', () => {
     expect(await screen.findByRole('dialog')).toHaveTextContent('New strategy');
   });
 
+  it('hides the edit and delete controls when no strategy is selected', async () => {
+    renderManager();
+
+    await screen.findByRole('combobox', { name: 'Selected strategy' });
+
+    expect({
+      edit: screen.queryByRole('button', { name: 'Edit strategy' }),
+      delete: screen.queryByRole('button', { name: 'Delete strategy' }),
+    }).toEqual({ edit: null, delete: null });
+  });
+
+  it('shows the edit and delete controls once a strategy is selected', async () => {
+    const user = userEvent.setup();
+    renderManager();
+
+    await user.click(await screen.findByRole('combobox', { name: 'Selected strategy' }));
+    await user.click(screen.getByRole('option', { name: 'Breakout' }));
+
+    expect({
+      edit: screen.getByRole('button', { name: 'Edit strategy' }) !== null,
+      delete: screen.getByRole('button', { name: 'Delete strategy' }) !== null,
+    }).toEqual({ edit: true, delete: true });
+  });
+
   it('opens the edit dialog seeded with the selected strategy', async () => {
     const user = userEvent.setup();
     renderManager();

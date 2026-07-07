@@ -103,33 +103,33 @@ export function StrategyManager({
           New
         </Button>
 
-        <Tooltip content="Edit strategy">
-          <IconButton
-            type="button"
-            variant="soft"
-            color="gray"
-            aria-label="Edit strategy"
-            disabled={selected === null}
-            onClick={() => {
-              if (selected !== null) setDialog({ open: true, mode: 'edit', initial: selected });
-            }}
-          >
-            <Pencil size={16} aria-hidden="true" />
-          </IconButton>
-        </Tooltip>
+        {selected !== null && (
+          <>
+            <Tooltip content="Edit strategy">
+              <IconButton
+                type="button"
+                variant="soft"
+                color="gray"
+                aria-label="Edit strategy"
+                onClick={() => setDialog({ open: true, mode: 'edit', initial: selected })}
+              >
+                <Pencil size={16} aria-hidden="true" />
+              </IconButton>
+            </Tooltip>
 
-        <Tooltip content="Delete strategy">
-          <IconButton
-            type="button"
-            variant="soft"
-            color="red"
-            aria-label="Delete strategy"
-            disabled={selected === null}
-            onClick={() => setToDelete(selected)}
-          >
-            <Trash2 size={16} aria-hidden="true" />
-          </IconButton>
-        </Tooltip>
+            <Tooltip content="Delete strategy">
+              <IconButton
+                type="button"
+                variant="soft"
+                color="red"
+                aria-label="Delete strategy"
+                onClick={() => setToDelete(selected)}
+              >
+                <Trash2 size={16} aria-hidden="true" />
+              </IconButton>
+            </Tooltip>
+          </>
+        )}
       </Flex>
 
       <StrategyEditorDialog
