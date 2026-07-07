@@ -126,7 +126,7 @@ function TradesTab({
   openPosition: BacktestOpenPosition | undefined;
 }): ReactNode {
   const [sortKey, setSortKey] = useState<SortKey>('entry');
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [pageIndex, setPageIndex] = useState(0);
 
   const sorted = useMemo(() => {

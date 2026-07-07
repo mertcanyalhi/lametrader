@@ -149,14 +149,14 @@ describe('ResultsTabs', () => {
     const rows = within(screen.getByLabelText('Trades')).getAllByRole('row');
     expect({
       closedReasons: [
-        within(rows[1] as HTMLElement).getByText('Profit target').textContent,
-        within(rows[2] as HTMLElement).getByText('Stop loss').textContent,
+        within(rows[1] as HTMLElement).getByText('Stop loss').textContent,
+        within(rows[2] as HTMLElement).getByText('Profit target').textContent,
       ],
       openReason: within(rows[3] as HTMLElement).getByText('Open').textContent,
       openUnrealized: within(rows[3] as HTMLElement).getByText('unrealized').textContent,
       openPnl: within(rows[3] as HTMLElement).getByText('+4.00') !== null,
     }).toEqual({
-      closedReasons: ['Profit target', 'Stop loss'],
+      closedReasons: ['Stop loss', 'Profit target'],
       openReason: 'Open',
       openUnrealized: 'unrealized',
       openPnl: true,
@@ -224,7 +224,7 @@ describe('ResultsTabs', () => {
     await user.click(screen.getByRole('tab', { name: /Trades/ }));
 
     const rows = within(screen.getByLabelText('Trades')).getAllByRole('row');
-    const winner = rows[1] as HTMLElement;
+    const winner = rows[2] as HTMLElement;
     expect({
       pnlText: within(winner).getByText('+19.00').textContent,
       pnlAccent: within(winner).getByText('+19.00').getAttribute('data-accent-color'),
@@ -236,6 +236,18 @@ describe('ResultsTabs', () => {
       roiText: '+9.50%',
       roiAccent: 'grass',
     });
+  });
+
+  it('sorts the trades table by Entry descending by default, newest trade first', async () => {
+    const user = userEvent.setup();
+    renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: undefined });
+    await user.click(screen.getByRole('tab', { name: /Trades/ }));
+
+    const rows = within(screen.getByLabelText('Trades')).getAllByRole('row');
+    expect({
+      firstReason: within(rows[1] as HTMLElement).getByText('Stop loss').textContent,
+      secondReason: within(rows[2] as HTMLElement).getByText('Profit target').textContent,
+    }).toEqual({ firstReason: 'Stop loss', secondReason: 'Profit target' });
   });
 
   it('sorts the trades table by P/L ascending then descending when the P/L header is clicked', async () => {
