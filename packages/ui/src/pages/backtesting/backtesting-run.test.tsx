@@ -606,4 +606,22 @@ describe('BacktestingPage run flow', () => {
 
     expect(document.title).toEqual('crypto:BTCUSDT 100% -12.50 - lametrader');
   });
+
+  it('opens on the last-used period from storage instead of the symbol smallest', async () => {
+    window.localStorage.setItem('backtest-period', Period.OneDay);
+    renderPage();
+
+    const bar = await screen.findByRole('group', { name: 'Backtesting actions' });
+    // BTC is watched on [1h, 1d] with 1h the smallest; the persisted 1d wins.
+    expect(within(bar).queryByRole('button', { name: Period.OneDay }) !== null).toEqual(true);
+  });
+
+  it('persists the current period to storage so a later mount can restore it', async () => {
+    renderPage();
+    await screen.findByRole('group', { name: 'Backtesting actions' });
+
+    // BTC's smallest watched period (1h) seeds the selection and is written
+    // through — so a fresh mount (navigating back) reads it instead of a default.
+    expect(window.localStorage.getItem('backtest-period')).toEqual(Period.OneHour);
+  });
 });

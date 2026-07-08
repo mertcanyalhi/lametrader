@@ -20,6 +20,12 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { Settings } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import {
+  getStoredBacktestPeriod,
+  getStoredBacktestSymbolId,
+  setStoredBacktestPeriod,
+  setStoredBacktestSymbolId,
+} from '../../lib/backtest-selection.js';
 import { formatChange } from '../../lib/format.js';
 import {
   COMPLETED_BACKTESTS_QUERY_KEY,
@@ -92,13 +98,29 @@ function BacktestingLayout({
   config: Config;
 }): ReactNode {
   const { profileId } = useSelectedProfile();
-  const [symbolId, setSymbolId] = useState<string | null>(() => symbols[0]?.id ?? null);
-  // Idle default: the selected symbol's smallest watched period (the finest
+  // Seed the symbol from the last-used one (persisted), as long as it's still
+  // watched; otherwise the first watched symbol. This survives the layout
+  // re-mounting (a navigation, reload, or a run ending) instead of snapping back
+  // to `symbols[0]`.
+  const [symbolId, setSymbolId] = useState<string | null>(() => {
+    const stored = getStoredBacktestSymbolId();
+    return stored && symbols.some((symbol) => symbol.id === stored)
+      ? stored
+      : (symbols[0]?.id ?? null);
+  });
+  // Idle default: the last-used period (persisted) when it's watched on the
+  // seeded symbol, else that symbol's smallest watched period (the finest
   // timeframe it holds), not the global config default. A loaded/running run
   // still pins its own stored period via `chartPeriod` below, so this only
   // seeds a fresh selection. Picking another symbol re-seeds it in
   // `selectSymbol`; the config default is the fallback for an empty list.
-  const [period, setPeriod] = useState<Period>(() => smallestPeriod(symbols[0] ?? null, config));
+  const [period, setPeriod] = useState<Period>(() => {
+    const seededSymbol = symbols.find((symbol) => symbol.id === symbolId) ?? symbols[0] ?? null;
+    const stored = getStoredBacktestPeriod();
+    return stored && (seededSymbol?.periods.includes(stored) ?? false)
+      ? stored
+      : smallestPeriod(seededSymbol, config);
+  });
   const [range, setRange] = useState<ChartRange | null>(null);
   const [strategyId, setStrategyId] = useState<string | null>(null);
   const [activeRun, setActiveRun] = useState<ActiveBacktest | null>(null);
@@ -125,6 +147,15 @@ function BacktestingLayout({
     }
     setHydrated(true);
   }, [hydrated, runningQuery.isPending, runningQuery.data]);
+
+  // Persist the selection on every change (a symbol/period pick, a reattach, a
+  // loaded backtest) so the seed above can restore it after a re-mount.
+  useEffect(() => {
+    if (symbolId) setStoredBacktestSymbolId(symbolId);
+  }, [symbolId]);
+  useEffect(() => {
+    setStoredBacktestPeriod(period);
+  }, [period]);
 
   const run = useBacktestRun(activeRun);
   const loadedView = useLoadedBacktest(loaded);
