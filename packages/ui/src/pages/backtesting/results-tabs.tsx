@@ -16,8 +16,8 @@ import { formatChange, formatDuration, formatPrice } from '../../lib/format.js';
 import { exitReasonLabel, formatPercent } from './backtest-format.js';
 import { bucketDailyPnl } from './daily-pnl.js';
 import { DailyPnlChart } from './daily-pnl-chart.js';
-import { cumulativePnl } from './equity-curve.js';
-import { EquityCurveChart } from './equity-curve-chart.js';
+import { PnlBaselineChart } from './pnl-baseline-chart.js';
+import { cumulativePnl, perTradePnl } from './pnl-series.js';
 
 /** The em-dash placeholder for a cell a row has no value for (the open row's exit columns). */
 const EMPTY_CELL = '—';
@@ -72,8 +72,9 @@ function winRateColor(pct: number): MetricColor {
 /**
  * The run's results panel — two tabs the right ⅓ fills in as frames arrive and
  * after completion: **Summary** (the full metric block plus a chart that toggles
- * between the per-exit-day Daily P&L histogram and the cumulative equity curve)
- * and **Trades** (closed trades plus the open position as an unrealized final row).
+ * between the per-exit-day Daily P&L histogram, the cumulative equity curve, and
+ * the per-trade win/lose series) and **Trades** (closed trades plus the open
+ * position as an unrealized final row).
  *
  * Every value is read straight off the streamed run view, so the tabs track the
  * live run and render a loaded backtest identically.
@@ -110,15 +111,15 @@ export function ResultsTabs({
 }
 
 /** Which chart the Summary tab's toggle currently shows. */
-type SummaryChart = 'daily' | 'equity';
+type SummaryChart = 'daily' | 'equity' | 'trades';
 
 /**
  * The Summary tab: the full metric block — realized aggregates (total P/L, ROI %,
  * win rate), trade counts, and per-trade averages, plus the open-position
  * unrealized-P/L line when a position is still open — above a chart that toggles
- * between the per-exit-day Daily P&L histogram and the cumulative equity curve.
- * Each metric is a card tinted by the sign of its value (unsigned metrics stay
- * neutral).
+ * between the per-exit-day Daily P&L histogram, the cumulative equity curve, and
+ * the per-trade win/lose series. Each metric is a card tinted by the sign of its
+ * value (win rate on its own ramp; unsigned metrics stay neutral).
  */
 function SummaryTab({
   trades,
@@ -132,6 +133,7 @@ function SummaryTab({
   const [chart, setChart] = useState<SummaryChart>('daily');
   const bars = useMemo(() => bucketDailyPnl(trades), [trades]);
   const equity = useMemo(() => cumulativePnl(trades), [trades]);
+  const perTrade = useMemo(() => perTradePnl(trades), [trades]);
   const winRate = summary.tradeCount > 0 ? (summary.winners / summary.tradeCount) * 100 : 0;
 
   return (
@@ -177,9 +179,16 @@ function SummaryTab({
       >
         <SegmentedControl.Item value="daily">Daily P&amp;L</SegmentedControl.Item>
         <SegmentedControl.Item value="equity">Equity curve</SegmentedControl.Item>
+        <SegmentedControl.Item value="trades">Win/lose per trade</SegmentedControl.Item>
       </SegmentedControl.Root>
       <div className="h-40 w-full">
-        {chart === 'daily' ? <DailyPnlChart bars={bars} /> : <EquityCurveChart points={equity} />}
+        {chart === 'daily' ? (
+          <DailyPnlChart bars={bars} />
+        ) : chart === 'equity' ? (
+          <PnlBaselineChart points={equity} />
+        ) : (
+          <PnlBaselineChart points={perTrade} />
+        )}
       </div>
     </Flex>
   );

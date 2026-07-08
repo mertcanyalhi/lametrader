@@ -11,20 +11,21 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DailyPnlBar } from './daily-pnl.js';
-import type { EquityPoint } from './equity-curve.js';
+import type { PnlPoint } from './pnl-series.js';
 import { ResultsTabs } from './results-tabs.js';
 
 // Both charts load lightweight-charts, which doesn't run under jsdom; render
-// them as doubles that expose their point/bar counts so the data feeding each is
-// observable without the real canvas.
+// them as doubles. The histogram exposes its bar count; the baseline chart (used
+// for both the equity curve and the per-trade series) exposes its point values so
+// tests can tell the two series apart without the real canvas.
 vi.mock('./daily-pnl-chart.js', () => ({
   DailyPnlChart: ({ bars }: { bars: readonly DailyPnlBar[] }) => (
     <div data-testid="daily-pnl-chart">{bars.length} bars</div>
   ),
 }));
-vi.mock('./equity-curve-chart.js', () => ({
-  EquityCurveChart: ({ points }: { points: readonly EquityPoint[] }) => (
-    <div data-testid="equity-curve-chart">{points.length} points</div>
+vi.mock('./pnl-baseline-chart.js', () => ({
+  PnlBaselineChart: ({ points }: { points: readonly PnlPoint[] }) => (
+    <div data-testid="pnl-baseline-chart">{points.map((point) => point.value).join(',')}</div>
   ),
 }));
 
@@ -253,21 +254,34 @@ describe('ResultsTabs', () => {
     // TRADES exit on two distinct UTC days → two histogram bars.
     expect({
       daily: screen.getByTestId('daily-pnl-chart').textContent,
-      equityShown: screen.queryByTestId('equity-curve-chart'),
-    }).toEqual({ daily: '2 bars', equityShown: null });
+      baselineShown: screen.queryByTestId('pnl-baseline-chart'),
+    }).toEqual({ daily: '2 bars', baselineShown: null });
   });
 
-  it('switches the Summary chart to the equity curve when its segment is selected', async () => {
+  it('switches the Summary chart to the cumulative equity curve when its segment is selected', async () => {
     const user = userEvent.setup();
     renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: undefined });
 
     await user.click(screen.getByRole('radio', { name: 'Equity curve' }));
 
-    // One cumulative-P/L point per closed trade's exit.
+    // Running totals: +19 after the first trade, +8 after the −11 second.
     expect({
-      equity: screen.getByTestId('equity-curve-chart').textContent,
+      equity: screen.getByTestId('pnl-baseline-chart').textContent,
       dailyShown: screen.queryByTestId('daily-pnl-chart'),
-    }).toEqual({ equity: '2 points', dailyShown: null });
+    }).toEqual({ equity: '19,8', dailyShown: null });
+  });
+
+  it('switches the Summary chart to the per-trade win/lose series when its segment is selected', async () => {
+    const user = userEvent.setup();
+    renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: undefined });
+
+    await user.click(screen.getByRole('radio', { name: 'Win/lose per trade' }));
+
+    // Each trade's own P/L, not a running total: +19 then −11.
+    expect({
+      perTrade: screen.getByTestId('pnl-baseline-chart').textContent,
+      dailyShown: screen.queryByTestId('daily-pnl-chart'),
+    }).toEqual({ perTrade: '19,-11', dailyShown: null });
   });
 
   it('colors a positive Summary metric value with the green accent', () => {

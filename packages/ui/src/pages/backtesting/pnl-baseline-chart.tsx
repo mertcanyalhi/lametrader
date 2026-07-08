@@ -9,21 +9,22 @@ import {
 import { type ReactNode, useEffect, useMemo, useRef } from 'react';
 import { useTheme } from '../../lib/theme-context.js';
 import { chartColors } from '../chart/chart-series.js';
-import type { EquityPoint } from './equity-curve.js';
+import type { PnlPoint } from './pnl-series.js';
 
 /**
- * The equity curve — a `lightweight-charts` `BaselineSeries` of the running
- * realized P/L after each closed trade, plotted at the trade's exit time. The
- * baseline sits at zero, so the curve renders up-colored while the strategy is
- * net-winning and down-colored while it is net-losing, reading wins/losses at a
- * glance. The chart auto-sizes to its container and fits the whole series in view.
+ * A P/L baseline chart — a `lightweight-charts` `BaselineSeries` plotted at each
+ * point's time with the baseline pinned at zero, so values render up-colored
+ * above zero and down-colored below, reading wins/losses at a glance. Feeds both
+ * the Summary tab's cumulative equity curve and its per-trade win/lose series;
+ * only the point data differs. The chart auto-sizes to its container and fits the
+ * whole series in view.
  *
  * A thin sibling of {@link DailyPnlChart}: it owns one chart instance and one
  * series, and re-seeds the series whenever the points (or the theme palette) change.
  *
- * @param points - the cumulative-P/L points, ascending by exit time.
+ * @param points - the P/L points to plot, ascending by time.
  */
-export function EquityCurveChart({ points }: { points: readonly EquityPoint[] }): ReactNode {
+export function PnlBaselineChart({ points }: { points: readonly PnlPoint[] }): ReactNode {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Baseline'> | null>(null);
