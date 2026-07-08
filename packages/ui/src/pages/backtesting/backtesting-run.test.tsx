@@ -153,12 +153,14 @@ describe('BacktestingPage run flow', () => {
   let runningList: unknown[];
   let deleted: string[];
   let storeCandles: Candle[];
+  let watchlist: EnrichedSymbol[];
 
   beforeEach(() => {
     onFrame = null;
     runningList = [];
     deleted = [];
     storeCandles = [candle(1_000, 100)];
+    watchlist = [BTC];
     const fetchSpy = vi.fn(async (url: string, init?: RequestInit) => {
       const method = init?.method ?? 'GET';
       const target = String(url);
@@ -186,7 +188,7 @@ describe('BacktestingPage run flow', () => {
       }
       if (target.includes('/backtests?status=')) return json(runningList, 200);
       if (target.includes('/backtest-strategies')) return json([STRATEGY], 200);
-      if (target.includes('/symbols?enrich=true')) return json([BTC], 200);
+      if (target.includes('/symbols?enrich=true')) return json(watchlist, 200);
       if (target.includes('/config')) return json(CONFIG, 200);
       if (target.includes('/profiles')) return json([ALPHA], 200);
       if (target.includes('/candles')) {
@@ -455,6 +457,68 @@ describe('BacktestingPage run flow', () => {
       follow: chart.getAttribute('data-follow'),
       candles: chart.textContent,
     }).toEqual({ period: Period.OneDay, follow: 'true', candles: '1 candles' });
+  });
+
+  it('forms the picked bar from a finer stored period even when the run is coarser', async () => {
+    const DAY = 86_400_000;
+    const HOUR = 3_600_000;
+    // A run at 1d — coarser than the 1h we'll switch to — over a 2-day window, on
+    // a symbol also watched at 1m (finer than 1h), reattached.
+    const symbol = { ...BTC, periods: [Period.OneMinute, Period.OneHour, Period.OneDay] };
+    watchlist = [symbol];
+    const reattachParams = { ...PARAMS, period: Period.OneDay, start: 0, end: 2 * DAY };
+    // Two 1m bars inside the hour bucket starting at 3_600_000.
+    storeCandles = [candle(HOUR, 105), candle(HOUR + 60_000, 108)];
+    runningList = [
+      {
+        id: 'b-9',
+        name: 'existing',
+        status: BacktestStatus.Running,
+        createdAt: 1,
+        updatedAt: 1,
+        params: reattachParams,
+        strategyId: 's-1',
+        strategy: STRATEGY,
+        trades: [],
+        summary: EMPTY_SUMMARY,
+      },
+    ];
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(onFrame).not.toBeNull());
+    // Frontier 1.5h in — inside hour-bucket 3_600_000, past both 1m bars.
+    push({
+      kind: BacktestFrameKind.Snapshot,
+      status: BacktestStatus.Running,
+      progress: { elapsedDays: 5_400_000 / DAY, totalDays: 2 },
+      params: reattachParams,
+      trades: [],
+      summary: EMPTY_SUMMARY,
+      events: [],
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('backtest-chart').getAttribute('data-period')).toEqual(
+        Period.OneDay,
+      ),
+    );
+
+    // Switch to 1h: the run (1d) is coarser, but the symbol's finer 1m candles are
+    // read from the store and folded into the current hour's forming bar.
+    const bar = screen.getByRole('group', { name: 'Backtesting actions' });
+    await user.click(within(bar).getByRole('button', { name: Period.OneDay }));
+    await user.click(await screen.findByRole('button', { name: Period.OneHour }));
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('backtest-chart').getAttribute('data-period')).toEqual(
+        Period.OneHour,
+      ),
+    );
+    const chart = screen.getByTestId('backtest-chart');
+    expect({
+      period: chart.getAttribute('data-period'),
+      candles: chart.textContent,
+    }).toEqual({ period: Period.OneHour, candles: '1 candles' });
   });
 
   it('keeps the switched period selected after the run is cancelled, without reverting', async () => {

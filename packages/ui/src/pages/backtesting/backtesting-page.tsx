@@ -1,7 +1,6 @@
 import {
   type Backtest,
   BacktestStatus,
-  type Candle,
   type Config,
   type EnrichedSymbol,
   type Period,
@@ -45,6 +44,7 @@ import {
 import { useConfig } from '../../lib/hooks/use-config.js';
 import { useLoadedBacktest } from '../../lib/hooks/use-loaded-backtest.js';
 import { getLogger } from '../../lib/log.js';
+import { finestFinerPeriod } from '../../lib/periods.js';
 import { useSelectedProfile } from '../../lib/selected-profile-context.js';
 import { useTheme } from '../../lib/theme-context.js';
 import { CandleChart } from '../chart/candle-chart.js';
@@ -255,8 +255,6 @@ function BacktestingLayout({
               start={view.params.start}
               end={view.params.end}
               frontier={frontier}
-              runPeriod={view.params.period}
-              runCandles={view.chartCandles}
               eventMarkers={tradeMarkers}
               stateOverlays={showRuleEvents ? runStateOverlays : []}
             />
@@ -345,24 +343,24 @@ function noop(): void {}
  *   at/behind the frontier (clip on bucket *end*, `time + periodMillis(period)`),
  *   so a bar the replay is only partway through never appears with its full,
  *   not-yet-reached OHLC.
- * - **A synthesized forming bar.** When the run's own period is *finer* than the
- *   picked one, the current bucket is folded live from the run's finer replay
- *   candles up to the frontier via {@link formingBucketCandle} — the same way the
- *   run chart forms its bar — so the in-progress bucket grows with the replay
- *   instead of popping in whole. When the run's period is coarser (no finer replay
- *   data to fold), there is no forming bar and only completed buckets show.
+ * - **A synthesized forming bar.** The current bucket is folded from the symbol's
+ *   finest watched period *finer* than the picked one — its stored candles over
+ *   the current bucket, clipped to the frontier, aggregated via
+ *   {@link formingBucketCandle}. Reading the finer period from the store (rather
+ *   than the run's own candles) means this works whether the run is finer *or*
+ *   coarser than the view; only when the picked period is itself the symbol's
+ *   finest (nothing finer to fold) is there no forming bar.
  *
- * The fetch is keyed by the fixed run window (`symbol`, `period`, `start`, `end`),
- * not the moving frontier, so a live run advancing the frontier re-clips an
- * already-fetched series rather than refetching the whole window each frame.
+ * The completed fetch is keyed by the fixed run window (`symbol`, `period`,
+ * `start`, `end`); the forming fetch by the current bucket (`bucketStart`), so a
+ * live run advancing the frontier re-clips already-fetched series and only
+ * refetches the finer window when it crosses into a new bucket.
  *
  * @param symbol - the charted symbol.
  * @param period - the picked period to chart (≠ the run's period).
  * @param start - the run window's start (inclusive), epoch ms.
  * @param end - the run window's end (exclusive), epoch ms.
  * @param frontier - the replay frontier; bars past it are hidden.
- * @param runPeriod - the run's own period; its finer candles form the current bar.
- * @param runCandles - the run's candles at `runPeriod`, used to fold the forming bar.
  * @param eventMarkers - the run's trade markers to overlay.
  * @param stateOverlays - the run's state overlays to overlay (empty when gated off).
  */
@@ -372,8 +370,6 @@ function OffPeriodBacktestChart({
   start,
   end,
   frontier,
-  runPeriod,
-  runCandles,
   eventMarkers,
   stateOverlays,
 }: {
@@ -382,32 +378,42 @@ function OffPeriodBacktestChart({
   start: number;
   end: number;
   frontier: number;
-  runPeriod: Period;
-  runCandles: readonly Candle[];
   eventMarkers: ReadonlyArray<SeriesMarker<Time>>;
   stateOverlays: ReadonlyArray<StateOverlay>;
 }): ReactNode {
-  const query = useQuery({
+  const periodMs = periodMillis(period);
+  const bucketStart = Math.floor(frontier / periodMs) * periodMs;
+  // The finest watched period below the picked one — its stored candles fold into
+  // the current bucket's forming bar. `null` when the picked period is the finest.
+  const finerPeriod = finestFinerPeriod(symbol.periods, period);
+
+  const completedQuery = useQuery({
     queryKey: ['backtest-offperiod-candles', symbol.id, period, start, end],
     queryFn: () => fetchRangeCandles(symbol.id, period, start, end),
   });
+  // Finer candles for just the current bucket, to fold its forming bar. Keyed by
+  // `bucketStart`, so it refetches only when the frontier crosses a bucket edge.
+  const formingQuery = useQuery({
+    queryKey: ['backtest-offperiod-forming', symbol.id, finerPeriod, bucketStart, periodMs],
+    queryFn: () =>
+      finerPeriod === null
+        ? []
+        : fetchRangeCandles(symbol.id, finerPeriod, bucketStart, bucketStart + periodMs),
+    enabled: finerPeriod !== null,
+  });
+
   const candles = useMemo(() => {
-    const periodMs = periodMillis(period);
     // Completed buckets only: the whole bucket must lie at/behind the frontier,
     // so no bar shows OHLC from time the replay hasn't reached.
-    const completed = (query.data ?? []).filter((c) => c.time + periodMs <= frontier);
-    // Fold the current (forming) bucket from the run's finer replay candles up to
-    // the frontier — only when the run's own period is finer than the picked one.
-    if (periodMillis(runPeriod) < periodMs) {
-      const bucketStart = Math.floor(frontier / periodMs) * periodMs;
-      const finer = runCandles
-        .filter((c) => c.time >= bucketStart && c.time <= frontier)
-        .sort((a, b) => a.time - b.time);
-      const forming = formingBucketCandle(finer, period);
-      if (forming) return [...completed, forming];
-    }
-    return completed;
-  }, [query.data, frontier, period, runPeriod, runCandles]);
+    const completed = (completedQuery.data ?? []).filter((c) => c.time + periodMs <= frontier);
+    // Fold the current bucket from the finer period's stored candles up to the
+    // frontier (clip so the forming bar never reveals a not-yet-reached tick).
+    const finer = (formingQuery.data ?? [])
+      .filter((c) => c.time <= frontier)
+      .sort((a, b) => a.time - b.time);
+    const forming = formingBucketCandle(finer, period);
+    return forming ? [...completed, forming] : completed;
+  }, [completedQuery.data, formingQuery.data, frontier, period, periodMs]);
   return (
     <Card className="h-full">
       <CandleChart
