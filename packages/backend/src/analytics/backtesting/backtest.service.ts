@@ -489,9 +489,10 @@ export class BacktestService {
    * The step's events and trades join only the pending batch (never the flushed
    * prefix directly) so a snapshot taken before the next flush cannot contain
    * them — {@link flush} folds them into the prefix as it emits them. Every
-   * active period's candle is processed, but only a **run-period** candle enters
-   * the streamed batch (spec: *Stream protocol* — deltas carry new run-period
-   * candles); the candle-count cadence still counts every processed candle.
+   * active period's candle is processed **and** enters the streamed batch — the
+   * client picks which period(s) to render and folds finer candles into the
+   * forming run-period bar (spec: *Stream protocol* — deltas carry every active
+   * period's candles); the candle-count cadence counts every processed candle.
    */
   private accumulateStep(active: ActiveRun, step: BacktestReplayStep): void {
     const stream = active.stream;
@@ -503,9 +504,7 @@ export class BacktestService {
     } else {
       stream.latestOpenPosition = step.openPosition;
     }
-    if (step.candle.period === active.backtest.params.period) {
-      stream.pendingCandles.push({ period: step.candle.period, candle: step.candle.candle });
-    }
+    stream.pendingCandles.push({ period: step.candle.period, candle: step.candle.candle });
     stream.stepsSinceFlush += 1;
     active.progress = step.progress;
     if (

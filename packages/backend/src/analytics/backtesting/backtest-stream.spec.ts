@@ -368,9 +368,13 @@ describe('BacktestService per-run stream deltas', () => {
           kind: BacktestFrameKind.Delta,
           status: BacktestStatus.Running,
           progress: progressAt(60_000),
-          // Both processed candles are 1m; the run period is 1h, so neither
-          // enters the streamed batch even though they drive events/trades.
-          candles: [],
+          // Every processed candle streams now, tagged with its period — here two
+          // 1m candles finer than the 1h run period. The client folds finer
+          // candles into the forming run-period bar so it advances intra-bar.
+          candles: [
+            { period: Period.OneMinute, candle: candle(START, 100) },
+            { period: Period.OneMinute, candle: candle(START + 60_000, 105) },
+          ],
           events: [stateEvent(START), stateEvent(START + 60_000)],
           trades: [t1],
           summary: summaryOf([t1]),
@@ -528,11 +532,12 @@ describe('BacktestService per-run stream exactly-once on reattach', () => {
 });
 
 describe('BacktestService per-run stream candle scope', () => {
-  it('carries only run-period candles in deltas though all active periods are processed', async () => {
+  it('carries every active period candle in deltas, tagged with its period', async () => {
     const runPeriodOne = candle(START, 200);
     const runPeriodTwo = candle(START + 3_600_000, 210);
-    // Interleave finer-period (1m) candles with the run-period (1h) ones; the run
-    // period is 1h, so only the 1h candles may appear in the streamed deltas.
+    // Interleave finer-period (1m) candles with the run-period (1h) ones; every
+    // processed candle streams, period-tagged, so the client can fold the finer
+    // ones into the forming run-period bar.
     const steps: BacktestReplayStep[] = [
       {
         candle: { period: Period.OneMinute, candle: candle(START, 100) },
@@ -575,7 +580,9 @@ describe('BacktestService per-run stream candle scope', () => {
       .filter((f): f is Extract<BacktestFrame, { kind: 'delta' }> => f.kind === 'delta')
       .flatMap((d) => d.candles);
     expect(streamedCandles).toEqual([
+      { period: Period.OneMinute, candle: candle(START, 100) },
       { period: Period.OneHour, candle: runPeriodOne },
+      { period: Period.OneMinute, candle: candle(START + 60_000, 110) },
       { period: Period.OneHour, candle: runPeriodTwo },
     ]);
   });
