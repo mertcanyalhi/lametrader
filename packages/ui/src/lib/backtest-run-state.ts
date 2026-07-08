@@ -5,7 +5,9 @@ import type {
   Candle,
   Period,
 } from '@lametrader/core';
+import { formingBucketCandle } from './aggregate-candles.js';
 import type { BacktestRunState } from './backtest.types.js';
+import { finestFinerPeriod } from './periods.js';
 
 /**
  * Seed a {@link BacktestRunState} from the stream's one snapshot frame — the
@@ -63,6 +65,16 @@ export function applyBacktestDelta(
  * ascending by `time` and deduplicated (a later candle at the same `time`
  * replaces the earlier one, so a re-sent bar updates rather than doubling).
  *
+ * When the replay also carries a period strictly finer than `period` (it loads
+ * across all active periods, finest-first), the charted period's **forming**
+ * (latest) bar is synthesized from that finest finer period via
+ * {@link formingBucketCandle} and overlaid onto the coarse series — so the
+ * forming bar advances with each finer frame instead of freezing between the
+ * coarse period's own, less frequent, boundaries. Completed coarse buckets stay
+ * the coarse period's own candles; only the latest bucket is folded. When
+ * `period` is itself the finest present (the common case), nothing is finer and
+ * the projection is the coarse candles unchanged.
+ *
  * @param candles - the run's accumulated {@link BacktestStreamCandle}s.
  * @param period - the period the chart is anchored to.
  */
@@ -74,5 +86,19 @@ export function chartCandlesFor(
   for (const entry of candles) {
     if (entry.period === period) byTime.set(entry.candle.time, entry.candle);
   }
+
+  const finer = finestFinerPeriod(
+    candles.map((entry) => entry.period),
+    period,
+  );
+  if (finer !== null) {
+    const finerCandles = candles
+      .filter((entry) => entry.period === finer)
+      .map((entry) => entry.candle)
+      .sort((a, b) => a.time - b.time);
+    const forming = formingBucketCandle(finerCandles, period);
+    if (forming) byTime.set(forming.time, forming);
+  }
+
   return [...byTime.values()].sort((a, b) => a.time - b.time);
 }

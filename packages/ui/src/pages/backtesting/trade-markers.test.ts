@@ -26,13 +26,17 @@ function openPosition(entryTs: number): BacktestOpenPosition {
   return { entryTs, entryPrice: 120, quantity: 1, entryCommission: 0, unrealizedPnl: 5 };
 }
 
+/** The concrete chart green/red the markers reuse (matches the candle palette). */
+const BUY_COLOR = '#30a46c';
+const SELL_COLOR = '#e5484d';
+
 describe('buildTradeMarkers', () => {
   it('emits a Buy entry marker and a Sell exit marker per closed trade, sorted by time', () => {
     const markers = buildTradeMarkers([trade(2_000, 5_000)]);
 
     expect(markers).toEqual([
-      { time: 2, position: 'belowBar', shape: 'arrowUp', color: 'var(--grass-9)', text: 'Buy' },
-      { time: 5, position: 'aboveBar', shape: 'arrowDown', color: 'var(--red-9)', text: 'Sell' },
+      { time: 2, position: 'aboveBar', shape: 'arrowDown', color: BUY_COLOR, text: 'Buy @ 100.00' },
+      { time: 5, position: 'belowBar', shape: 'arrowUp', color: SELL_COLOR, text: 'Sell @ 110.00' },
     ]);
   });
 
@@ -40,9 +44,9 @@ describe('buildTradeMarkers', () => {
     const markers = buildTradeMarkers([trade(6_000, 9_000)], openPosition(3_000));
 
     expect(markers).toEqual([
-      { time: 3, position: 'belowBar', shape: 'arrowUp', color: 'var(--grass-9)', text: 'Buy' },
-      { time: 6, position: 'belowBar', shape: 'arrowUp', color: 'var(--grass-9)', text: 'Buy' },
-      { time: 9, position: 'aboveBar', shape: 'arrowDown', color: 'var(--red-9)', text: 'Sell' },
+      { time: 3, position: 'aboveBar', shape: 'arrowDown', color: BUY_COLOR, text: 'Buy @ 120.00' },
+      { time: 6, position: 'aboveBar', shape: 'arrowDown', color: BUY_COLOR, text: 'Buy @ 100.00' },
+      { time: 9, position: 'belowBar', shape: 'arrowUp', color: SELL_COLOR, text: 'Sell @ 110.00' },
     ]);
   });
 

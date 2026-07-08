@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatChange,
   formatChangePct,
+  formatDuration,
   formatPrice,
   formatTimestamp,
   formatVolume,
@@ -122,6 +123,30 @@ describe('formatVolume', () => {
       fractional: '0.34',
       smallInteger: '258',
       hundreds: '742.5',
+    });
+  });
+});
+
+describe('formatDuration', () => {
+  it('renders a compact span as its two most-significant non-zero units', () => {
+    expect({
+      subMinute: formatDuration(30_000),
+      minutes: formatDuration(48 * 60_000),
+      hourMinutes: formatDuration(80 * 60_000),
+      oneHour: formatDuration(3_600_000),
+      hours: formatDuration(4 * 3_600_000),
+      oneDay: formatDuration(24 * 3_600_000),
+      days: formatDuration(3 * 24 * 3_600_000),
+      daysHours: formatDuration(50 * 3_600_000),
+    }).toEqual({
+      subMinute: '<1m',
+      minutes: '48m',
+      hourMinutes: '1h 20m',
+      oneHour: '1h',
+      hours: '4h',
+      oneDay: '1d',
+      days: '3d',
+      daysHours: '2d 2h',
     });
   });
 });

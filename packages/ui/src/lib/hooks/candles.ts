@@ -2,8 +2,11 @@ import { type Candle, type CandlePage, type Period, periodMillis } from '@lametr
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../api-fetch.js';
+import { getLogger } from '../log.js';
 import { type CandleEvent, StreamKind } from '../stream/stream-client.types.js';
 import { useStreamSubscription } from '../stream/use-stream-subscription.js';
+
+const log = getLogger('chart-paging');
 
 /**
  * Bars per fetch window. The window is sized as `CHART_PAGE_BARS × periodMillis`
@@ -128,6 +131,24 @@ export function usePagedCandles({ id, period }: { id: string; period: Period }):
   return {
     candles,
     loadOlder: () => {
+      // ponytail: debug loop instrumentation, remove once diagnosed
+      log.debug(
+        {
+          id,
+          period,
+          hasNextPage: query.hasNextPage,
+          isFetchingNextPage: query.isFetchingNextPage,
+          pages: query.data?.pages.length ?? 0,
+          earliest: query.data?.pages.at(-1)?.candles[0]?.time,
+        },
+        'loadOlder called',
+      );
+      // Re-entrancy guard: no-op while an older window is already being fetched,
+      // or once history is exhausted. The chart's viewport effects re-fire this
+      // each render/candle; without the guard `fetchNextPage` (which defaults to
+      // `cancelRefetch: true`) stacks/cancels requests and grows `candles`
+      // unbounded — each merge sort then slower — until the tab hangs.
+      if (query.isFetchingNextPage || !query.hasNextPage) return;
       query.fetchNextPage();
     },
     hasMore: query.hasNextPage,

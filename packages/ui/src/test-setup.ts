@@ -36,6 +36,37 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 }
 
 /**
+ * jsdom does not implement `HTMLCanvasElement.getContext`, so it returns `null`.
+ * `lightweight-charts` tolerates that during its initial render but not in the
+ * `requestAnimationFrame` draw it schedules: after a chart's container unmounts,
+ * a pending frame runs `PriceAxisWidget._optimalWidth`, which `ensureNotNull`s
+ * the 2d context and throws `Error: Value is null`. That async throw escapes the
+ * test that rendered the chart and Vitest counts it as an unhandled error,
+ * failing the whole run. A permissive 2d-context stub (no-op drawing ops,
+ * zero-width text measurement) keeps the frame from throwing.
+ */
+if (typeof HTMLCanvasElement !== 'undefined') {
+  const stub2dContext = new Proxy(
+    {},
+    {
+      get(_target, prop) {
+        if (prop === 'measureText') return () => ({ width: 0 });
+        if (prop === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
+        if (prop === 'createLinearGradient' || prop === 'createRadialGradient') {
+          return () => ({ addColorStop: (): void => undefined });
+        }
+        if (prop === 'canvas') return undefined;
+        // Every drawing/state method is a no-op; property reads return the same
+        // callable, which is harmless for the paths the chart exercises here.
+        return (): void => undefined;
+      },
+    },
+  );
+  HTMLCanvasElement.prototype.getContext = (() =>
+    stub2dContext) as unknown as HTMLCanvasElement['getContext'];
+}
+
+/**
  * Radix Themes uses `Element.hasPointerCapture` / `scrollIntoView` while
  * managing focus inside `Select` and other floating components. jsdom omits
  * both; we stub them so triggering them via `userEvent.click` is a no-op.

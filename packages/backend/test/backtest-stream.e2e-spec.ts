@@ -268,10 +268,11 @@ describe('backtest stream WebSocket (e2e)', () => {
       firstStatus: first && 'kind' in first ? first.status : null,
       snapshotHasNoCandles: first !== undefined && 'kind' in first && !('candles' in first),
       someDeltaHasCandles: deltas.some((d) => d.candles.length > 0),
-      // The symbol has a finer 1m period that is processed, but the run period is
-      // 1h, so no delta may carry a non-1h candle (spec: deltas carry run-period candles).
-      allDeltaCandlesAreRunPeriod: deltas.every((d) =>
-        d.candles.every((c) => c.period === Period.OneHour),
+      // Every active period is processed and streamed, so the symbol's finer 1m
+      // candles reach the client too (spec: deltas carry every active period's
+      // candles) — the chart folds them into the forming run-period bar.
+      deltaCandlesIncludeFinerPeriod: deltas.some((d) =>
+        d.candles.some((c) => c.period === Period.OneMinute),
       ),
       lastKind: last && 'kind' in last ? last.kind : null,
       lastStatus: last && 'kind' in last ? last.status : null,
@@ -283,7 +284,7 @@ describe('backtest stream WebSocket (e2e)', () => {
       firstStatus: 'running',
       snapshotHasNoCandles: true,
       someDeltaHasCandles: true,
-      allDeltaCandlesAreRunPeriod: true,
+      deltaCandlesIncludeFinerPeriod: true,
       lastKind: 'delta',
       lastStatus: 'completed',
       completedStatus: 'completed',
@@ -343,14 +344,10 @@ describe('backtest stream WebSocket (e2e)', () => {
       // gap would make it shorter — equality on both counts pins exactly-once.
       reconstructedTradeCount: reconstructedTrades.length,
       reconstructedEventCount: reconstructedEvents.length,
-      reattachDeltaCandlesAllRunPeriod: reattachedDeltas.every((d) =>
-        d.candles.every((c) => c.period === Period.OneHour),
-      ),
     }).toEqual({
       reattachSnapshotKind: 'snapshot',
       reconstructedTradeCount: authoritativeTradeCount,
       reconstructedEventCount: authoritativeEventCount,
-      reattachDeltaCandlesAllRunPeriod: true,
     });
   }, 30_000);
 

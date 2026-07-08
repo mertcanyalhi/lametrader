@@ -9,6 +9,7 @@ import {
   Pane,
   type Period,
   type Profile,
+  periodMillis,
   RenderKind,
   StateValueType,
 } from '@lametrader/core';
@@ -36,15 +37,20 @@ import {
   type WhitespaceData,
 } from 'lightweight-charts';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { formingBucketCandle } from '../../lib/aggregate-candles.js';
 import {
   captureViewport,
   DEFAULT_VISIBLE_BARS,
   getStoredViewport,
   liveLogicalRange,
+  rollingWindowBars,
   setStoredViewport,
 } from '../../lib/chart-viewport.js';
 import { priceDecimals } from '../../lib/format.js';
 import { liveCandleForPeriod } from '../../lib/hooks/candles.js';
+import { getLogger } from '../../lib/log.js';
+import { finestFinerPeriod } from '../../lib/periods.js';
+import type { CandleEvent } from '../../lib/stream/stream-client.types.js';
 import { StreamKind } from '../../lib/stream/stream-client.types.js';
 import { useStreamSubscription } from '../../lib/stream/use-stream-subscription.js';
 import { useTheme } from '../../lib/theme-context.js';
@@ -58,6 +64,8 @@ import {
   stateOverlayToLineData,
   stateOverlayToMarkers,
 } from './states/state-overlay.js';
+
+const log = getLogger('chart-paging');
 
 /** No-op callback used when no `onToggleLegendVisible` is passed (read-only legend). */
 const noop = (): void => {};
@@ -120,6 +128,10 @@ function toVolume(candle: Candle, colors: ChartColors): HistogramData {
  * the visible window stays fed. Range is a viewport hint — scroll-back beyond
  * the preset keeps working through the existing paging mechanism.
  *
+ * When `follow` is set (backtest replay), each candle growth re-frames the visible
+ * scale to a rolling fixed-width window on the newest bar instead of restoring or
+ * persisting the shared viewport — see the `follow` prop.
+ *
  * @param candles - the series to render, ascending by time.
  * @param symbol - the enriched symbol the chart is rendering (drives the overlay).
  * @param period - the current charted period (the middle of the summary line).
@@ -139,12 +151,15 @@ export function CandleChart({
   range,
   loadOlder,
   hasMore,
+  follow = false,
   overlays = [],
   stateOverlays = [],
   legendOverlays = [],
   onToggleLegendVisible,
   legendProfile = null,
   eventMarkers = [],
+  onLiveCandle,
+  live = true,
 }: {
   candles: Candle[];
   symbol: EnrichedSymbol;
@@ -152,6 +167,29 @@ export function CandleChart({
   range: ChartRange | null;
   loadOlder: () => void;
   hasMore: boolean;
+  /**
+   * Whether to fold the live market stream into the chart. Default `true` for the
+   * live `/chart`. A backtest **replay** chart sets this `false`: its bars are
+   * historical, so a present-time market tick would be folded into a bucket at
+   * *now* and — with `follow` — yank the viewport to today, far past the replay
+   * frontier.
+   */
+  live?: boolean;
+  /**
+   * Called with each live bar the chart applies to the series — the charted
+   * period's own frame, or the forming bar folded from a finer stream frame for
+   * a coarser charted period. Lets the page drive the tab title from the same
+   * forming bar the chart draws, so it ticks between coarse boundaries too.
+   */
+  onLiveCandle?: (candle: Candle) => void;
+  /**
+   * Backtest-replay rolling window: when set, each candle growth re-frames the
+   * visible scale to a fixed-width window ending on the newest bar (default
+   * `ROLLING_WINDOW_BARS`, or the user's current width if wider), instead of
+   * restoring/persisting the shared `chart-viewport`. The `/chart` page leaves
+   * this off and keeps its restore/capture behaviour.
+   */
+  follow?: boolean;
   overlays?: ReadonlyArray<IndicatorOverlay>;
   /**
    * One row per state key currently selected on the chart's States panel —
@@ -255,6 +293,18 @@ export function CandleChart({
   // re-applied after a `setData` re-seeds the series from history alone — which
   // happens on a theme or data refresh and would otherwise drop the live tail.
   const liveBarsRef = useRef<Map<number, Candle>>(new Map());
+  // The finest watched period strictly finer than the charted one, or `null` when
+  // the charted period is itself the finest (the common case, no folding). Its
+  // live frames are folded into the charted period's forming bar so a coarser
+  // charted period ticks between its own, less frequent, boundaries.
+  const finerPeriod = useMemo(
+    () => finestFinerPeriod(symbol.periods, period),
+    [symbol.periods, period],
+  );
+  // Finer-period frames in the charted period's current forming bucket, keyed by
+  // time; folded via `formingBucketCandle`. Empty (and unused) when `finerPeriod`
+  // is `null`. Reset with the stream key below.
+  const finerBarsRef = useRef<Map<number, Candle>>(new Map());
   // Those bars belong to one (id, period); when it changes, start a fresh tail.
   // Reset during render (not an effect) so the data effect re-seeds from empty.
   const streamKey = `${symbol.id}:${period}`;
@@ -262,6 +312,7 @@ export function CandleChart({
   if (streamKeyRef.current !== streamKey) {
     streamKeyRef.current = streamKey;
     liveBarsRef.current = new Map();
+    finerBarsRef.current = new Map();
     setLiveLatest(null);
   }
   // The newest bar's open time (live tick or last loaded), read by the long-lived
@@ -308,7 +359,11 @@ export function CandleChart({
       chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
     }
     const onRange = (logical: LogicalRange | null): void => {
-      if (logical && logical.from < 1 && paging.current.hasMore) paging.current.loadOlder();
+      if (logical && logical.from < 1 && paging.current.hasMore) {
+        // ponytail: debug loop instrumentation, remove once diagnosed
+        log.debug({ logicalFrom: logical.from, logicalTo: logical.to }, 'onRange → loadOlder');
+        paging.current.loadOlder();
+      }
     };
     chart.timeScale().subscribeVisibleLogicalRangeChange(onRange);
     // Persist the user's scroll/pinch window so the next chart restores it —
@@ -454,16 +509,50 @@ export function CandleChart({
   // last, leaving the closed bar stuck at its last in-progress value. Applying
   // per event (each frame) lets both land: `update` replaces the bar when the
   // time matches (forming / final correction) and appends when it is newer.
-  useStreamSubscription(StreamKind.Candle, symbol.id, (event) => {
-    const candle = liveCandleForPeriod(event, period);
-    if (!candle) return;
-    liveBarsRef.current.set(candle.time, candle);
-    setLiveLatest(candle);
-    const candleSeries = candleSeriesRef.current;
-    if (!candleSeries) return;
-    candleSeries.update(toCandlestick(candle));
-    volumeSeriesRef.current?.update(toVolume(candle, colors));
-  });
+  // Fold a finer-than-charted stream frame into the charted period's forming bar:
+  // buffer the frame under `finerPeriod`, drop any older than the current bucket,
+  // and re-aggregate the bucket via `formingBucketCandle`. Returns `null` when
+  // folding is off (`finerPeriod` is `null`) or the frame is a different period.
+  const foldFinerFrame = useCallback(
+    (event: CandleEvent): Candle | null => {
+      if (finerPeriod === null || event.period !== finerPeriod) return null;
+      const buffer = finerBarsRef.current;
+      buffer.set(event.candle.time, event.candle);
+      const bucketStart =
+        Math.floor(event.candle.time / periodMillis(period)) * periodMillis(period);
+      for (const time of buffer.keys()) {
+        if (time < bucketStart) buffer.delete(time);
+      }
+      return formingBucketCandle(
+        [...buffer.values()].sort((a, b) => a.time - b.time),
+        period,
+      );
+    },
+    [finerPeriod, period],
+  );
+
+  useStreamSubscription(
+    StreamKind.Candle,
+    // A replay chart (`live === false`) subscribes to nothing: its bars are
+    // historical, so a live market frame would land at *now* and pull the view
+    // off the replay window.
+    live ? symbol.id : null,
+    (event) => {
+      // The charted period's own frame, or — for a coarser charted period — the
+      // forming bar folded from the finest finer stream frame. `finerPeriod` is
+      // `null` when the charted period is the finest, so this is inert there and
+      // the shortest-period path is byte-for-byte the strict-match behaviour.
+      const candle = liveCandleForPeriod(event, period) ?? foldFinerFrame(event);
+      if (!candle) return;
+      liveBarsRef.current.set(candle.time, candle);
+      setLiveLatest(candle);
+      onLiveCandle?.(candle);
+      const candleSeries = candleSeriesRef.current;
+      if (!candleSeries) return;
+      candleSeries.update(toCandlestick(candle));
+      volumeSeriesRef.current?.update(toVolume(candle, colors));
+    },
+  );
 
   // When a range preset is active, drive the visible time scale to its window;
   // auto-trigger loadOlder if the earliest loaded candle doesn't yet cover it.
@@ -474,6 +563,19 @@ export function CandleChart({
     const now = Date.now();
     const earliestNeeded = now - rangeMillis(range, now);
     const earliestLoaded = candles[0]?.time ?? now;
+    // ponytail: debug loop instrumentation, remove once diagnosed
+    log.debug(
+      {
+        source: 'range-preset-effect',
+        range,
+        earliestLoaded,
+        earliestNeeded,
+        gapMs: earliestLoaded - earliestNeeded,
+        hasMore: paging.current.hasMore,
+        willPage: earliestLoaded > earliestNeeded && paging.current.hasMore,
+      },
+      'range/candles effect',
+    );
     if (earliestLoaded > earliestNeeded && paging.current.hasMore) {
       paging.current.loadOlder();
       return;
@@ -493,7 +595,9 @@ export function CandleChart({
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart || candles.length === 0 || settledRef.current) return;
-    if (range !== null) return;
+    // Follow mode owns the viewport (rolling window below) and must not touch the
+    // shared persisted window — skip restore/capture entirely.
+    if (range !== null || follow) return;
     const stored = getStoredViewport();
     if (!stored) {
       // Nothing to restore — accept the default view and start capturing.
@@ -503,6 +607,19 @@ export function CandleChart({
     }
     if (stored.mode === 'fixed') {
       const earliestLoaded = candles[0]?.time ?? stored.to;
+      // ponytail: debug loop instrumentation, remove once diagnosed
+      log.debug(
+        {
+          source: 'viewport-restore-effect',
+          storedFrom: stored.from,
+          storedTo: stored.to,
+          earliestLoaded,
+          gapMs: earliestLoaded - stored.from,
+          hasMore: paging.current.hasMore,
+          willPage: earliestLoaded > stored.from && paging.current.hasMore,
+        },
+        'fixed viewport restore',
+      );
       if (earliestLoaded > stored.from && paging.current.hasMore) {
         paging.current.loadOlder();
         return;
@@ -525,7 +642,18 @@ export function CandleChart({
         captureEnabledRef.current = true;
       });
     });
-  }, [range, candles]);
+  }, [range, candles, follow]);
+
+  // Backtest replay: on each candle growth, keep a rolling fixed-width window on
+  // the newest bar (default 20, or the user's current width if they've widened
+  // it) so the chart follows the replay instead of zooming out to fit everything.
+  useEffect(() => {
+    if (!follow) return;
+    const chart = chartRef.current;
+    if (!chart || candles.length === 0) return;
+    const bars = rollingWindowBars(chart.timeScale().getVisibleLogicalRange());
+    chart.timeScale().setVisibleLogicalRange(liveLogicalRange(candles.length, bars));
+  }, [candles, follow]);
 
   // Resolve the candle to inspect in the overlay: the one at the crosshair, or
   // the latest as a stable fallback when no hover is active. The live bar (when

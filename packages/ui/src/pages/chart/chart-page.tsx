@@ -7,7 +7,7 @@ import {
 } from '@lametrader/core';
 import { Callout, Flex, Link as RadixLink } from '@radix-ui/themes';
 import { useQueries } from '@tanstack/react-query';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router';
 import { getStoredPeriod, setStoredPeriod } from '../../lib/chart-period.js';
 import { getStoredStateOverlays } from '../../lib/chart-state-overlays.js';
@@ -293,17 +293,30 @@ function ChartView({
   selectedStateKeys: string[];
 }): ReactNode {
   const feed = usePagedCandles({ id, period });
-  // The chart applies live bars itself; here the live bar drives the tab-title
-  // latest close AND the events-window upper bound (`eventsTo` below). It must
-  // track the charted period specifically — a collapsed newest-any-period frame
-  // would read `null` between this period's ticks and leave the window stale.
+  // The chart applies live bars itself; here the live bar drives the events-window
+  // upper bound (`liveTo` below). It must track the charted period specifically — a
+  // collapsed newest-any-period frame would read `null` between this period's ticks
+  // and leave the window stale.
   const liveCandle = useLatestCandle(id, period);
+  // The exact forming bar the chart draws, reported back per applied frame — the
+  // charted period's own frame OR the bar folded from a finer stream frame on a
+  // coarser charted period. Drives the tab title so it ticks between coarse
+  // boundaries, not only on the charted period's own (infrequent) frames.
+  const [chartLive, setChartLive] = useState<Candle | null>(null);
+  // Clear the reported bar the moment the symbol/period switches (during render,
+  // matching the chart's own stream-key reset) so a stale bar can't bleed into
+  // the new title before the fresh chart reports its first frame.
+  const streamKeyRef = useRef(`${id}:${period}`);
+  if (streamKeyRef.current !== `${id}:${period}`) {
+    streamKeyRef.current = `${id}:${period}`;
+    if (chartLive !== null) setChartLive(null);
+  }
   const lastLoaded = feed.candles.at(-1) ?? null;
   // The live bar is the freshest "latest"; when it opens a new bar the last
   // loaded one becomes the title's previous-close baseline.
-  const latest = liveCandle ?? lastLoaded;
+  const latest = chartLive ?? liveCandle ?? lastLoaded;
   const previous =
-    liveCandle && lastLoaded && liveCandle.time > lastLoaded.time
+    latest && lastLoaded && latest.time > lastLoaded.time
       ? lastLoaded
       : (feed.candles.at(-2) ?? null);
   // Bound the indicator-compute window to the candle feed the chart actually
@@ -361,6 +374,7 @@ function ChartView({
       legendOverlays={legendOverlays}
       onToggleLegendVisible={toggleVisible}
       legendProfile={profile}
+      onLiveCandle={setChartLive}
     />
   );
   return (

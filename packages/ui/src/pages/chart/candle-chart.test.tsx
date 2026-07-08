@@ -14,19 +14,34 @@ import { CandleChart } from './candle-chart.js';
  * chart's forming-bar mutator. The shared stream client is mocked so the test
  * captures the candle listener and emits frames directly (jsdom has no socket).
  */
-const { createdSeries, listeners, crosshairCallbacks, eventMarkerPlugins, createMarkersCalls } =
-  vi.hoisted(() => ({
-    createdSeries: [] as Array<{
-      setData: ReturnType<typeof vi.fn>;
-      applyOptions: ReturnType<typeof vi.fn>;
-      update: ReturnType<typeof vi.fn>;
-    }>,
-    listeners: [] as Array<(event: unknown) => void>,
-    crosshairCallbacks: [] as Array<(param: { time?: number }) => void>,
-    eventMarkerPlugins: [] as Array<{ setMarkers: ReturnType<typeof vi.fn> }>,
-    /** Each `createSeriesMarkers(...)` call's initial markers list, in order. */
-    createMarkersCalls: [] as unknown[][],
-  }));
+const {
+  createdSeries,
+  listeners,
+  crosshairCallbacks,
+  eventMarkerPlugins,
+  createMarkersCalls,
+  timeScale,
+} = vi.hoisted(() => ({
+  createdSeries: [] as Array<{
+    setData: ReturnType<typeof vi.fn>;
+    applyOptions: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+  }>,
+  listeners: [] as Array<(event: unknown) => void>,
+  crosshairCallbacks: [] as Array<(param: { time?: number }) => void>,
+  eventMarkerPlugins: [] as Array<{ setMarkers: ReturnType<typeof vi.fn> }>,
+  /** Each `createSeriesMarkers(...)` call's initial markers list, in order. */
+  createMarkersCalls: [] as unknown[][],
+  // A single, stable time-scale so viewport calls are captured across renders
+  // (a fresh object per `timeScale()` call would drop the spies before assertion).
+  timeScale: {
+    subscribeVisibleLogicalRangeChange: vi.fn(),
+    subscribeVisibleTimeRangeChange: vi.fn(),
+    setVisibleRange: vi.fn(),
+    setVisibleLogicalRange: vi.fn(),
+    getVisibleLogicalRange: vi.fn(() => null as { from: number; to: number } | null),
+  },
+}));
 
 vi.mock('lightweight-charts', () => ({
   createChart: () => ({
@@ -35,13 +50,7 @@ vi.mock('lightweight-charts', () => ({
       createdSeries.push(series);
       return series;
     },
-    timeScale: () => ({
-      subscribeVisibleLogicalRangeChange: vi.fn(),
-      subscribeVisibleTimeRangeChange: vi.fn(),
-      setVisibleRange: vi.fn(),
-      setVisibleLogicalRange: vi.fn(),
-      getVisibleLogicalRange: vi.fn(() => null),
-    }),
+    timeScale: () => timeScale,
     priceScale: () => ({ applyOptions: vi.fn() }),
     subscribeCrosshairMove: (cb: (param: { time?: number }) => void) => {
       crosshairCallbacks.push(cb);
@@ -152,6 +161,27 @@ describe('CandleChart live ticks', () => {
     expect(createdSeries[0]?.update.mock.calls).toEqual([[point(live)]]);
   });
 
+  it('ignores live market frames when live is off (a replay chart)', () => {
+    render(
+      <ThemeProvider>
+        <Theme>
+          <CandleChart
+            candles={[bar(1000, 100, 100, 100, 100)]}
+            symbol={SYMBOL}
+            period={Period.OneHour}
+            range={null}
+            loadOlder={() => {}}
+            hasMore={false}
+            live={false}
+          />
+        </Theme>
+      </ThemeProvider>,
+    );
+    emit(event(bar(1000, 100, 120, 100, 110)));
+
+    expect(createdSeries[0]?.update.mock.calls).toEqual([]);
+  });
+
   it('applies both a just-closed bar and the new forming bar from one poll', () => {
     render(chartElement([bar(1000, 100, 100, 100, 100)]));
     // One poll crosses the interval boundary: the closed bar's final values and
@@ -211,6 +241,35 @@ describe('CandleChart live ticks', () => {
       [point(live3)],
       [point(live2)],
       [point(live3)],
+    ]);
+  });
+
+  it('folds finer-period frames into the coarser charted period forming bar', () => {
+    // Chart OneHour while the symbol also streams OneMinute (a finer period). The
+    // hour's forming bar must advance with each minute frame, not freeze between
+    // the hour's own boundaries.
+    const finerSymbol: EnrichedSymbol = { ...SYMBOL, periods: [Period.OneMinute, Period.OneHour] };
+    render(
+      <ThemeProvider>
+        <Theme>
+          <CandleChart
+            candles={[bar(0, 100, 100, 100, 100)]}
+            symbol={finerSymbol}
+            period={Period.OneHour}
+            range={null}
+            loadOlder={() => {}}
+            hasMore={false}
+          />
+        </Theme>
+      </ThemeProvider>,
+    );
+    // Two OneMinute frames inside the hour bucket starting at 3_600_000 ms.
+    emit(event(bar(3_600_000, 105, 110, 104, 108), Period.OneMinute));
+    emit(event(bar(3_660_000, 108, 112, 107, 111), Period.OneMinute));
+
+    expect(createdSeries[0]?.update.mock.calls).toEqual([
+      [point(bar(3_600_000, 105, 110, 104, 108))],
+      [point(bar(3_600_000, 105, 112, 104, 111))],
     ]);
   });
 });
@@ -282,5 +341,74 @@ describe('CandleChart event markers', () => {
       creates: 1,
       setCalls: [[next]],
     });
+  });
+});
+
+/** A `bars`-long ascending crypto series, one candle per second starting at `time` ms. */
+function series(count: number, from = 1000): Candle[] {
+  return Array.from({ length: count }, (_, i) => bar(from + i * 1000, 100, 100, 100, 100));
+}
+
+/** A chart element with the replay `follow` rolling-window prop set. */
+function followChart(candles: Candle[], follow: boolean) {
+  return (
+    <ThemeProvider>
+      <Theme>
+        <CandleChart
+          candles={candles}
+          symbol={SYMBOL}
+          period={Period.OneHour}
+          range={null}
+          loadOlder={() => {}}
+          hasMore={false}
+          follow={follow}
+        />
+      </Theme>
+    </ThemeProvider>
+  );
+}
+
+describe('CandleChart replay rolling window', () => {
+  beforeEach(() => {
+    createdSeries.length = 0;
+    listeners.length = 0;
+    crosshairCallbacks.length = 0;
+    timeScale.setVisibleLogicalRange.mockClear();
+    timeScale.getVisibleLogicalRange.mockReset();
+    timeScale.getVisibleLogicalRange.mockReturnValue(null);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('frames the last-20-bars logical window when candles are set in follow mode', () => {
+    render(followChart(series(25), true));
+
+    expect(timeScale.setVisibleLogicalRange.mock.calls).toEqual([[{ from: 5, to: 24 }]]);
+  });
+
+  it('moves the window forward to the newest bars when a candle is appended', () => {
+    const { rerender } = render(followChart(series(25), true));
+    rerender(followChart(series(26), true));
+
+    expect(timeScale.setVisibleLogicalRange.mock.calls).toEqual([
+      [{ from: 5, to: 24 }],
+      [{ from: 6, to: 25 }],
+    ]);
+  });
+
+  it("re-frames at the user's widened count when the visible window is wider than the default", () => {
+    timeScale.getVisibleLogicalRange.mockReturnValue({ from: 0, to: 49 });
+    render(followChart(series(60), true));
+
+    expect(timeScale.setVisibleLogicalRange.mock.calls).toEqual([[{ from: 10, to: 59 }]]);
+  });
+
+  it('does not re-frame the viewport on candle growth when follow is off', () => {
+    const { rerender } = render(followChart(series(25), false));
+    rerender(followChart(series(26), false));
+
+    expect(timeScale.setVisibleLogicalRange.mock.calls).toEqual([]);
   });
 });

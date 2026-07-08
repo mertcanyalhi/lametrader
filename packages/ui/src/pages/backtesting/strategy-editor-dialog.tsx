@@ -8,13 +8,12 @@ import {
   StateValueType,
 } from '@lametrader/core';
 import {
+  AlertDialog,
   Button,
   Callout,
   Checkbox,
   Dialog,
   Flex,
-  Heading,
-  IconButton,
   Select,
   Text,
   TextArea,
@@ -22,10 +21,12 @@ import {
 } from '@radix-ui/themes';
 import { type ReactNode, useState } from 'react';
 import { toast } from 'sonner';
+import { CollapsibleGroup } from '../../components/collapsible-group.js';
 import { FieldLabel } from '../../components/field-label.js';
 import { ApiError } from '../../lib/api-fetch.js';
 import {
   useCreateBacktestStrategy,
+  useDeleteBacktestStrategy,
   useUpdateBacktestStrategy,
 } from '../../lib/hooks/backtest-strategies.js';
 import { useSymbolStateKeys } from '../../lib/hooks/state.js';
@@ -156,6 +157,7 @@ export function StrategyEditorDialog({
   initial,
   symbolId,
   onSaved,
+  onDeleted,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -163,6 +165,7 @@ export function StrategyEditorDialog({
   initial?: BacktestStrategy;
   symbolId: string;
   onSaved?: (strategy: BacktestStrategy) => void;
+  onDeleted?: (id: string) => void;
 }): ReactNode {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -175,6 +178,7 @@ export function StrategyEditorDialog({
             symbolId={symbolId}
             onOpenChange={onOpenChange}
             onSaved={onSaved}
+            onDeleted={onDeleted}
           />
         ) : null}
       </Dialog.Content>
@@ -194,20 +198,24 @@ function StrategyEditorForm({
   symbolId,
   onOpenChange,
   onSaved,
+  onDeleted,
 }: {
   mode: 'create' | 'edit';
   initial?: BacktestStrategy;
   symbolId: string;
   onOpenChange: (open: boolean) => void;
   onSaved?: (strategy: BacktestStrategy) => void;
+  onDeleted?: (id: string) => void;
 }): ReactNode {
   const stateKeysQuery = useSymbolStateKeys(symbolId);
   const knownKeys = stateKeysQuery.data ?? [];
   const stateKeysLoading = symbolId !== '' && stateKeysQuery.isPending;
   const create = useCreateBacktestStrategy();
   const update = useUpdateBacktestStrategy();
+  const del = useDeleteBacktestStrategy();
   const [draft, setDraft] = useState<StrategyDraft>(() => draftFrom(initial));
   const [inlineError, setInlineError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const entryDefined = signalDefined(draft.entrySignalEnabled, draft.entrySignal);
   const exitDefined =
@@ -236,6 +244,19 @@ function StrategyEditorForm({
         return;
       }
       setInlineError(error instanceof Error ? error.message : 'Could not save the strategy.');
+    }
+  }
+
+  async function handleDelete(): Promise<void> {
+    if (initial === undefined) return;
+    try {
+      await del.mutateAsync(initial.id);
+      toast.success('Strategy deleted');
+      setConfirmDelete(false);
+      onDeleted?.(initial.id);
+      onOpenChange(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not delete the strategy.');
     }
   }
 
@@ -292,83 +313,77 @@ function StrategyEditorForm({
           />
         </div>
 
-        <section aria-label="Entry">
-          <Heading size="3" mb="2">
-            Entry
-          </Heading>
-          <ToggleRow
-            label="Signal"
-            ariaLabel="Entry signal"
-            checked={draft.entrySignalEnabled}
-            onCheckedChange={(next) => setDraft((prev) => ({ ...prev, entrySignalEnabled: next }))}
-          />
-          {draft.entrySignalEnabled ? (
-            <SignalEditor
-              value={draft.entrySignal}
-              knownKeys={knownKeys}
-              ariaPrefix="Entry signal"
-              isLoading={stateKeysLoading}
-              onChange={(next) => setDraft((prev) => ({ ...prev, entrySignal: next }))}
+        <CollapsibleGroup title="Entry" defaultOpen>
+          <div>
+            <ToggleRow
+              label="Signal"
+              ariaLabel="Entry signal"
+              checked={draft.entrySignalEnabled}
+              onCheckedChange={(next) =>
+                setDraft((prev) => ({ ...prev, entrySignalEnabled: next }))
+              }
             />
-          ) : null}
-        </section>
+            {draft.entrySignalEnabled ? (
+              <SignalEditor
+                value={draft.entrySignal}
+                knownKeys={knownKeys}
+                ariaPrefix="Entry signal"
+                isLoading={stateKeysLoading}
+                onChange={(next) => setDraft((prev) => ({ ...prev, entrySignal: next }))}
+              />
+            ) : null}
+          </div>
+        </CollapsibleGroup>
 
-        <section aria-label="Exit">
-          <Heading size="3" mb="2">
-            Exit
-          </Heading>
-          <Flex direction="column" gap="3">
-            <div>
-              <ToggleRow
-                label="Signal"
-                ariaLabel="Exit signal"
-                checked={draft.exitSignalEnabled}
-                onCheckedChange={(next) =>
-                  setDraft((prev) => ({ ...prev, exitSignalEnabled: next }))
-                }
+        <CollapsibleGroup title="Exit" defaultOpen>
+          <div>
+            <ToggleRow
+              label="Signal"
+              ariaLabel="Exit signal"
+              checked={draft.exitSignalEnabled}
+              onCheckedChange={(next) => setDraft((prev) => ({ ...prev, exitSignalEnabled: next }))}
+            />
+            {draft.exitSignalEnabled ? (
+              <SignalEditor
+                value={draft.exitSignal}
+                knownKeys={knownKeys}
+                ariaPrefix="Exit signal"
+                isLoading={stateKeysLoading}
+                onChange={(next) => setDraft((prev) => ({ ...prev, exitSignal: next }))}
               />
-              {draft.exitSignalEnabled ? (
-                <SignalEditor
-                  value={draft.exitSignal}
-                  knownKeys={knownKeys}
-                  ariaPrefix="Exit signal"
-                  isLoading={stateKeysLoading}
-                  onChange={(next) => setDraft((prev) => ({ ...prev, exitSignal: next }))}
-                />
-              ) : null}
-            </div>
-            <div>
-              <ToggleRow
-                label="Profit target"
-                ariaLabel="Profit target"
-                checked={draft.profitEnabled}
-                onCheckedChange={(next) => setDraft((prev) => ({ ...prev, profitEnabled: next }))}
+            ) : null}
+          </div>
+          <div>
+            <ToggleRow
+              label="Profit target"
+              ariaLabel="Profit target"
+              checked={draft.profitEnabled}
+              onCheckedChange={(next) => setDraft((prev) => ({ ...prev, profitEnabled: next }))}
+            />
+            {draft.profitEnabled ? (
+              <ThresholdEditor
+                value={draft.profitTarget}
+                ariaPrefix="Profit target"
+                onChange={(next) => setDraft((prev) => ({ ...prev, profitTarget: next }))}
               />
-              {draft.profitEnabled ? (
-                <ThresholdEditor
-                  value={draft.profitTarget}
-                  ariaPrefix="Profit target"
-                  onChange={(next) => setDraft((prev) => ({ ...prev, profitTarget: next }))}
-                />
-              ) : null}
-            </div>
-            <div>
-              <ToggleRow
-                label="Stop loss"
-                ariaLabel="Stop loss"
-                checked={draft.stopEnabled}
-                onCheckedChange={(next) => setDraft((prev) => ({ ...prev, stopEnabled: next }))}
+            ) : null}
+          </div>
+          <div>
+            <ToggleRow
+              label="Stop loss"
+              ariaLabel="Stop loss"
+              checked={draft.stopEnabled}
+              onCheckedChange={(next) => setDraft((prev) => ({ ...prev, stopEnabled: next }))}
+            />
+            {draft.stopEnabled ? (
+              <ThresholdEditor
+                value={draft.stopLoss}
+                ariaPrefix="Stop loss"
+                onChange={(next) => setDraft((prev) => ({ ...prev, stopLoss: next }))}
               />
-              {draft.stopEnabled ? (
-                <ThresholdEditor
-                  value={draft.stopLoss}
-                  ariaPrefix="Stop loss"
-                  onChange={(next) => setDraft((prev) => ({ ...prev, stopLoss: next }))}
-                />
-              ) : null}
-            </div>
-          </Flex>
-        </section>
+            ) : null}
+          </div>
+        </CollapsibleGroup>
 
         {!canSave ? (
           <Text size="1" color="gray">
@@ -376,13 +391,41 @@ function StrategyEditorForm({
           </Text>
         ) : null}
 
-        <Flex gap="3" justify="end">
-          <Button type="button" variant="soft" color="gray" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={!canSave || submitting} loading={submitting}>
-            Save
-          </Button>
+        <Flex gap="3" justify={mode === 'edit' ? 'between' : 'end'} align="center">
+          {mode === 'edit' ? (
+            <AlertDialog.Root open={confirmDelete} onOpenChange={setConfirmDelete}>
+              <AlertDialog.Trigger>
+                <Button type="button" variant="soft" color="red">
+                  Delete
+                </Button>
+              </AlertDialog.Trigger>
+              <AlertDialog.Content maxWidth="420px">
+                <AlertDialog.Title>Delete strategy</AlertDialog.Title>
+                <AlertDialog.Description size="2">
+                  Delete “{initial?.name}”? Saved backtests keep their own snapshot and are
+                  unaffected.
+                </AlertDialog.Description>
+                <Flex gap="3" mt="4" justify="end">
+                  <AlertDialog.Cancel>
+                    <Button variant="soft" color="gray">
+                      Cancel
+                    </Button>
+                  </AlertDialog.Cancel>
+                  <Button color="red" loading={del.isPending} onClick={() => void handleDelete()}>
+                    Delete
+                  </Button>
+                </Flex>
+              </AlertDialog.Content>
+            </AlertDialog.Root>
+          ) : null}
+          <Flex gap="3">
+            <Button type="button" variant="soft" color="gray" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!canSave || submitting} loading={submitting}>
+              Save
+            </Button>
+          </Flex>
         </Flex>
       </Flex>
     </form>

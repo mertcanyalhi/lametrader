@@ -327,27 +327,29 @@ describe('backtesting saved-reload flow (e2e)', () => {
     renderPage();
     await screen.findByRole('button', { name: 'Alpha' });
 
-    // Load the saved backtest from the panel — no run is started.
+    // Saved backtests now live behind the "Previous runs" bottom-bar modal —
+    // open it before the saved run is reachable. No run is started.
+    await user.click(await screen.findByRole('button', { name: /Previous runs/ }));
     await user.click(await screen.findByRole('button', { name: 'Saved run' }));
 
     await waitFor(() =>
       expect(screen.getByTestId('backtest-chart')).toHaveTextContent('1 candles'),
     );
+    // Summary (active first) carries the merged metric block plus the Daily P&L
+    // histogram shown by default.
     const summary = screen.getByLabelText('Summary');
-    expect(within(summary).getByText('Total P/L').nextElementSibling?.textContent).toBe('+19.00');
+    expect(within(summary).getByText('Total P/L').previousElementSibling?.textContent).toBe(
+      '+19.00',
+    );
+    expect(within(summary).getByText('Winners / losers').previousElementSibling?.textContent).toBe(
+      '1 / 0',
+    );
+    expect(screen.getByTestId('daily-pnl-chart')).toHaveTextContent('1 bars');
     expect(screen.queryByRole('button', { name: 'Run backtest' })).toBeNull();
 
     // Trades tab: the closed trade with its exit reason.
     await user.click(screen.getByRole('tab', { name: /Trades/ }));
     const tradeRows = within(screen.getByLabelText('Trades')).getAllByRole('row');
     expect(within(tradeRows[1] as HTMLElement).getByText('Profit target')).toBeInTheDocument();
-
-    // Daily P&L tab: the exit-day histogram plus the summary block.
-    await user.click(screen.getByRole('tab', { name: /Daily P&L/ }));
-    expect(screen.getByTestId('daily-pnl-chart')).toHaveTextContent('1 bars');
-    const block = screen.getByLabelText('Daily P&L summary');
-    expect(within(block).getByText('Winners / losers').nextElementSibling?.textContent).toBe(
-      '1 / 0',
-    );
   });
 });

@@ -5,6 +5,7 @@ import {
   captureViewport,
   getStoredViewport,
   liveLogicalRange,
+  rollingWindowBars,
   setStoredViewport,
 } from './chart-viewport.js';
 
@@ -79,5 +80,19 @@ describe('liveLogicalRange', () => {
 
   it('never starts before the first bar when the series is shorter than the window', () => {
     expect(liveLogicalRange(50, 120)).toEqual({ from: 0, to: 49 });
+  });
+});
+
+describe('rollingWindowBars', () => {
+  it('defaults to the 20-bar window when the chart reports no visible range', () => {
+    expect(rollingWindowBars(null)).toEqual(20);
+  });
+
+  it("adopts the user's current width (to - from + 1) when widened past the default", () => {
+    expect(rollingWindowBars({ from: 0, to: 49 })).toEqual(50);
+  });
+
+  it('floors at the 20-bar default when the current width is narrower', () => {
+    expect(rollingWindowBars({ from: 0, to: 9 })).toEqual(20);
   });
 });

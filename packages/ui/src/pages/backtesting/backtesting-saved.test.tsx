@@ -193,11 +193,12 @@ describe('BacktestingPage saved backtests', () => {
     );
   }
 
-  it('loads a saved backtest, locking the pickers and rendering its chart, markers, overlays, and results without a run', async () => {
+  it('loads a saved backtest, locking the pickers and rendering its chart, overlays, and results without a run', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole('button', { name: 'Alpha' });
 
+    await user.click(await screen.findByRole('button', { name: 'Previous runs (1)' }));
     await user.click(await screen.findByRole('button', { name: 'Saved BTC run' }));
 
     // The chart fills from the candle store and the persisted trades/events.
@@ -208,38 +209,78 @@ describe('BacktestingPage saved backtests', () => {
     const bar = screen.getByRole('group', { name: 'Backtesting actions' });
     const summary = screen.getByLabelText('Summary');
     expect({
+      // Trade markers show by default; rule-event overlays are gated off.
       markers: chart.getAttribute('data-markers'),
       overlays: chart.getAttribute('data-overlays'),
       symbolLocked: within(bar).getByRole('button', { name: BTC.id }).hasAttribute('disabled'),
-      periodLocked: within(bar)
+      // The period picker stays interactive: it is never locked, so a loaded
+      // backtest can be re-charted on another timeframe.
+      periodEnabled: !within(bar)
         .getByRole('button', { name: Period.OneHour })
         .hasAttribute('disabled'),
       profileLocked: within(bar).getByRole('button', { name: 'Alpha' }).hasAttribute('disabled'),
-      totalPnl: within(summary).getByText('Total P/L').nextElementSibling?.textContent,
+      totalPnl: within(summary).getByText('Total P/L').previousElementSibling?.textContent,
       noRunForm: screen.queryByRole('button', { name: 'Run backtest' }) === null,
     }).toEqual({
       markers: '2',
-      overlays: '1',
+      overlays: '0',
       symbolLocked: true,
-      periodLocked: true,
+      periodEnabled: true,
       profileLocked: true,
       totalPnl: '+10.00',
       noRunForm: true,
     });
   });
 
-  it('unlocks the pickers and returns to the saved list when the loaded backtest is closed', async () => {
+  it('shows a Chart settings cog button once a saved backtest chart is rendered', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole('button', { name: 'Alpha' });
 
+    await user.click(await screen.findByRole('button', { name: 'Previous runs (1)' }));
+    await user.click(await screen.findByRole('button', { name: 'Saved BTC run' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('backtest-chart')).toHaveTextContent('1 candles'),
+    );
+
+    expect(screen.queryByRole('button', { name: 'Chart settings' }) !== null).toEqual(true);
+  });
+
+  it('passes the rule-event overlays to the chart after toggling Show rule events on', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: 'Alpha' });
+
+    await user.click(await screen.findByRole('button', { name: 'Previous runs (1)' }));
+    await user.click(await screen.findByRole('button', { name: 'Saved BTC run' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('backtest-chart')).toHaveTextContent('1 candles'),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Chart settings' }));
+    await user.click(await screen.findByRole('switch', { name: 'Show rule events' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('backtest-chart').getAttribute('data-overlays')).toEqual('1'),
+    );
+    expect(screen.getByTestId('backtest-chart').getAttribute('data-overlays')).toEqual('1');
+  });
+
+  it('unlocks the pickers and re-enables the previous-runs trigger when the loaded backtest is closed', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: 'Alpha' });
+
+    await user.click(await screen.findByRole('button', { name: 'Previous runs (1)' }));
     await user.click(await screen.findByRole('button', { name: 'Saved BTC run' }));
     await user.click(await screen.findByRole('button', { name: 'Close' }));
 
     const bar = screen.getByRole('group', { name: 'Backtesting actions' });
     expect({
       symbolUnlocked: !within(bar).getByRole('button', { name: BTC.id }).hasAttribute('disabled'),
-      backToList: screen.getByRole('button', { name: 'Saved BTC run' }) !== null,
-    }).toEqual({ symbolUnlocked: true, backToList: true });
+      previousRunsEnabled: !within(bar)
+        .getByRole('button', { name: 'Previous runs (1)' })
+        .hasAttribute('disabled'),
+    }).toEqual({ symbolUnlocked: true, previousRunsEnabled: true });
   });
 });

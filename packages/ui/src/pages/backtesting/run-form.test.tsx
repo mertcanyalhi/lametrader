@@ -84,6 +84,8 @@ describe('RunForm', () => {
             symbolId="crypto:BTCUSDT"
             profileId="p-1"
             period={Period.OneHour}
+            runWindow={{ from: 0, to: 90 * 86_400_000 }}
+            onWindowChange={vi.fn()}
             onStarted={onStarted}
             {...props}
           />
@@ -93,17 +95,28 @@ describe('RunForm', () => {
     return { onStarted };
   }
 
-  it('renders the capital, date, and commission fields plus the Run button', () => {
+  it('renders the Period picker, always-visible Capital field, and Run button with the Commission group collapsed by default', () => {
     renderForm();
 
     expect({
-      capital: screen.getByLabelText('Initial capital') !== null,
-      start: screen.getByLabelText('Start') !== null,
-      end: screen.getByLabelText('End') !== null,
-      rate: screen.getByLabelText('Commission rate') !== null,
-      fixed: screen.getByLabelText('Fixed commission') !== null,
-      run: screen.getByRole('button', { name: 'Run backtest' }) !== null,
-    }).toEqual({ capital: true, start: true, end: true, rate: true, fixed: true, run: true });
+      period: screen.queryByRole('button', { name: 'Period' }) !== null,
+      run: screen.queryByRole('button', { name: 'Run backtest' }) !== null,
+      capital: screen.queryByLabelText('Initial capital') !== null,
+      rate: screen.queryByLabelText('Commission rate') !== null,
+      fixed: screen.queryByLabelText('Fixed commission') !== null,
+    }).toEqual({ period: true, run: true, capital: true, rate: false, fixed: false });
+  });
+
+  it('reveals the commission rate and fixed inputs when the Commission group is opened', async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.click(screen.getByText('Commission'));
+
+    expect({
+      rate: screen.queryByLabelText('Commission rate') !== null,
+      fixed: screen.queryByLabelText('Fixed commission') !== null,
+    }).toEqual({ rate: true, fixed: true });
   });
 
   it('rejects a non-positive initial capital client-side without posting', async () => {
@@ -119,20 +132,18 @@ describe('RunForm', () => {
     expect(posted).toEqual([]);
   });
 
-  it('rejects a start on or after the end client-side without posting', async () => {
+  it('applies a preset from the Period picker and posts that window', async () => {
     const user = userEvent.setup();
-    renderForm();
+    const { onStarted } = renderForm();
 
-    const start = screen.getByLabelText('Start');
-    const end = screen.getByLabelText('End');
-    await user.clear(start);
-    await user.type(start, '2024-02-01');
-    await user.clear(end);
-    await user.type(end, '2024-01-01');
+    await user.click(screen.getByRole('button', { name: 'Period' }));
+    await user.click(screen.getByRole('button', { name: '1 Week' }));
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
     await user.click(screen.getByRole('button', { name: 'Run backtest' }));
 
-    expect(await screen.findByText('Start must be before end.')).toBeInTheDocument();
-    expect(posted).toEqual([]);
+    await waitFor(() => expect(onStarted).toHaveBeenCalledWith(RUNNING));
+    const run = posted[0] as { start: number; end: number };
+    expect(run.end - run.start).toEqual(7 * 86_400_000);
   });
 
   it('disables Run and hints when no strategy is selected', () => {
@@ -144,13 +155,24 @@ describe('RunForm', () => {
     }).toEqual({ disabled: true, hint: true });
   });
 
-  it('posts the run and reports the new run id on a valid submit', async () => {
+  it('renders the hint after the Run button in DOM order when no strategy is selected', () => {
+    renderForm({ strategyId: null });
+
+    const run = screen.getByRole('button', { name: 'Run backtest' });
+    const hint = screen.getByText('Select a strategy and a profile to run.');
+    const buttonPrecedesHint = Boolean(
+      run.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(buttonPrecedesHint).toEqual(true);
+  });
+
+  it('posts the run with the default 90-day window on a valid submit', async () => {
     const user = userEvent.setup();
     const { onStarted } = renderForm();
 
     await user.click(screen.getByRole('button', { name: 'Run backtest' }));
 
-    await waitFor(() => expect(onStarted).toHaveBeenCalledWith('b-1'));
+    await waitFor(() => expect(onStarted).toHaveBeenCalledWith(RUNNING));
     expect(posted).toEqual([
       {
         strategyId: 's-1',
@@ -163,6 +185,8 @@ describe('RunForm', () => {
         commission: {},
       },
     ]);
+    const run = posted[0] as { start: number; end: number };
+    expect(run.end - run.start).toEqual(90 * 86_400_000);
   });
 
   it('surfaces a server 409 conflict as a form-level error', async () => {

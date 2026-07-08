@@ -124,7 +124,7 @@ Computed over **closed trades only**; the open position is reported separately a
 ### Stream protocol
 
 - On subscribe the server sends one **snapshot** frame: `status`, `progress`, `params`, trades so far, running summary, `openPosition?`, and events so far (candles are not included — the client reads the candle store over REST when reattaching).
-- Then batched **delta** frames: `progress`, new run-period candles, new events, new trades, updated summary.
+- Then batched **delta** frames: `progress`, new candles for **every active period** (the client renders the charted period and folds finer candles into the forming run-period bar so it advances intra-bar), new events, new trades, updated summary.
 - The final frame carries `status: Completed`; the persisted backtest keeps the same id.
 
 ## UI — the `/backtesting` page
@@ -135,7 +135,7 @@ Computed over **closed trades only**; the open position is reported separately a
 - Strategy editor dialog: Entry section (Signal checkbox + key/value), Exit section (Signal, Profit, Stop loss checkboxes), threshold kind dropdowns with info-icon tooltips explaining Fixed vs Percentage.
 - The state-key selector reuses the rules-editor machinery: find-or-create combobox seeded from the selected symbol's `GET /symbols/:id/state-keys`, known keys adopt their catalog type, unknown keys declare one; the value widget follows the type (string → text or enum-select, bool → checkbox, number → numeric).
 - During a run (or with a loaded backtest) the symbol / profile / period pickers are locked; loading a saved backtest sets the chart to its stored period.
-- The chart is the reused `CandleChart`: run-period candles fill incrementally from the frames, state overlays render from the run's events, and the run's trades draw entry/exit markers.
+- The chart is the reused `CandleChart`: candles fill incrementally from the frames (the client picks the charted period and folds finer candles into the forming run-period bar), state overlays render from the run's events, and the run's trades draw entry/exit markers.
 - Trades tab: entry/exit timestamps, buy/sell price, P/L, ROI %, exit reason; the open position renders as the last row with exit columns empty and its P/L marked unrealized.
 - Daily P&L tab: a `lightweight-charts` `HistogramSeries` of per-day P/L (a trade's whole P/L lands on its **exit day**, bucketed in UTC), with the summary block below (number of trades, winners/losers, average ROI per trade, total P/L, average days in trade).
 
@@ -203,7 +203,7 @@ Computed over **closed trades only**; the open position is reported separately a
 ### Stream
 
 - [ ] Subscribing to a running backtest first delivers a snapshot frame (progress, trades so far, summary, events so far).
-- [ ] Delta frames carry new run-period candles, events, trades, and the updated summary, batched.
+- [ ] Delta frames carry new candles for every active period, events, trades, and the updated summary, batched.
 - [ ] The final frame reports `Completed` and the backtest is immediately fetchable at the same id.
 
 ### UI

@@ -5,19 +5,20 @@ import type { BacktestRunInput } from './backtest.types.js';
 /**
  * The values the `/backtesting` run form binds to.
  *
- * Dates are the raw `yyyy-mm-dd` strings a native date input yields; the
- * commission `*Enabled` booleans mirror the Rate / Fixed checkboxes and gate
- * their amount fields. {@link toBacktestRunInput} folds these into the
- * {@link BacktestRunInput} the API takes (UTC-midnight epoch bounds, commissions
- * dropped when unchecked).
+ * `from` / `to` are the replay window's concrete epoch-ms bounds — the Period
+ * picker resolves whichever preset or freely-picked range the user chose to
+ * these two numbers before they reach the form. The commission `*Enabled`
+ * booleans mirror the Rate / Fixed checkboxes and gate their amount fields.
+ * {@link toBacktestRunInput} folds these into the {@link BacktestRunInput} the
+ * API takes (commissions dropped when unchecked).
  */
 export interface BacktestRunFormValues {
   /** Starting equity; must be positive. */
   initialCapital: number;
-  /** Replay window start as `yyyy-mm-dd`. */
-  start: string;
-  /** Replay window end as `yyyy-mm-dd`. */
-  end: string;
+  /** Replay window start, epoch ms. */
+  from: number;
+  /** Replay window end, epoch ms. */
+  to: number;
   /** Whether a percentage commission rate applies. */
   commissionRateEnabled: boolean;
   /** Percent of each fill's notional (`0.1` = 0.1 %); applied when enabled. */
@@ -28,18 +29,13 @@ export interface BacktestRunFormValues {
   commissionFixed: number;
 }
 
-/** Parse a `yyyy-mm-dd` form value to its UTC-midnight epoch ms, or `NaN` when blank/invalid. */
-function toUtcMs(date: string): number {
-  return Date.parse(`${date}T00:00:00.000Z`);
-}
-
 /**
  * The **user-facing** validation layer for the run form — the client half of the
- * client/server split (per ADR 0011): it mirrors the API's numeric / date rules
- * (`initialCapital > 0`, `start < end`, `end ≤ now`, non-negative commissions)
- * for immediate feedback, while the server re-validates every start (including
- * the profile-scope and stored-candle rules the client can't check) and stays
- * the authority.
+ * client/server split (per ADR 0011): it mirrors the API's numeric / range rules
+ * (`initialCapital > 0`, `from < to`, `to ≤ now`, non-negative commissions) for
+ * immediate feedback, while the server re-validates every start (including the
+ * profile-scope and stored-candle rules the client can't check) and stays the
+ * authority.
  *
  * A commission amount is only checked when its checkbox is enabled, so an
  * unchecked field never blocks a submit.
@@ -50,21 +46,17 @@ export const backtestRunFormSchema: yup.ObjectSchema<BacktestRunFormValues> = yu
     .typeError('Initial capital must be a number.')
     .positive('Initial capital must be greater than 0.')
     .required('Initial capital must be greater than 0.'),
-  start: yup.string().trim().required('Start date is required.'),
-  end: yup
-    .string()
-    .trim()
-    .required('End date is required.')
-    .test('before-end', 'Start must be before end.', (value, ctx) => {
-      const start = toUtcMs(String((ctx.parent as BacktestRunFormValues).start));
-      const end = toUtcMs(String(value));
-      if (Number.isNaN(start) || Number.isNaN(end)) return true;
-      return start < end;
+  from: yup.number().typeError('A start date is required.').required('A start date is required.'),
+  to: yup
+    .number()
+    .typeError('An end date is required.')
+    .required('An end date is required.')
+    .test('after-from', 'Start must be before end.', (value, ctx) => {
+      const { from } = ctx.parent as BacktestRunFormValues;
+      return !Number.isFinite(from) || !Number.isFinite(value) || from < (value as number);
     })
     .test('not-future', 'End must not be in the future.', (value) => {
-      const end = toUtcMs(String(value));
-      if (Number.isNaN(end)) return true;
-      return end <= Date.now();
+      return !Number.isFinite(value) || (value as number) <= Date.now();
     }),
   commissionRateEnabled: yup.boolean().required(),
   commissionRate: yup
@@ -98,8 +90,9 @@ export interface BacktestRunContext {
 
 /**
  * Fold validated form values plus the picker context into the
- * {@link BacktestRunInput} the API takes: dates become UTC-midnight epoch bounds
- * and each commission field is included only when its checkbox is enabled.
+ * {@link BacktestRunInput} the API takes: the window's `from` / `to` become the
+ * run's `start` / `end`, and each commission field is included only when its
+ * checkbox is enabled.
  *
  * @param values - the validated form values.
  * @param context - the strategy / symbol / profile / period selection.
@@ -116,8 +109,8 @@ export function toBacktestRunInput(
     symbolId: context.symbolId,
     profileId: context.profileId,
     period: context.period,
-    start: toUtcMs(values.start),
-    end: toUtcMs(values.end),
+    start: values.from,
+    end: values.to,
     initialCapital: values.initialCapital,
     commission,
   };

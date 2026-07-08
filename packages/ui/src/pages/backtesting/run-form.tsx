@@ -1,5 +1,5 @@
 import { yupResolver } from '@hookform/resolvers/yup';
-import type { Period } from '@lametrader/core';
+import type { Backtest, Period } from '@lametrader/core';
 import { Button, Callout, Checkbox, Flex, Text, TextField } from '@radix-ui/themes';
 import { type ReactNode, useState } from 'react';
 import {
@@ -10,7 +10,9 @@ import {
   type UseFormRegister,
   useForm,
 } from 'react-hook-form';
+import { CollapsibleGroup } from '../../components/collapsible-group.js';
 import { ApiError } from '../../lib/api-fetch.js';
+import type { RangeBounds } from '../../lib/backtest-range.js';
 import {
   type BacktestRunFormValues,
   backtestRunFormSchema,
@@ -18,28 +20,21 @@ import {
 } from '../../lib/backtest-run-schema.js';
 import { useStartBacktest } from '../../lib/hooks/backtests.js';
 import { getLogger } from '../../lib/log.js';
+import { PeriodPicker } from './period-picker.js';
 
 /** Scoped logger for run-form submission failures. */
 const log = getLogger('backtest-run-form');
 
-/** Format an epoch ms as a `yyyy-mm-dd` string in UTC for the date inputs. */
-function toDateValue(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10);
-}
-
-/** Milliseconds in one day. */
-const MS_PER_DAY = 86_400_000;
-
 /**
- * The run form's initial values: a positive starting capital, a trailing
- * ~90-day window ending today (UTC), and both commissions off.
+ * The run form's initial values: a positive starting capital, the caller-owned
+ * date window (lifted so it survives the form unmounting while a run streams),
+ * and both commissions off.
  */
-function defaultValues(): BacktestRunFormValues {
-  const now = Date.now();
+function defaultValues(runWindow: RangeBounds): BacktestRunFormValues {
   return {
     initialCapital: 10_000,
-    start: toDateValue(now - 90 * MS_PER_DAY),
-    end: toDateValue(now),
+    from: runWindow.from,
+    to: runWindow.to,
     commissionRateEnabled: false,
     commissionRate: 0,
     commissionFixedEnabled: false,
@@ -48,9 +43,9 @@ function defaultValues(): BacktestRunFormValues {
 }
 
 /**
- * The `/backtesting` run form: initial capital, start/end dates, and Rate / Fixed
- * commission checkboxes with amount fields, plus the Run action (spec: *UI — run
- * flow*).
+ * The `/backtesting` run form: initial capital, the Period range picker, and
+ * Rate / Fixed commission checkboxes with amount fields, plus the Run action
+ * (spec: *UI — run flow*).
  *
  * Validation is the client mirror of the API's numeric / date rules
  * ({@link backtestRunFormSchema}) for immediate feedback; the server re-validates
@@ -65,20 +60,27 @@ function defaultValues(): BacktestRunFormValues {
  * @param symbolId - the selected symbol id.
  * @param profileId - the selected profile id, or `null` when none is selected.
  * @param period - the selected chart period.
- * @param onStarted - called with the new run's id once the server accepts it.
+ * @param runWindow - the backtest date window, owned by the parent so it
+ *   persists across the form unmounting mid-run.
+ * @param onWindowChange - lifts a new date-window selection up to the parent.
+ * @param onStarted - called with the created run once the server accepts it.
  */
 export function RunForm({
   strategyId,
   symbolId,
   profileId,
   period,
+  runWindow,
+  onWindowChange,
   onStarted,
 }: {
   strategyId: string | null;
   symbolId: string;
   profileId: string | null;
   period: Period;
-  onStarted: (backtestId: string) => void;
+  runWindow: RangeBounds;
+  onWindowChange: (bounds: RangeBounds) => void;
+  onStarted: (backtest: Backtest) => void;
 }): ReactNode {
   const start = useStartBacktest();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -87,14 +89,18 @@ export function RunForm({
     handleSubmit,
     control,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<BacktestRunFormValues>({
     resolver: yupResolver(backtestRunFormSchema),
-    defaultValues: defaultValues(),
+    defaultValues: defaultValues(runWindow),
   });
 
   const rateEnabled = watch('commissionRateEnabled');
   const fixedEnabled = watch('commissionFixedEnabled');
+  const from = watch('from');
+  const to = watch('to');
+  const periodError = errors.from?.message ?? errors.to?.message;
   const canRun = strategyId !== null && profileId !== null;
 
   const onSubmit: SubmitHandler<BacktestRunFormValues> = async (values) => {
@@ -104,7 +110,7 @@ export function RunForm({
       const backtest = await start.mutateAsync(
         toBacktestRunInput(values, { strategyId, symbolId, profileId, period }),
       );
-      onStarted(backtest.id);
+      onStarted(backtest);
     } catch (error) {
       if (error instanceof ApiError) {
         setServerError(error.message);
@@ -124,6 +130,25 @@ export function RunForm({
           </Callout.Root>
         ) : null}
 
+        <div>
+          <Text as="div" size="2" weight="medium" mb="1">
+            Period
+          </Text>
+          <PeriodPicker
+            value={{ from, to }}
+            onChange={(bounds) => {
+              setValue('from', bounds.from, { shouldValidate: true });
+              setValue('to', bounds.to, { shouldValidate: true });
+              onWindowChange(bounds);
+            }}
+          />
+          {periodError ? (
+            <Text size="1" color="red" mt="1" className="block" role="alert">
+              {periodError}
+            </Text>
+          ) : null}
+        </div>
+
         <Field label="Initial capital" htmlFor="bt-initial-capital" error={errors.initialCapital}>
           <TextField.Root
             id="bt-initial-capital"
@@ -134,47 +159,40 @@ export function RunForm({
           />
         </Field>
 
-        <Flex gap="3">
-          <Field label="Start" htmlFor="bt-start" error={errors.start} className="grow">
-            <TextField.Root id="bt-start" type="date" {...register('start')} />
-          </Field>
-          <Field label="End" htmlFor="bt-end" error={errors.end} className="grow">
-            <TextField.Root id="bt-end" type="date" {...register('end')} />
-          </Field>
-        </Flex>
+        <CollapsibleGroup title="Commission">
+          <CommissionRow
+            control={control}
+            enabledName="commissionRateEnabled"
+            amountName="commissionRate"
+            label="Rate"
+            amountLabel="Commission rate"
+            suffix="%"
+            enabled={rateEnabled}
+            register={register}
+            error={errors.commissionRate}
+          />
+          <CommissionRow
+            control={control}
+            enabledName="commissionFixedEnabled"
+            amountName="commissionFixed"
+            label="Fixed"
+            amountLabel="Fixed commission"
+            suffix=""
+            enabled={fixedEnabled}
+            register={register}
+            error={errors.commissionFixed}
+          />
+        </CollapsibleGroup>
 
-        <CommissionRow
-          control={control}
-          enabledName="commissionRateEnabled"
-          amountName="commissionRate"
-          label="Rate"
-          amountLabel="Commission rate"
-          suffix="%"
-          enabled={rateEnabled}
-          register={register}
-          error={errors.commissionRate}
-        />
-        <CommissionRow
-          control={control}
-          enabledName="commissionFixedEnabled"
-          amountName="commissionFixed"
-          label="Fixed"
-          amountLabel="Fixed commission"
-          suffix=""
-          enabled={fixedEnabled}
-          register={register}
-          error={errors.commissionFixed}
-        />
+        <Button type="submit" disabled={!canRun} loading={start.isPending}>
+          Run backtest
+        </Button>
 
         {!canRun ? (
           <Text size="1" color="gray">
             Select a strategy and a profile to run.
           </Text>
         ) : null}
-
-        <Button type="submit" disabled={!canRun} loading={start.isPending}>
-          Run backtest
-        </Button>
       </Flex>
     </form>
   );

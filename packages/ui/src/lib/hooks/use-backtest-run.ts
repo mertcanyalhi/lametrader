@@ -109,7 +109,9 @@ export function useBacktestRun(active: ActiveBacktest | null): BacktestRunView |
   const catchUp = useQuery({
     queryKey: ['backtest-catchup-candles', params?.symbolId, params?.period, params?.start],
     queryFn: () =>
-      params ? fetchRangeCandles(params.symbolId, params.period, params.start, params.end) : [],
+      params && catchUpTo !== null
+        ? fetchRangeCandles(params.symbolId, params.period, params.start, catchUpTo)
+        : [],
     enabled: reattach && params !== null && catchUpTo !== null && catchUpTo > params.start,
   });
 

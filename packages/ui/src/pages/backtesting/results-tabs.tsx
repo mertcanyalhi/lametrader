@@ -1,20 +1,67 @@
 import type { BacktestOpenPosition, BacktestSummary, BacktestTrade } from '@lametrader/core';
-import { Badge, Box, Flex, Table, Tabs, Text } from '@radix-ui/themes';
-import { type ReactNode, useMemo } from 'react';
-import { formatChange, formatPrice, formatTimestamp } from '../../lib/format.js';
+import {
+  Badge,
+  Box,
+  Button,
+  Card,
+  Flex,
+  Grid,
+  SegmentedControl,
+  Table,
+  Tabs,
+  Text,
+} from '@radix-ui/themes';
+import { type ReactNode, useMemo, useState } from 'react';
+import { formatChange, formatDuration, formatPrice } from '../../lib/format.js';
+import { type MetricColor, signTone } from '../../lib/metric-tone.js';
 import { exitReasonLabel, formatPercent } from './backtest-format.js';
 import { bucketDailyPnl } from './daily-pnl.js';
 import { DailyPnlChart } from './daily-pnl-chart.js';
+import { PnlBaselineChart } from './pnl-baseline-chart.js';
+import { cumulativePnl, perTradePnl } from './pnl-series.js';
 
 /** The em-dash placeholder for a cell a row has no value for (the open row's exit columns). */
 const EMPTY_CELL = '—';
 
+/** Milliseconds in one day — converts the summary's fractional-days average into a span. */
+const MS_PER_DAY = 86_400_000;
+
 /**
- * The run's results panel — the three tabs the right ⅓ fills in as frames arrive
- * and after completion: **Summary** (realized aggregates + the open-position
- * unrealized line), **Trades** (closed trades plus the open position as an
- * unrealized final row), and **Daily P&L** (the per-exit-day histogram over a
- * five-item summary block).
+ * Format an epoch-ms timestamp as `YYYY-MM-DD HH:mm` (UTC) for the Trades table —
+ * the date plus 24-hour time, dropping the seconds/ms noise of the app's shared
+ * timestamp formatter since a trade's entry/exit reads clearly to the minute.
+ */
+function formatTradeTime(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 16).replace('T', ' ');
+}
+
+/** How many closed trades fill one page of the Trades table before pagination kicks in. */
+const PAGE_SIZE = 10;
+
+/** Column the Trades table can be sorted on (entry time or per-trade P/L). */
+type SortKey = 'entry' | 'pnl';
+
+/** Sort direction toggled by clicking a sortable header. */
+type SortDir = 'asc' | 'desc';
+
+/**
+ * Grade a win-rate percentage on a monotonic worse-to-better ramp — red under
+ * 25%, orange under 50%, yellow under 75%, green at 75%+ — so the metric's color
+ * reads the strategy's hit rate at a glance (0% red … 100% green).
+ */
+function winRateColor(pct: number): MetricColor {
+  if (pct < 25) return 'red';
+  if (pct < 50) return 'orange';
+  if (pct < 75) return 'yellow';
+  return 'green';
+}
+
+/**
+ * The run's results panel — two tabs the right ⅓ fills in as frames arrive and
+ * after completion: **Summary** (the full metric block plus a chart that toggles
+ * between the per-exit-day Daily P&L histogram, the cumulative equity curve, and
+ * the per-trade win/lose series) and **Trades** (closed trades plus the open
+ * position as an unrealized final row).
  *
  * Every value is read straight off the streamed run view, so the tabs track the
  * live run and render a loaded backtest identically.
@@ -37,53 +84,107 @@ export function ResultsTabs({
       <Tabs.List>
         <Tabs.Trigger value="summary">Summary</Tabs.Trigger>
         <Tabs.Trigger value="trades">Trades</Tabs.Trigger>
-        <Tabs.Trigger value="daily">Daily P&amp;L</Tabs.Trigger>
       </Tabs.List>
       <Box pt="3">
         <Tabs.Content value="summary">
-          <SummaryTab summary={summary} openPosition={openPosition} />
+          <SummaryTab trades={trades} summary={summary} openPosition={openPosition} />
         </Tabs.Content>
         <Tabs.Content value="trades">
           <TradesTab trades={trades} openPosition={openPosition} />
-        </Tabs.Content>
-        <Tabs.Content value="daily">
-          <DailyPnlTab trades={trades} summary={summary} />
         </Tabs.Content>
       </Box>
     </Tabs.Root>
   );
 }
 
+/** Which chart the Summary tab's toggle currently shows. */
+type SummaryChart = 'daily' | 'equity' | 'trades';
+
 /**
- * The Summary tab: total P/L, ROI %, and average P/L per trade over the closed
- * trades, plus a separate open-position unrealized-P/L line when a position is
- * still open.
+ * The Summary tab: the full metric block — realized aggregates (total P/L, ROI %,
+ * win rate), trade counts, and per-trade averages, plus the open-position
+ * unrealized-P/L line when a position is still open — above a chart that toggles
+ * between the per-exit-day Daily P&L histogram, the cumulative equity curve, and
+ * the per-trade win/lose series. Each metric is a card tinted by the sign of its
+ * value (win rate on its own ramp; unsigned metrics stay neutral).
  */
 function SummaryTab({
+  trades,
   summary,
   openPosition,
 }: {
+  trades: readonly BacktestTrade[];
   summary: BacktestSummary;
   openPosition: BacktestOpenPosition | undefined;
 }): ReactNode {
+  const [chart, setChart] = useState<SummaryChart>('daily');
+  const bars = useMemo(() => bucketDailyPnl(trades), [trades]);
+  const equity = useMemo(() => cumulativePnl(trades), [trades]);
+  const perTrade = useMemo(() => perTradePnl(trades), [trades]);
+  const winRate = summary.tradeCount > 0 ? (summary.winners / summary.tradeCount) * 100 : 0;
+
   return (
-    <Flex direction="column" gap="2" aria-label="Summary">
-      <Metric label="Total P/L" value={formatChange(summary.totalPnl)} />
-      <Metric label="ROI %" value={formatPercent(summary.roiPct)} />
-      <Metric label="Avg P/L per trade" value={formatChange(summary.avgPnlPerTrade)} />
-      {openPosition ? (
+    <Flex direction="column" gap="3">
+      <Grid columns={{ initial: '2', sm: '3' }} gap="2" aria-label="Summary">
         <Metric
-          label="Open position (unrealized)"
-          value={formatChange(openPosition.unrealizedPnl)}
+          label="Total P/L"
+          value={formatChange(summary.totalPnl)}
+          amount={summary.totalPnl}
         />
-      ) : null}
+        <Metric label="ROI %" value={formatPercent(summary.roiPct)} amount={summary.roiPct} />
+        <Metric label="Win rate" value={`${winRate.toFixed(1)}%`} color={winRateColor(winRate)} />
+        <Metric
+          label="Avg P/L per trade"
+          value={formatChange(summary.avgPnlPerTrade)}
+          amount={summary.avgPnlPerTrade}
+        />
+        <Metric
+          label="Avg ROI per trade"
+          value={formatPercent(summary.avgRoiPct)}
+          amount={summary.avgRoiPct}
+        />
+        <Metric label="Trades" value={String(summary.tradeCount)} />
+        <Metric label="Winners / losers" value={`${summary.winners} / ${summary.losers}`} />
+        <Metric
+          label="Avg period in trade"
+          value={formatDuration(summary.avgDaysInTrade * MS_PER_DAY)}
+        />
+        {openPosition ? (
+          <Metric
+            label="Open position (unrealized)"
+            value={formatChange(openPosition.unrealizedPnl)}
+            amount={openPosition.unrealizedPnl}
+          />
+        ) : null}
+      </Grid>
+
+      <SegmentedControl.Root
+        size="1"
+        value={chart}
+        onValueChange={(value) => setChart(value as SummaryChart)}
+        aria-label="Chart"
+      >
+        <SegmentedControl.Item value="daily">Daily P&amp;L</SegmentedControl.Item>
+        <SegmentedControl.Item value="equity">Equity curve</SegmentedControl.Item>
+        <SegmentedControl.Item value="trades">Win/lose per trade</SegmentedControl.Item>
+      </SegmentedControl.Root>
+      <div className="h-40 w-full">
+        {chart === 'daily' ? (
+          <DailyPnlChart bars={bars} />
+        ) : chart === 'equity' ? (
+          <PnlBaselineChart points={equity} />
+        ) : (
+          <PnlBaselineChart points={perTrade} />
+        )}
+      </div>
     </Flex>
   );
 }
 
 /**
- * The Trades tab: one row per closed trade (entry/exit times, buy/sell prices,
- * P/L, ROI %, and exit reason), with the open position as the final row — its
+ * The Trades tab: one sortable, paginated row per closed trade (entry/exit times,
+ * holding duration, buy/sell prices, per-trade P/L amount and ROI %, and exit
+ * reason), with the open position pinned as the final row on the last page — its
  * exit columns blank and its P/L flagged unrealized.
  */
 function TradesTab({
@@ -93,6 +194,32 @@ function TradesTab({
   trades: readonly BacktestTrade[];
   openPosition: BacktestOpenPosition | undefined;
 }): ReactNode {
+  const [sortKey, setSortKey] = useState<SortKey>('entry');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [pageIndex, setPageIndex] = useState(0);
+
+  const sorted = useMemo(() => {
+    const factor = sortDir === 'asc' ? 1 : -1;
+    return [...trades].sort(
+      (a, b) => factor * (sortKey === 'entry' ? a.entryTs - b.entryTs : a.pnl - b.pnl),
+    );
+  }, [trades, sortKey, sortDir]);
+
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const page = Math.min(pageIndex, pageCount - 1);
+  const pageTrades = sorted.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  const showOpen = openPosition !== undefined && page === pageCount - 1;
+
+  function toggleSort(key: SortKey): void {
+    if (key === sortKey) {
+      setSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+    setPageIndex(0);
+  }
+
   if (trades.length === 0 && !openPosition) {
     return (
       <Text size="2" color="gray">
@@ -101,92 +228,169 @@ function TradesTab({
     );
   }
   return (
-    <Table.Root size="1" aria-label="Trades">
-      <Table.Header>
-        <Table.Row>
-          <Table.ColumnHeaderCell>Entry</Table.ColumnHeaderCell>
-          <Table.ColumnHeaderCell>Exit</Table.ColumnHeaderCell>
-          <Table.ColumnHeaderCell>Buy</Table.ColumnHeaderCell>
-          <Table.ColumnHeaderCell>Sell</Table.ColumnHeaderCell>
-          <Table.ColumnHeaderCell>P/L</Table.ColumnHeaderCell>
-          <Table.ColumnHeaderCell>ROI %</Table.ColumnHeaderCell>
-          <Table.ColumnHeaderCell>Reason</Table.ColumnHeaderCell>
-        </Table.Row>
-      </Table.Header>
-      <Table.Body>
-        {trades.map((trade) => (
-          <Table.Row key={`${trade.entryTs}-${trade.exitTs}`}>
-            <Table.Cell>{formatTimestamp(trade.entryTs)}</Table.Cell>
-            <Table.Cell>{formatTimestamp(trade.exitTs)}</Table.Cell>
-            <Table.Cell>{formatPrice(trade.entryPrice)}</Table.Cell>
-            <Table.Cell>{formatPrice(trade.exitPrice)}</Table.Cell>
-            <Table.Cell>{formatChange(trade.pnl)}</Table.Cell>
-            <Table.Cell>{formatPercent(trade.roiPct)}</Table.Cell>
-            <Table.Cell>{exitReasonLabel(trade.exitReason)}</Table.Cell>
-          </Table.Row>
-        ))}
-        {openPosition ? (
+    <Flex direction="column" gap="2">
+      <Table.Root size="1" aria-label="Trades" className="[&_td]:text-[11px]">
+        <Table.Header>
           <Table.Row>
-            <Table.Cell>{formatTimestamp(openPosition.entryTs)}</Table.Cell>
-            <Table.Cell>{EMPTY_CELL}</Table.Cell>
-            <Table.Cell>{formatPrice(openPosition.entryPrice)}</Table.Cell>
-            <Table.Cell>{EMPTY_CELL}</Table.Cell>
-            <Table.Cell>
-              <Flex align="center" gap="2">
-                {formatChange(openPosition.unrealizedPnl)}
-                <Badge color="amber" variant="soft">
-                  unrealized
-                </Badge>
-              </Flex>
-            </Table.Cell>
-            <Table.Cell>{EMPTY_CELL}</Table.Cell>
-            <Table.Cell>Open</Table.Cell>
+            <HeaderCell
+              label="Entry"
+              sort={{
+                active: sortKey === 'entry',
+                dir: sortDir,
+                onClick: () => toggleSort('entry'),
+              }}
+            />
+            <HeaderCell label="Exit" />
+            <HeaderCell label="Duration" />
+            <HeaderCell label="Buy" />
+            <HeaderCell label="Sell" />
+            <HeaderCell
+              label="P/L"
+              sort={{ active: sortKey === 'pnl', dir: sortDir, onClick: () => toggleSort('pnl') }}
+            />
+            <HeaderCell label="ROI %" />
+            <HeaderCell label="Reason" />
           </Table.Row>
-        ) : null}
-      </Table.Body>
-    </Table.Root>
+        </Table.Header>
+        <Table.Body>
+          {pageTrades.map((trade) => (
+            <Table.Row key={`${trade.entryTs}-${trade.exitTs}`}>
+              <Table.Cell>{formatTradeTime(trade.entryTs)}</Table.Cell>
+              <Table.Cell>{formatTradeTime(trade.exitTs)}</Table.Cell>
+              <Table.Cell>{formatDuration(trade.exitTs - trade.entryTs)}</Table.Cell>
+              <Table.Cell>{formatPrice(trade.entryPrice)}</Table.Cell>
+              <Table.Cell>{formatPrice(trade.exitPrice)}</Table.Cell>
+              <Table.Cell>
+                <Text color={signTone(trade.pnl)}>{formatChange(trade.pnl)}</Text>
+              </Table.Cell>
+              <Table.Cell>
+                <Text color={signTone(trade.roiPct)}>{formatPercent(trade.roiPct)}</Text>
+              </Table.Cell>
+              <Table.Cell>{exitReasonLabel(trade.exitReason)}</Table.Cell>
+            </Table.Row>
+          ))}
+          {showOpen && openPosition ? (
+            <Table.Row>
+              <Table.Cell>{formatTradeTime(openPosition.entryTs)}</Table.Cell>
+              <Table.Cell>{EMPTY_CELL}</Table.Cell>
+              <Table.Cell>{EMPTY_CELL}</Table.Cell>
+              <Table.Cell>{formatPrice(openPosition.entryPrice)}</Table.Cell>
+              <Table.Cell>{EMPTY_CELL}</Table.Cell>
+              <Table.Cell>
+                <Flex align="center" gap="2">
+                  <Text color={signTone(openPosition.unrealizedPnl)}>
+                    {formatChange(openPosition.unrealizedPnl)}
+                  </Text>
+                  <Badge color="amber" variant="soft">
+                    unrealized
+                  </Badge>
+                </Flex>
+              </Table.Cell>
+              <Table.Cell>{EMPTY_CELL}</Table.Cell>
+              <Table.Cell>Open</Table.Cell>
+            </Table.Row>
+          ) : null}
+        </Table.Body>
+      </Table.Root>
+      {pageCount > 1 ? (
+        <Flex justify="between" align="center" gap="3">
+          <Text size="1" color="gray">
+            Page {page + 1} of {pageCount}
+          </Text>
+          <Flex gap="2">
+            <Button
+              size="1"
+              variant="soft"
+              disabled={page === 0}
+              onClick={() => setPageIndex(page - 1)}
+            >
+              Previous
+            </Button>
+            <Button
+              size="1"
+              variant="soft"
+              disabled={page >= pageCount - 1}
+              onClick={() => setPageIndex(page + 1)}
+            >
+              Next
+            </Button>
+          </Flex>
+        </Flex>
+      ) : null}
+    </Flex>
   );
 }
 
 /**
- * The Daily P&L tab: the per-exit-day histogram above the five-item summary
- * block (number of trades, winners/losers, average ROI per trade, total P/L,
- * average days in trade).
+ * One metric as a color-coded card in the grid: a centered vertical stack with
+ * the value on top as the larger, accented text and the label below it as smaller
+ * muted text. The accent is an explicit `color` when given (e.g. the win-rate
+ * ramp), else derived from the sign of `amount` (green positive, red negative,
+ * neutral zero); a metric with neither stays neutral. The card background is the
+ * accent's `-a3` alpha step.
  */
-function DailyPnlTab({
-  trades,
-  summary,
+function Metric({
+  label,
+  value,
+  amount,
+  color,
 }: {
-  trades: readonly BacktestTrade[];
-  summary: BacktestSummary;
+  label: string;
+  value: string;
+  amount?: number;
+  color?: MetricColor;
 }): ReactNode {
-  const bars = useMemo(() => bucketDailyPnl(trades), [trades]);
+  const tone: MetricColor = color ?? (amount === undefined ? 'gray' : signTone(amount));
   return (
-    <Flex direction="column" gap="3">
-      <div className="h-40 w-full">
-        <DailyPnlChart bars={bars} />
-      </div>
-      <Flex direction="column" gap="2" aria-label="Daily P&L summary">
-        <Metric label="Trades" value={String(summary.tradeCount)} />
-        <Metric label="Winners / losers" value={`${summary.winners} / ${summary.losers}`} />
-        <Metric label="Avg ROI per trade" value={formatPercent(summary.avgRoiPct)} />
-        <Metric label="Total P/L" value={formatChange(summary.totalPnl)} />
-        <Metric label="Avg days in trade" value={summary.avgDaysInTrade.toFixed(2)} />
+    <Card size="1" style={{ background: `var(--${tone}-a3)` }}>
+      <Flex direction="column" align="center" gap="1">
+        <Text size="4" weight="bold" color={tone}>
+          {value}
+        </Text>
+        <Text size="1" color="gray">
+          {label}
+        </Text>
       </Flex>
-    </Flex>
+    </Card>
   );
 }
 
-/** One label/value row in the Summary and Daily P&L blocks. */
-function Metric({ label, value }: { label: string; value: string }): ReactNode {
+/**
+ * A Trades-table column header with one consistent look — a gray, medium, size-1
+ * label — whether or not the column is sortable, so the two never diverge in
+ * weight or color. A sortable header (`sort` given) wraps that label in a ghost
+ * button that toggles the sort, with an asc/desc caret that is decorative
+ * (`aria-hidden`) so the button's accessible name stays the plain label; a plain
+ * header renders the same label with no control.
+ */
+function HeaderCell({
+  label,
+  sort,
+}: {
+  label: string;
+  sort?: { active: boolean; dir: SortDir; onClick: () => void };
+}): ReactNode {
+  const text = (
+    <Text size="1" weight="medium" color="gray">
+      {label}
+    </Text>
+  );
   return (
-    <Flex justify="between" align="center" gap="4">
-      <Text size="2" color="gray">
-        {label}
-      </Text>
-      <Text size="2" weight="medium">
-        {value}
-      </Text>
-    </Flex>
+    <Table.ColumnHeaderCell>
+      {/* Fixed-height centered box so the sortable ghost button and the plain
+          text labels share one vertical line instead of drifting apart. */}
+      <Flex align="center" className="h-6">
+        {sort ? (
+          <Button variant="ghost" size="1" color="gray" onClick={sort.onClick} my="0">
+            {text}
+            <Text aria-hidden="true" size="1" color="gray">
+              {sort.active ? (sort.dir === 'asc' ? '▲' : '▼') : ''}
+            </Text>
+          </Button>
+        ) : (
+          text
+        )}
+      </Flex>
+    </Table.ColumnHeaderCell>
   );
 }
