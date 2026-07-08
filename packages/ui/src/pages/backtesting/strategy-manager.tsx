@@ -33,15 +33,20 @@ type DialogState =
  *                     editors in the dialog.
  * @param selectedId - The controlled selected strategy id (omit for uncontrolled).
  * @param onSelectedIdChange - Called when the selection changes (controlled mode).
+ * @param disabled - When `true` (a backtest run is active), the New / Edit /
+ *                     Delete *actions* are locked; the selector itself stays
+ *                     interactive so the trader can still browse strategies.
  */
 export function StrategyManager({
   symbolId,
   selectedId: controlledId,
   onSelectedIdChange,
+  disabled = false,
 }: {
   symbolId: string;
   selectedId?: string | null;
   onSelectedIdChange?: (id: string | null) => void;
+  disabled?: boolean;
 }): ReactNode {
   const strategiesQuery = useBacktestStrategies();
   const strategies = strategiesQuery.data ?? [];
@@ -97,6 +102,7 @@ export function StrategyManager({
         <Button
           type="button"
           variant="soft"
+          disabled={disabled}
           onClick={() => setDialog({ open: true, mode: 'create', initial: undefined })}
         >
           <Plus size={16} aria-hidden="true" />
@@ -111,6 +117,7 @@ export function StrategyManager({
                 variant="soft"
                 color="gray"
                 aria-label="Edit strategy"
+                disabled={disabled}
                 onClick={() => setDialog({ open: true, mode: 'edit', initial: selected })}
               >
                 <Pencil size={16} aria-hidden="true" />
@@ -123,6 +130,7 @@ export function StrategyManager({
                 variant="soft"
                 color="red"
                 aria-label="Delete strategy"
+                disabled={disabled}
                 onClick={() => setToDelete(selected)}
               >
                 <Trash2 size={16} aria-hidden="true" />

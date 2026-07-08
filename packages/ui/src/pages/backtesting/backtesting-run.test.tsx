@@ -231,7 +231,7 @@ describe('BacktestingPage run flow', () => {
     });
   }
 
-  it('locks the pickers and shows the progress bar when a run starts', async () => {
+  it('locks the symbol and profile pickers and shows the progress bar when a run starts', async () => {
     const user = userEvent.setup();
     renderPage();
     // Wait for the profile auto-select so the run has a profile.
@@ -243,17 +243,38 @@ describe('BacktestingPage run flow', () => {
     const bar = screen.getByRole('group', { name: 'Backtesting actions' });
     expect({
       symbolLocked: within(bar).getByRole('button', { name: BTC.id }).hasAttribute('disabled'),
-      periodLocked: within(bar)
-        .getByRole('button', { name: Period.OneHour })
-        .hasAttribute('disabled'),
       profileLocked: within(bar).getByRole('button', { name: 'Alpha' }).hasAttribute('disabled'),
       progressShown: screen.getByText('Running — 50%') !== null,
     }).toEqual({
       symbolLocked: true,
-      periodLocked: true,
       profileLocked: true,
       progressShown: true,
     });
+  });
+
+  it('keeps the period picker interactive while a run is active', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: 'Alpha' });
+
+    await selectStrategyAndRun(user);
+    push(snapshot(1));
+
+    const bar = screen.getByRole('group', { name: 'Backtesting actions' });
+    expect(
+      within(bar).getByRole('button', { name: Period.OneHour }).hasAttribute('disabled'),
+    ).toEqual(false);
+  });
+
+  it('locks the strategy New action while a run is active', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: 'Alpha' });
+
+    await selectStrategyAndRun(user);
+    push(snapshot(1));
+
+    expect(screen.getByRole('button', { name: /New/ }).hasAttribute('disabled')).toEqual(true);
   });
 
   it('fills the chart incrementally from delta candle frames', async () => {

@@ -60,11 +60,11 @@ describe('StrategyManager', () => {
     });
   }
 
-  function renderManager(): void {
+  function renderManager(disabled = false): void {
     render(
       <QueryClientProvider client={queryClient}>
         <Theme>
-          <StrategyManager symbolId="crypto:BTCUSDT" />
+          <StrategyManager symbolId="crypto:BTCUSDT" disabled={disabled} />
         </Theme>
       </QueryClientProvider>,
     );
@@ -124,6 +124,35 @@ describe('StrategyManager', () => {
     await user.click(screen.getByRole('button', { name: 'Edit strategy' }));
 
     expect(await screen.findByLabelText('Strategy name')).toHaveValue('Breakout');
+  });
+
+  it('keeps the New button enabled when idle', async () => {
+    renderManager();
+
+    const newButton = await screen.findByRole('button', { name: /New/ });
+
+    expect(newButton).toBeEnabled();
+  });
+
+  it('disables the New button when disabled (a backtest is running)', async () => {
+    renderManager(true);
+
+    const newButton = await screen.findByRole('button', { name: /New/ });
+
+    expect(newButton).toBeDisabled();
+  });
+
+  it('disables the edit and delete controls when disabled (a backtest is running)', async () => {
+    const user = userEvent.setup();
+    renderManager(true);
+
+    await user.click(await screen.findByRole('combobox', { name: 'Selected strategy' }));
+    await user.click(screen.getByRole('option', { name: 'Breakout' }));
+
+    expect({
+      edit: screen.getByRole('button', { name: 'Edit strategy' }).hasAttribute('disabled'),
+      delete: screen.getByRole('button', { name: 'Delete strategy' }).hasAttribute('disabled'),
+    }).toEqual({ edit: true, delete: true });
   });
 
   it('deletes the selected strategy and drops it from the selector', async () => {

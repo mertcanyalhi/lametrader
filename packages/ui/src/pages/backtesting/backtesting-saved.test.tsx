@@ -213,7 +213,9 @@ describe('BacktestingPage saved backtests', () => {
       markers: chart.getAttribute('data-markers'),
       overlays: chart.getAttribute('data-overlays'),
       symbolLocked: within(bar).getByRole('button', { name: BTC.id }).hasAttribute('disabled'),
-      periodLocked: within(bar)
+      // The period picker stays interactive: it is never locked, so a loaded
+      // backtest can be re-charted on another timeframe.
+      periodEnabled: !within(bar)
         .getByRole('button', { name: Period.OneHour })
         .hasAttribute('disabled'),
       profileLocked: within(bar).getByRole('button', { name: 'Alpha' }).hasAttribute('disabled'),
@@ -223,7 +225,7 @@ describe('BacktestingPage saved backtests', () => {
       markers: '2',
       overlays: '0',
       symbolLocked: true,
-      periodLocked: true,
+      periodEnabled: true,
       profileLocked: true,
       totalPnl: '+10.00',
       noRunForm: true,

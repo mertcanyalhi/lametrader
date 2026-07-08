@@ -207,6 +207,7 @@ function BacktestingLayout({
             view={view}
             runId={activeRun?.id ?? null}
             loaded={loaded}
+            locked={locked}
             onStarted={(id) => {
               setLoaded(null);
               setActiveRun({ id, reattach: false });
@@ -234,7 +235,6 @@ function BacktestingLayout({
           period={period}
           range={range}
           watchedPeriods={watchedPeriods}
-          disabled={locked}
           onApply={(next) => {
             setPeriod(next.period);
             setRange(next.range);
@@ -321,6 +321,7 @@ function BacktestPanel({
   view,
   runId,
   loaded,
+  locked,
   onStarted,
   onDismiss,
   onCloseLoaded,
@@ -333,6 +334,8 @@ function BacktestPanel({
   view: BacktestRunView | null;
   runId: string | null;
   loaded: Backtest | null;
+  /** A run is active (or a saved backtest is loaded); strategy actions lock. */
+  locked: boolean;
   onStarted: (backtestId: string) => void;
   onDismiss: () => void;
   onCloseLoaded: () => void;
@@ -369,6 +372,7 @@ function BacktestPanel({
             symbolId={symbolId}
             selectedId={strategyId}
             onSelectedIdChange={onStrategyIdChange}
+            disabled={locked}
           />
         </section>
         <section aria-label="Backtest run">
