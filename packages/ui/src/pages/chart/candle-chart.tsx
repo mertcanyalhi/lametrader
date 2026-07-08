@@ -158,6 +158,7 @@ export function CandleChart({
   onToggleLegendVisible,
   legendProfile = null,
   eventMarkers = [],
+  onLiveCandle,
 }: {
   candles: Candle[];
   symbol: EnrichedSymbol;
@@ -165,6 +166,13 @@ export function CandleChart({
   range: ChartRange | null;
   loadOlder: () => void;
   hasMore: boolean;
+  /**
+   * Called with each live bar the chart applies to the series — the charted
+   * period's own frame, or the forming bar folded from a finer stream frame for
+   * a coarser charted period. Lets the page drive the tab title from the same
+   * forming bar the chart draws, so it ticks between coarse boundaries too.
+   */
+  onLiveCandle?: (candle: Candle) => void;
   /**
    * Backtest-replay rolling window: when set, each candle growth re-frames the
    * visible scale to a fixed-width window ending on the newest bar (default
@@ -523,6 +531,7 @@ export function CandleChart({
     if (!candle) return;
     liveBarsRef.current.set(candle.time, candle);
     setLiveLatest(candle);
+    onLiveCandle?.(candle);
     const candleSeries = candleSeriesRef.current;
     if (!candleSeries) return;
     candleSeries.update(toCandlestick(candle));

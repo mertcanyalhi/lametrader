@@ -28,7 +28,17 @@ import { SelectedProfileProvider } from '../../lib/selected-profile-context.js';
 import { ThemeProvider } from '../../lib/theme-context.js';
 
 // The canvas wrapper is mocked — page tests assert data/URL/state, not pixels.
-vi.mock('./candle-chart.js', () => ({ CandleChart: () => <div>candle-chart</div> }));
+// Its `onLiveCandle` (the forming bar the chart applies) is captured so a test
+// can report a live/folded bar and assert the page reacts (e.g. the tab title).
+const { chartMock } = vi.hoisted(() => ({
+  chartMock: { onLiveCandle: null as ((candle: unknown) => void) | null },
+}));
+vi.mock('./candle-chart.js', () => ({
+  CandleChart: (props: { onLiveCandle?: (candle: unknown) => void }) => {
+    chartMock.onLiveCandle = props.onLiveCandle ?? null;
+    return <div>candle-chart</div>;
+  },
+}));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
 // The chart subscribes to the live candle stream; stub the shared client so the
 // page tests don't open a (jsdom-absent) WebSocket. Subscribers are captured so
@@ -88,6 +98,7 @@ describe('ChartPage', () => {
 
   beforeEach(() => {
     streamSubs.length = 0;
+    chartMock.onLiveCandle = null;
     matchers = [];
     const fetchSpy = vi.fn(async (url: string) => {
       const match = matchers.find((m) => String(url).includes(m.includes));
@@ -192,6 +203,30 @@ describe('ChartPage', () => {
     await screen.findByText('candle-chart');
 
     expect(document.title).toEqual('crypto:BTCUSDT 102.00 ▲ +2.00% (2.00) - lametrader');
+  });
+
+  it("updates document.title from the chart's live forming bar (e.g. a coarser period's folded bar)", async () => {
+    onRequest('/symbols?enrich=true', () => [BTC]);
+    onRequest('/config', () => CONFIG);
+    onRequest('/profiles', () => []);
+    onRequest('/indicators', () => []);
+    onRequest('/rule-events/count', () => ({ count: 0 }));
+    onRequest('/rules?', () => []);
+    onRequest('/candles', () => ({
+      candles: [candle(1000, 100), candle(2000, 102)],
+      nextCursor: null,
+    }));
+
+    renderAt('/chart?id=crypto:BTCUSDT&period=1h');
+    await screen.findByText('candle-chart');
+
+    // The chart reports the forming bar it applies (a folded finer frame on a
+    // coarser period, or the period's own frame) for the newest bucket (time
+    // 2000) — the title follows it: close 110 vs the previous bar's 100 →
+    // +10.00 (+10.00%).
+    act(() => chartMock.onLiveCandle?.(candle(2000, 110)));
+
+    expect(document.title).toEqual('crypto:BTCUSDT 110.00 ▲ +10.00% (10.00) - lametrader');
   });
 
   it('redirects bare /chart to the last-selected period from storage when one is saved', async () => {
