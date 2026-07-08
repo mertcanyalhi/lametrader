@@ -1,6 +1,7 @@
 import {
   type Backtest,
   BacktestStatus,
+  type Candle,
   type Config,
   type EnrichedSymbol,
   type Period,
@@ -21,6 +22,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SeriesMarker, Time } from 'lightweight-charts';
 import { Settings } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { formingBucketCandle } from '../../lib/aggregate-candles.js';
 import {
   getStoredBacktestPeriod,
   getStoredBacktestSymbolId,
@@ -52,7 +54,6 @@ import { PeriodRangeDialog } from '../chart/period-range-dialog.js';
 import { ProfilePickerDialog } from '../chart/profile-picker-dialog.js';
 import type { StateOverlay } from '../chart/states/state-overlay.js';
 import { SymbolPickerDialog } from '../chart/symbol-picker-dialog.js';
-import { IdleBacktestChart } from './idle-backtest-chart.js';
 import { ResultsTabs } from './results-tabs.js';
 import { RunForm } from './run-form.js';
 import { stateOverlaysFromEvents } from './run-state-overlays.js';
@@ -242,6 +243,7 @@ function BacktestingLayout({
                 loadOlder={noop}
                 hasMore={false}
                 follow
+                live={false}
                 eventMarkers={tradeMarkers}
                 stateOverlays={showRuleEvents ? runStateOverlays : []}
               />
@@ -253,14 +255,10 @@ function BacktestingLayout({
               start={view.params.start}
               end={view.params.end}
               frontier={frontier}
+              runPeriod={view.params.period}
+              runCandles={view.chartCandles}
               eventMarkers={tradeMarkers}
               stateOverlays={showRuleEvents ? runStateOverlays : []}
-            />
-          ) : selected ? (
-            <IdleBacktestChart
-              symbol={selected}
-              period={period}
-              smallerPeriod={smallestPeriod(selected, config)}
             />
           ) : (
             <ChartPlaceholder />
@@ -339,10 +337,20 @@ function noop(): void {}
  * data at a single period, so switching the picker mid-run (or on a loaded run)
  * can't reuse the run's frames; instead this reads that period's stored candles
  * over the run's own window from the candle store (the same {@link fetchRangeCandles}
- * the reattach/load paths use) and clips them to the replay `frontier`, so the
- * chart tracks the current cursor exactly like the run chart — never revealing a
- * bar past where the replay has reached. The run's trade markers / state overlays
- * are kept on top, and `follow` keeps the frontier bar in view.
+ * the reattach/load paths use). The run's trade markers / state overlays are kept
+ * on top, and `follow` keeps the frontier bar in view.
+ *
+ * Two things keep it aligned to the replay cursor rather than leaking future data:
+ * - **Completed buckets only.** A stored bar shows only once its whole bucket lies
+ *   at/behind the frontier (clip on bucket *end*, `time + periodMillis(period)`),
+ *   so a bar the replay is only partway through never appears with its full,
+ *   not-yet-reached OHLC.
+ * - **A synthesized forming bar.** When the run's own period is *finer* than the
+ *   picked one, the current bucket is folded live from the run's finer replay
+ *   candles up to the frontier via {@link formingBucketCandle} — the same way the
+ *   run chart forms its bar — so the in-progress bucket grows with the replay
+ *   instead of popping in whole. When the run's period is coarser (no finer replay
+ *   data to fold), there is no forming bar and only completed buckets show.
  *
  * The fetch is keyed by the fixed run window (`symbol`, `period`, `start`, `end`),
  * not the moving frontier, so a live run advancing the frontier re-clips an
@@ -352,7 +360,9 @@ function noop(): void {}
  * @param period - the picked period to chart (≠ the run's period).
  * @param start - the run window's start (inclusive), epoch ms.
  * @param end - the run window's end (exclusive), epoch ms.
- * @param frontier - the replay frontier; bars after it are hidden.
+ * @param frontier - the replay frontier; bars past it are hidden.
+ * @param runPeriod - the run's own period; its finer candles form the current bar.
+ * @param runCandles - the run's candles at `runPeriod`, used to fold the forming bar.
  * @param eventMarkers - the run's trade markers to overlay.
  * @param stateOverlays - the run's state overlays to overlay (empty when gated off).
  */
@@ -362,6 +372,8 @@ function OffPeriodBacktestChart({
   start,
   end,
   frontier,
+  runPeriod,
+  runCandles,
   eventMarkers,
   stateOverlays,
 }: {
@@ -370,6 +382,8 @@ function OffPeriodBacktestChart({
   start: number;
   end: number;
   frontier: number;
+  runPeriod: Period;
+  runCandles: readonly Candle[];
   eventMarkers: ReadonlyArray<SeriesMarker<Time>>;
   stateOverlays: ReadonlyArray<StateOverlay>;
 }): ReactNode {
@@ -377,10 +391,23 @@ function OffPeriodBacktestChart({
     queryKey: ['backtest-offperiod-candles', symbol.id, period, start, end],
     queryFn: () => fetchRangeCandles(symbol.id, period, start, end),
   });
-  const candles = useMemo(
-    () => (query.data ?? []).filter((c) => c.time <= frontier),
-    [query.data, frontier],
-  );
+  const candles = useMemo(() => {
+    const periodMs = periodMillis(period);
+    // Completed buckets only: the whole bucket must lie at/behind the frontier,
+    // so no bar shows OHLC from time the replay hasn't reached.
+    const completed = (query.data ?? []).filter((c) => c.time + periodMs <= frontier);
+    // Fold the current (forming) bucket from the run's finer replay candles up to
+    // the frontier — only when the run's own period is finer than the picked one.
+    if (periodMillis(runPeriod) < periodMs) {
+      const bucketStart = Math.floor(frontier / periodMs) * periodMs;
+      const finer = runCandles
+        .filter((c) => c.time >= bucketStart && c.time <= frontier)
+        .sort((a, b) => a.time - b.time);
+      const forming = formingBucketCandle(finer, period);
+      if (forming) return [...completed, forming];
+    }
+    return completed;
+  }, [query.data, frontier, period, runPeriod, runCandles]);
   return (
     <Card className="h-full">
       <CandleChart
@@ -391,6 +418,7 @@ function OffPeriodBacktestChart({
         loadOlder={noop}
         hasMore={false}
         follow
+        live={false}
         eventMarkers={eventMarkers}
         stateOverlays={stateOverlays}
       />

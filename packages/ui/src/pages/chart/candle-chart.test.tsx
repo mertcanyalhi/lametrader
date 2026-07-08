@@ -161,6 +161,27 @@ describe('CandleChart live ticks', () => {
     expect(createdSeries[0]?.update.mock.calls).toEqual([[point(live)]]);
   });
 
+  it('ignores live market frames when live is off (a replay chart)', () => {
+    render(
+      <ThemeProvider>
+        <Theme>
+          <CandleChart
+            candles={[bar(1000, 100, 100, 100, 100)]}
+            symbol={SYMBOL}
+            period={Period.OneHour}
+            range={null}
+            loadOlder={() => {}}
+            hasMore={false}
+            live={false}
+          />
+        </Theme>
+      </ThemeProvider>,
+    );
+    emit(event(bar(1000, 100, 120, 100, 110)));
+
+    expect(createdSeries[0]?.update.mock.calls).toEqual([]);
+  });
+
   it('applies both a just-closed bar and the new forming bar from one poll', () => {
     render(chartElement([bar(1000, 100, 100, 100, 100)]));
     // One poll crosses the interval boundary: the closed bar's final values and

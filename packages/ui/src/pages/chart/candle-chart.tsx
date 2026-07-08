@@ -159,6 +159,7 @@ export function CandleChart({
   legendProfile = null,
   eventMarkers = [],
   onLiveCandle,
+  live = true,
 }: {
   candles: Candle[];
   symbol: EnrichedSymbol;
@@ -166,6 +167,14 @@ export function CandleChart({
   range: ChartRange | null;
   loadOlder: () => void;
   hasMore: boolean;
+  /**
+   * Whether to fold the live market stream into the chart. Default `true` for the
+   * live `/chart`. A backtest **replay** chart sets this `false`: its bars are
+   * historical, so a present-time market tick would be folded into a bucket at
+   * *now* and — with `follow` — yank the viewport to today, far past the replay
+   * frontier.
+   */
+  live?: boolean;
   /**
    * Called with each live bar the chart applies to the series — the charted
    * period's own frame, or the forming bar folded from a finer stream frame for
@@ -522,21 +531,28 @@ export function CandleChart({
     [finerPeriod, period],
   );
 
-  useStreamSubscription(StreamKind.Candle, symbol.id, (event) => {
-    // The charted period's own frame, or — for a coarser charted period — the
-    // forming bar folded from the finest finer stream frame. `finerPeriod` is
-    // `null` when the charted period is the finest, so this is inert there and
-    // the shortest-period path is byte-for-byte the strict-match behaviour.
-    const candle = liveCandleForPeriod(event, period) ?? foldFinerFrame(event);
-    if (!candle) return;
-    liveBarsRef.current.set(candle.time, candle);
-    setLiveLatest(candle);
-    onLiveCandle?.(candle);
-    const candleSeries = candleSeriesRef.current;
-    if (!candleSeries) return;
-    candleSeries.update(toCandlestick(candle));
-    volumeSeriesRef.current?.update(toVolume(candle, colors));
-  });
+  useStreamSubscription(
+    StreamKind.Candle,
+    // A replay chart (`live === false`) subscribes to nothing: its bars are
+    // historical, so a live market frame would land at *now* and pull the view
+    // off the replay window.
+    live ? symbol.id : null,
+    (event) => {
+      // The charted period's own frame, or — for a coarser charted period — the
+      // forming bar folded from the finest finer stream frame. `finerPeriod` is
+      // `null` when the charted period is the finest, so this is inert there and
+      // the shortest-period path is byte-for-byte the strict-match behaviour.
+      const candle = liveCandleForPeriod(event, period) ?? foldFinerFrame(event);
+      if (!candle) return;
+      liveBarsRef.current.set(candle.time, candle);
+      setLiveLatest(candle);
+      onLiveCandle?.(candle);
+      const candleSeries = candleSeriesRef.current;
+      if (!candleSeries) return;
+      candleSeries.update(toCandlestick(candle));
+      volumeSeriesRef.current?.update(toVolume(candle, colors));
+    },
+  );
 
   // When a range preset is active, drive the visible time scale to its window;
   // auto-trigger loadOlder if the earliest loaded candle doesn't yet cover it.

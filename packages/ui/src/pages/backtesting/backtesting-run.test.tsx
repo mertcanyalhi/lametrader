@@ -396,21 +396,49 @@ describe('BacktestingPage run flow', () => {
     expect(chart.getAttribute('data-overlays')).toEqual('1');
   });
 
-  it('charts the picked period over the run window, following the frontier, when switched mid-run', async () => {
+  it("folds a forming bar for the picked period from the run's finer candles when switched mid-run", async () => {
+    const DAY = 86_400_000;
+    const HOUR = 3_600_000;
+    // A run at 1h over a 2-day window, reattached; its two 1h bars sit in day 0.
+    const reattachParams = { ...PARAMS, period: Period.OneHour, start: 0, end: 2 * DAY };
+    storeCandles = [candle(HOUR, 105), candle(2 * HOUR, 108)];
+    runningList = [
+      {
+        id: 'b-9',
+        name: 'existing',
+        status: BacktestStatus.Running,
+        createdAt: 1,
+        updatedAt: 1,
+        params: reattachParams,
+        strategyId: 's-1',
+        strategy: STRATEGY,
+        trades: [],
+        summary: EMPTY_SUMMARY,
+      },
+    ];
     const user = userEvent.setup();
     renderPage();
-    await screen.findByRole('button', { name: 'Alpha' });
-
-    await selectStrategyAndRun(user);
-    push(snapshot(1));
-    // The run streams at 1h, so the chart opens on 1h.
-    expect(screen.getByTestId('backtest-chart').getAttribute('data-period')).toEqual(
-      Period.OneHour,
+    await waitFor(() => expect(onFrame).not.toBeNull());
+    // Frontier 0.15 days in — inside day-0's 1d bucket, past both 1h bars.
+    push({
+      kind: BacktestFrameKind.Snapshot,
+      status: BacktestStatus.Running,
+      progress: { elapsedDays: 0.15, totalDays: 2 },
+      params: reattachParams,
+      trades: [],
+      summary: EMPTY_SUMMARY,
+      events: [],
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('backtest-chart').getAttribute('data-period')).toEqual(
+        Period.OneHour,
+      ),
     );
 
-    // Switching the (still-live) picker to 1d re-charts that period from the store
-    // over the run's window and keeps following the frontier bar — it does not
-    // stay pinned to the run's 1h, nor jump to present-day candles.
+    // Switch to 1d: the run's period (1h) is finer, so day-0's not-yet-complete
+    // bucket is folded live from the two 1h replay bars into one forming bar,
+    // following the frontier — not popped in whole, and no completed 1d bar
+    // (its bucket end lies past the frontier).
     const bar = screen.getByRole('group', { name: 'Backtesting actions' });
     await user.click(within(bar).getByRole('button', { name: Period.OneHour }));
     await user.click(await screen.findByRole('button', { name: Period.OneDay }));
@@ -421,8 +449,6 @@ describe('BacktestingPage run flow', () => {
         Period.OneDay,
       ),
     );
-    // The 1d candle lives inside the run window [1_000, 100_000); reading that
-    // window (not a present-day one) surfaces it, so the chart shows 1 candle.
     const chart = screen.getByTestId('backtest-chart');
     expect({
       period: chart.getAttribute('data-period'),
@@ -431,7 +457,7 @@ describe('BacktestingPage run flow', () => {
     }).toEqual({ period: Period.OneDay, follow: 'true', candles: '1 candles' });
   });
 
-  it('keeps the switched period on the chart after the run is cancelled, without reverting', async () => {
+  it('keeps the switched period selected after the run is cancelled, without reverting', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole('button', { name: 'Alpha' });
@@ -443,17 +469,18 @@ describe('BacktestingPage run flow', () => {
     await user.click(await screen.findByRole('button', { name: Period.OneDay }));
     await user.click(screen.getByRole('button', { name: 'Apply' }));
     await waitFor(() =>
-      expect(screen.getByTestId('backtest-chart').getAttribute('data-period')).toEqual(
-        Period.OneDay,
-      ),
+      expect(within(bar).queryByRole('button', { name: Period.OneDay })).not.toBeNull(),
     );
 
     await user.click(screen.getByRole('button', { name: 'Cancel run' }));
 
-    // Cancelling returns to idle but keeps the chart on the picked 1d — it does
-    // not snap back to the run's 1h.
+    // Cancelling returns to idle (a pre-run placeholder) but keeps the picker on
+    // the chosen 1d — it does not snap back to the run's 1h.
     await waitFor(() => expect(deleted).toEqual(['b-1']));
-    expect(screen.getByTestId('backtest-chart').getAttribute('data-period')).toEqual(Period.OneDay);
+    expect({
+      picker: within(bar).queryByRole('button', { name: Period.OneDay }) !== null,
+      idle: screen.queryByText(/run a backtest to see the chart/i) !== null,
+    }).toEqual({ picker: true, idle: true });
   });
 
   it('reports completion on the final frame', async () => {

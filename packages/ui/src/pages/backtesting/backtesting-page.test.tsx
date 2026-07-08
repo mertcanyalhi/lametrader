@@ -18,14 +18,6 @@ import { SelectedProfileProvider } from '../../lib/selected-profile-context.js';
 import { ThemeProvider } from '../../lib/theme-context.js';
 import { BacktestingPage } from './backtesting-page.js';
 
-// The idle setup chart drives its own candle fetches + live stream and a real
-// `lightweight-charts` canvas; these page tests exercise the pickers and regions,
-// not the chart, so it's stubbed to a marker (its own behaviour is covered by
-// `idle-backtest-chart.test.tsx`).
-vi.mock('./idle-backtest-chart.js', () => ({
-  IdleBacktestChart: () => 'Idle setup chart',
-}));
-
 const BTC: EnrichedSymbol = {
   id: 'crypto:BTCUSDT',
   type: SymbolType.Crypto,
@@ -146,7 +138,7 @@ describe('BacktestingPage', () => {
     );
   }
 
-  it('renders the idle setup chart and the panel region when a symbol is selected', async () => {
+  it('renders the pre-run placeholder and the panel region when a symbol is selected', async () => {
     onRequest('/symbols?enrich=true', () => [BTC]);
     onRequest('/config', () => CONFIG);
     onRequest('/profiles', () => [ALPHA]);
@@ -156,10 +148,9 @@ describe('BacktestingPage', () => {
     const chart = await screen.findByRole('region', { name: 'Backtest chart' });
     const panel = screen.getByRole('region', { name: 'Backtest panel' });
     expect({
-      idleChart: within(chart).queryByText('Idle setup chart') !== null,
       placeholder: within(chart).queryByText(/run a backtest to see the chart/i) !== null,
       panelPresent: panel !== null,
-    }).toEqual({ idleChart: true, placeholder: false, panelPresent: true });
+    }).toEqual({ placeholder: true, panelPresent: true });
   });
 
   it('drops the Setup and Run section headings while keeping the Strategy label in the panel', async () => {
@@ -230,7 +221,7 @@ describe('BacktestingPage', () => {
     });
     expect({
       selected: within(bar).queryByRole('button', { name: ETH.id }) !== null,
-      chartStillIdle: screen.queryByText('Idle setup chart') !== null,
+      chartStillIdle: screen.queryByText(/run a backtest to see the chart/i) !== null,
     }).toEqual({ selected: true, chartStillIdle: true });
   });
 
