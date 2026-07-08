@@ -11,14 +11,20 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DailyPnlBar } from './daily-pnl.js';
+import type { EquityPoint } from './equity-curve.js';
 import { ResultsTabs } from './results-tabs.js';
 
-// The histogram loads lightweight-charts, which doesn't run under jsdom; render
-// it as a double that exposes the bucketed bar count so exit-day bucketing is
+// Both charts load lightweight-charts, which doesn't run under jsdom; render
+// them as doubles that expose their point/bar counts so the data feeding each is
 // observable without the real canvas.
 vi.mock('./daily-pnl-chart.js', () => ({
   DailyPnlChart: ({ bars }: { bars: readonly DailyPnlBar[] }) => (
     <div data-testid="daily-pnl-chart">{bars.length} bars</div>
+  ),
+}));
+vi.mock('./equity-curve-chart.js', () => ({
+  EquityCurveChart: ({ points }: { points: readonly EquityPoint[] }) => (
+    <div data-testid="equity-curve-chart">{points.length} points</div>
   ),
 }));
 
@@ -189,28 +195,79 @@ describe('ResultsTabs', () => {
     }).toEqual({ header: 'Duration', firstDuration: '59m' });
   });
 
-  it('renders the Daily P&L histogram bucketed by exit day plus the five-item summary block', async () => {
-    const user = userEvent.setup();
-    renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: OPEN_POSITION });
-    await user.click(screen.getByRole('tab', { name: /Daily P&L/ }));
+  it('renders the full merged metric block under Summary, including counts and averages', async () => {
+    renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: undefined });
 
-    const block = screen.getByLabelText('Daily P&L summary');
+    const block = screen.getByLabelText('Summary');
     expect({
-      bars: screen.getByTestId('daily-pnl-chart').textContent,
       trades: within(block).getByText('Trades').previousElementSibling?.textContent,
       winnersLosers:
         within(block).getByText('Winners / losers').previousElementSibling?.textContent,
       avgRoi: within(block).getByText('Avg ROI per trade').previousElementSibling?.textContent,
-      totalPnl: within(block).getByText('Total P/L').previousElementSibling?.textContent,
+      avgPnl: within(block).getByText('Avg P/L per trade').previousElementSibling?.textContent,
       avgPeriod: within(block).getByText('Avg period in trade').previousElementSibling?.textContent,
     }).toEqual({
-      bars: '2 bars',
       trades: '2',
       winnersLosers: '1 / 1',
       avgRoi: '+2.25%',
-      totalPnl: '+8.00',
+      avgPnl: '+4.00',
       avgPeriod: '12h',
     });
+  });
+
+  it('renders the win rate as winners over trade count under Summary', () => {
+    renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: undefined });
+
+    const block = screen.getByLabelText('Summary');
+    // 1 winner of 2 trades → 50.0%.
+    expect(within(block).getByText('Win rate').previousElementSibling?.textContent).toEqual(
+      '50.0%',
+    );
+  });
+
+  it('colors a mid-range win rate (50%) with the yellow band', () => {
+    renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: undefined });
+
+    const value = within(screen.getByLabelText('Summary')).getByText(
+      'Win rate',
+    ).previousElementSibling;
+    expect(value?.getAttribute('data-accent-color')).toEqual('yellow');
+  });
+
+  it('colors a top win rate (100%) with the green band', () => {
+    renderTabs({
+      trades: TRADES,
+      summary: { ...SUMMARY, winners: 2, losers: 0 },
+      openPosition: undefined,
+    });
+
+    const value = within(screen.getByLabelText('Summary')).getByText(
+      'Win rate',
+    ).previousElementSibling;
+    expect(value?.getAttribute('data-accent-color')).toEqual('green');
+  });
+
+  it('shows the Daily P&L histogram under Summary by default', () => {
+    renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: undefined });
+
+    // TRADES exit on two distinct UTC days → two histogram bars.
+    expect({
+      daily: screen.getByTestId('daily-pnl-chart').textContent,
+      equityShown: screen.queryByTestId('equity-curve-chart'),
+    }).toEqual({ daily: '2 bars', equityShown: null });
+  });
+
+  it('switches the Summary chart to the equity curve when its segment is selected', async () => {
+    const user = userEvent.setup();
+    renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: undefined });
+
+    await user.click(screen.getByRole('radio', { name: 'Equity curve' }));
+
+    // One cumulative-P/L point per closed trade's exit.
+    expect({
+      equity: screen.getByTestId('equity-curve-chart').textContent,
+      dailyShown: screen.queryByTestId('daily-pnl-chart'),
+    }).toEqual({ equity: '2 points', dailyShown: null });
   });
 
   it('colors a positive Summary metric value with the green accent', () => {
@@ -232,16 +289,6 @@ describe('ResultsTabs', () => {
 
     const value = screen.getByText('Total P/L').previousElementSibling;
     expect(value?.getAttribute('data-accent-color')).toEqual('gray');
-  });
-
-  it('colors a negative Daily P&L block metric value with the red accent', async () => {
-    const user = userEvent.setup();
-    renderTabs({ trades: TRADES, summary: SUMMARY_NEG, openPosition: undefined });
-    await user.click(screen.getByRole('tab', { name: /Daily P&L/ }));
-
-    const block = screen.getByLabelText('Daily P&L summary');
-    const value = within(block).getByText('Total P/L').previousElementSibling;
-    expect(value?.getAttribute('data-accent-color')).toEqual('red');
   });
 
   it('colors a winning trade row P/L amount and ROI percentage with the green accent', async () => {

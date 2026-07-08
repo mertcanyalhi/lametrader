@@ -1,10 +1,23 @@
 import type { BacktestOpenPosition, BacktestSummary, BacktestTrade } from '@lametrader/core';
-import { Badge, Box, Button, Card, Flex, Grid, Table, Tabs, Text } from '@radix-ui/themes';
+import {
+  Badge,
+  Box,
+  Button,
+  Card,
+  Flex,
+  Grid,
+  SegmentedControl,
+  Table,
+  Tabs,
+  Text,
+} from '@radix-ui/themes';
 import { type ReactNode, useMemo, useState } from 'react';
 import { formatChange, formatDuration, formatPrice } from '../../lib/format.js';
 import { exitReasonLabel, formatPercent } from './backtest-format.js';
 import { bucketDailyPnl } from './daily-pnl.js';
 import { DailyPnlChart } from './daily-pnl-chart.js';
+import { cumulativePnl } from './equity-curve.js';
+import { EquityCurveChart } from './equity-curve-chart.js';
 
 /** The em-dash placeholder for a cell a row has no value for (the open row's exit columns). */
 const EMPTY_CELL = '—';
@@ -24,8 +37,12 @@ function formatTradeTime(ms: number): string {
 /** How many closed trades fill one page of the Trades table before pagination kicks in. */
 const PAGE_SIZE = 10;
 
-/** A metric's sign-derived Radix accent: green up, red down, neutral flat. */
-type Tone = 'grass' | 'red' | 'gray';
+/**
+ * A metric card's Radix accent scale — the sign-derived trio (green up, red down,
+ * neutral flat) plus the warm-to-cool ramp the win-rate metric grades itself on.
+ * Each name is a Radix color scale, so its background is `var(--<name>-a3)`.
+ */
+type MetricColor = 'grass' | 'red' | 'gray' | 'orange' | 'yellow' | 'green';
 
 /** Column the Trades table can be sorted on (entry time or per-trade P/L). */
 type SortKey = 'entry' | 'pnl';
@@ -33,26 +50,30 @@ type SortKey = 'entry' | 'pnl';
 /** Sort direction toggled by clicking a sortable header. */
 type SortDir = 'asc' | 'desc';
 
-/** The subtle card-background accent-alpha var for each tone (Radix scale, never a hex). */
-const TONE_BG: Record<Tone, string> = {
-  grass: 'var(--grass-a3)',
-  red: 'var(--red-a3)',
-  gray: 'var(--gray-a3)',
-};
-
 /** Map a signed number to its tone — positive green, negative red, zero neutral. */
-function signTone(value: number): Tone {
+function signTone(value: number): MetricColor {
   if (value > 0) return 'grass';
   if (value < 0) return 'red';
   return 'gray';
 }
 
 /**
- * The run's results panel — the three tabs the right ⅓ fills in as frames arrive
- * and after completion: **Summary** (realized aggregates + the open-position
- * unrealized line), **Trades** (closed trades plus the open position as an
- * unrealized final row), and **Daily P&L** (the per-exit-day histogram over a
- * five-item summary block).
+ * Grade a win-rate percentage on a monotonic worse-to-better ramp — red under
+ * 25%, orange under 50%, yellow under 75%, green at 75%+ — so the metric's color
+ * reads the strategy's hit rate at a glance (0% red … 100% green).
+ */
+function winRateColor(pct: number): MetricColor {
+  if (pct < 25) return 'red';
+  if (pct < 50) return 'orange';
+  if (pct < 75) return 'yellow';
+  return 'green';
+}
+
+/**
+ * The run's results panel — two tabs the right ⅓ fills in as frames arrive and
+ * after completion: **Summary** (the full metric block plus a chart that toggles
+ * between the per-exit-day Daily P&L histogram and the cumulative equity curve)
+ * and **Trades** (closed trades plus the open position as an unrealized final row).
  *
  * Every value is read straight off the streamed run view, so the tabs track the
  * live run and render a loaded backtest identically.
@@ -75,52 +96,92 @@ export function ResultsTabs({
       <Tabs.List>
         <Tabs.Trigger value="summary">Summary</Tabs.Trigger>
         <Tabs.Trigger value="trades">Trades</Tabs.Trigger>
-        <Tabs.Trigger value="daily">Daily P&amp;L</Tabs.Trigger>
       </Tabs.List>
       <Box pt="3">
         <Tabs.Content value="summary">
-          <SummaryTab summary={summary} openPosition={openPosition} />
+          <SummaryTab trades={trades} summary={summary} openPosition={openPosition} />
         </Tabs.Content>
         <Tabs.Content value="trades">
           <TradesTab trades={trades} openPosition={openPosition} />
-        </Tabs.Content>
-        <Tabs.Content value="daily">
-          <DailyPnlTab trades={trades} summary={summary} />
         </Tabs.Content>
       </Box>
     </Tabs.Root>
   );
 }
 
+/** Which chart the Summary tab's toggle currently shows. */
+type SummaryChart = 'daily' | 'equity';
+
 /**
- * The Summary tab: total P/L, ROI %, and average P/L per trade over the closed
- * trades, plus a separate open-position unrealized-P/L line when a position is
- * still open. Each metric is a card tinted by the sign of its value.
+ * The Summary tab: the full metric block — realized aggregates (total P/L, ROI %,
+ * win rate), trade counts, and per-trade averages, plus the open-position
+ * unrealized-P/L line when a position is still open — above a chart that toggles
+ * between the per-exit-day Daily P&L histogram and the cumulative equity curve.
+ * Each metric is a card tinted by the sign of its value (unsigned metrics stay
+ * neutral).
  */
 function SummaryTab({
+  trades,
   summary,
   openPosition,
 }: {
+  trades: readonly BacktestTrade[];
   summary: BacktestSummary;
   openPosition: BacktestOpenPosition | undefined;
 }): ReactNode {
+  const [chart, setChart] = useState<SummaryChart>('daily');
+  const bars = useMemo(() => bucketDailyPnl(trades), [trades]);
+  const equity = useMemo(() => cumulativePnl(trades), [trades]);
+  const winRate = summary.tradeCount > 0 ? (summary.winners / summary.tradeCount) * 100 : 0;
+
   return (
-    <Grid columns={{ initial: '2', sm: '3' }} gap="2" aria-label="Summary">
-      <Metric label="Total P/L" value={formatChange(summary.totalPnl)} amount={summary.totalPnl} />
-      <Metric label="ROI %" value={formatPercent(summary.roiPct)} amount={summary.roiPct} />
-      <Metric
-        label="Avg P/L per trade"
-        value={formatChange(summary.avgPnlPerTrade)}
-        amount={summary.avgPnlPerTrade}
-      />
-      {openPosition ? (
+    <Flex direction="column" gap="3">
+      <Grid columns={{ initial: '2', sm: '3' }} gap="2" aria-label="Summary">
         <Metric
-          label="Open position (unrealized)"
-          value={formatChange(openPosition.unrealizedPnl)}
-          amount={openPosition.unrealizedPnl}
+          label="Total P/L"
+          value={formatChange(summary.totalPnl)}
+          amount={summary.totalPnl}
         />
-      ) : null}
-    </Grid>
+        <Metric label="ROI %" value={formatPercent(summary.roiPct)} amount={summary.roiPct} />
+        <Metric label="Win rate" value={`${winRate.toFixed(1)}%`} color={winRateColor(winRate)} />
+        <Metric
+          label="Avg P/L per trade"
+          value={formatChange(summary.avgPnlPerTrade)}
+          amount={summary.avgPnlPerTrade}
+        />
+        <Metric
+          label="Avg ROI per trade"
+          value={formatPercent(summary.avgRoiPct)}
+          amount={summary.avgRoiPct}
+        />
+        <Metric label="Trades" value={String(summary.tradeCount)} />
+        <Metric label="Winners / losers" value={`${summary.winners} / ${summary.losers}`} />
+        <Metric
+          label="Avg period in trade"
+          value={formatDuration(summary.avgDaysInTrade * MS_PER_DAY)}
+        />
+        {openPosition ? (
+          <Metric
+            label="Open position (unrealized)"
+            value={formatChange(openPosition.unrealizedPnl)}
+            amount={openPosition.unrealizedPnl}
+          />
+        ) : null}
+      </Grid>
+
+      <SegmentedControl.Root
+        size="1"
+        value={chart}
+        onValueChange={(value) => setChart(value as SummaryChart)}
+        aria-label="Chart"
+      >
+        <SegmentedControl.Item value="daily">Daily P&amp;L</SegmentedControl.Item>
+        <SegmentedControl.Item value="equity">Equity curve</SegmentedControl.Item>
+      </SegmentedControl.Root>
+      <div className="h-40 w-full">
+        {chart === 'daily' ? <DailyPnlChart bars={bars} /> : <EquityCurveChart points={equity} />}
+      </div>
+    </Flex>
   );
 }
 
@@ -269,64 +330,27 @@ function TradesTab({
 }
 
 /**
- * The Daily P&L tab: the per-exit-day histogram above the five-item summary
- * block (number of trades, winners/losers, average period in trade, average ROI
- * per trade, total P/L). Signed metrics are tinted by their sign.
- */
-function DailyPnlTab({
-  trades,
-  summary,
-}: {
-  trades: readonly BacktestTrade[];
-  summary: BacktestSummary;
-}): ReactNode {
-  const bars = useMemo(() => bucketDailyPnl(trades), [trades]);
-  return (
-    <Flex direction="column" gap="3">
-      <div className="h-40 w-full">
-        <DailyPnlChart bars={bars} />
-      </div>
-      <Grid columns={{ initial: '2', sm: '3' }} gap="2" aria-label="Daily P&L summary">
-        <Metric label="Trades" value={String(summary.tradeCount)} />
-        <Metric label="Winners / losers" value={`${summary.winners} / ${summary.losers}`} />
-        <Metric
-          label="Avg period in trade"
-          value={formatDuration(summary.avgDaysInTrade * MS_PER_DAY)}
-        />
-        <Metric
-          label="Avg ROI per trade"
-          value={formatPercent(summary.avgRoiPct)}
-          amount={summary.avgRoiPct}
-        />
-        <Metric
-          label="Total P/L"
-          value={formatChange(summary.totalPnl)}
-          amount={summary.totalPnl}
-        />
-      </Grid>
-    </Flex>
-  );
-}
-
-/**
  * One metric as a color-coded card in the grid: a centered vertical stack with
- * the value on top as the larger, sign-accented text and the label below it as
- * smaller muted text. The card is tinted and the value accented by the sign of
- * `amount` (green positive, red negative, neutral zero); a metric with no signed
- * value (`amount` omitted) stays neutral.
+ * the value on top as the larger, accented text and the label below it as smaller
+ * muted text. The accent is an explicit `color` when given (e.g. the win-rate
+ * ramp), else derived from the sign of `amount` (green positive, red negative,
+ * neutral zero); a metric with neither stays neutral. The card background is the
+ * accent's `-a3` alpha step.
  */
 function Metric({
   label,
   value,
   amount,
+  color,
 }: {
   label: string;
   value: string;
   amount?: number;
+  color?: MetricColor;
 }): ReactNode {
-  const tone = amount === undefined ? 'gray' : signTone(amount);
+  const tone: MetricColor = color ?? (amount === undefined ? 'gray' : signTone(amount));
   return (
-    <Card size="1" style={{ background: TONE_BG[tone] }}>
+    <Card size="1" style={{ background: `var(--${tone}-a3)` }}>
       <Flex direction="column" align="center" gap="1">
         <Text size="4" weight="bold" color={tone}>
           {value}
