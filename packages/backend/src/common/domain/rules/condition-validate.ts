@@ -93,8 +93,13 @@ export function validateRuleCondition(condition: ConditionNode): void {
   });
 }
 
-/** Depth-first walk invoking `visit` on every leaf of the tree. */
-function walkLeaves(node: ConditionNode, visit: (leaf: LeafCondition) => void): void {
+/**
+ * Depth-first walk invoking `visit` on every leaf of the condition tree.
+ *
+ * The one tree traversal the condition helpers share — validation, interval
+ * collection, and lookback derivation all enumerate leaves through it.
+ */
+export function walkLeaves(node: ConditionNode, visit: (leaf: LeafCondition) => void): void {
   if (node.kind === ConditionNodeKind.Leaf) {
     visit(node.leaf);
     return;
