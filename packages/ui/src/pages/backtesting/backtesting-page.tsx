@@ -42,7 +42,7 @@ import {
   setStoredBacktestSymbolId,
   setStoredBacktestWindow,
 } from '../../lib/backtest-selection.js';
-import { formatChange } from '../../lib/format.js';
+import { formatChange, formatPrice } from '../../lib/format.js';
 import { useBacktestStrategies } from '../../lib/hooks/backtest-strategies.js';
 import {
   COMPLETED_BACKTESTS_QUERY_KEY,
@@ -611,6 +611,10 @@ function RunMetaList({ backtest }: { backtest: Backtest }): ReactNode {
         <DataList.Item>
           <DataList.Label>End date</DataList.Label>
           <DataList.Value>{utcDate(backtest.params.end)}</DataList.Value>
+        </DataList.Item>
+        <DataList.Item>
+          <DataList.Label>Capital</DataList.Label>
+          <DataList.Value>{formatPrice(backtest.params.initialCapital)}</DataList.Value>
         </DataList.Item>
         <DataList.Item>
           <DataList.Label>Ran at</DataList.Label>
