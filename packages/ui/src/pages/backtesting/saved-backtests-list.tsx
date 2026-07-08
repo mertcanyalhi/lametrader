@@ -22,6 +22,7 @@ import {
   useDeleteBacktest,
   useRenameBacktest,
 } from '../../lib/hooks/backtests.js';
+import { signTone } from '../../lib/metric-tone.js';
 
 /** How many saved runs fill one page of the table before pagination kicks in. */
 const PAGE_SIZE = 10;
@@ -140,7 +141,7 @@ export function SavedBacktestsList({
             </Table.ColumnHeaderCell>
             <Table.ColumnHeaderCell>
               <SortButton
-                label="Created"
+                label="Ran at"
                 active={sortKey === 'created'}
                 dir={sortDir}
                 onClick={() => toggleSort('created')}
@@ -189,7 +190,11 @@ export function SavedBacktestsList({
                 </Text>
               </Table.Cell>
               <Table.Cell>{backtest.summary.tradeCount}</Table.Cell>
-              <Table.Cell>{formatChange(backtest.summary.totalPnl)}</Table.Cell>
+              <Table.Cell>
+                <Text color={signTone(backtest.summary.totalPnl)}>
+                  {formatChange(backtest.summary.totalPnl)}
+                </Text>
+              </Table.Cell>
               <Table.Cell>
                 <Flex gap="1" align="center" justify="end">
                   <Tooltip content="Rename backtest">

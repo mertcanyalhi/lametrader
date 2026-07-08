@@ -266,6 +266,22 @@ describe('BacktestingPage run flow', () => {
     });
   });
 
+  it("shows the started run's metadata (strategy, window, run time) while it streams", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: 'Alpha' });
+
+    await selectStrategyAndRun(user);
+    push(snapshot(1));
+
+    const details = await screen.findByRole('region', { name: 'Run details' });
+    expect({
+      name: within(details).getByText('run') !== null,
+      strategy: within(details).getByText('Breakout') !== null,
+      viewStrategy: within(details).getByRole('button', { name: 'View strategy' }) !== null,
+    }).toEqual({ name: true, strategy: true, viewStrategy: true });
+  });
+
   it('keeps the period picker interactive while a run is active', async () => {
     const user = userEvent.setup();
     renderPage();
@@ -635,9 +651,11 @@ describe('BacktestingPage run flow', () => {
     await waitFor(() => expect(onFrame).not.toBeNull());
     push(snapshot(1));
 
-    const trigger = await screen.findByRole('combobox', { name: 'Selected strategy' });
-    await waitFor(() => expect(trigger).toHaveTextContent('Breakout'));
-    expect(trigger).toHaveTextContent('Breakout');
+    // A reattached run shows its metadata (not the setup selector); the Strategy
+    // row names the run's strategy.
+    const details = await screen.findByRole('region', { name: 'Run details' });
+    await waitFor(() => expect(within(details).getByText('Breakout')).toBeInTheDocument());
+    expect(within(details).getByText('Breakout')).toBeInTheDocument();
   });
 
   it('catches the reattached chart up only to the replay frontier, not the whole run window', async () => {

@@ -3,7 +3,7 @@ import { type BacktestStrategy, BacktestThresholdKind, StateValueType } from '@l
 import { Theme } from '@radix-ui/themes';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StrategyManager } from './strategy-manager.js';
@@ -91,28 +91,22 @@ describe('StrategyManager', () => {
     expect(await screen.findByRole('dialog')).toHaveTextContent('New strategy');
   });
 
-  it('hides the edit and delete controls when no strategy is selected', async () => {
+  it('hides the edit control when no strategy is selected', async () => {
     renderManager();
 
     await screen.findByRole('combobox', { name: 'Selected strategy' });
 
-    expect({
-      edit: screen.queryByRole('button', { name: 'Edit strategy' }),
-      delete: screen.queryByRole('button', { name: 'Delete strategy' }),
-    }).toEqual({ edit: null, delete: null });
+    expect(screen.queryByRole('button', { name: 'Edit strategy' })).toEqual(null);
   });
 
-  it('shows the edit and delete controls once a strategy is selected', async () => {
+  it('shows the edit control once a strategy is selected', async () => {
     const user = userEvent.setup();
     renderManager();
 
     await user.click(await screen.findByRole('combobox', { name: 'Selected strategy' }));
     await user.click(screen.getByRole('option', { name: 'Breakout' }));
 
-    expect({
-      edit: screen.getByRole('button', { name: 'Edit strategy' }) !== null,
-      delete: screen.getByRole('button', { name: 'Delete strategy' }) !== null,
-    }).toEqual({ edit: true, delete: true });
+    expect(screen.getByRole('button', { name: 'Edit strategy' }) !== null).toEqual(true);
   });
 
   it('opens the edit dialog seeded with the selected strategy', async () => {
@@ -143,30 +137,29 @@ describe('StrategyManager', () => {
     expect(screen.queryByRole('button', { name: /New/ })).toBeNull();
   });
 
-  it('hides the edit and delete controls when disabled (a backtest is running)', async () => {
+  it('hides the edit control when disabled (a backtest is running)', async () => {
     const user = userEvent.setup();
     renderManager(true);
 
     await user.click(await screen.findByRole('combobox', { name: 'Selected strategy' }));
     await user.click(screen.getByRole('option', { name: 'Breakout' }));
 
-    expect({
-      edit: screen.queryByRole('button', { name: 'Edit strategy' }),
-      delete: screen.queryByRole('button', { name: 'Delete strategy' }),
-    }).toEqual({ edit: null, delete: null });
+    expect(screen.queryByRole('button', { name: 'Edit strategy' })).toEqual(null);
   });
 
-  it('deletes the selected strategy and drops it from the selector', async () => {
+  it('deletes the selected strategy from the edit dialog and drops it from the selector', async () => {
     const user = userEvent.setup();
     renderManager();
 
     await user.click(await screen.findByRole('combobox', { name: 'Selected strategy' }));
     await user.click(screen.getByRole('option', { name: 'Breakout' }));
-    await user.click(screen.getByRole('button', { name: 'Delete strategy' }));
+    await user.click(screen.getByRole('button', { name: 'Edit strategy' }));
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    const confirm = await screen.findByRole('alertdialog');
+    await user.click(within(confirm).getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(deleted).toEqual(['s-1']));
     await user.click(screen.getByRole('combobox', { name: 'Selected strategy' }));
-    expect(screen.queryByRole('option', { name: 'Breakout' })).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('option', { name: 'Breakout' })).toBeNull());
   });
 });

@@ -1,4 +1,5 @@
-import { Button, Dialog, Flex } from '@radix-ui/themes';
+import { Button, Dialog, Flex, IconButton, TextField } from '@radix-ui/themes';
+import { CalendarDays } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { createStaticRanges, DateRangePicker, type Range } from 'react-date-range';
 import 'react-date-range/dist/styles.css';
@@ -90,11 +91,43 @@ export function PeriodPicker({
 
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
-      <Dialog.Trigger>
-        <Button type="button" variant="soft" color="gray" aria-label="Period" className="w-full">
-          {`${toTriggerLabel(value.from)} – ${toTriggerLabel(value.to)}`}
-        </Button>
-      </Dialog.Trigger>
+      {/* The trigger is a real TextField (not a styled Button) so its width, font
+          size, text colour, and background match the sibling inputs exactly.
+          Deliberately NOT `readOnly`: Radix mutes read-only inputs (gray text +
+          background), which is the very mismatch we're fixing. Editing is blocked
+          instead by opening the picker on click / Enter / Space; the no-op
+          `onChange` keeps it a valid controlled input whose value only the dialog
+          changes. */}
+      <TextField.Root
+        aria-label="Selected period"
+        value={`${toTriggerLabel(value.from)} – ${toTriggerLabel(value.to)}`}
+        onChange={() => {
+          /* value is set only via the picker dialog */
+        }}
+        onMouseDown={(event) => {
+          event.preventDefault();
+          handleOpenChange(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            handleOpenChange(true);
+          }
+        }}
+        className="cursor-pointer"
+      >
+        <TextField.Slot side="right">
+          <IconButton
+            type="button"
+            variant="ghost"
+            color="gray"
+            aria-label="Period"
+            onClick={() => handleOpenChange(true)}
+          >
+            <CalendarDays size={16} aria-hidden="true" />
+          </IconButton>
+        </TextField.Slot>
+      </TextField.Root>
       <Dialog.Content width="fit-content" maxWidth="calc(100vw - 32px)">
         <Dialog.Title size="3" mb="3">
           Period

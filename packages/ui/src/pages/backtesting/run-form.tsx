@@ -1,7 +1,6 @@
 import { yupResolver } from '@hookform/resolvers/yup';
-import type { Period } from '@lametrader/core';
+import type { Backtest, Period } from '@lametrader/core';
 import { Button, Callout, Checkbox, Flex, Text, TextField } from '@radix-ui/themes';
-import { ChevronDown, ChevronRight } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import {
   type Control,
@@ -11,6 +10,7 @@ import {
   type UseFormRegister,
   useForm,
 } from 'react-hook-form';
+import { CollapsibleGroup } from '../../components/collapsible-group.js';
 import { ApiError } from '../../lib/api-fetch.js';
 import type { RangeBounds } from '../../lib/backtest-range.js';
 import {
@@ -63,7 +63,7 @@ function defaultValues(runWindow: RangeBounds): BacktestRunFormValues {
  * @param runWindow - the backtest date window, owned by the parent so it
  *   persists across the form unmounting mid-run.
  * @param onWindowChange - lifts a new date-window selection up to the parent.
- * @param onStarted - called with the new run's id once the server accepts it.
+ * @param onStarted - called with the created run once the server accepts it.
  */
 export function RunForm({
   strategyId,
@@ -80,7 +80,7 @@ export function RunForm({
   period: Period;
   runWindow: RangeBounds;
   onWindowChange: (bounds: RangeBounds) => void;
-  onStarted: (backtestId: string) => void;
+  onStarted: (backtest: Backtest) => void;
 }): ReactNode {
   const start = useStartBacktest();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -110,7 +110,7 @@ export function RunForm({
       const backtest = await start.mutateAsync(
         toBacktestRunInput(values, { strategyId, symbolId, profileId, period }),
       );
-      onStarted(backtest.id);
+      onStarted(backtest);
     } catch (error) {
       if (error instanceof ApiError) {
         setServerError(error.message);
@@ -195,45 +195,6 @@ export function RunForm({
         ) : null}
       </Flex>
     </form>
-  );
-}
-
-/**
- * A collapsible, collapsed-by-default option group: a ghost `<Button>` disclosure
- * toggle titled by `title`, its children mounted only while open.
- *
- * Radix Themes ships no Accordion, so this is a plain React disclosure — a Radix
- * `Button` (keyboard-accessible, `aria-expanded`-annotated) over conditionally
- * rendered children. Children render only when open rather than relying on CSS
- * collapse, so a collapsed group truly removes its fields from the tree;
- * react-hook-form keeps the unmounted fields' values (its default
- * `shouldUnregister: false`).
- *
- * @param title - the group's disclosure label, always visible on the toggle.
- * @param children - the option fields, shown only while the group is open.
- */
-function CollapsibleGroup({ title, children }: { title: string; children: ReactNode }): ReactNode {
-  const [open, setOpen] = useState(false);
-  return (
-    <div>
-      <Button
-        type="button"
-        variant="ghost"
-        color="gray"
-        aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
-      >
-        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        <Text size="2" weight="medium">
-          {title}
-        </Text>
-      </Button>
-      {open ? (
-        <Flex direction="column" gap="3" mt="2">
-          {children}
-        </Flex>
-      ) : null}
-    </div>
   );
 }
 

@@ -141,7 +141,7 @@ describe('RunForm', () => {
     await user.click(screen.getByRole('button', { name: 'Apply' }));
     await user.click(screen.getByRole('button', { name: 'Run backtest' }));
 
-    await waitFor(() => expect(onStarted).toHaveBeenCalledWith('b-1'));
+    await waitFor(() => expect(onStarted).toHaveBeenCalledWith(RUNNING));
     const run = posted[0] as { start: number; end: number };
     expect(run.end - run.start).toEqual(7 * 86_400_000);
   });
@@ -172,7 +172,7 @@ describe('RunForm', () => {
 
     await user.click(screen.getByRole('button', { name: 'Run backtest' }));
 
-    await waitFor(() => expect(onStarted).toHaveBeenCalledWith('b-1'));
+    await waitFor(() => expect(onStarted).toHaveBeenCalledWith(RUNNING));
     expect(posted).toEqual([
       {
         strategyId: 's-1',

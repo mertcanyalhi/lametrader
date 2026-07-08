@@ -13,6 +13,7 @@ import {
 } from '@radix-ui/themes';
 import { type ReactNode, useMemo, useState } from 'react';
 import { formatChange, formatDuration, formatPrice } from '../../lib/format.js';
+import { type MetricColor, signTone } from '../../lib/metric-tone.js';
 import { exitReasonLabel, formatPercent } from './backtest-format.js';
 import { bucketDailyPnl } from './daily-pnl.js';
 import { DailyPnlChart } from './daily-pnl-chart.js';
@@ -37,25 +38,11 @@ function formatTradeTime(ms: number): string {
 /** How many closed trades fill one page of the Trades table before pagination kicks in. */
 const PAGE_SIZE = 10;
 
-/**
- * A metric card's Radix accent scale — the sign-derived trio (green up, red down,
- * neutral flat) plus the warm-to-cool ramp the win-rate metric grades itself on.
- * Each name is a Radix color scale, so its background is `var(--<name>-a3)`.
- */
-type MetricColor = 'grass' | 'red' | 'gray' | 'orange' | 'yellow' | 'green';
-
 /** Column the Trades table can be sorted on (entry time or per-trade P/L). */
 type SortKey = 'entry' | 'pnl';
 
 /** Sort direction toggled by clicking a sortable header. */
 type SortDir = 'asc' | 'desc';
-
-/** Map a signed number to its tone — positive green, negative red, zero neutral. */
-function signTone(value: number): MetricColor {
-  if (value > 0) return 'grass';
-  if (value < 0) return 'red';
-  return 'gray';
-}
 
 /**
  * Grade a win-rate percentage on a monotonic worse-to-better ramp — red under

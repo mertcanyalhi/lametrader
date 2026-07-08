@@ -1,6 +1,10 @@
 import {
   type Backtest,
+  type BacktestSignal,
   BacktestStatus,
+  type BacktestStrategy,
+  type BacktestThreshold,
+  BacktestThresholdKind,
   type Config,
   type EnrichedSymbol,
   type Period,
@@ -10,16 +14,21 @@ import {
   Button,
   Callout,
   Card,
+  DataList,
+  Dialog,
   Flex,
   Heading,
+  IconButton,
   Popover,
   Progress,
   Switch,
   Text,
+  Tooltip,
+  VisuallyHidden,
 } from '@radix-ui/themes';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SeriesMarker, Time } from 'lightweight-charts';
-import { Settings } from 'lucide-react';
+import { Eye, Settings } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { formingBucketCandle } from '../../lib/aggregate-candles.js';
 import type { RangeBounds } from '../../lib/backtest-range.js';
@@ -72,6 +81,16 @@ const log = getLogger('backtesting-page');
 
 /** Milliseconds in one day — turns a run's `elapsedDays` into a frontier time. */
 const MS_PER_DAY = 86_400_000;
+
+/** Format an epoch-ms instant as a UTC `YYYY-MM-DD` calendar date (window bounds). */
+function utcDate(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+/** Format an epoch-ms instant as UTC `YYYY-MM-DD HH:mm` (minute precision reads cleanly). */
+function utcMinute(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 16).replace('T', ' ');
+}
 
 /**
  * The `/backtesting` route — define a strategy, run it against a symbol's stored
@@ -149,6 +168,10 @@ function BacktestingLayout({
   // live list below — a persisted strategy may have been deleted since.
   const [strategyId, setStrategyId] = useState<string | null>(getStoredBacktestStrategyId);
   const [activeRun, setActiveRun] = useState<ActiveBacktest | null>(null);
+  // The active run's document (from the start response or the reattach discovery),
+  // used to show its metadata (strategy, window, run time) alongside the progress.
+  // Its params/strategy/createdAt are immutable, so it never needs refetching.
+  const [activeBacktest, setActiveBacktest] = useState<Backtest | null>(null);
   const [loaded, setLoaded] = useState<Backtest | null>(null);
   const [hydrated, setHydrated] = useState(false);
   // Rule-event overlays clutter the chart, so they stay hidden until the trader
@@ -166,6 +189,7 @@ function BacktestingLayout({
     const running = runningQuery.data?.[0];
     if (running) {
       setActiveRun({ id: running.id, reattach: true });
+      setActiveBacktest(running);
       setSymbolId(running.params.symbolId);
       setPeriod(running.params.period);
       setStrategyId(running.strategyId);
@@ -309,13 +333,18 @@ function BacktestingLayout({
             onStrategyIdChange={setStrategyId}
             view={view}
             runId={activeRun?.id ?? null}
+            activeBacktest={activeBacktest}
             loaded={loaded}
             locked={locked}
-            onStarted={(id) => {
+            onStarted={(backtest) => {
               setLoaded(null);
-              setActiveRun({ id, reattach: false });
+              setActiveBacktest(backtest);
+              setActiveRun({ id: backtest.id, reattach: false });
             }}
-            onDismiss={() => setActiveRun(null)}
+            onDismiss={() => {
+              setActiveRun(null);
+              setActiveBacktest(null);
+            }}
             onCloseLoaded={() => setLoaded(null)}
           />
         </section>
@@ -343,7 +372,9 @@ function BacktestingLayout({
             setRange(next.range);
           }}
         />
-        <PreviousRunsDialog onLoad={loadBacktest} disabled={locked} />
+        {/* Stays selectable while a saved run is displayed (only a live run
+            locks it), so the trader can swap to another previous run directly. */}
+        <PreviousRunsDialog onLoad={loadBacktest} disabled={activeRun !== null} />
         <ChartSettings showRuleEvents={showRuleEvents} onShowRuleEventsChange={setShowRuleEvents} />
       </Flex>
     </div>
@@ -508,6 +539,168 @@ function ChartSettings({
 }
 
 /**
+ * The loaded (saved) run's right-panel view: a "Previous run" header, the run's
+ * metadata ({@link RunMetaList}), and its results.
+ */
+function LoadedRunPanel({
+  loaded,
+  view,
+  onClose,
+}: {
+  loaded: Backtest;
+  view: BacktestRunView | null;
+  onClose: () => void;
+}): ReactNode {
+  return (
+    <Card className="h-full">
+      <Flex direction="column" gap="4" p="2" className="h-full overflow-y-auto">
+        <section aria-label="Loaded backtest">
+          <Flex justify="between" align="center" gap="2" mb="3">
+            <Heading size="3">Previous run</Heading>
+            <Button type="button" variant="soft" color="gray" onClick={onClose}>
+              Close
+            </Button>
+          </Flex>
+          <RunMetaList backtest={loaded} />
+        </section>
+        {view ? <ResultsSection view={view} /> : null}
+      </Flex>
+    </Card>
+  );
+}
+
+/**
+ * A run's metadata as a {@link DataList} — name, strategy (with a view control
+ * opening its config), the replayed window, and when it ran. Shared by the
+ * loaded-run view and the live-run panel, so both read identically. Owns the
+ * strategy-config modal's open state.
+ */
+function RunMetaList({ backtest }: { backtest: Backtest }): ReactNode {
+  const [showStrategy, setShowStrategy] = useState(false);
+  return (
+    <>
+      <DataList.Root size="1">
+        <DataList.Item>
+          <DataList.Label>Name</DataList.Label>
+          <DataList.Value>{backtest.name}</DataList.Value>
+        </DataList.Item>
+        <DataList.Item>
+          <DataList.Label>Strategy</DataList.Label>
+          <DataList.Value>
+            <Flex align="center" gap="2">
+              {backtest.strategy.name}
+              <Tooltip content="View strategy">
+                <IconButton
+                  type="button"
+                  size="1"
+                  variant="ghost"
+                  color="gray"
+                  aria-label="View strategy"
+                  onClick={() => setShowStrategy(true)}
+                >
+                  <Eye size={14} aria-hidden="true" />
+                </IconButton>
+              </Tooltip>
+            </Flex>
+          </DataList.Value>
+        </DataList.Item>
+        <DataList.Item>
+          <DataList.Label>Start date</DataList.Label>
+          <DataList.Value>{utcDate(backtest.params.start)}</DataList.Value>
+        </DataList.Item>
+        <DataList.Item>
+          <DataList.Label>End date</DataList.Label>
+          <DataList.Value>{utcDate(backtest.params.end)}</DataList.Value>
+        </DataList.Item>
+        <DataList.Item>
+          <DataList.Label>Ran at</DataList.Label>
+          <DataList.Value>{utcMinute(backtest.createdAt)}</DataList.Value>
+        </DataList.Item>
+      </DataList.Root>
+      <StrategyViewDialog
+        strategy={backtest.strategy}
+        open={showStrategy}
+        onOpenChange={setShowStrategy}
+      />
+    </>
+  );
+}
+
+/**
+ * A read-only modal of a saved run's strategy snapshot — name, description, and
+ * each configured entry / exit mechanism, rendered as a {@link DataList}.
+ */
+function StrategyViewDialog({
+  strategy,
+  open,
+  onOpenChange,
+}: {
+  strategy: BacktestStrategy;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}): ReactNode {
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Content maxWidth="480px">
+        <Dialog.Title>{strategy.name}</Dialog.Title>
+        {strategy.description ? (
+          <Dialog.Description size="2" color="gray" mb="3">
+            {strategy.description}
+          </Dialog.Description>
+        ) : (
+          <VisuallyHidden>
+            <Dialog.Description>Strategy configuration.</Dialog.Description>
+          </VisuallyHidden>
+        )}
+        <DataList.Root size="1">
+          <DataList.Item>
+            <DataList.Label>Entry signal</DataList.Label>
+            <DataList.Value>{formatSignal(strategy.entry.signal)}</DataList.Value>
+          </DataList.Item>
+          {strategy.exit.signal ? (
+            <DataList.Item>
+              <DataList.Label>Exit signal</DataList.Label>
+              <DataList.Value>{formatSignal(strategy.exit.signal)}</DataList.Value>
+            </DataList.Item>
+          ) : null}
+          {strategy.exit.profitTarget ? (
+            <DataList.Item>
+              <DataList.Label>Profit target</DataList.Label>
+              <DataList.Value>{formatThreshold(strategy.exit.profitTarget)}</DataList.Value>
+            </DataList.Item>
+          ) : null}
+          {strategy.exit.stopLoss ? (
+            <DataList.Item>
+              <DataList.Label>Stop loss</DataList.Label>
+              <DataList.Value>{formatThreshold(strategy.exit.stopLoss)}</DataList.Value>
+            </DataList.Item>
+          ) : null}
+        </DataList.Root>
+        <Flex justify="end" mt="4">
+          <Dialog.Close>
+            <Button variant="soft" color="gray">
+              Close
+            </Button>
+          </Dialog.Close>
+        </Flex>
+      </Dialog.Content>
+    </Dialog.Root>
+  );
+}
+
+/** Render a signal as `key → value` (its edge-trigger transition). */
+function formatSignal(signal: BacktestSignal): string {
+  return `${signal.key} → ${String(signal.value.value)}`;
+}
+
+/** Render a threshold as `amount%` (percentage) or a bare price offset (fixed). */
+function formatThreshold(threshold: BacktestThreshold): string {
+  return threshold.kind === BacktestThresholdKind.Percentage
+    ? `${threshold.amount}%`
+    : String(threshold.amount);
+}
+
+/**
  * The right ⅓ region across the page's three states: **loaded** (a saved
  * backtest's finished-run view with a Close control), **running** (progress +
  * cancel over the results), and **idle** (the strategy manager and the run
@@ -527,6 +720,7 @@ function BacktestPanel({
   onStrategyIdChange,
   view,
   runId,
+  activeBacktest,
   loaded,
   locked,
   onStarted,
@@ -542,64 +736,61 @@ function BacktestPanel({
   onStrategyIdChange: (id: string | null) => void;
   view: BacktestRunView | null;
   runId: string | null;
+  /** The active run's document, for its metadata while it streams. */
+  activeBacktest: Backtest | null;
   loaded: Backtest | null;
   /** A run is active (or a saved backtest is loaded); strategy actions lock. */
   locked: boolean;
-  onStarted: (backtestId: string) => void;
+  onStarted: (backtest: Backtest) => void;
   onDismiss: () => void;
   onCloseLoaded: () => void;
 }): ReactNode {
   if (loaded !== null) {
-    return (
-      <Card className="h-full">
-        <Flex direction="column" gap="4" p="2" className="h-full overflow-y-auto">
-          <section aria-label="Loaded backtest">
-            <Flex justify="between" align="center" gap="2" mb="1">
-              <Heading size="3" className="truncate">
-                {loaded.name}
-              </Heading>
-              <Button type="button" variant="soft" color="gray" onClick={onCloseLoaded}>
-                Close
-              </Button>
-            </Flex>
-            <Text size="1" color="gray">
-              Saved backtest
-            </Text>
-          </section>
-          {view ? <ResultsSection view={view} /> : null}
-        </Flex>
-      </Card>
-    );
+    return <LoadedRunPanel loaded={loaded} view={view} onClose={onCloseLoaded} />;
   }
 
   const idle = runId === null;
   return (
     <Card className="h-full">
       <Flex direction="column" gap="4" p="2" className="h-full overflow-y-auto">
-        <section aria-label="Backtest setup">
-          <StrategyManager
-            symbolId={symbolId}
-            selectedId={strategyId}
-            onSelectedIdChange={onStrategyIdChange}
-            disabled={locked}
-          />
-        </section>
-        <section aria-label="Backtest run">
-          {idle ? (
-            <RunForm
-              strategyId={strategyId}
-              symbolId={symbolId}
-              profileId={profileId}
-              period={period}
-              runWindow={runWindow}
-              onWindowChange={onRunWindowChange}
-              onStarted={onStarted}
-            />
-          ) : (
-            <RunProgress run={view} runId={runId} onDismiss={onDismiss} />
-          )}
-        </section>
-        {view ? <ResultsSection view={view} /> : null}
+        {idle ? (
+          <>
+            <Heading size="3">New run</Heading>
+            <section aria-label="Backtest setup">
+              <StrategyManager
+                symbolId={symbolId}
+                selectedId={strategyId}
+                onSelectedIdChange={onStrategyIdChange}
+                disabled={locked}
+              />
+            </section>
+            <section aria-label="Backtest run">
+              <RunForm
+                strategyId={strategyId}
+                symbolId={symbolId}
+                profileId={profileId}
+                period={period}
+                runWindow={runWindow}
+                onWindowChange={onRunWindowChange}
+                onStarted={onStarted}
+              />
+            </section>
+          </>
+        ) : (
+          <>
+            <Heading size="3">Active run</Heading>
+            {/* A run's own details, mirroring the saved-run view. */}
+            {activeBacktest ? (
+              <section aria-label="Run details">
+                <RunMetaList backtest={activeBacktest} />
+              </section>
+            ) : null}
+            <section aria-label="Backtest run">
+              <RunProgress run={view} runId={runId} onDismiss={onDismiss} />
+            </section>
+            {view ? <ResultsSection view={view} /> : null}
+          </>
+        )}
       </Flex>
     </Card>
   );
