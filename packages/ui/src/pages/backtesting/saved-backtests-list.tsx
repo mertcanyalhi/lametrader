@@ -6,6 +6,7 @@ import {
   Dialog,
   Flex,
   IconButton,
+  Link,
   Spinner,
   Table,
   Text,
@@ -168,14 +169,19 @@ export function SavedBacktestsList({
           {pageRows.map((backtest) => (
             <Table.Row key={backtest.id} align="center">
               <Table.Cell>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="justify-start"
-                  onClick={() => onLoad(backtest)}
-                >
-                  {backtest.name}
-                </Button>
+                {/* A link, not a Button: the ghost Button is `justify-content:
+                    center`, so the name reads centered in the cell. Radix `Link
+                    asChild` styles a real <button> (keyboard + `role="button"`),
+                    left-aligned like the plain-text cells beside it. */}
+                <Link asChild highContrast color="gray">
+                  <button
+                    type="button"
+                    className="cursor-pointer text-left"
+                    onClick={() => onLoad(backtest)}
+                  >
+                    {backtest.name}
+                  </button>
+                </Link>
               </Table.Cell>
               <Table.Cell>
                 <Text size="1" color="gray">
