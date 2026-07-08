@@ -222,6 +222,35 @@ describe('CandleChart live ticks', () => {
       [point(live3)],
     ]);
   });
+
+  it('folds finer-period frames into the coarser charted period forming bar', () => {
+    // Chart OneHour while the symbol also streams OneMinute (a finer period). The
+    // hour's forming bar must advance with each minute frame, not freeze between
+    // the hour's own boundaries.
+    const finerSymbol: EnrichedSymbol = { ...SYMBOL, periods: [Period.OneMinute, Period.OneHour] };
+    render(
+      <ThemeProvider>
+        <Theme>
+          <CandleChart
+            candles={[bar(0, 100, 100, 100, 100)]}
+            symbol={finerSymbol}
+            period={Period.OneHour}
+            range={null}
+            loadOlder={() => {}}
+            hasMore={false}
+          />
+        </Theme>
+      </ThemeProvider>,
+    );
+    // Two OneMinute frames inside the hour bucket starting at 3_600_000 ms.
+    emit(event(bar(3_600_000, 105, 110, 104, 108), Period.OneMinute));
+    emit(event(bar(3_660_000, 108, 112, 107, 111), Period.OneMinute));
+
+    expect(createdSeries[0]?.update.mock.calls).toEqual([
+      [point(bar(3_600_000, 105, 110, 104, 108))],
+      [point(bar(3_600_000, 105, 112, 104, 111))],
+    ]);
+  });
 });
 
 /** Build a `chartElement` that also accepts `eventMarkers`. */

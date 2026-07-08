@@ -31,6 +31,12 @@ function candle(time: number, close: number): Candle {
   return { type: SymbolType.Fx, time, open: close, high: close, low: close, close };
 }
 
+function bar(time: number, open: number, high: number, low: number, close: number): Candle {
+  return { type: SymbolType.Fx, time, open, high, low, close };
+}
+
+const HOUR = 3_600_000;
+
 function ruleEvent(ts: number): RuleEventEntry {
   return {
     type: RuleEventType.StateSet,
@@ -226,5 +232,38 @@ describe('chartCandlesFor', () => {
     expect(
       chartCandlesFor([{ period: Period.OneDay, candle: candle(1, 1) }], Period.OneHour),
     ).toEqual([]);
+  });
+
+  it('leaves the charted period unchanged when it is the finest period present', () => {
+    const candles = [
+      { period: Period.OneHour, candle: candle(0, 100) },
+      { period: Period.OneHour, candle: candle(HOUR, 103) },
+      { period: Period.OneDay, candle: candle(0, 200) },
+    ];
+
+    expect(chartCandlesFor(candles, Period.OneHour)).toEqual([candle(0, 100), candle(HOUR, 103)]);
+  });
+
+  it('folds the finest finer period into the charted period forming bar', () => {
+    const candles = [
+      { period: Period.OneHour, candle: candle(0, 100) },
+      { period: Period.FifteenMinutes, candle: bar(HOUR, 105, 110, 104, 108) },
+      { period: Period.FifteenMinutes, candle: bar(HOUR + 900_000, 108, 112, 107, 111) },
+    ];
+
+    expect(chartCandlesFor(candles, Period.OneHour)).toEqual([
+      candle(0, 100),
+      bar(HOUR, 105, 112, 104, 111),
+    ]);
+  });
+
+  it('overlays the finer fold onto the charted period own forming bar', () => {
+    const candles = [
+      { period: Period.OneHour, candle: bar(HOUR, 105, 106, 105, 105) },
+      { period: Period.FifteenMinutes, candle: bar(HOUR, 105, 110, 104, 108) },
+      { period: Period.FifteenMinutes, candle: bar(HOUR + 900_000, 108, 112, 107, 111) },
+    ];
+
+    expect(chartCandlesFor(candles, Period.OneHour)).toEqual([bar(HOUR, 105, 112, 104, 111)]);
   });
 });
