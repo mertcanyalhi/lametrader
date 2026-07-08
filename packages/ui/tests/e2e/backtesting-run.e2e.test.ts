@@ -308,7 +308,9 @@ describe('backtesting run flow (e2e)', () => {
     expect(screen.getByTestId('backtest-chart')).toHaveTextContent('2 candles');
     expect(screen.getByRole('button', { name: 'New run' })).toBeInTheDocument();
 
-    // The three result tabs render the completed run. Summary is active first.
+    // Two result tabs render the completed run. Summary is active first and now
+    // carries the merged metric block plus the Daily P&L histogram (shown by
+    // default, switchable to the equity / per-trade series).
     const summary = screen.getByLabelText('Summary');
     expect(within(summary).getByText('Total P/L').previousElementSibling?.textContent).toBe(
       '+19.00',
@@ -316,6 +318,10 @@ describe('backtesting run flow (e2e)', () => {
     expect(
       within(summary).getByText('Open position (unrealized)').previousElementSibling?.textContent,
     ).toBe('+4.00');
+    expect(within(summary).getByText('Winners / losers').previousElementSibling?.textContent).toBe(
+      '1 / 0',
+    );
+    expect(screen.getByTestId('daily-pnl-chart')).toHaveTextContent('1 bars');
 
     // Trades tab: the closed trade plus the open position as an unrealized row.
     await user.click(screen.getByRole('tab', { name: /Trades/ }));
@@ -323,16 +329,5 @@ describe('backtesting run flow (e2e)', () => {
     expect(within(tradeRows[1] as HTMLElement).getByText('Profit target')).toBeInTheDocument();
     expect(within(tradeRows[2] as HTMLElement).getByText('unrealized')).toBeInTheDocument();
     expect(within(tradeRows[2] as HTMLElement).getByText('Open')).toBeInTheDocument();
-
-    // Daily P&L tab: the exit-day histogram plus the five-item summary block.
-    await user.click(screen.getByRole('tab', { name: /Daily P&L/ }));
-    expect(screen.getByTestId('daily-pnl-chart')).toHaveTextContent('1 bars');
-    const block = screen.getByLabelText('Daily P&L summary');
-    expect(within(block).getByText('Winners / losers').previousElementSibling?.textContent).toBe(
-      '1 / 0',
-    );
-    expect(within(block).getByText('Avg days in trade').previousElementSibling?.textContent).toBe(
-      '0.50',
-    );
   });
 });
