@@ -211,7 +211,7 @@ function BacktestingLayout({
   return (
     <div className="grid h-full grid-rows-[minmax(0,1fr)_auto] gap-3">
       {run ? <BacktestDocumentTitle run={run} /> : null}
-      <div className="grid min-h-0 grid-cols-1 gap-3 lg:grid-cols-3">
+      <div className="grid min-h-0 grid-cols-1 gap-3 lg:grid-cols-3 lg:grid-rows-1">
         <section aria-label="Backtest chart" className="min-h-0 lg:col-span-2">
           {view && selected ? (
             <Card className="h-full">
@@ -382,8 +382,8 @@ function BacktestPanel({
 }): ReactNode {
   if (loaded !== null) {
     return (
-      <Card className="h-full overflow-y-auto">
-        <Flex direction="column" gap="4" p="2">
+      <Card className="h-full">
+        <Flex direction="column" gap="4" p="2" className="h-full overflow-y-auto">
           <section aria-label="Loaded backtest">
             <Flex justify="between" align="center" gap="2" mb="1">
               <Heading size="3" className="truncate">
@@ -405,8 +405,8 @@ function BacktestPanel({
 
   const idle = runId === null;
   return (
-    <Card className="h-full overflow-y-auto">
-      <Flex direction="column" gap="4" p="2">
+    <Card className="h-full">
+      <Flex direction="column" gap="4" p="2" className="h-full overflow-y-auto">
         <section aria-label="Backtest setup">
           <StrategyManager
             symbolId={symbolId}
