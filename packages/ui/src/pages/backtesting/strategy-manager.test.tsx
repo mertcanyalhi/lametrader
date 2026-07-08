@@ -134,15 +134,16 @@ describe('StrategyManager', () => {
     expect(newButton).toBeEnabled();
   });
 
-  it('disables the New button when disabled (a backtest is running)', async () => {
+  it('hides the New button when disabled (a backtest is running)', async () => {
     renderManager(true);
 
-    const newButton = await screen.findByRole('button', { name: /New/ });
+    // The selector still renders (strategies can be browsed), so wait on it.
+    await screen.findByRole('combobox', { name: 'Selected strategy' });
 
-    expect(newButton).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /New/ })).toBeNull();
   });
 
-  it('disables the edit and delete controls when disabled (a backtest is running)', async () => {
+  it('hides the edit and delete controls when disabled (a backtest is running)', async () => {
     const user = userEvent.setup();
     renderManager(true);
 
@@ -150,9 +151,9 @@ describe('StrategyManager', () => {
     await user.click(screen.getByRole('option', { name: 'Breakout' }));
 
     expect({
-      edit: screen.getByRole('button', { name: 'Edit strategy' }).hasAttribute('disabled'),
-      delete: screen.getByRole('button', { name: 'Delete strategy' }).hasAttribute('disabled'),
-    }).toEqual({ edit: true, delete: true });
+      edit: screen.queryByRole('button', { name: 'Edit strategy' }),
+      delete: screen.queryByRole('button', { name: 'Delete strategy' }),
+    }).toEqual({ edit: null, delete: null });
   });
 
   it('deletes the selected strategy and drops it from the selector', async () => {

@@ -34,7 +34,7 @@ type DialogState =
  * @param selectedId - The controlled selected strategy id (omit for uncontrolled).
  * @param onSelectedIdChange - Called when the selection changes (controlled mode).
  * @param disabled - When `true` (a backtest run is active), the New / Edit /
- *                     Delete *actions* are locked; the selector itself stays
+ *                     Delete *actions* are hidden; the selector itself stays
  *                     interactive so the trader can still browse strategies.
  */
 export function StrategyManager({
@@ -99,43 +99,45 @@ export function StrategyManager({
           </Select.Content>
         </Select.Root>
 
-        <Button
-          type="button"
-          variant="soft"
-          disabled={disabled}
-          onClick={() => setDialog({ open: true, mode: 'create', initial: undefined })}
-        >
-          <Plus size={16} aria-hidden="true" />
-          New
-        </Button>
-
-        {selected !== null && (
+        {/* A run hides the mutation actions entirely; the selector above stays live. */}
+        {!disabled && (
           <>
-            <Tooltip content="Edit strategy">
-              <IconButton
-                type="button"
-                variant="soft"
-                color="gray"
-                aria-label="Edit strategy"
-                disabled={disabled}
-                onClick={() => setDialog({ open: true, mode: 'edit', initial: selected })}
-              >
-                <Pencil size={16} aria-hidden="true" />
-              </IconButton>
-            </Tooltip>
+            <Button
+              type="button"
+              variant="soft"
+              onClick={() => setDialog({ open: true, mode: 'create', initial: undefined })}
+            >
+              <Plus size={16} aria-hidden="true" />
+              New
+            </Button>
 
-            <Tooltip content="Delete strategy">
-              <IconButton
-                type="button"
-                variant="soft"
-                color="red"
-                aria-label="Delete strategy"
-                disabled={disabled}
-                onClick={() => setToDelete(selected)}
-              >
-                <Trash2 size={16} aria-hidden="true" />
-              </IconButton>
-            </Tooltip>
+            {selected !== null && (
+              <>
+                <Tooltip content="Edit strategy">
+                  <IconButton
+                    type="button"
+                    variant="soft"
+                    color="gray"
+                    aria-label="Edit strategy"
+                    onClick={() => setDialog({ open: true, mode: 'edit', initial: selected })}
+                  >
+                    <Pencil size={16} aria-hidden="true" />
+                  </IconButton>
+                </Tooltip>
+
+                <Tooltip content="Delete strategy">
+                  <IconButton
+                    type="button"
+                    variant="soft"
+                    color="red"
+                    aria-label="Delete strategy"
+                    onClick={() => setToDelete(selected)}
+                  >
+                    <Trash2 size={16} aria-hidden="true" />
+                  </IconButton>
+                </Tooltip>
+              </>
+            )}
           </>
         )}
       </Flex>

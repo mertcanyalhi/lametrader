@@ -266,7 +266,7 @@ describe('BacktestingPage run flow', () => {
     ).toEqual(false);
   });
 
-  it('locks the strategy New action while a run is active', async () => {
+  it('hides the strategy New action while a run is active', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole('button', { name: 'Alpha' });
@@ -274,7 +274,9 @@ describe('BacktestingPage run flow', () => {
     await selectStrategyAndRun(user);
     push(snapshot(1));
 
-    expect(screen.getByRole('button', { name: /New/ }).hasAttribute('disabled')).toEqual(true);
+    // A running (not completed) run shows "Cancel run", so no /New/ button
+    // should exist — the strategy New action is hidden.
+    expect(screen.queryByRole('button', { name: /New/ })).toBeNull();
   });
 
   it('fills the chart incrementally from delta candle frames', async () => {
