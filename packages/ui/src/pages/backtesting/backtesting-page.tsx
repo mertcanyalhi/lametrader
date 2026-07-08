@@ -20,6 +20,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { Settings } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { formatChange } from '../../lib/format.js';
 import {
   COMPLETED_BACKTESTS_QUERY_KEY,
   useCancelBacktest,
@@ -178,6 +179,7 @@ function BacktestingLayout({
 
   return (
     <div className="grid h-full grid-rows-[minmax(0,1fr)_auto] gap-3">
+      {run ? <BacktestDocumentTitle run={run} /> : null}
       <div className="grid min-h-0 grid-cols-1 gap-3 lg:grid-cols-3">
         <section aria-label="Backtest chart" className="min-h-0 lg:col-span-2">
           {view && selected ? (
@@ -411,6 +413,32 @@ function ResultsSection({ view }: { view: BacktestRunView }): ReactNode {
       <ResultsTabs trades={view.trades} summary={view.summary} openPosition={view.openPosition} />
     </section>
   );
+}
+
+/**
+ * Drives the document title to `<symbol> <pct>% <total P/L> - lametrader` while a
+ * backtest is active, so the browser tab tracks a run's progress and running P/L
+ * from another tab. The percentage is the run's elapsed-days progress while it
+ * streams and a full `100%` once it completes (until dismissed); the P/L is the
+ * running Σ over closed trades so far. Mounted only while a run is active, so
+ * dismissing it (or leaving the page) restores the pre-run title.
+ */
+function BacktestDocumentTitle({ run }: { run: BacktestRunView }): ReactNode {
+  const percent = run.status === BacktestStatus.Completed ? 100 : progressPercent(run);
+  const title = `${run.params.symbolId} ${percent}% ${formatChange(run.summary.totalPnl)} - lametrader`;
+  // Capture the pre-run title once (mount) and restore it on unmount — the run
+  // component unmounts in place when the run is dismissed, so restoring the last
+  // title instead would leave the tab stuck on a finished run's line.
+  useEffect(() => {
+    const previous = document.title;
+    return () => {
+      document.title = previous;
+    };
+  }, []);
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
+  return null;
 }
 
 /** Clamp a run's elapsed-days / total-days progress to a whole 0–100 percentage. */

@@ -562,4 +562,48 @@ describe('BacktestingPage run flow', () => {
       follow: chart.getAttribute('data-follow'),
     }).toEqual({ candles: '4 candles', follow: 'true' });
   });
+
+  it('sets the tab title to the running symbol, progress, and total P/L while a run streams', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: 'Alpha' });
+
+    await selectStrategyAndRun(user);
+    push(snapshot(0));
+    push({
+      kind: BacktestFrameKind.Delta,
+      status: BacktestStatus.Running,
+      progress: { elapsedDays: 1, totalDays: 2 },
+      candles: [],
+      events: [],
+      trades: [],
+      summary: { ...EMPTY_SUMMARY, totalPnl: 25, roiPct: 0.25, tradeCount: 1, winners: 1 },
+      openPosition: undefined,
+    });
+
+    expect(document.title).toEqual('crypto:BTCUSDT 50% +25.00 - lametrader');
+  });
+
+  it('shows 100% and the final total P/L in the tab title once the run completes', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: 'Alpha' });
+
+    await selectStrategyAndRun(user);
+    push(snapshot(0));
+    // A completed frame pins the title to 100% even if its progress trails, and
+    // carries the run's final total P/L.
+    push({
+      kind: BacktestFrameKind.Delta,
+      status: BacktestStatus.Completed,
+      progress: { elapsedDays: 1, totalDays: 2 },
+      candles: [],
+      events: [],
+      trades: [],
+      summary: { ...EMPTY_SUMMARY, totalPnl: -12.5, roiPct: -0.125, tradeCount: 1, losers: 1 },
+      openPosition: undefined,
+    });
+
+    expect(document.title).toEqual('crypto:BTCUSDT 100% -12.50 - lametrader');
+  });
 });
