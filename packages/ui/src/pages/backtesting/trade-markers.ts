@@ -1,5 +1,6 @@
 import type { BacktestOpenPosition, BacktestTrade } from '@lametrader/core';
 import type { SeriesMarker, Time } from 'lightweight-charts';
+import { formatPrice } from '../../lib/format.js';
 import { Theme } from '../../lib/theme.types.js';
 import { chartColors } from '../chart/chart-series.js';
 
@@ -50,7 +51,7 @@ function entryMarker(ts: number, price: number): SeriesMarker<Time> {
     position: 'aboveBar',
     shape: 'arrowDown',
     color: BUY_COLOR,
-    text: `Buy @ ${price}`,
+    text: `Buy @ ${formatPrice(price)}`,
   };
 }
 
@@ -61,6 +62,6 @@ function exitMarker(ts: number, price: number): SeriesMarker<Time> {
     position: 'belowBar',
     shape: 'arrowUp',
     color: SELL_COLOR,
-    text: `Sell @ ${price}`,
+    text: `Sell @ ${formatPrice(price)}`,
   };
 }
