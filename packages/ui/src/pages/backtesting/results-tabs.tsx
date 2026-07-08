@@ -390,16 +390,20 @@ function HeaderCell({
   );
   return (
     <Table.ColumnHeaderCell>
-      {sort ? (
-        <Button variant="ghost" size="1" color="gray" onClick={sort.onClick}>
-          {text}
-          <Text aria-hidden="true" size="1" color="gray">
-            {sort.active ? (sort.dir === 'asc' ? '▲' : '▼') : ''}
-          </Text>
-        </Button>
-      ) : (
-        text
-      )}
+      {/* Fixed-height centered box so the sortable ghost button and the plain
+          text labels share one vertical line instead of drifting apart. */}
+      <Flex align="center" className="h-6">
+        {sort ? (
+          <Button variant="ghost" size="1" color="gray" onClick={sort.onClick} my="0">
+            {text}
+            <Text aria-hidden="true" size="1" color="gray">
+              {sort.active ? (sort.dir === 'asc' ? '▲' : '▼') : ''}
+            </Text>
+          </Button>
+        ) : (
+          text
+        )}
+      </Flex>
     </Table.ColumnHeaderCell>
   );
 }
