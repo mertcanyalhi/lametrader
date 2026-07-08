@@ -17,7 +17,8 @@ import {
   Switch,
   Text,
 } from '@radix-ui/themes';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { SeriesMarker, Time } from 'lightweight-charts';
 import { Settings } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import {
@@ -32,6 +33,7 @@ import {
   useCancelBacktest,
   useRunningBacktest,
 } from '../../lib/hooks/backtests.js';
+import { fetchRangeCandles } from '../../lib/hooks/candles.js';
 import { useWatchlist } from '../../lib/hooks/symbols.js';
 import {
   type ActiveBacktest,
@@ -48,6 +50,7 @@ import { ChartLoading } from '../chart/chart-loading.js';
 import type { ChartRange } from '../chart/chart-range.js';
 import { PeriodRangeDialog } from '../chart/period-range-dialog.js';
 import { ProfilePickerDialog } from '../chart/profile-picker-dialog.js';
+import type { StateOverlay } from '../chart/states/state-overlay.js';
 import { SymbolPickerDialog } from '../chart/symbol-picker-dialog.js';
 import { IdleBacktestChart } from './idle-backtest-chart.js';
 import { ResultsTabs } from './results-tabs.js';
@@ -59,6 +62,9 @@ import { buildTradeMarkers } from './trade-markers.js';
 
 /** Scoped logger for run-cancel failures. */
 const log = getLogger('backtesting-page');
+
+/** Milliseconds in one day — turns a run's `elapsedDays` into a frontier time. */
+const MS_PER_DAY = 86_400_000;
 
 /**
  * The `/backtesting` route — define a strategy, run it against a symbol's stored
@@ -110,10 +116,10 @@ function BacktestingLayout({
   });
   // Idle default: the last-used period (persisted) when it's watched on the
   // seeded symbol, else that symbol's smallest watched period (the finest
-  // timeframe it holds), not the global config default. A loaded/running run
-  // still pins its own stored period via `chartPeriod` below, so this only
-  // seeds a fresh selection. Picking another symbol re-seeds it in
-  // `selectSymbol`; the config default is the fallback for an empty list.
+  // timeframe it holds), not the global config default. A reattach / load aligns
+  // this to the run's own period (see the effects below), so this only seeds a
+  // fresh selection. Picking another symbol re-seeds it in `selectSymbol`; the
+  // config default is the fallback for an empty list.
   const [period, setPeriod] = useState<Period>(() => {
     const seededSymbol = symbols.find((symbol) => symbol.id === symbolId) ?? symbols[0] ?? null;
     const stored = getStoredBacktestPeriod();
@@ -164,7 +170,20 @@ function BacktestingLayout({
   const view = run ?? loadedView;
   const { theme } = useTheme();
   const locked = activeRun !== null || loaded !== null;
-  const chartPeriod = view?.params.period ?? period;
+  // The picker's `period` drives the chart, always. A run/loaded view feeds its
+  // live/replayed candles only while the picker sits on the run's own period.
+  // Switch the picker elsewhere and the chart shows that period's stored candles
+  // over the SAME replay window (a run produces data at one period only) — see
+  // `OffPeriodBacktestChart`. This keeps the picker live during a run and leaves
+  // nothing to snap back when the run ends.
+  const onRunPeriod = view !== null && period === view.params.period;
+  // The replay frontier: how far the run has advanced through its window. A live
+  // run reports `elapsedDays`; a loaded (completed) view reports it fully elapsed,
+  // so this is its `end`. Bounds the off-period chart so it never reveals bars
+  // past the cursor.
+  const frontier = view
+    ? Math.min(view.params.end, view.params.start + view.progress.elapsedDays * MS_PER_DAY)
+    : 0;
 
   // When a run finishes, refresh the saved-backtests list so the just-persisted
   // backtest is there once the page returns to idle.
@@ -213,12 +232,12 @@ function BacktestingLayout({
       {run ? <BacktestDocumentTitle run={run} /> : null}
       <div className="grid min-h-0 grid-cols-1 gap-3 lg:grid-cols-3 lg:grid-rows-1">
         <section aria-label="Backtest chart" className="min-h-0 lg:col-span-2">
-          {view && selected ? (
+          {view && selected && onRunPeriod ? (
             <Card className="h-full">
               <CandleChart
                 candles={view.chartCandles}
                 symbol={selected}
-                period={chartPeriod}
+                period={period}
                 range={null}
                 loadOlder={noop}
                 hasMore={false}
@@ -227,6 +246,16 @@ function BacktestingLayout({
                 stateOverlays={showRuleEvents ? runStateOverlays : []}
               />
             </Card>
+          ) : view && selected ? (
+            <OffPeriodBacktestChart
+              symbol={selected}
+              period={period}
+              start={view.params.start}
+              end={view.params.end}
+              frontier={frontier}
+              eventMarkers={tradeMarkers}
+              stateOverlays={showRuleEvents ? runStateOverlays : []}
+            />
           ) : selected ? (
             <IdleBacktestChart
               symbol={selected}
@@ -241,7 +270,7 @@ function BacktestingLayout({
           <BacktestPanel
             symbolId={symbolId ?? ''}
             profileId={profileId}
-            period={chartPeriod}
+            period={period}
             strategyId={strategyId}
             onStrategyIdChange={setStrategyId}
             view={view}
@@ -304,6 +333,70 @@ function smallestPeriod(symbol: EnrichedSymbol | null, config: Config): Period {
 
 /** No-op passed to the reused chart's paging hook — a backtest never scrolls back. */
 function noop(): void {}
+
+/**
+ * The backtest chart at a period **other** than the run's own. A run produces
+ * data at a single period, so switching the picker mid-run (or on a loaded run)
+ * can't reuse the run's frames; instead this reads that period's stored candles
+ * over the run's own window from the candle store (the same {@link fetchRangeCandles}
+ * the reattach/load paths use) and clips them to the replay `frontier`, so the
+ * chart tracks the current cursor exactly like the run chart — never revealing a
+ * bar past where the replay has reached. The run's trade markers / state overlays
+ * are kept on top, and `follow` keeps the frontier bar in view.
+ *
+ * The fetch is keyed by the fixed run window (`symbol`, `period`, `start`, `end`),
+ * not the moving frontier, so a live run advancing the frontier re-clips an
+ * already-fetched series rather than refetching the whole window each frame.
+ *
+ * @param symbol - the charted symbol.
+ * @param period - the picked period to chart (≠ the run's period).
+ * @param start - the run window's start (inclusive), epoch ms.
+ * @param end - the run window's end (exclusive), epoch ms.
+ * @param frontier - the replay frontier; bars after it are hidden.
+ * @param eventMarkers - the run's trade markers to overlay.
+ * @param stateOverlays - the run's state overlays to overlay (empty when gated off).
+ */
+function OffPeriodBacktestChart({
+  symbol,
+  period,
+  start,
+  end,
+  frontier,
+  eventMarkers,
+  stateOverlays,
+}: {
+  symbol: EnrichedSymbol;
+  period: Period;
+  start: number;
+  end: number;
+  frontier: number;
+  eventMarkers: ReadonlyArray<SeriesMarker<Time>>;
+  stateOverlays: ReadonlyArray<StateOverlay>;
+}): ReactNode {
+  const query = useQuery({
+    queryKey: ['backtest-offperiod-candles', symbol.id, period, start, end],
+    queryFn: () => fetchRangeCandles(symbol.id, period, start, end),
+  });
+  const candles = useMemo(
+    () => (query.data ?? []).filter((c) => c.time <= frontier),
+    [query.data, frontier],
+  );
+  return (
+    <Card className="h-full">
+      <CandleChart
+        candles={candles}
+        symbol={symbol}
+        period={period}
+        range={null}
+        loadOlder={noop}
+        hasMore={false}
+        follow
+        eventMarkers={eventMarkers}
+        stateOverlays={stateOverlays}
+      />
+    </Card>
+  );
+}
 
 /**
  * The bottom bar's chart-settings control: a text {@link Button} (cog icon +

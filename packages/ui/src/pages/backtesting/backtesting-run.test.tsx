@@ -32,17 +32,20 @@ import { BacktestingPage } from './backtesting-page.js';
 vi.mock('../chart/candle-chart.js', () => ({
   CandleChart: ({
     candles,
+    period,
     follow = false,
     eventMarkers = [],
     stateOverlays = [],
   }: {
     candles: Candle[];
+    period: Period;
     follow?: boolean;
     eventMarkers?: unknown[];
     stateOverlays?: unknown[];
   }) => (
     <div
       data-testid="backtest-chart"
+      data-period={period}
       data-follow={String(follow)}
       data-markers={eventMarkers.length}
       data-overlays={stateOverlays.length}
@@ -50,6 +53,15 @@ vi.mock('../chart/candle-chart.js', () => ({
       {candles.length} candles
     </div>
   ),
+}));
+
+// The idle chart (shown after a run ends) may fold a smaller period up over the
+// shared stream client; stub it so no real socket is opened under jsdom.
+vi.mock('../../lib/stream/stream-client.js', () => ({
+  streamClient: {
+    subscribe: () => () => {},
+    onReconnect: () => () => {},
+  },
 }));
 
 // Capture the run stream's frame handler so tests can push snapshot / delta
@@ -382,6 +394,66 @@ describe('BacktestingPage run flow', () => {
     const chart = screen.getByTestId('backtest-chart');
     await waitFor(() => expect(chart.getAttribute('data-overlays')).toEqual('1'));
     expect(chart.getAttribute('data-overlays')).toEqual('1');
+  });
+
+  it('charts the picked period over the run window, following the frontier, when switched mid-run', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: 'Alpha' });
+
+    await selectStrategyAndRun(user);
+    push(snapshot(1));
+    // The run streams at 1h, so the chart opens on 1h.
+    expect(screen.getByTestId('backtest-chart').getAttribute('data-period')).toEqual(
+      Period.OneHour,
+    );
+
+    // Switching the (still-live) picker to 1d re-charts that period from the store
+    // over the run's window and keeps following the frontier bar — it does not
+    // stay pinned to the run's 1h, nor jump to present-day candles.
+    const bar = screen.getByRole('group', { name: 'Backtesting actions' });
+    await user.click(within(bar).getByRole('button', { name: Period.OneHour }));
+    await user.click(await screen.findByRole('button', { name: Period.OneDay }));
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('backtest-chart').getAttribute('data-period')).toEqual(
+        Period.OneDay,
+      ),
+    );
+    // The 1d candle lives inside the run window [1_000, 100_000); reading that
+    // window (not a present-day one) surfaces it, so the chart shows 1 candle.
+    const chart = screen.getByTestId('backtest-chart');
+    expect({
+      period: chart.getAttribute('data-period'),
+      follow: chart.getAttribute('data-follow'),
+      candles: chart.textContent,
+    }).toEqual({ period: Period.OneDay, follow: 'true', candles: '1 candles' });
+  });
+
+  it('keeps the switched period on the chart after the run is cancelled, without reverting', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: 'Alpha' });
+
+    await selectStrategyAndRun(user);
+    push(snapshot(1));
+    const bar = screen.getByRole('group', { name: 'Backtesting actions' });
+    await user.click(within(bar).getByRole('button', { name: Period.OneHour }));
+    await user.click(await screen.findByRole('button', { name: Period.OneDay }));
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('backtest-chart').getAttribute('data-period')).toEqual(
+        Period.OneDay,
+      ),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Cancel run' }));
+
+    // Cancelling returns to idle but keeps the chart on the picked 1d — it does
+    // not snap back to the run's 1h.
+    await waitFor(() => expect(deleted).toEqual(['b-1']));
+    expect(screen.getByTestId('backtest-chart').getAttribute('data-period')).toEqual(Period.OneDay);
   });
 
   it('reports completion on the final frame', async () => {
