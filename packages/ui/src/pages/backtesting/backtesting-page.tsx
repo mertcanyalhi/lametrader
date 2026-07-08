@@ -382,7 +382,7 @@ function BacktestPanel({
 }): ReactNode {
   if (loaded !== null) {
     return (
-      <Card className="h-full">
+      <Card className="h-full overflow-y-auto">
         <Flex direction="column" gap="4" p="2">
           <section aria-label="Loaded backtest">
             <Flex justify="between" align="center" gap="2" mb="1">
@@ -405,7 +405,7 @@ function BacktestPanel({
 
   const idle = runId === null;
   return (
-    <Card className="h-full">
+    <Card className="h-full overflow-y-auto">
       <Flex direction="column" gap="4" p="2">
         <section aria-label="Backtest setup">
           <StrategyManager
