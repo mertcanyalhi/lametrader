@@ -9,7 +9,6 @@ import {
   Pane,
   type Period,
   type Profile,
-  periodMillis,
   RenderKind,
   StateValueType,
 } from '@lametrader/core';
@@ -37,7 +36,6 @@ import {
   type WhitespaceData,
 } from 'lightweight-charts';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { formingBucketCandle } from '../../lib/aggregate-candles.js';
 import {
   captureViewport,
   DEFAULT_VISIBLE_BARS,
@@ -49,8 +47,6 @@ import {
 import { priceDecimals } from '../../lib/format.js';
 import { liveCandleForPeriod } from '../../lib/hooks/candles.js';
 import { getLogger } from '../../lib/log.js';
-import { finestFinerPeriod } from '../../lib/periods.js';
-import type { CandleEvent } from '../../lib/stream/stream-client.types.js';
 import { StreamKind } from '../../lib/stream/stream-client.types.js';
 import { useStreamSubscription } from '../../lib/stream/use-stream-subscription.js';
 import { useTheme } from '../../lib/theme-context.js';
@@ -284,18 +280,6 @@ export function CandleChart({
   // re-applied after a `setData` re-seeds the series from history alone — which
   // happens on a theme or data refresh and would otherwise drop the live tail.
   const liveBarsRef = useRef<Map<number, Candle>>(new Map());
-  // The finest watched period strictly finer than the charted one, or `null` when
-  // the charted period is itself the finest (the common case, no folding). Its
-  // live frames are folded into the charted period's forming bar so a coarser
-  // charted period ticks between its own, less frequent, boundaries.
-  const finerPeriod = useMemo(
-    () => finestFinerPeriod(symbol.periods, period),
-    [symbol.periods, period],
-  );
-  // Finer-period frames in the charted period's current forming bucket, keyed by
-  // time; folded via `formingBucketCandle`. Empty (and unused) when `finerPeriod`
-  // is `null`. Reset with the stream key below.
-  const finerBarsRef = useRef<Map<number, Candle>>(new Map());
   // Those bars belong to one (id, period); when it changes, start a fresh tail.
   // Reset during render (not an effect) so the data effect re-seeds from empty.
   const streamKey = `${symbol.id}:${period}`;
@@ -303,7 +287,6 @@ export function CandleChart({
   if (streamKeyRef.current !== streamKey) {
     streamKeyRef.current = streamKey;
     liveBarsRef.current = new Map();
-    finerBarsRef.current = new Map();
     setLiveLatest(null);
   }
   // The newest bar's open time (live tick or last loaded), read by the long-lived
@@ -500,34 +483,8 @@ export function CandleChart({
   // last, leaving the closed bar stuck at its last in-progress value. Applying
   // per event (each frame) lets both land: `update` replaces the bar when the
   // time matches (forming / final correction) and appends when it is newer.
-  // Fold a finer-than-charted stream frame into the charted period's forming bar:
-  // buffer the frame under `finerPeriod`, drop any older than the current bucket,
-  // and re-aggregate the bucket via `formingBucketCandle`. Returns `null` when
-  // folding is off (`finerPeriod` is `null`) or the frame is a different period.
-  const foldFinerFrame = useCallback(
-    (event: CandleEvent): Candle | null => {
-      if (finerPeriod === null || event.period !== finerPeriod) return null;
-      const buffer = finerBarsRef.current;
-      buffer.set(event.candle.time, event.candle);
-      const bucketStart =
-        Math.floor(event.candle.time / periodMillis(period)) * periodMillis(period);
-      for (const time of buffer.keys()) {
-        if (time < bucketStart) buffer.delete(time);
-      }
-      return formingBucketCandle(
-        [...buffer.values()].sort((a, b) => a.time - b.time),
-        period,
-      );
-    },
-    [finerPeriod, period],
-  );
-
   useStreamSubscription(StreamKind.Candle, symbol.id, (event) => {
-    // The charted period's own frame, or — for a coarser charted period — the
-    // forming bar folded from the finest finer stream frame. `finerPeriod` is
-    // `null` when the charted period is the finest, so this is inert there and
-    // the shortest-period path is byte-for-byte the strict-match behaviour.
-    const candle = liveCandleForPeriod(event, period) ?? foldFinerFrame(event);
+    const candle = liveCandleForPeriod(event, period);
     if (!candle) return;
     liveBarsRef.current.set(candle.time, candle);
     setLiveLatest(candle);
