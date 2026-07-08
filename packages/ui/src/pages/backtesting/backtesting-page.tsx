@@ -22,13 +22,19 @@ import type { SeriesMarker, Time } from 'lightweight-charts';
 import { Settings } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { formingBucketCandle } from '../../lib/aggregate-candles.js';
+import type { RangeBounds } from '../../lib/backtest-range.js';
 import {
   getStoredBacktestPeriod,
+  getStoredBacktestStrategyId,
   getStoredBacktestSymbolId,
+  getStoredBacktestWindow,
   setStoredBacktestPeriod,
+  setStoredBacktestStrategyId,
   setStoredBacktestSymbolId,
+  setStoredBacktestWindow,
 } from '../../lib/backtest-selection.js';
 import { formatChange } from '../../lib/format.js';
+import { useBacktestStrategies } from '../../lib/hooks/backtest-strategies.js';
 import {
   COMPLETED_BACKTESTS_QUERY_KEY,
   useCancelBacktest,
@@ -129,7 +135,19 @@ function BacktestingLayout({
       : smallestPeriod(seededSymbol, config);
   });
   const [range, setRange] = useState<ChartRange | null>(null);
-  const [strategyId, setStrategyId] = useState<string | null>(null);
+  // The run form's date window, lifted here so it survives the form unmounting
+  // while a run streams (the panel swaps it for the progress view) and isn't
+  // reset when the run ends. Seeded from the last-used window (persisted), else
+  // a trailing 90 days.
+  const [runWindow, setRunWindow] = useState<RangeBounds>(() => {
+    const stored = getStoredBacktestWindow();
+    if (stored) return stored;
+    const now = Date.now();
+    return { from: now - 90 * MS_PER_DAY, to: now };
+  });
+  // Seeded from the last-used strategy (persisted), then validated against the
+  // live list below — a persisted strategy may have been deleted since.
+  const [strategyId, setStrategyId] = useState<string | null>(getStoredBacktestStrategyId);
   const [activeRun, setActiveRun] = useState<ActiveBacktest | null>(null);
   const [loaded, setLoaded] = useState<Backtest | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -163,6 +181,24 @@ function BacktestingLayout({
   useEffect(() => {
     setStoredBacktestPeriod(period);
   }, [period]);
+  useEffect(() => {
+    setStoredBacktestWindow(runWindow);
+  }, [runWindow]);
+  useEffect(() => {
+    setStoredBacktestStrategyId(strategyId);
+  }, [strategyId]);
+
+  // Drop the selected strategy once the live list confirms it's gone (deleted
+  // here or elsewhere since it was persisted); leave it untouched while the list
+  // is still loading so a valid seed isn't cleared on a transient empty list.
+  const strategiesQuery = useBacktestStrategies();
+  useEffect(() => {
+    const strategies = strategiesQuery.data;
+    if (!strategies || strategyId === null) return;
+    if (!strategies.some((strategy) => strategy.id === strategyId)) {
+      setStrategyId(null);
+    }
+  }, [strategiesQuery.data, strategyId]);
 
   const run = useBacktestRun(activeRun);
   const loadedView = useLoadedBacktest(loaded);
@@ -267,6 +303,8 @@ function BacktestingLayout({
             symbolId={symbolId ?? ''}
             profileId={profileId}
             period={period}
+            runWindow={runWindow}
+            onRunWindowChange={setRunWindow}
             strategyId={strategyId}
             onStrategyIdChange={setStrategyId}
             view={view}
@@ -483,6 +521,8 @@ function BacktestPanel({
   symbolId,
   profileId,
   period,
+  runWindow,
+  onRunWindowChange,
   strategyId,
   onStrategyIdChange,
   view,
@@ -496,6 +536,8 @@ function BacktestPanel({
   symbolId: string;
   profileId: string | null;
   period: Period;
+  runWindow: RangeBounds;
+  onRunWindowChange: (bounds: RangeBounds) => void;
   strategyId: string | null;
   onStrategyIdChange: (id: string | null) => void;
   view: BacktestRunView | null;
@@ -549,6 +591,8 @@ function BacktestPanel({
               symbolId={symbolId}
               profileId={profileId}
               period={period}
+              runWindow={runWindow}
+              onWindowChange={onRunWindowChange}
               onStarted={onStarted}
             />
           ) : (

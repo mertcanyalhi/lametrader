@@ -84,6 +84,8 @@ describe('RunForm', () => {
             symbolId="crypto:BTCUSDT"
             profileId="p-1"
             period={Period.OneHour}
+            runWindow={{ from: 0, to: 90 * 86_400_000 }}
+            onWindowChange={vi.fn()}
             onStarted={onStarted}
             {...props}
           />

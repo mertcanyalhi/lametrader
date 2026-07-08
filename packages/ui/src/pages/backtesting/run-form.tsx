@@ -12,6 +12,7 @@ import {
   useForm,
 } from 'react-hook-form';
 import { ApiError } from '../../lib/api-fetch.js';
+import type { RangeBounds } from '../../lib/backtest-range.js';
 import {
   type BacktestRunFormValues,
   backtestRunFormSchema,
@@ -24,19 +25,16 @@ import { PeriodPicker } from './period-picker.js';
 /** Scoped logger for run-form submission failures. */
 const log = getLogger('backtest-run-form');
 
-/** Milliseconds in one day. */
-const MS_PER_DAY = 86_400_000;
-
 /**
- * The run form's initial values: a positive starting capital, a trailing
- * 90-day window ending now, and both commissions off.
+ * The run form's initial values: a positive starting capital, the caller-owned
+ * date window (lifted so it survives the form unmounting while a run streams),
+ * and both commissions off.
  */
-function defaultValues(): BacktestRunFormValues {
-  const now = Date.now();
+function defaultValues(runWindow: RangeBounds): BacktestRunFormValues {
   return {
     initialCapital: 10_000,
-    from: now - 90 * MS_PER_DAY,
-    to: now,
+    from: runWindow.from,
+    to: runWindow.to,
     commissionRateEnabled: false,
     commissionRate: 0,
     commissionFixedEnabled: false,
@@ -62,6 +60,9 @@ function defaultValues(): BacktestRunFormValues {
  * @param symbolId - the selected symbol id.
  * @param profileId - the selected profile id, or `null` when none is selected.
  * @param period - the selected chart period.
+ * @param runWindow - the backtest date window, owned by the parent so it
+ *   persists across the form unmounting mid-run.
+ * @param onWindowChange - lifts a new date-window selection up to the parent.
  * @param onStarted - called with the new run's id once the server accepts it.
  */
 export function RunForm({
@@ -69,12 +70,16 @@ export function RunForm({
   symbolId,
   profileId,
   period,
+  runWindow,
+  onWindowChange,
   onStarted,
 }: {
   strategyId: string | null;
   symbolId: string;
   profileId: string | null;
   period: Period;
+  runWindow: RangeBounds;
+  onWindowChange: (bounds: RangeBounds) => void;
   onStarted: (backtestId: string) => void;
 }): ReactNode {
   const start = useStartBacktest();
@@ -88,7 +93,7 @@ export function RunForm({
     formState: { errors },
   } = useForm<BacktestRunFormValues>({
     resolver: yupResolver(backtestRunFormSchema),
-    defaultValues: defaultValues(),
+    defaultValues: defaultValues(runWindow),
   });
 
   const rateEnabled = watch('commissionRateEnabled');
@@ -134,6 +139,7 @@ export function RunForm({
             onChange={(bounds) => {
               setValue('from', bounds.from, { shouldValidate: true });
               setValue('to', bounds.to, { shouldValidate: true });
+              onWindowChange(bounds);
             }}
           />
           {periodError ? (
