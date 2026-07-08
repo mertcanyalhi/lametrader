@@ -42,6 +42,7 @@ import type { ChartRange } from '../chart/chart-range.js';
 import { PeriodRangeDialog } from '../chart/period-range-dialog.js';
 import { ProfilePickerDialog } from '../chart/profile-picker-dialog.js';
 import { SymbolPickerDialog } from '../chart/symbol-picker-dialog.js';
+import { IdleBacktestChart } from './idle-backtest-chart.js';
 import { ResultsTabs } from './results-tabs.js';
 import { RunForm } from './run-form.js';
 import { stateOverlaysFromEvents } from './run-state-overlays.js';
@@ -193,6 +194,12 @@ function BacktestingLayout({
                 stateOverlays={showRuleEvents ? runStateOverlays : []}
               />
             </Card>
+          ) : selected ? (
+            <IdleBacktestChart
+              symbol={selected}
+              period={period}
+              smallerPeriod={smallestPeriod(selected, config)}
+            />
           ) : (
             <ChartPlaceholder />
           )}
