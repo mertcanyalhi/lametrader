@@ -182,10 +182,11 @@ describe('ResultsTabs', () => {
     await user.click(screen.getByRole('tab', { name: /Trades/ }));
 
     const rows = within(screen.getByLabelText('Trades')).getAllByRole('row');
+    // Each trade spans DAY+1s → DAY+1h, i.e. 59m59s; sub-minute noise is dropped.
     expect({
       header: within(rows[0] as HTMLElement).getByText('Duration').textContent,
-      firstDuration: within(rows[1] as HTMLElement).getByText('<1 hour').textContent,
-    }).toEqual({ header: 'Duration', firstDuration: '<1 hour' });
+      firstDuration: within(rows[1] as HTMLElement).getByText('59 minutes').textContent,
+    }).toEqual({ header: 'Duration', firstDuration: '59 minutes' });
   });
 
   it('renders the Daily P&L histogram bucketed by exit day plus the five-item summary block', async () => {
@@ -201,14 +202,14 @@ describe('ResultsTabs', () => {
         within(block).getByText('Winners / losers').previousElementSibling?.textContent,
       avgRoi: within(block).getByText('Avg ROI per trade').previousElementSibling?.textContent,
       totalPnl: within(block).getByText('Total P/L').previousElementSibling?.textContent,
-      avgDays: within(block).getByText('Avg days in trade').previousElementSibling?.textContent,
+      avgPeriod: within(block).getByText('Avg period in trade').previousElementSibling?.textContent,
     }).toEqual({
       bars: '2 bars',
       trades: '2',
       winnersLosers: '1 / 1',
       avgRoi: '+2.25%',
       totalPnl: '+8.00',
-      avgDays: '0.50',
+      avgPeriod: '12 hours',
     });
   });
 

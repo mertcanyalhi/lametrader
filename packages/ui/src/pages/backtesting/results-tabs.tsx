@@ -9,6 +9,9 @@ import { DailyPnlChart } from './daily-pnl-chart.js';
 /** The em-dash placeholder for a cell a row has no value for (the open row's exit columns). */
 const EMPTY_CELL = '—';
 
+/** Milliseconds in one day — converts the summary's fractional-days average into a span. */
+const MS_PER_DAY = 86_400_000;
+
 /**
  * Format an epoch-ms timestamp as `YYYY-MM-DD HH:mm` (UTC) for the Trades table —
  * the date plus 24-hour time, dropping the seconds/ms noise of the app's shared
@@ -267,8 +270,8 @@ function TradesTab({
 
 /**
  * The Daily P&L tab: the per-exit-day histogram above the five-item summary
- * block (number of trades, winners/losers, average ROI per trade, total P/L,
- * average days in trade). Signed metrics are tinted by their sign.
+ * block (number of trades, winners/losers, average period in trade, average ROI
+ * per trade, total P/L). Signed metrics are tinted by their sign.
  */
 function DailyPnlTab({
   trades,
@@ -287,6 +290,10 @@ function DailyPnlTab({
         <Metric label="Trades" value={String(summary.tradeCount)} />
         <Metric label="Winners / losers" value={`${summary.winners} / ${summary.losers}`} />
         <Metric
+          label="Avg period in trade"
+          value={formatDuration(summary.avgDaysInTrade * MS_PER_DAY)}
+        />
+        <Metric
           label="Avg ROI per trade"
           value={formatPercent(summary.avgRoiPct)}
           amount={summary.avgRoiPct}
@@ -296,7 +303,6 @@ function DailyPnlTab({
           value={formatChange(summary.totalPnl)}
           amount={summary.totalPnl}
         />
-        <Metric label="Avg days in trade" value={summary.avgDaysInTrade.toFixed(2)} />
       </Grid>
     </Flex>
   );
