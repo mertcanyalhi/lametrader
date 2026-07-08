@@ -105,15 +105,6 @@ describe('RunForm', () => {
     }).toEqual({ period: true, run: true, capital: true, rate: false, fixed: false });
   });
 
-  it('shows the Capital title above the always-visible Initial capital field', () => {
-    renderForm();
-
-    expect({
-      title: screen.queryByText('Capital') !== null,
-      field: screen.queryByLabelText('Initial capital') !== null,
-    }).toEqual({ title: true, field: true });
-  });
-
   it('reveals the commission rate and fixed inputs when the Commission group is opened', async () => {
     const user = userEvent.setup();
     renderForm();

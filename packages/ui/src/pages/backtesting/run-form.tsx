@@ -143,20 +143,15 @@ export function RunForm({
           ) : null}
         </div>
 
-        <div>
-          <Text as="div" size="2" weight="medium" mb="1">
-            Capital
-          </Text>
-          <Field label="Initial capital" htmlFor="bt-initial-capital" error={errors.initialCapital}>
-            <TextField.Root
-              id="bt-initial-capital"
-              type="number"
-              inputMode="decimal"
-              step="any"
-              {...register('initialCapital', { valueAsNumber: true })}
-            />
-          </Field>
-        </div>
+        <Field label="Initial capital" htmlFor="bt-initial-capital" error={errors.initialCapital}>
+          <TextField.Root
+            id="bt-initial-capital"
+            type="number"
+            inputMode="decimal"
+            step="any"
+            {...register('initialCapital', { valueAsNumber: true })}
+          />
+        </Field>
 
         <CollapsibleGroup title="Commission">
           <CommissionRow
