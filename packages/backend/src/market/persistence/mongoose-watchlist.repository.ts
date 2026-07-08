@@ -21,12 +21,17 @@ export class MongooseWatchlistRepository implements WatchlistRepository {
   constructor(@InjectModel(WatchlistEntry.name) private readonly model: Model<WatchlistEntry>) {}
 
   async list(): Promise<WatchedSymbol[]> {
-    const docs = await this.model.find().lean().exec();
+    // Exclude the `events` array the rule engine's event log `$push`-mirrors onto
+    // these same documents (ADR-0014): it can grow unboundedly and this surface
+    // never reads it, so pulling it makes each read scale with event volume.
+    const docs = await this.model.find({}, { events: 0 }).lean().exec();
     return docs.map(toWatchedSymbol);
   }
 
   async get(id: string): Promise<WatchedSymbol | null> {
-    const doc = await this.model.findById(id).lean().exec();
+    // See {@link list}: project out the mirrored `events` array so a `get` on a
+    // busy symbol doesn't drag thousands of logged events across the wire.
+    const doc = await this.model.findById(id, { events: 0 }).lean().exec();
     return doc ? toWatchedSymbol(doc) : null;
   }
 
