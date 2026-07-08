@@ -185,8 +185,8 @@ describe('ResultsTabs', () => {
     // Each trade spans DAY+1s → DAY+1h, i.e. 59m59s; sub-minute noise is dropped.
     expect({
       header: within(rows[0] as HTMLElement).getByText('Duration').textContent,
-      firstDuration: within(rows[1] as HTMLElement).getByText('59 minutes').textContent,
-    }).toEqual({ header: 'Duration', firstDuration: '59 minutes' });
+      firstDuration: within(rows[1] as HTMLElement).getByText('59m').textContent,
+    }).toEqual({ header: 'Duration', firstDuration: '59m' });
   });
 
   it('renders the Daily P&L histogram bucketed by exit day plus the five-item summary block', async () => {
@@ -209,7 +209,7 @@ describe('ResultsTabs', () => {
       winnersLosers: '1 / 1',
       avgRoi: '+2.25%',
       totalPnl: '+8.00',
-      avgPeriod: '12 hours',
+      avgPeriod: '12h',
     });
   });
 

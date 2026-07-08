@@ -128,7 +128,7 @@ describe('formatVolume', () => {
 });
 
 describe('formatDuration', () => {
-  it('renders a friendly span as its two most-significant non-zero units', () => {
+  it('renders a compact span as its two most-significant non-zero units', () => {
     expect({
       subMinute: formatDuration(30_000),
       minutes: formatDuration(48 * 60_000),
@@ -139,14 +139,14 @@ describe('formatDuration', () => {
       days: formatDuration(3 * 24 * 3_600_000),
       daysHours: formatDuration(50 * 3_600_000),
     }).toEqual({
-      subMinute: '<1 minute',
-      minutes: '48 minutes',
-      hourMinutes: '1 hour 20 minutes',
-      oneHour: '1 hour',
-      hours: '4 hours',
-      oneDay: '1 day',
-      days: '3 days',
-      daysHours: '2 days 2 hours',
+      subMinute: '<1m',
+      minutes: '48m',
+      hourMinutes: '1h 20m',
+      oneHour: '1h',
+      hours: '4h',
+      oneDay: '1d',
+      days: '3d',
+      daysHours: '2d 2h',
     });
   });
 });

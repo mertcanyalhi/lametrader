@@ -1,4 +1,4 @@
-import { formatDuration as dateFnsFormatDuration, intervalToDuration } from 'date-fns';
+import { intervalToDuration } from 'date-fns';
 
 /**
  * Snapshot-quote number formatting for the watchlist table and chart legend.
@@ -96,24 +96,32 @@ export function formatTimestamp(ms: number): string {
   return new Date(ms).toISOString().replace('T', ' ').replace('Z', '');
 }
 
-/** Duration units, largest-first, for picking the two most significant in {@link formatDuration}. */
-const DURATION_UNITS = ['years', 'months', 'days', 'hours', 'minutes'] as const;
+/** Duration units, largest-first, with their compact suffix, for {@link formatDuration}. */
+const DURATION_UNITS = [
+  { key: 'years', suffix: 'y' },
+  { key: 'months', suffix: 'mo' },
+  { key: 'days', suffix: 'd' },
+  { key: 'hours', suffix: 'h' },
+  { key: 'minutes', suffix: 'm' },
+] as const;
 
 /**
- * Format an elapsed span (in ms) as friendly human-readable text for the Trades
+ * Format an elapsed span (in ms) as compact human-readable text for the Trades
  * table's Duration column and the "Avg period in trade" summary metric — e.g.
- * `48 minutes`, `1 hour 20 minutes`, `2 days 2 hours`. The two most-significant
- * non-zero units are shown (via date-fns' `formatDuration`), so a holding period
- * reads at a glance without a trailing tail of smaller units. Sub-minute noise is
- * dropped (backtest spans are candle-aligned to the minute); anything under a
- * minute renders as `"<1 minute"`.
+ * `48m`, `1h 20m`, `2d 2h`. The two most-significant non-zero units are shown
+ * (broken out by date-fns' `intervalToDuration`), so a holding period reads at a
+ * glance without a trailing tail of smaller units. Sub-minute noise is dropped
+ * (backtest spans are candle-aligned to the minute); anything under a minute
+ * renders as `"<1m"`.
  */
 export function formatDuration(ms: number): string {
   const minutes = Math.floor(ms / 60_000);
-  if (minutes <= 0) return '<1 minute';
+  if (minutes <= 0) return '<1m';
   const duration = intervalToDuration({ start: 0, end: minutes * 60_000 });
-  const present = DURATION_UNITS.filter((unit) => (duration[unit] ?? 0) > 0);
-  return dateFnsFormatDuration(duration, { format: present.slice(0, 2), delimiter: ' ' });
+  return DURATION_UNITS.filter(({ key }) => (duration[key] ?? 0) > 0)
+    .slice(0, 2)
+    .map(({ key, suffix }) => `${duration[key]}${suffix}`)
+    .join(' ');
 }
 
 /**
