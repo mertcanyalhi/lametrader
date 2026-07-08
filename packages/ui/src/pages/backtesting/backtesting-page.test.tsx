@@ -38,6 +38,29 @@ const ETH: EnrichedSymbol = {
   quote: { price: 3000, change: 10, changePct: 0.003, period: Period.OneDay, time: 1000 },
 };
 
+// Watched on 4h/1d, so its smallest watched period is 4h — differs from BTC's
+// 1h, letting a symbol switch prove the idle period re-seeds per symbol.
+const GOLD: EnrichedSymbol = {
+  id: 'stock:GOLD',
+  type: SymbolType.Stock,
+  description: 'Gold',
+  exchange: 'NYSE',
+  currency: 'USD',
+  periods: [Period.FourHours, Period.OneDay],
+  quote: { price: 2000, change: 5, changePct: 0.0025, period: Period.OneDay, time: 1000 },
+};
+
+// No watched periods, so the idle default falls back to config.defaultPeriod.
+const BARE: EnrichedSymbol = {
+  id: 'stock:BARE',
+  type: SymbolType.Stock,
+  description: 'Bare',
+  exchange: 'NYSE',
+  currency: 'USD',
+  periods: [],
+  quote: { price: 10, change: 0, changePct: 0, period: Period.OneDay, time: 1000 },
+};
+
 const CONFIG: Config = {
   periods: [Period.OneHour, Period.FourHours, Period.OneDay],
   defaultPeriod: Period.OneDay,
@@ -159,7 +182,8 @@ describe('BacktestingPage', () => {
     });
     expect({
       symbol: within(bar).queryByRole('button', { name: BTC.id }) !== null,
-      period: within(bar).queryByRole('button', { name: Period.OneDay }) !== null,
+      // BTC is watched on 1h/1d, so the idle period defaults to its smallest (1h).
+      period: within(bar).queryByRole('button', { name: Period.OneHour }) !== null,
       profile: within(bar).queryByRole('button', { name: 'Alpha' }) !== null,
     }).toEqual({ symbol: true, period: true, profile: true });
   });
@@ -210,15 +234,16 @@ describe('BacktestingPage', () => {
     renderPage();
 
     const bar = await screen.findByRole('group', { name: 'Backtesting actions' });
-    await user.click(within(bar).getByRole('button', { name: Period.OneDay }));
+    // The idle default is BTC's smallest period (1h); apply 1d to change it.
+    await user.click(within(bar).getByRole('button', { name: Period.OneHour }));
     const dialog = await screen.findByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: Period.OneHour }));
+    await user.click(within(dialog).getByRole('button', { name: Period.OneDay }));
     await user.click(within(dialog).getByRole('button', { name: 'Apply' }));
 
     await waitFor(() => {
-      expect(within(bar).queryByRole('button', { name: Period.OneHour })).not.toBeNull();
+      expect(within(bar).queryByRole('button', { name: Period.OneDay })).not.toBeNull();
     });
-    expect(within(bar).queryByRole('button', { name: Period.OneHour }) !== null).toEqual(true);
+    expect(within(bar).queryByRole('button', { name: Period.OneDay }) !== null).toEqual(true);
   });
 
   it('updates the selected profile in the picker when another profile is picked', async () => {
@@ -242,6 +267,56 @@ describe('BacktestingPage', () => {
       expect(within(bar).queryByRole('button', { name: 'Beta' })).not.toBeNull();
     });
     expect(within(bar).queryByRole('button', { name: 'Beta' }) !== null).toEqual(true);
+  });
+
+  it("defaults the period picker to the selected symbol's smallest watched period", async () => {
+    onRequest('/symbols?enrich=true', () => [BTC]);
+    onRequest('/config', () => CONFIG);
+    onRequest('/profiles', () => [ALPHA]);
+
+    renderPage();
+
+    const bar = await screen.findByRole('group', { name: 'Backtesting actions' });
+    await waitFor(() => {
+      expect(within(bar).queryByRole('button', { name: Period.OneHour })).not.toBeNull();
+    });
+    expect({
+      smallest: within(bar).queryByRole('button', { name: Period.OneHour }) !== null,
+      configDefault: within(bar).queryByRole('button', { name: Period.OneDay }) !== null,
+    }).toEqual({ smallest: true, configDefault: false });
+  });
+
+  it("resets the period to the newly picked symbol's smallest watched period", async () => {
+    onRequest('/symbols?enrich=true', () => [BTC, GOLD]);
+    onRequest('/config', () => CONFIG);
+    onRequest('/profiles', () => [ALPHA]);
+    const user = userEvent.setup();
+
+    renderPage();
+
+    const bar = await screen.findByRole('group', { name: 'Backtesting actions' });
+    await user.click(within(bar).getByRole('button', { name: BTC.id }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: GOLD.id }));
+
+    await waitFor(() => {
+      expect(within(bar).queryByRole('button', { name: Period.FourHours })).not.toBeNull();
+    });
+    expect(within(bar).queryByRole('button', { name: Period.FourHours }) !== null).toEqual(true);
+  });
+
+  it('falls back to the config default period when the selected symbol has no watched periods', async () => {
+    onRequest('/symbols?enrich=true', () => [BARE]);
+    onRequest('/config', () => CONFIG);
+    onRequest('/profiles', () => [ALPHA]);
+
+    renderPage();
+
+    const bar = await screen.findByRole('group', { name: 'Backtesting actions' });
+    await waitFor(() => {
+      expect(within(bar).queryByRole('button', { name: Period.OneDay })).not.toBeNull();
+    });
+    expect(within(bar).queryByRole('button', { name: Period.OneDay }) !== null).toEqual(true);
   });
 
   it('renders the page even when the watchlist is empty', async () => {

@@ -4,6 +4,7 @@ import {
   type Config,
   type EnrichedSymbol,
   type Period,
+  periodMillis,
 } from '@lametrader/core';
 import {
   Button,
@@ -90,7 +91,12 @@ function BacktestingLayout({
 }): ReactNode {
   const { profileId } = useSelectedProfile();
   const [symbolId, setSymbolId] = useState<string | null>(() => symbols[0]?.id ?? null);
-  const [period, setPeriod] = useState<Period>(config.defaultPeriod);
+  // Idle default: the selected symbol's smallest watched period (the finest
+  // timeframe it holds), not the global config default. A loaded/running run
+  // still pins its own stored period via `chartPeriod` below, so this only
+  // seeds a fresh selection. Picking another symbol re-seeds it in
+  // `selectSymbol`; the config default is the fallback for an empty list.
+  const [period, setPeriod] = useState<Period>(() => smallestPeriod(symbols[0] ?? null, config));
   const [range, setRange] = useState<ChartRange | null>(null);
   const [strategyId, setStrategyId] = useState<string | null>(null);
   const [activeRun, setActiveRun] = useState<ActiveBacktest | null>(null);
@@ -147,6 +153,15 @@ function BacktestingLayout({
 
   const selected = symbols.find((symbol) => symbol.id === symbolId) ?? null;
   const watchedPeriods = selected?.periods ?? [];
+
+  // Picking a new symbol re-seeds the idle period to that symbol's smallest
+  // watched period. Done in the handler (not a `symbolId` effect) so it never
+  // clobbers the period the reattach effect / `loadBacktest` set alongside
+  // their own symbol change.
+  function selectSymbol(id: string): void {
+    setSymbolId(id);
+    setPeriod(smallestPeriod(symbols.find((symbol) => symbol.id === id) ?? null, config));
+  }
 
   // The view's trades draw entry/exit markers and its events drive the chart's
   // state overlays — sourced from the run frames while live, or the persisted
@@ -212,7 +227,7 @@ function BacktestingLayout({
         <SymbolPickerDialog
           currentId={symbolId ?? ''}
           watched={symbols}
-          onSelect={setSymbolId}
+          onSelect={selectSymbol}
           disabled={locked}
         />
         <PeriodRangeDialog
@@ -230,6 +245,21 @@ function BacktestingLayout({
       </Flex>
     </div>
   );
+}
+
+/**
+ * The smallest (finest) period a symbol is watched on — the min by
+ * {@link periodMillis} of its `periods`. Falls back to the global
+ * `config.defaultPeriod` when the symbol is missing or has no watched periods,
+ * so a symbol with an empty list still yields a usable default.
+ *
+ * @param symbol - the selected symbol, or `null` when none is selected.
+ * @param config - the app config supplying the fallback period.
+ */
+function smallestPeriod(symbol: EnrichedSymbol | null, config: Config): Period {
+  const periods = symbol?.periods ?? [];
+  if (periods.length === 0) return config.defaultPeriod;
+  return periods.reduce((min, period) => (periodMillis(period) < periodMillis(min) ? period : min));
 }
 
 /** No-op passed to the reused chart's paging hook — a backtest never scrolls back. */
