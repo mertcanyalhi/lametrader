@@ -242,31 +242,27 @@ function TradesTab({
   }
   return (
     <Flex direction="column" gap="2">
-      <Table.Root size="1" aria-label="Trades">
+      <Table.Root size="1" aria-label="Trades" className="[&_td]:text-[11px]">
         <Table.Header>
           <Table.Row>
-            <Table.ColumnHeaderCell>
-              <SortButton
-                label="Entry"
-                active={sortKey === 'entry'}
-                dir={sortDir}
-                onClick={() => toggleSort('entry')}
-              />
-            </Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Exit</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Duration</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Buy</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Sell</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>
-              <SortButton
-                label="P/L"
-                active={sortKey === 'pnl'}
-                dir={sortDir}
-                onClick={() => toggleSort('pnl')}
-              />
-            </Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>ROI %</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Reason</Table.ColumnHeaderCell>
+            <HeaderCell
+              label="Entry"
+              sort={{
+                active: sortKey === 'entry',
+                dir: sortDir,
+                onClick: () => toggleSort('entry'),
+              }}
+            />
+            <HeaderCell label="Exit" />
+            <HeaderCell label="Duration" />
+            <HeaderCell label="Buy" />
+            <HeaderCell label="Sell" />
+            <HeaderCell
+              label="P/L"
+              sort={{ active: sortKey === 'pnl', dir: sortDir, onClick: () => toggleSort('pnl') }}
+            />
+            <HeaderCell label="ROI %" />
+            <HeaderCell label="Reason" />
           </Table.Row>
         </Table.Header>
         <Table.Body>
@@ -373,25 +369,37 @@ function Metric({
 }
 
 /**
- * A sortable column header — a ghost button whose accessible name is the plain
- * column label; the asc/desc caret is decorative (`aria-hidden`) so the name
- * stays queryable by label alone.
+ * A Trades-table column header with one consistent look — a gray, medium, size-1
+ * label — whether or not the column is sortable, so the two never diverge in
+ * weight or color. A sortable header (`sort` given) wraps that label in a ghost
+ * button that toggles the sort, with an asc/desc caret that is decorative
+ * (`aria-hidden`) so the button's accessible name stays the plain label; a plain
+ * header renders the same label with no control.
  */
-function SortButton({
+function HeaderCell({
   label,
-  active,
-  dir,
-  onClick,
+  sort,
 }: {
   label: string;
-  active: boolean;
-  dir: SortDir;
-  onClick: () => void;
+  sort?: { active: boolean; dir: SortDir; onClick: () => void };
 }): ReactNode {
-  return (
-    <Button variant="ghost" size="1" color="gray" onClick={onClick}>
+  const text = (
+    <Text size="1" weight="medium" color="gray">
       {label}
-      <Text aria-hidden="true">{active ? (dir === 'asc' ? '▲' : '▼') : ''}</Text>
-    </Button>
+    </Text>
+  );
+  return (
+    <Table.ColumnHeaderCell>
+      {sort ? (
+        <Button variant="ghost" size="1" color="gray" onClick={sort.onClick}>
+          {text}
+          <Text aria-hidden="true" size="1" color="gray">
+            {sort.active ? (sort.dir === 'asc' ? '▲' : '▼') : ''}
+          </Text>
+        </Button>
+      ) : (
+        text
+      )}
+    </Table.ColumnHeaderCell>
   );
 }
