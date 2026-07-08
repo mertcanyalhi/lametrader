@@ -29,6 +29,8 @@ import { InMemoryStateRepository } from '../../persistence/in-memory-state.repos
 import { InMemoryOncePerBarLatchStore } from '../dispatch/in-memory-once-per-bar-latch.store.js';
 import { _resetLogRoot, _setLogLevel } from '../engine-log.js';
 import { InMemoryRuleRepository } from '../in-memory-rule.repository.js';
+import { createRunScopedIndicatorComputeCache } from '../indicator-compute-cache.js';
+import type { IndicatorComputeCache } from '../indicator-compute-cache.types.js';
 import { IndicatorSeriesStore } from '../indicator-series-store.js';
 import { wireRuleEngine } from './wire-rule-engine.js';
 
@@ -987,9 +989,13 @@ describe('wireRuleEngine', () => {
    * Wire a live engine over a real SMA(3) instance for `BTC`, seeding `closes`
    * as 1m candles and recording every `IndicatorService.compute` call so a test
    * can assert how many times the shared operand was computed.
+   *
+   * `runComputeCache` is threaded straight into {@link RuleEngineDeps} so the
+   * run-scope tests exercise the same seam the backtest replay wires (#556).
    */
   const wireIndicatorEngine = async (
     closes: ReadonlyArray<[number, number]>,
+    runComputeCache?: IndicatorComputeCache,
   ): Promise<{
     wired: Awaited<ReturnType<typeof wireRuleEngine>>;
     computeCalls: unknown[][];
@@ -1033,6 +1039,7 @@ describe('wireRuleEngine', () => {
       notifier,
       candleRepository: repo,
       indicatorStore: store,
+      ...(runComputeCache === undefined ? {} : { runComputeCache }),
     });
     return { wired, computeCalls };
   };
@@ -1124,6 +1131,95 @@ describe('wireRuleEngine', () => {
         { length: 3, source: 'close' },
         Period.OneMinute,
         { from: 60_000, to: 240_001 },
+      ],
+    ]);
+  });
+
+  it('computes a shared operand once across two observations over an identical visible window when a runComputeCache is supplied (#556)', async () => {
+    // Two observations of the SAME bar — the forming poll (final: false) and the
+    // closing poll (final: true) — are two separate serializer batches whose
+    // per-tick evaluations read the operand over a bit-identical visible window
+    // (`before = 180_001` both times). With a run-scoped cache in the deps the
+    // memo outlives the first batch, so the second drain's read is a hit.
+    await rules.save(indicatorRule('r-tick', 1, { kind: TriggerKind.EveryTime }));
+
+    const { wired, computeCalls } = await wireIndicatorEngine(
+      [
+        [60_000, 10],
+        [120_000, 20],
+        [180_000, 30],
+      ],
+      createRunScopedIndicatorComputeCache(),
+    );
+
+    wired.barBridge.handleCandle({
+      id: 'BTC',
+      period: Period.OneMinute,
+      candle: { time: 180_000, open: 30, high: 30, low: 30, close: 30, volume: 1 },
+      final: false,
+    });
+    await wired.drain();
+    wired.barBridge.handleCandle({
+      id: 'BTC',
+      period: Period.OneMinute,
+      candle: { time: 180_000, open: 30, high: 30, low: 30, close: 30, volume: 1 },
+      final: true,
+    });
+    await wired.drain();
+
+    expect(computeCalls).toEqual([
+      [
+        'BTC',
+        'sma',
+        { length: 3, source: 'close' },
+        Period.OneMinute,
+        { from: 60_000, to: 180_001 },
+      ],
+    ]);
+  });
+
+  it('computes a shared operand once per observation over an identical visible window when no runComputeCache is supplied (the #548 default lifetime)', async () => {
+    // The same two observations of one bar as above, wired WITHOUT a run-scoped
+    // cache: the serializer creates a fresh per-observation memo per batch, so
+    // each drain recomputes the identical window — the unchanged ADR-0021
+    // live-path behaviour the option must not alter by default.
+    await rules.save(indicatorRule('r-tick', 1, { kind: TriggerKind.EveryTime }));
+
+    const { wired, computeCalls } = await wireIndicatorEngine([
+      [60_000, 10],
+      [120_000, 20],
+      [180_000, 30],
+    ]);
+
+    wired.barBridge.handleCandle({
+      id: 'BTC',
+      period: Period.OneMinute,
+      candle: { time: 180_000, open: 30, high: 30, low: 30, close: 30, volume: 1 },
+      final: false,
+    });
+    await wired.drain();
+    wired.barBridge.handleCandle({
+      id: 'BTC',
+      period: Period.OneMinute,
+      candle: { time: 180_000, open: 30, high: 30, low: 30, close: 30, volume: 1 },
+      final: true,
+    });
+    await wired.drain();
+
+    expect(computeCalls).toEqual([
+      [
+        'BTC',
+        'sma',
+        { length: 3, source: 'close' },
+        Period.OneMinute,
+        { from: 60_000, to: 180_001 },
+      ],
+      [
+        'BTC',
+        'sma',
+        { length: 3, source: 'close' },
+        Period.OneMinute,
+        { from: 60_000, to: 180_001 },
       ],
     ]);
   });

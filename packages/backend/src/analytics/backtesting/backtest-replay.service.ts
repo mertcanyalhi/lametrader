@@ -21,6 +21,7 @@ import { InMemoryProfileRepository } from '../persistence/in-memory-profile.repo
 import { InMemoryStateRepository } from '../persistence/in-memory-state.repository.js';
 import { InMemoryOncePerBarLatchStore } from '../rules/dispatch/in-memory-once-per-bar-latch.store.js';
 import { InMemoryRuleRepository } from '../rules/in-memory-rule.repository.js';
+import { createRunScopedIndicatorComputeCache } from '../rules/indicator-compute-cache.js';
 import { IndicatorSeriesStore } from '../rules/indicator-series-store.js';
 import { registerIndicatorInstances } from '../rules/wire/register-indicator-instances.js';
 import { feedCandleIntoEngine, wireRuleEngine } from '../rules/wire/wire-rule-engine.js';
@@ -154,6 +155,12 @@ class RecordingNoOpNotifier implements Notifier {
  * The candle store is the one shared collaborator it reads (never writes), so
  * rule/indicator lookbacks reaching before `start` resolve on demand from stored
  * history with no fixed warm-up window.
+ *
+ * That read-only, closed-bar access pattern is what lets the replay pass the
+ * engine a **run-scoped** indicator-compute memo (ADR-0022, #556): identical
+ * compute identities are guaranteed identical inputs for the whole run, so a
+ * coarse-period operand computes once per coarse-bar visibility change instead
+ * of once per fine observation, with byte-identical results.
  */
 export class BacktestReplayService implements BacktestReplayPort {
   /**
@@ -215,6 +222,11 @@ export class BacktestReplayService implements BacktestReplayPort {
       eventLog,
       candleRepository: this.candles,
       indicatorStore,
+      // Run-scoped compute memo (ADR-0022, #556): a replay only reads closed
+      // historical bars, so an operand whose visible window is unchanged since
+      // a previous fed candle is a memo hit — a coarse-period operand computes
+      // once per coarse bar instead of once per fine observation.
+      runComputeCache: createRunScopedIndicatorComputeCache(),
     });
 
     const executor = new BacktestExecutor(strategy, {

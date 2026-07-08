@@ -24,6 +24,7 @@ import type { OncePerBarLatchStore } from '../dispatch/once-per-bar-latch.types.
 import { getLogger } from '../engine-log.js';
 import { buildBarSeriesPagers, buildEvaluationContext } from '../evaluation-context.js';
 import { createIndicatorComputeCache } from '../indicator-compute-cache.js';
+import type { IndicatorComputeCache } from '../indicator-compute-cache.types.js';
 import type { IndicatorSeriesStore } from '../indicator-series-store.js';
 import { ActionRunner } from '../orchestrator/action-runner.js';
 import { RuleOrchestrator } from '../orchestrator/orchestrator.js';
@@ -65,6 +66,21 @@ export interface RuleEngineDeps {
   candleRepository: CandleRepository;
   /** In-memory indicator series store; shared with the indicator service. */
   indicatorStore: IndicatorSeriesStore;
+  /**
+   * Optional **run-scoped** indicator-compute memo (ADR-0022, #556). When
+   * present, the serializer threads this one instance into every batch instead
+   * of creating a fresh per-observation cache, so an operand whose visible
+   * window is unchanged since a previous observation is a memo hit rather than
+   * a recompute — the coarse-bar change-detection the backtest replay wires.
+   *
+   * Only sound when the candles behind every compute key are **immutable for
+   * the cache's lifetime** (the identity carries the window, not the data).
+   * The live wire-up must omit it: the poll loop re-saves the forming bar
+   * under the same `candle.time` and backfill upserts history, so an identical
+   * key does not imply identical inputs there. Omitted (the default), the
+   * ADR-0021 per-observation lifetime is unchanged.
+   */
+  runComputeCache?: IndicatorComputeCache;
 }
 
 /**
@@ -186,7 +202,14 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
     // batches concurrently on separate chains, so a shared, cleared-between-
     // batches instance would race and leak across symbols. The memo's advancing
     // window keys the next bar's reads separately, so nothing leaks across bars.
-    const computeCache = createIndicatorComputeCache();
+    //
+    // A caller that guarantees candle immutability (the backtest replay) passes
+    // `runComputeCache` instead: the same seam, with the memo outliving the
+    // batch so an unchanged visible window is a hit across observations —
+    // coarse-bar change-detection per ADR-0022 (#556). The key carries the
+    // window and symbol, so sharing one instance across per-symbol chains
+    // cannot conflate identities.
+    const computeCache = deps.runComputeCache ?? createIndicatorComputeCache();
     for (const event of batch.events) {
       try {
         await orchestrator.process(event, computeCache);

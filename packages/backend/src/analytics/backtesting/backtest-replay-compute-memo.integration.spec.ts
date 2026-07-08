@@ -189,12 +189,13 @@ describe('BacktestReplayService shared-seam indicator compute memo (regression #
     ]);
   });
 
-  it('recomputes the shared operand on the next replayed candle because the memo is per observation', async () => {
+  it('recomputes the shared operand on the next replayed candle because the advancing window keys a fresh compute', async () => {
     // Two consecutive in-window bars. Within each candle's drain the memo collapses
-    // BarOpened + BarClosed + Tick to one compute; across bars the first memo dies
-    // with its batch and the wider window keys a fresh compute — so exactly one
-    // compute per replayed candle, each over its own advancing window, no stale
-    // value leaking across bars.
+    // BarOpened + BarClosed + Tick to one compute; across bars the newly visible
+    // bar widens the operand's window, keying a fresh compute — so exactly one
+    // compute per replayed candle, no stale value leaking across bars. (Since
+    // ADR-0022 the replay memo is run-scoped, so it is the window identity — not
+    // a batch boundary — that forces the recompute.)
     const candles = new InMemoryCandleRepository();
     await candles.save(SYMBOL_ID, PERIOD, [
       candle(60_000, 10),
