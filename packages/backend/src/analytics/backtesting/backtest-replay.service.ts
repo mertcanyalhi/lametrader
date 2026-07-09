@@ -25,6 +25,7 @@ import { IndicatorSeriesStore } from '../rules/indicator-series-store.js';
 import { registerIndicatorInstances } from '../rules/wire/register-indicator-instances.js';
 import { feedCandleIntoEngine, wireRuleEngine } from '../rules/wire/wire-rule-engine.js';
 import { BacktestExecutor, emptyBacktestSummary } from './backtest-executor.js';
+import { ReplayCandleCache } from './replay-candle-cache.js';
 
 /** Milliseconds in a calendar day — the unit progress is reported in. */
 const DAY_MS = 86_400_000;
@@ -203,7 +204,11 @@ export class BacktestReplayService implements BacktestReplayPort {
       (rule) => rule.profileId === profile.id,
     );
     const ruleRepository = new InMemoryRuleRepository(rulesForProfile, profiles);
-    const indicatorStore = new IndicatorSeriesStore(this.candles, this.indicators);
+    // Collapse a replay's redundant candle reads — a bar's same-`before` fan-out
+    // and the bar-after-bar re-fetch — into one round trip per forward window: a
+    // short-lived, backtest-scoped rolling-window cache over the shared store.
+    const candles = new ReplayCandleCache(this.candles);
+    const indicatorStore = new IndicatorSeriesStore(candles, this.indicators);
     await registerIndicatorInstances({ store: indicatorStore, profiles });
 
     const wired = await wireRuleEngine({
@@ -213,7 +218,7 @@ export class BacktestReplayService implements BacktestReplayPort {
       watchlist: this.watchlist,
       notifier: new RecordingNoOpNotifier(),
       eventLog,
-      candleRepository: this.candles,
+      candleRepository: candles,
       indicatorStore,
     });
 
