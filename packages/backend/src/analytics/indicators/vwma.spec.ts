@@ -148,14 +148,14 @@ describe('volumeWeightedMovingAverage.definition', () => {
 });
 
 describe('defaultIndicators (with VWMA registered)', () => {
-  it('now contains both sma and vwma definitions', () => {
+  it('contains the vwma definition alongside the rest of the catalog', () => {
     const registry = defaultIndicators();
     expect(
       registry
         .list()
         .map((d) => d.key)
         .sort(),
-    ).toEqual(['sma', 'vwma']);
+    ).toEqual(['sma', 'supertrend', 'vwma']);
     expect(registry.get('vwma')).toEqual(volumeWeightedMovingAverage);
   });
 });

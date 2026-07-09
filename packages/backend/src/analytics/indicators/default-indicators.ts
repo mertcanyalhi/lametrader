@@ -1,5 +1,6 @@
 import { IndicatorRegistry } from './indicator-registry.js';
 import { movingAverage } from './sma.js';
+import { supertrend } from './supertrend.js';
 import { volumeWeightedMovingAverage } from './vwma.js';
 
 /**
@@ -13,5 +14,6 @@ export function defaultIndicators(): IndicatorRegistry {
   const registry = new IndicatorRegistry();
   registry.register(movingAverage);
   registry.register(volumeWeightedMovingAverage);
+  registry.register(supertrend);
   return registry;
 }
