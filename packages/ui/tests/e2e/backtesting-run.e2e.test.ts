@@ -316,11 +316,12 @@ describe('backtesting run flow (e2e)', () => {
     );
     expect(screen.getByTestId('daily-pnl-chart')).toHaveTextContent('1 bars');
 
-    // Trades tab: the closed trade plus the open position as an unrealized row.
+    // Trades tab: the open position renders as an unrealized first row (on top),
+    // then the closed trade with its exit reason.
     await user.click(screen.getByRole('tab', { name: /Trades/ }));
     const tradeRows = within(screen.getByLabelText('Trades')).getAllByRole('row');
-    expect(within(tradeRows[1] as HTMLElement).getByText('Profit target')).toBeInTheDocument();
-    expect(within(tradeRows[2] as HTMLElement).getByText('unrealized')).toBeInTheDocument();
-    expect(within(tradeRows[2] as HTMLElement).getByText('Open')).toBeInTheDocument();
+    expect(within(tradeRows[1] as HTMLElement).getByText('unrealized')).toBeInTheDocument();
+    expect(within(tradeRows[1] as HTMLElement).getByText('Open')).toBeInTheDocument();
+    expect(within(tradeRows[2] as HTMLElement).getByText('Profit target')).toBeInTheDocument();
   });
 });
