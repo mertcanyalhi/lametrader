@@ -102,6 +102,22 @@ export function runCandleRepositoryContract(
     expect(await repo.latestN(ID, PERIOD, 1, 3000)).toEqual([candle(2000)]);
   });
 
+  it('count returns how many candles are stored, and 0 when empty', async () => {
+    const repo = await make();
+    expect(await repo.count(ID, PERIOD)).toEqual(0);
+
+    await repo.save(ID, PERIOD, [candle(1000), candle(2000), candle(3000)]);
+    expect(await repo.count(ID, PERIOD)).toEqual(3);
+  });
+
+  it('count with a before bound counts only candles strictly before it', async () => {
+    const repo = await make();
+    await repo.save(ID, PERIOD, [candle(1000), candle(2000), candle(3000)]);
+
+    // The bar at the bound is excluded; only times 1000 and 2000 count.
+    expect(await repo.count(ID, PERIOD, 3000)).toEqual(2);
+  });
+
   it('deleteSymbol removes the symbol candles (all periods), leaving others intact', async () => {
     const repo = await make();
     await repo.save(ID, Period.OneHour, [candle(1000)]);

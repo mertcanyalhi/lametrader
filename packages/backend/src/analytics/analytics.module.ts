@@ -139,9 +139,18 @@ import { StateHistoryService } from './services/state-history.service.js';
         candles: CandleRepository,
         rules: RuleRepository,
         watchlist: WatchlistRepository,
-        indicators: IndicatorService,
-      ) => new BacktestReplayService(candles, rules, watchlist, indicators),
-      inject: [CANDLE_REPOSITORY, RULE_REPOSITORY, WATCHLIST_REPOSITORY, IndicatorService],
+        indicators: IndicatorRegistry,
+      ) =>
+        new BacktestReplayService(
+          candles,
+          rules,
+          watchlist,
+          // The run-local indicator service reads the run's preloaded in-memory
+          // store and streams no live state (a backtest publishes to no hub).
+          (preloaded) =>
+            new IndicatorService(indicators, watchlist, preloaded, { onState: () => {} }),
+        ),
+      inject: [CANDLE_REPOSITORY, RULE_REPOSITORY, WATCHLIST_REPOSITORY, IndicatorRegistry],
     },
     {
       provide: BacktestService,

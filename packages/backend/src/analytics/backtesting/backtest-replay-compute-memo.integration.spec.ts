@@ -26,7 +26,10 @@ import { InMemoryWatchlistRepository } from '../../market/persistence/in-memory-
 import { defaultIndicators } from '../indicators/default-indicators.js';
 import { IndicatorService } from '../indicators/indicator.service.js';
 import { InMemoryRuleRepository } from '../rules/in-memory-rule.repository.js';
-import { BacktestReplayService } from './backtest-replay.service.js';
+import {
+  BacktestReplayService,
+  type ReplayIndicatorServiceFactory,
+} from './backtest-replay.service.js';
 
 const SYMBOL_ID = 'crypto:BTCUSDT';
 const PERIOD = Period.OneMinute;
@@ -150,15 +153,21 @@ function buildRecordingReplay(
   computeCalls: Parameters<IndicatorService['compute']>[];
 } {
   const watchlist = new InMemoryWatchlistRepository([watched]);
-  const realService = new IndicatorService(defaultIndicators(), watchlist, candles);
   const computeCalls: Parameters<IndicatorService['compute']>[] = [];
-  const recordingService: IndicatorService = Object.create(realService);
-  recordingService.compute = (...args: Parameters<IndicatorService['compute']>) => {
-    computeCalls.push(args);
-    return realService.compute(...args);
+  // The replay builds its indicator service over the run's preloaded in-memory
+  // store; the recorder wraps that same service so the memo it exercises is the
+  // one actually driving the run.
+  const makeIndicators: ReplayIndicatorServiceFactory = (preloaded) => {
+    const realService = new IndicatorService(defaultIndicators(), watchlist, preloaded);
+    const recordingService: IndicatorService = Object.create(realService);
+    recordingService.compute = (...args: Parameters<IndicatorService['compute']>) => {
+      computeCalls.push(args);
+      return realService.compute(...args);
+    };
+    return recordingService;
   };
   const ruleRepo = new InMemoryRuleRepository(rules);
-  const replay = new BacktestReplayService(candles, ruleRepo, watchlist, recordingService);
+  const replay = new BacktestReplayService(candles, ruleRepo, watchlist, makeIndicators);
   return { replay, computeCalls };
 }
 

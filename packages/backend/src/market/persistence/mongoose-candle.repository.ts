@@ -84,6 +84,20 @@ export class MongooseCandleRepository implements CandleRepository {
     return docs.map(toCandle);
   }
 
+  async count(
+    symbolId: string,
+    period: Period,
+    before = Number.POSITIVE_INFINITY,
+  ): Promise<number> {
+    return this.model
+      .countDocuments(
+        before === Number.POSITIVE_INFINITY
+          ? { '_id.s': symbolId, '_id.p': period }
+          : { '_id.s': symbolId, '_id.p': period, '_id.t': { $lt: before } },
+      )
+      .exec();
+  }
+
   async deleteSymbol(symbolId: string): Promise<void> {
     await this.model.deleteMany({ '_id.s': symbolId }).exec();
   }

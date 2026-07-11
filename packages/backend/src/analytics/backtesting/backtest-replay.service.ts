@@ -16,6 +16,7 @@ import {
   type WatchlistRepository,
 } from '@lametrader/core';
 import { InMemoryEventLog } from '../../common/persistence/in-memory-event-log.js';
+import { InMemoryCandleRepository } from '../../market/persistence/in-memory-candle.repository.js';
 import { IndicatorService } from '../indicators/indicator.service.js';
 import { InMemoryProfileRepository } from '../persistence/in-memory-profile.repository.js';
 import { InMemoryStateRepository } from '../persistence/in-memory-state.repository.js';
@@ -25,7 +26,6 @@ import { IndicatorSeriesStore } from '../rules/indicator-series-store.js';
 import { registerIndicatorInstances } from '../rules/wire/register-indicator-instances.js';
 import { feedCandleIntoEngine, wireRuleEngine } from '../rules/wire/wire-rule-engine.js';
 import { BacktestExecutor, emptyBacktestSummary } from './backtest-executor.js';
-import { ReplayCandleCache } from './replay-candle-cache.js';
 
 /** Milliseconds in a calendar day — the unit progress is reported in. */
 const DAY_MS = 86_400_000;
@@ -141,6 +141,18 @@ class RecordingNoOpNotifier implements Notifier {
 }
 
 /**
+ * Builds the run-local {@link IndicatorService} a replay computes indicators
+ * through, over the in-memory store preloaded for that run.
+ *
+ * A backtest resolves every indicator from its preloaded candle copy, not the
+ * shared Mongo-backed store, so the service is constructed per run over that copy
+ * rather than injected pre-built (an {@link IndicatorService} reads candles from
+ * the repository it was constructed with). Production binds a factory over the
+ * shared indicator registry + watchlist; a test substitutes a recording variant.
+ */
+export type ReplayIndicatorServiceFactory = (candles: CandleRepository) => IndicatorService;
+
+/**
  * Replays a symbol's stored candle history through a **throwaway** rule engine
  * instance and returns the events the run produced — the isolated engine beneath
  * the {@link Backtest} resource.
@@ -152,22 +164,25 @@ class RecordingNoOpNotifier implements Notifier {
  * touched: a backtest writes no live state, sends no notification, and leaves
  * the live rule engine alone.
  *
- * The candle store is the one shared collaborator it reads (never writes), so
- * rule/indicator lookbacks reaching before `start` resolve on demand from stored
- * history with no fixed warm-up window.
+ * Before replaying, the run copies the symbol's full stored history up to `end`
+ * into a private in-memory candle store and resolves every read — the feed, the
+ * bar-series pagers, and a run-local indicator service's warmup — from that copy
+ * (ADR-0022). The shared candle store is read once, up front, never during a
+ * drain, so a run contends with no live write while pre-`start` lookbacks stay
+ * byte-identical to the live path with no fixed warm-up window.
  */
 export class BacktestReplayService implements BacktestReplayPort {
   /**
-   * @param candles - the shared candle store (read-only source of the feed + lookbacks).
+   * @param candles - the shared candle store, read once to seed the run's in-memory copy.
    * @param rules - the shared rule store; the run seeds a fresh engine with the profile's rules.
    * @param watchlist - the shared watchlist (read for the engine's `AllSymbols` fan-out + warm-up).
-   * @param indicators - the shared indicator compute use-case the run's series store runs.
+   * @param makeIndicators - builds the run-local indicator service over the preloaded in-memory store.
    */
   constructor(
     private readonly candles: CandleRepository,
     private readonly rules: RuleRepository,
     private readonly watchlist: WatchlistRepository,
-    private readonly indicators: IndicatorService,
+    private readonly makeIndicators: ReplayIndicatorServiceFactory,
   ) {}
 
   /**
@@ -193,7 +208,8 @@ export class BacktestReplayService implements BacktestReplayPort {
     periods: Period[],
     hooks: BacktestReplayHooks = {},
   ): Promise<BacktestReplayResult> {
-    const feed = await this.loadFeed(params, periods);
+    const candles = await this.preload(params, periods);
+    const feed = await this.loadFeed(candles, params, periods);
     const totalDays = (params.end - params.start) / DAY_MS;
     hooks.onProgress?.({ elapsedDays: 0, totalDays });
 
@@ -204,11 +220,11 @@ export class BacktestReplayService implements BacktestReplayPort {
       (rule) => rule.profileId === profile.id,
     );
     const ruleRepository = new InMemoryRuleRepository(rulesForProfile, profiles);
-    // Collapse a replay's redundant candle reads — a bar's same-`before` fan-out
-    // and the bar-after-bar re-fetch — into one round trip per forward window: a
-    // short-lived, backtest-scoped rolling-window cache over the shared store.
-    const candles = new ReplayCandleCache(this.candles);
-    const indicatorStore = new IndicatorSeriesStore(candles, this.indicators);
+    // Every candle read — the feed, the bar-series pagers, and the run-local
+    // indicator warmup — resolves from the preloaded in-memory store, so a drain
+    // touches no shared collaborator and contends with no live write (ADR-0022).
+    const indicators = this.makeIndicators(candles);
+    const indicatorStore = new IndicatorSeriesStore(candles, indicators);
     await registerIndicatorInstances({ store: indicatorStore, profiles });
 
     const wired = await wireRuleEngine({
@@ -283,12 +299,46 @@ export class BacktestReplayService implements BacktestReplayPort {
     };
   }
 
-  /** Load every active period's candles in `[start, end)` and order the merged feed. */
-  private async loadFeed(params: BacktestParams, periods: Period[]): Promise<FeedCandle[]> {
+  /**
+   * Copy the symbol's full stored history up to `end`, across the active periods,
+   * into a fresh in-memory store — the single source every replay read resolves
+   * from.
+   *
+   * Loads everything below `end` (not just `[start, end)`) so every pre-`start`
+   * lookback and indicator warmup resolves to exactly what the live path would
+   * read from the shared store — parity by construction, no sized warm-up window
+   * that could silently under-read. The run's window is validated to stay within
+   * `MAX_REPLAY_CANDLES` before it starts, so this copy is bounded.
+   */
+  private async preload(
+    params: BacktestParams,
+    periods: Period[],
+  ): Promise<InMemoryCandleRepository> {
+    const preloaded = new InMemoryCandleRepository();
+    await Promise.all(
+      periods.map(async (period) => {
+        const history = await this.candles.range(
+          params.symbolId,
+          period,
+          Number.MIN_SAFE_INTEGER,
+          params.end,
+        );
+        await preloaded.save(params.symbolId, period, history);
+      }),
+    );
+    return preloaded;
+  }
+
+  /** Order every active period's `[start, end)` candles, read from `source`, into one feed. */
+  private async loadFeed(
+    source: CandleRepository,
+    params: BacktestParams,
+    periods: Period[],
+  ): Promise<FeedCandle[]> {
     const perPeriod = await Promise.all(
       periods.map(async (period) => ({
         period,
-        candles: await this.candles.range(params.symbolId, period, params.start, params.end),
+        candles: await source.range(params.symbolId, period, params.start, params.end),
       })),
     );
     return orderBacktestFeed(perPeriod);

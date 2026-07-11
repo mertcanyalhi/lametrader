@@ -52,6 +52,14 @@ export class InMemoryCandleRepository implements CandleRepository {
       .reverse();
   }
 
+  async count(
+    symbolId: string,
+    period: Period,
+    before = Number.POSITIVE_INFINITY,
+  ): Promise<number> {
+    return this.sorted(symbolId, period).filter((candle) => candle.time < before).length;
+  }
+
   async deleteSymbol(symbolId: string): Promise<void> {
     const prefix = `${symbolId}|`;
     for (const key of this.series.keys()) {

@@ -28,12 +28,14 @@ import { nanoid } from 'nanoid';
 import {
   activePeriods,
   assertProfileRunnable,
+  assertReplayCandleBudget,
   assertStrategyRunnable,
   BacktestConflictError,
   BacktestError,
   BacktestNotFoundError,
   type BacktestRunRequest,
   generateBacktestName,
+  MAX_REPLAY_CANDLES,
   validateRunWindow,
 } from '../../common/domain/backtest.js';
 import {
@@ -224,6 +226,7 @@ export class BacktestService {
     assertProfileRunnable(profile, request.symbolId);
     const periods = activePeriods(symbol);
     await this.assertCandlesInRange(request, periods);
+    await this.assertWithinReplayBudget(request, periods);
 
     const ts = this.now();
     const params: BacktestParams = {
@@ -369,6 +372,24 @@ export class BacktestService {
       if (found.length > 0) return;
     }
     throw new BacktestError('no stored candles in the requested range; backfill the symbol first');
+  }
+
+  /**
+   * Assert the run's in-memory preload stays within {@link MAX_REPLAY_CANDLES}.
+   *
+   * The replay loads the symbol's full stored history up to `end` across the
+   * active periods (ADR-0022), so its footprint is that count — measured here
+   * with an index count (no candles materialized) before the 202, so an
+   * over-large window fails fast with a 400 rather than OOM-ing the run job.
+   */
+  private async assertWithinReplayBudget(
+    request: BacktestRunRequest,
+    periods: Period[],
+  ): Promise<void> {
+    const counts = await Promise.all(
+      periods.map((period) => this.candles.count(request.symbolId, period, request.end)),
+    );
+    assertReplayCandleBudget(counts, MAX_REPLAY_CANDLES);
   }
 
   /** Run the replay to completion, then persist — or discard on cancel / error. */

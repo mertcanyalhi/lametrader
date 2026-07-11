@@ -164,6 +164,15 @@ export interface CandleRepository {
    */
   latestN(symbolId: string, period: Period, n: number, before?: number): Promise<Candle[]>;
   /**
+   * How many candles are stored for the symbol+period.
+   *
+   * When `before` is given, only candles with `time < before` are counted (the
+   * same exclusive-bound semantics as {@link latestN}). Backed by an index count
+   * on the store, so a caller can size a load — e.g. cap a backtest preload —
+   * without materializing the candles it is about to count.
+   */
+  count(symbolId: string, period: Period, before?: number): Promise<number>;
+  /**
    * Delete every stored candle for the symbol, across all periods. Idempotent
    * (no-op when none exist). Used when a symbol is removed from the watchlist.
    */

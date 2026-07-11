@@ -8,10 +8,12 @@ import {
 } from '@lametrader/core';
 import {
   assertProfileRunnable,
+  assertReplayCandleBudget,
   assertStrategyRunnable,
   BacktestError,
   type BacktestRunRequest,
   generateBacktestName,
+  MAX_REPLAY_CANDLES,
   validateRunWindow,
 } from './backtest.js';
 
@@ -128,6 +130,24 @@ describe('assertProfileRunnable', () => {
     });
     expect(() => assertProfileRunnable(scoped, 'crypto:BTCUSDT')).toThrow(
       new BacktestError('profile scope does not include the symbol'),
+    );
+  });
+});
+
+describe('assertReplayCandleBudget', () => {
+  it('passes when the summed candle count across periods is within the cap', () => {
+    expect(() => assertReplayCandleBudget([500_000, 400_000], MAX_REPLAY_CANDLES)).not.toThrow();
+  });
+
+  it('passes when the summed candle count exactly equals the cap', () => {
+    expect(() => assertReplayCandleBudget([600_000, 400_000], MAX_REPLAY_CANDLES)).not.toThrow();
+  });
+
+  it('rejects when the summed candle count across periods exceeds the cap', () => {
+    expect(() => assertReplayCandleBudget([600_000, 600_000], MAX_REPLAY_CANDLES)).toThrow(
+      new BacktestError(
+        `backtest window is too large: 1200000 candles exceed the ${MAX_REPLAY_CANDLES} cap — narrow the range or drop a period`,
+      ),
     );
   });
 });

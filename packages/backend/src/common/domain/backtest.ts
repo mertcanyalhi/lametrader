@@ -158,6 +158,42 @@ export function activePeriods(symbol: WatchedSymbol): Period[] {
 }
 
 /**
+ * The most candles a single backtest may preload into memory, summed across its
+ * active periods.
+ *
+ * A run replays from a fully in-memory copy of the symbol's stored history up to
+ * `end` (ADR-0022), so its resident memory scales with that history. At the
+ * coarse, bounded scale this platform runs (a year or two at 1h / 1d) a run is
+ * tens of thousands of rows; this cap sits far above any legitimate run yet well
+ * under memory pressure, so a mis-entered fine-grained run (years of 1-minute
+ * bars) fails fast with a clear 400 instead of OOM-ing the single in-process run.
+ *
+ * A fixed constant on purpose — lift to `@nestjs/config` only on a second need.
+ */
+export const MAX_REPLAY_CANDLES = 1_000_000;
+
+/**
+ * Assert a run's preload stays within {@link MAX_REPLAY_CANDLES}: the summed
+ * candle count across its active periods must not exceed `cap`.
+ *
+ * Pure — the caller supplies each active period's stored-candle count (an index
+ * count, no candles materialized) so the guard runs before the preload it
+ * guards.
+ *
+ * @param perPeriodCounts - each active period's stored-candle count up to `end`.
+ * @param cap - the inclusive upper bound on the summed count.
+ * @throws {@link BacktestError} when the summed count exceeds `cap` (→ 400).
+ */
+export function assertReplayCandleBudget(perPeriodCounts: readonly number[], cap: number): void {
+  const total = perPeriodCounts.reduce((sum, count) => sum + count, 0);
+  if (total > cap) {
+    throw new BacktestError(
+      `backtest window is too large: ${total} candles exceed the ${cap} cap — narrow the range or drop a period`,
+    );
+  }
+}
+
+/**
  * Generate a backtest's auto name: `{strategy} · {symbol} · {period} ·
  * {start}→{end}` with UTC calendar dates.
  *

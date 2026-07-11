@@ -100,11 +100,14 @@ const strategy: BacktestStrategy = {
 /** Build a replay over in-memory stores; the indicator service is unused by these rules. */
 function buildReplay(candles: InMemoryCandleRepository, rules: Rule[], periods: Period[]) {
   const watchlist = new InMemoryWatchlistRepository([watched(periods)]);
-  const indicators = new IndicatorService(defaultIndicators(), watchlist, candles, {
-    onState: () => {},
-  });
   const ruleRepo = new InMemoryRuleRepository(rules);
-  return new BacktestReplayService(candles, ruleRepo, watchlist, indicators);
+  return new BacktestReplayService(
+    candles,
+    ruleRepo,
+    watchlist,
+    (preloaded) =>
+      new IndicatorService(defaultIndicators(), watchlist, preloaded, { onState: () => {} }),
+  );
 }
 
 describe('BacktestReplayService replay', () => {
