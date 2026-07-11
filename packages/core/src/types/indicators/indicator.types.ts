@@ -14,6 +14,8 @@ export enum FieldType {
   Source = 'source',
   /** A choice from a closed set of string options. */
   Enum = 'enum',
+  /** A boolean flag — a state field that is `true` / `false` (or `null` during warm-up). */
+  Bool = 'bool',
 }
 
 /**
@@ -182,9 +184,34 @@ export interface EnumStateFieldDescriptor<O extends readonly EnumOption[] = read
 }
 
 /**
+ * A boolean state field — emits `true` / `false` per bar (or `null` during warm-up).
+ *
+ * The first non-numeric persistent state shape: a flag an indicator sets every
+ * bar once warmed (e.g. "source is above the line"), read by the rules engine's
+ * state operators against a `Bool` literal.
+ */
+export interface BoolStateFieldDescriptor {
+  /** Discriminator: boolean state. */
+  type: FieldType.Bool;
+  /** Stable key used in the result rows and addressable from action rules. */
+  key: string;
+  /** Human-readable label for UI / chart legends. */
+  label: string;
+  /** Render hint for a future chart view. */
+  render?: RenderKind;
+  /** Pane hint for a future chart view. */
+  pane?: Pane;
+  /** Default colour hint for a future chart view (CSS string). */
+  color?: string;
+}
+
+/**
  * A state field descriptor — a union of the supported state types.
  */
-export type StateFieldDescriptor = NumberStateFieldDescriptor | EnumStateFieldDescriptor;
+export type StateFieldDescriptor =
+  | NumberStateFieldDescriptor
+  | EnumStateFieldDescriptor
+  | BoolStateFieldDescriptor;
 
 /**
  * Map an input descriptor to the value type it produces.
@@ -213,9 +240,11 @@ export type InferInputs<I extends readonly FieldDescriptor[]> = {
  */
 export type InferStateValue<D extends StateFieldDescriptor> = D extends NumberStateFieldDescriptor
   ? number | null
-  : D extends EnumStateFieldDescriptor<infer O>
-    ? O[number]['value'] | null
-    : never;
+  : D extends BoolStateFieldDescriptor
+    ? boolean | null
+    : D extends EnumStateFieldDescriptor<infer O>
+      ? O[number]['value'] | null
+      : never;
 
 /**
  * One row of an indicator's output, aligned to a single candle by `time`.

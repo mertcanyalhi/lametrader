@@ -34,7 +34,7 @@ The cascade event's `prev` is threaded into the per-slot `getPrevSymbolState`, s
 - Threading non-null `getPrev*State` on the non-cascade paths (tick / bar / timer).
   The issue calls this out as larger scope and asks to settle it separately.
   The immediate fix is the cascade path only.
-- Indicator-cascade prev threading — `getPrevIndicator` is already derived from the indicator series store's second-newest point in `buildEvaluationContext`; no wire-up change needed for that path.
+- Indicator-cascade prev threading — an `IndicatorRef`'s `prev` is derived from the indicator series store's second-newest projected point in `buildEvaluationContext`; no wire-up change needed for that path. (The earlier optional `getPrevIndicator` fallback was removed in #562 once bool/string fields projected through the same series path.)
 
 ## Surprises
 

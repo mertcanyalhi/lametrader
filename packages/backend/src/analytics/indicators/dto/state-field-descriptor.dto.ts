@@ -69,3 +69,34 @@ export class EnumStateFieldDto {
   @ApiPropertyOptional()
   color?: string;
 }
+
+/**
+ * A boolean state descriptor — mirrors core `BoolStateFieldDescriptor`.
+ *
+ * Documentation only — pins the OpenAPI contract; responses are not validated.
+ */
+export class BoolStateFieldDto {
+  /** Discriminator: boolean state. */
+  @ApiProperty({ enum: [FieldType.Bool] })
+  type!: FieldType.Bool;
+
+  /** Stable key used in the result rows. */
+  @ApiProperty()
+  key!: string;
+
+  /** Human-readable label for UI / chart legends. */
+  @ApiProperty()
+  label!: string;
+
+  /** Render hint for a future chart view. */
+  @ApiPropertyOptional({ enum: RenderKind })
+  render?: RenderKind;
+
+  /** Pane hint for a future chart view. */
+  @ApiPropertyOptional({ enum: Pane })
+  pane?: Pane;
+
+  /** Default colour hint for a future chart view (CSS string). */
+  @ApiPropertyOptional()
+  color?: string;
+}

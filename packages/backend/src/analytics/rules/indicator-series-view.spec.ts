@@ -11,7 +11,7 @@ import { IndicatorService } from '../indicators/indicator.service.js';
 import { IndicatorRegistry } from '../indicators/indicator-registry.js';
 import { movingAverage } from '../indicators/sma.js';
 import { volumeWeightedMovingAverage } from '../indicators/vwma.js';
-import { PagedIndicatorSeriesView } from './indicator-series-view.js';
+import { PagedIndicatorSeriesView, toStateValue } from './indicator-series-view.js';
 import type { SeriesPoint } from './series.types.js';
 
 const SYMBOL = 'BTC';
@@ -72,6 +72,36 @@ const setup = async (
   const service = new IndicatorService(indicators, watchlist, repo);
   return { repo, service };
 };
+
+describe('toStateValue', () => {
+  it('wraps each supported shape as its tagged StateValue and returns null otherwise', () => {
+    expect({
+      number: toStateValue(42),
+      zero: toStateValue(0),
+      boolTrue: toStateValue(true),
+      boolFalse: toStateValue(false),
+      string: toStateValue('buy'),
+      emptyString: toStateValue(''),
+      null: toStateValue(null),
+      undefined: toStateValue(undefined),
+      nan: toStateValue(Number.NaN),
+      infinity: toStateValue(Number.POSITIVE_INFINITY),
+      object: toStateValue({ a: 1 }),
+    }).toEqual({
+      number: { type: StateValueType.Number, value: 42 },
+      zero: { type: StateValueType.Number, value: 0 },
+      boolTrue: { type: StateValueType.Bool, value: true },
+      boolFalse: { type: StateValueType.Bool, value: false },
+      string: { type: StateValueType.String, value: 'buy' },
+      emptyString: { type: StateValueType.String, value: '' },
+      null: null,
+      undefined: null,
+      nan: null,
+      infinity: null,
+      object: null,
+    });
+  });
+});
 
 describe('PagedIndicatorSeriesView', () => {
   it('walks the same points (newest-first) as an eager full-series compute over the same bars', async () => {

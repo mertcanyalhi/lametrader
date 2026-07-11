@@ -53,13 +53,6 @@ export interface EvaluationContextDeps {
   /** Optional one-step-back lookup for `GlobalStateRef` operands; see {@link getPrevSymbolState}. */
   getPrevGlobalState?(profileId: string, key: string): StateValue | null;
   /**
-   * Optional one-step-back lookup for non-numeric `IndicatorRef` operands
-   * (Bool / Enum state-keys aren't projected into the in-memory series store).
-   * When the key IS numeric, the context derives `prev` from the second-newest
-   * point on `indicatorStore.series` instead.
-   */
-  getPrevIndicator?(instanceId: string, stateKey: string): StateValue | null;
-  /**
    * OHLCV bar series the orchestrator wired for this evaluation, keyed by
    * `(period, axis)` (`barSeriesKey(period, axis)`).
    * The `resolveLatest` / `resolveSeries` paths read from this map; each view
@@ -149,11 +142,11 @@ export function buildEvaluationContext(deps: EvaluationContextDeps): EvaluationC
             deps.before,
             deps.computeCache,
           );
-          // A series with a second-newest point yields it (walk-and-count, since
-          // the view carries no length); otherwise fall to the optional hook for
-          // non-numeric indicator keys not projected into the store.
-          const prev = await prevFromSeries(series);
-          return prev ?? deps.getPrevIndicator?.(operand.instanceId, operand.stateKey) ?? null;
+          // `prev` is the series' second-newest projected point (walk-and-count,
+          // since the view carries no length). Number, bool and string fields all
+          // project through the single series path now (see `toStateValue`), so
+          // there is no separate non-numeric fallback.
+          return await prevFromSeries(series);
         }
         case OperandKind.SymbolStateRef:
           return deps.getPrevSymbolState?.(deps.profileId, deps.symbolId, operand.key) ?? null;

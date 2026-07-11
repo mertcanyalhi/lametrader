@@ -5,7 +5,11 @@ import {
   NumberInputFieldDto,
   SourceInputFieldDto,
 } from './input-field-descriptor.dto.js';
-import { EnumStateFieldDto, NumberStateFieldDto } from './state-field-descriptor.dto.js';
+import {
+  BoolStateFieldDto,
+  EnumStateFieldDto,
+  NumberStateFieldDto,
+} from './state-field-descriptor.dto.js';
 
 /**
  * A serialized indicator `IndicatorDefinition` — the 200 body of the catalog
@@ -22,6 +26,7 @@ import { EnumStateFieldDto, NumberStateFieldDto } from './state-field-descriptor
   EnumInputFieldDto,
   NumberStateFieldDto,
   EnumStateFieldDto,
+  BoolStateFieldDto,
 )
 export class IndicatorDefinitionDto {
   /** Stable lookup id — e.g. `sma`. */
@@ -65,9 +70,10 @@ export class IndicatorDefinitionDto {
       oneOf: [
         { $ref: getSchemaPath(NumberStateFieldDto) },
         { $ref: getSchemaPath(EnumStateFieldDto) },
+        { $ref: getSchemaPath(BoolStateFieldDto) },
       ],
     },
     description: 'Per-bar state field descriptors.',
   })
-  state!: (NumberStateFieldDto | EnumStateFieldDto)[];
+  state!: (NumberStateFieldDto | EnumStateFieldDto | BoolStateFieldDto)[];
 }

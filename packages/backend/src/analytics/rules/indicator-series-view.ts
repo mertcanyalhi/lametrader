@@ -93,9 +93,10 @@ export class PagedIndicatorSeriesView implements SeriesView {
    * candle page and yielding its projected points newest-first.
    *
    * Each call is a fresh walk with its own cursor, so the view is safe to
-   * consume more than once. A row whose `stateKey` value isn't a finite number
-   * (warm-up `null`, or a non-numeric state field) is skipped for yielding but
-   * still advances the candle cursor — paging is by candle. A compute failure
+   * consume more than once. A row whose `stateKey` value projects to `null` via
+   * {@link toStateValue} (warm-up, or a sparse field's non-firing bar) is
+   * skipped for yielding but still advances the candle cursor — paging is by
+   * candle; number, bool and string fields all project and yield. A compute failure
    * (asset-class mismatch / invalid inputs / unwatched symbol) is structural and
    * won't resolve on an older page, so it ends the walk with no points.
    */
@@ -190,13 +191,31 @@ export class PagedIndicatorSeriesView implements SeriesView {
 /**
  * Wrap an indicator state-field value as a {@link StateValue}.
  *
- * The rules engine projects numeric indicator fields (SMA, VWMA value, …); a
- * future bool/enum field would extend this match. Returns `null` for `null`
- * (warm-up) and for shapes not yet projected (e.g. an enum `signal` string).
+ * Projects all three state shapes the engine understands: a finite number →
+ * `{ type: Number }`, a boolean → `{ type: Bool }`, a string → `{ type: String }`
+ * (an enum state field's value is a plain string at eval time). Returns `null`
+ * for `null` / `undefined` (warm-up or a non-firing sparse field) and for any
+ * other shape.
+ *
+ * Because this is the single projection point for both `resolveLatest`'s `asOf`
+ * and `resolvePrev`'s series walk, non-numeric fields resolve through the same
+ * path as numeric ones — there is no latest/prev asymmetry. The `asOf` +
+ * backward-walk semantics make the projected read **sticky**: the latest value
+ * is the last known non-`null` point, and `prev` is the second-newest projected
+ * point. For a sparse event-like field (VWMA `signal`, `null` between crosses)
+ * that means the latest read is the last emitted signal; for a persistent bool
+ * field (set every warmed bar) it is exactly the current bar's value and `prev`
+ * is the prior bar's. See ADR-0022.
  */
-function toStateValue(raw: unknown): StateValue | null {
+export function toStateValue(raw: unknown): StateValue | null {
   if (typeof raw === 'number' && Number.isFinite(raw)) {
     return { type: StateValueType.Number, value: raw };
+  }
+  if (typeof raw === 'boolean') {
+    return { type: StateValueType.Bool, value: raw };
+  }
+  if (typeof raw === 'string') {
+    return { type: StateValueType.String, value: raw };
   }
   return null;
 }

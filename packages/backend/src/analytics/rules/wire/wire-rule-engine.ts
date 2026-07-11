@@ -156,7 +156,6 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
         getGlobalState: (pid, key) => lookups.getGlobalState(pid, key),
         getPrevSymbolState: cascadePrev.getPrevSymbolState,
         getPrevGlobalState: cascadePrev.getPrevGlobalState,
-        getPrevIndicator: () => null,
         barSeries,
       });
     },

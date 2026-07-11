@@ -5,6 +5,7 @@ import {
   LeafConditionFamily,
   NotificationChannel,
   OperandKind,
+  Period,
   type Rule,
   RuleScopeKind,
   StateOperator,
@@ -157,5 +158,98 @@ describe('InMemoryRuleRepository — legacy state/Equals migration', () => {
     await repo.save(stored);
     const got = await repo.get('r');
     expect(got).toEqual(stored);
+  });
+
+  it('preserves a stored state/Equals leaf with a Bool IndicatorRef LHS unchanged on read', async () => {
+    const repo = new InMemoryRuleRepository();
+    const stored = rule({
+      kind: ConditionNodeKind.Leaf,
+      leaf: {
+        family: LeafConditionFamily.State,
+        operator: StateOperator.Equals,
+        left: {
+          kind: OperandKind.IndicatorRef,
+          instanceId: 'vwma-1',
+          stateKey: 'above',
+          valueType: StateValueType.Bool,
+        },
+        right: {
+          kind: OperandKind.Literal,
+          value: { type: StateValueType.Bool, value: true },
+        },
+        interval: Period.OneMinute,
+      },
+    });
+    await repo.save(stored);
+    const got = await repo.get('r');
+    expect(got).toEqual(stored);
+  });
+
+  it('preserves a stored state/NotEquals leaf with a String IndicatorRef LHS unchanged on read', async () => {
+    const repo = new InMemoryRuleRepository();
+    const stored = rule({
+      kind: ConditionNodeKind.Leaf,
+      leaf: {
+        family: LeafConditionFamily.State,
+        operator: StateOperator.NotEquals,
+        left: {
+          kind: OperandKind.IndicatorRef,
+          instanceId: 'vwma-1',
+          stateKey: 'signal',
+          valueType: StateValueType.String,
+        },
+        right: {
+          kind: OperandKind.Literal,
+          value: { type: StateValueType.String, value: 'buy' },
+        },
+        interval: Period.OneMinute,
+      },
+    });
+    await repo.save(stored);
+    const got = await repo.get('r');
+    expect(got).toEqual(stored);
+  });
+
+  it('still rewrites a stored state/Equals leaf with a numeric IndicatorRef LHS to comparison/Eq on read', async () => {
+    const repo = new InMemoryRuleRepository();
+    await repo.save(
+      rule({
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.State,
+          operator: StateOperator.Equals,
+          left: {
+            kind: OperandKind.IndicatorRef,
+            instanceId: 'sma-1',
+            stateKey: 'value',
+            valueType: StateValueType.Number,
+          },
+          right: {
+            kind: OperandKind.Literal,
+            value: { type: StateValueType.Number, value: 100 },
+          },
+          interval: Period.OneMinute,
+        },
+      }),
+    );
+    const got = await repo.get('r');
+    expect(got?.condition).toEqual({
+      kind: ConditionNodeKind.Leaf,
+      leaf: {
+        family: LeafConditionFamily.Comparison,
+        operator: ComparisonOperator.Eq,
+        left: {
+          kind: OperandKind.IndicatorRef,
+          instanceId: 'sma-1',
+          stateKey: 'value',
+          valueType: StateValueType.Number,
+        },
+        right: {
+          kind: OperandKind.Literal,
+          value: { type: StateValueType.Number, value: 100 },
+        },
+        interval: Period.OneMinute,
+      },
+    });
   });
 });

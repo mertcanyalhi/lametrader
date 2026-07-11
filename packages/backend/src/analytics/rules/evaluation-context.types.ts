@@ -31,12 +31,11 @@ export interface EvaluationContext {
    * Previous (one-step-back) value for the operand, or `null` when no prior
    * snapshot has been observed.
    *
-   * Series-eligible operands (Price / OHLCV / numeric `IndicatorRef`) derive
-   * `prev` from the second-newest point on their series.
-   * State refs (`SymbolStateRef`, `GlobalStateRef`) and non-numeric indicator
-   * refs dispatch to the orchestrator-supplied `getPrevSymbolState` /
-   * `getPrevGlobalState` / `getPrevIndicator` lookups when configured;
-   * otherwise resolve to `null`.
+   * Series-eligible operands (Price / OHLCV / `IndicatorRef`, of any value type)
+   * derive `prev` from the second-newest projected point on their series.
+   * State refs (`SymbolStateRef`, `GlobalStateRef`) dispatch to the
+   * orchestrator-supplied `getPrevSymbolState` / `getPrevGlobalState` lookups
+   * when configured; otherwise resolve to `null`.
    * `Literal` returns its constant value (literals don't change).
    *
    * Used by `State` operators (`ChangesTo` / `ChangesFrom`) — never throws.
