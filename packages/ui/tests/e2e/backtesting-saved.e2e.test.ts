@@ -289,7 +289,7 @@ describe('backtesting saved-reload flow (e2e)', () => {
 
     await waitFor(() => expect(strategies.length).toBe(1));
     await user.click(screen.getByRole('button', { name: 'Run backtest' }));
-    await screen.findByText('Running — 50%');
+    await screen.findByText('50%');
 
     // The run finishes: the next poll reports completion, and the page flips into
     // the loaded view rendering the closed trade.

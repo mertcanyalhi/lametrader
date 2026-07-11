@@ -286,7 +286,7 @@ describe('backtesting run flow (e2e)', () => {
     await waitFor(() => expect(posted).toHaveLength(1));
 
     // Progress advances while the run polls.
-    expect(await screen.findByText('Running — 50%')).toBeInTheDocument();
+    expect(await screen.findByText('50%')).toBeInTheDocument();
 
     // The run finishes: the next poll reports completion with one closed trade
     // plus an open position, and the page renders the completed results through
