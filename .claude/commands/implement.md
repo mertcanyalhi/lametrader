@@ -13,6 +13,9 @@ Feature: $ARGUMENTS
 - `--no-merge` — leave the PR for a human to merge; don't ask.
 - neither — once the PR is green, **ask** (`AskUserQuestion`) whether to enable auto-merge. Never guess the merge preference (CLAUDE.md).
 
+> **Auto-merge depends on repo settings — it's not something the command can force.** The `--merge` leg only takes effect when the repo has *Allow auto-merge* on **and** a `main` branch rule makes the `check:full (+ e2e)` status check required; otherwise `enable_pr_auto_merge` no-ops gracefully and the PR waits for a manual merge.
+> If that rule also requires an approving review, GitHub holds the merge until someone approves — and a PR author can never approve their own PR. So the identity that opens the PR matters: a PR opened under your own account can't be self-approved, and the `--merge` flow will stall waiting for a review that can't come. For hands-off auto-merge either keep required approvals at 0 (CI-gated only) or add yourself to the ruleset bypass list (see `.github/CODEOWNERS`).
+
 **Branch first.** If `git branch --show-current` isn't `<type>/<kebab-summary>`, rename via `git branch -m <new-name>` — never push an auto-generated `claude/…` name. This branch is the PR's head; every commit below lands on it.
 
 ## The ladder — stop at the first rung that holds
