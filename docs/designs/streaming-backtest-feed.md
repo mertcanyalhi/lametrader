@@ -1,7 +1,12 @@
 # Streaming candle feed with a bounded lookback buffer for backtest replay
 
-- Status: proposal (design doc, not an ADR)
+- Status: superseded for current scale by ADR-0022 (`docs/decisions/0022-backtest-replay-preloads-run-history-in-memory.md`)
 - Scope: `BacktestReplayService` and the candle-feed / lookback plumbing it drives
+
+> **Superseded for now (ADR-0022).**
+> The backtests this platform runs are bounded (≈1–2 years, coarse periods), so `BacktestReplayService` preloads the full run history into an in-memory candle store instead of the bounded sliding window this proposal designs — simpler, and byte-identical to live.
+> This proposal's rejection of preload-all holds only at unbounded scale (multi-year 1-minute); it is retained in full because it is the right answer *if* run scale ever becomes unbounded.
+> Revisit it then; until then the design below is not implemented.
 
 ## Problem
 
