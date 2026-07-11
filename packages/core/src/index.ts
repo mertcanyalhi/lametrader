@@ -57,6 +57,7 @@ export {
   Period,
 } from './types/config/config.types.js';
 export {
+  type BoolStateFieldDescriptor,
   type EnumFieldDescriptor,
   type EnumOption,
   type EnumStateFieldDescriptor,

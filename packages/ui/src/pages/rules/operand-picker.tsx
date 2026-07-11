@@ -48,6 +48,8 @@ function stateFieldValueType(field: StateFieldDescriptor): StateValueType {
       return StateValueType.Number;
     case FieldType.Enum:
       return StateValueType.String;
+    case FieldType.Bool:
+      return StateValueType.Bool;
   }
 }
 

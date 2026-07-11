@@ -12,11 +12,13 @@ import { defineIndicator } from './define-indicator.js';
 /**
  * Volume-Weighted Moving Average with a crossover signal — the second reference indicator.
  *
- * Exercises the parts of the contract the simple moving average didn't: an enum input (`direction`), a discrete enum state field (`signal`) rendered later as buy/sell markers, a numeric state field in a separate pane (`confidence`), and a narrowed `appliesTo` (excludes Fx since the line consumes volume).
+ * Exercises the parts of the contract the simple moving average didn't: an enum input (`direction`), a discrete enum state field (`signal`) rendered later as buy/sell markers, a numeric state field in a separate pane (`confidence`), a persistent boolean state field (`above` — the resolved source sits above the line), and a narrowed `appliesTo` (excludes Fx since the line consumes volume).
  *
- * Compute: for each bar `i`, warm-up (`i + 1 < length`) yields a row with all three state fields `null`.
+ * Compute: for each bar `i`, warm-up (`i + 1 < length`) yields a row with all four state fields `null`.
  *
  * Otherwise `value = Σ(source × volume) / Σ(volume)` over the trailing `length` bars.
+ *
+ * `above = source[i] > value[i]` — set on every warmed bar (unlike the sparse `signal`), so it exercises a persistent bool field the rules engine reads per bar.
  *
  * Signals fire only when (a) a previous `value` exists, (b) the deviation `|source[i] − value[i]| / value[i]` is at least `multiplier × 0.001` (i.e. tenths of a percent — `multiplier = 1.0` requires a 0.1% deviation), and (c) the source crosses the line at bar `i`.
  *
@@ -98,6 +100,12 @@ export const volumeWeightedMovingAverage = defineIndicator({
       render: RenderKind.Line,
       pane: Pane.Separate,
     },
+    {
+      type: FieldType.Bool,
+      key: 'above',
+      label: 'Source above line',
+      pane: Pane.Overlay,
+    },
   ] as const,
   summary: ({ length, source, multiplier, direction }) =>
     `VWMA ${length} ${source} ±${multiplier}/1000 ${direction}`,
@@ -121,14 +129,20 @@ export const volumeWeightedMovingAverage = defineIndicator({
     return candles.map((candle, i) => {
       const value = values[i] ?? null;
       const prevValue = i > 0 ? (values[i - 1] ?? null) : null;
-      if (value === null || prevValue === null) {
-        return { time: candle.time, value, signal: null, confidence: null };
+      // `above` is persistent: it is set on every warmed bar (value !== null),
+      // independent of whether a cross fired — unlike the sparse `signal`.
+      if (value === null) {
+        return { time: candle.time, value, signal: null, confidence: null, above: null };
       }
       const currSource = resolveSource(candle, source);
+      const above = currSource > value;
+      if (prevValue === null) {
+        return { time: candle.time, value, signal: null, confidence: null, above };
+      }
       const prevSource = resolveSource(candles[i - 1] as Candle, source);
       const deviation = Math.abs(currSource - value) / value;
       if (deviation < threshold) {
-        return { time: candle.time, value, signal: null, confidence: null };
+        return { time: candle.time, value, signal: null, confidence: null, above };
       }
       const upCross = currSource > value && prevSource <= prevValue;
       const downCross = currSource < value && prevSource >= prevValue;
@@ -143,6 +157,7 @@ export const volumeWeightedMovingAverage = defineIndicator({
         value,
         signal,
         confidence: signal === null ? null : deviation,
+        above,
       };
     });
   },

@@ -8,6 +8,7 @@ import {
   OperandKind,
   type Rule,
   StateOperator,
+  StateValueType,
 } from '@lametrader/core';
 
 /**
@@ -28,6 +29,13 @@ import {
  * those dispatch through NULL-aware semantics (a `null` resolution is a
  * distinct sentinel, not "no data → false"), which is the post-collapse
  * contract for state-ref equality.
+ *
+ * A non-numeric `IndicatorRef` LHS (`valueType` `Bool` / `String`) likewise
+ * keeps its State family: `comparison/Eq` is numeric-only and would silently
+ * evaluate a bool/enum field to `false`, so a Bool/enum indicator field only
+ * ever compares through the type-agnostic State operators (#562, ADR-0022).
+ * A numeric `IndicatorRef` (`valueType` `Number`, or a legacy operand with no
+ * `valueType`) still rewrites, preserving the pre-#562 behaviour.
  *
  * Identity-preserving: when no leaf needs rewriting the input `rule` is
  * returned unchanged, so the orchestrator's hot path doesn't allocate.
@@ -72,7 +80,7 @@ function normalizeLeaf(leaf: LeafCondition): LeafCondition {
   if (leaf.operator !== StateOperator.Equals && leaf.operator !== StateOperator.NotEquals) {
     return leaf;
   }
-  if (isStateRefOperand(leaf.left)) return leaf;
+  if (keepsStateFamily(leaf.left)) return leaf;
   const operator =
     leaf.operator === StateOperator.Equals ? ComparisonOperator.Eq : ComparisonOperator.Neq;
   const rewritten: LeafCondition = {
@@ -86,9 +94,22 @@ function normalizeLeaf(leaf: LeafCondition): LeafCondition {
 }
 
 /**
- * Whether an operand reads from a profile-scoped state map — the only LHS
- * kinds that keep State family / NULL-aware dispatch post-collapse.
+ * Whether an equality leaf over this LHS keeps its State family post-collapse
+ * (rather than being rewritten to `comparison/Eq`).
+ *
+ * True for the profile-scoped state maps (`SymbolStateRef` / `GlobalStateRef`)
+ * and for a non-numeric `IndicatorRef` (`valueType` `Bool` / `String`): all of
+ * these carry a non-numeric or NULL-aware value that `comparison/Eq` — a
+ * numeric operator — cannot evaluate.
+ * A numeric `IndicatorRef` (`valueType` `Number`, or a legacy operand without a
+ * `valueType`) is left to rewrite, preserving the pre-#562 behaviour.
  */
-function isStateRefOperand(operand: ConditionOperand): boolean {
-  return operand.kind === OperandKind.SymbolStateRef || operand.kind === OperandKind.GlobalStateRef;
+function keepsStateFamily(operand: ConditionOperand): boolean {
+  if (operand.kind === OperandKind.SymbolStateRef || operand.kind === OperandKind.GlobalStateRef) {
+    return true;
+  }
+  return (
+    operand.kind === OperandKind.IndicatorRef &&
+    (operand.valueType === StateValueType.Bool || operand.valueType === StateValueType.String)
+  );
 }

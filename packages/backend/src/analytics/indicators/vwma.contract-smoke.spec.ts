@@ -32,14 +32,15 @@ describe('signal-style indicator contract (public surface, VWMA reference)', () 
     const result = vwma.compute(inputs, candles);
 
     expect(result).toEqual([
-      { time: 0, value: null, signal: null, confidence: null },
-      { time: 1, value: null, signal: null, confidence: null },
-      { time: 2, value: expect.closeTo(10, 6), signal: null, confidence: null },
+      { time: 0, value: null, signal: null, confidence: null, above: null },
+      { time: 1, value: null, signal: null, confidence: null, above: null },
+      { time: 2, value: expect.closeTo(10, 6), signal: null, confidence: null, above: false },
       {
         time: 3,
         value: expect.closeTo(11, 6),
         signal: 'buy',
         confidence: expect.closeTo(1 / 11, 6),
+        above: true,
       },
     ]);
   });

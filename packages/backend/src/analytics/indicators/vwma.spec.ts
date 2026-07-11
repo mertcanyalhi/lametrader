@@ -42,20 +42,22 @@ describe('volumeWeightedMovingAverage.compute', () => {
       candles,
     );
     expect(result).toEqual([
-      { time: 0, value: null, signal: null, confidence: null },
-      { time: 1, value: null, signal: null, confidence: null },
-      { time: 2, value: expect.closeTo(10, 6), signal: null, confidence: null },
+      { time: 0, value: null, signal: null, confidence: null, above: null },
+      { time: 1, value: null, signal: null, confidence: null, above: null },
+      { time: 2, value: expect.closeTo(10, 6), signal: null, confidence: null, above: false },
       {
         time: 3,
         value: expect.closeTo(11, 6),
         signal: 'buy',
         confidence: expect.closeTo(1 / 11, 6),
+        above: true,
       },
       {
         time: 4,
         value: expect.closeTo(10, 6),
         signal: 'sell',
         confidence: expect.closeTo(0.2, 6),
+        above: false,
       },
     ]);
   });
@@ -71,12 +73,14 @@ describe('volumeWeightedMovingAverage.compute', () => {
       value: expect.closeTo(11, 6),
       signal: 'buy',
       confidence: expect.closeTo(1 / 11, 6),
+      above: true,
     });
     expect(result[4]).toEqual({
       time: 4,
       value: expect.closeTo(10, 6),
       signal: null,
       confidence: null,
+      above: false,
     });
   });
 
@@ -99,9 +103,18 @@ describe('volumeWeightedMovingAverage.compute', () => {
         candles.slice(0, 2),
       ),
     ).toEqual([
-      { time: 0, value: null, signal: null, confidence: null },
-      { time: 1, value: null, signal: null, confidence: null },
+      { time: 0, value: null, signal: null, confidence: null, above: null },
+      { time: 1, value: null, signal: null, confidence: null, above: null },
     ]);
+  });
+
+  it('emits a persistent `above` bool on every warmed bar — true when source > line, false otherwise', () => {
+    // above is set independently of a cross: bar 2 (no signal) still reports it.
+    const result = volumeWeightedMovingAverage.compute(
+      { length: 3, source: PriceSource.Close, multiplier: 1, direction: 'both' },
+      candles,
+    );
+    expect(result.map((row) => row.above)).toEqual([null, null, false, true, false]);
   });
 
   it('throws IndicatorError when handed an FX candle (defensive backstop on top of appliesTo)', () => {

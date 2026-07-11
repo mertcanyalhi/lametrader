@@ -191,6 +191,7 @@ Both are watchlist-scoped (**404** on an unknown symbol id) and, unlike the maps
 
 The **indicator catalog** plus an ad-hoc **compute** route.
 The catalog is every registered indicator module's serialized `IndicatorDefinition` — the input/state schema a UI form renderer or action condition-builder reads (never the `compute` function).
+A state field descriptor carries a `type` of `number`, `enum`, or `bool` (ADR-0022); the `type` tells the operand picker which `StateValue` an `IndicatorRef` at that field resolves to (`number` / `string` / `bool`).
 
 - `GET /indicators` — list every registered definition.
 - `GET /indicators/:key` — get one definition by key (**404** with `{ error }` on an unknown key).
@@ -212,6 +213,7 @@ The response is `{ indicatorKey, version, period, state }`, where `state` is the
 
 CRUD over the greenfield v2 rules (ADR-0016) plus the chart-facing read of each rule's / symbol's mirrored event log.
 A rule pairs a `scope` (`Symbol` / `Symbols` / `AllSymbols`), a `condition` tree, a `trigger` cadence, and one or more `actions` (notification / state writes); the server stamps `id`, `createdAt`, `updatedAt`.
+An `IndicatorRef` operand carries a `valueType` (`number` / `string` / `bool`): a non-numeric field (an enum-`string` like VWMA's `signal`, or a `bool` like its `above`) resolves through the same projected indicator series as a numeric one and is compared via the `State` operators (`Equals` / `NotEquals` / `ChangesTo` / `ChangesFrom`); the series-aware operators (`Crossing` / `Moving` / `Channel`) stay numeric (ADR-0022).
 
 - `GET /rules?profileId=&symbolId=&enabled=` — list, each filter independent (all AND together), sorted by `order`.
 - `POST /rules` — create. **201** with the stamped rule. A tick-cadence trigger (`EveryTime` / `Once` / `OncePerBar`) on a scope whose symbol isn't watched is rejected **400** with a `fields[]` entry per unwatched symbol (`{ path: "scope.symbolId", message: "symbol not on watchlist: <id>" }`); an invalid condition or an unwatched condition interval is a **400** `{ error }`.
