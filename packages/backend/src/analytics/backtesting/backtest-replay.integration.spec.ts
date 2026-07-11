@@ -305,4 +305,32 @@ describe('BacktestReplayService replay', () => {
 
     expect({ fewReads, manyReads }).toEqual({ fewReads: 2, manyReads: 2 });
   });
+
+  it('yields the event loop during the replay so a concurrent poll runs before it finishes', async () => {
+    // The in-memory replay only awaits microtasks, so without a periodic yield it
+    // blocks the loop end-to-end and a concurrent `GET /backtests/:id` progress
+    // read cannot run until the run completes (progress jumps 0 → 100). A feed
+    // longer than the yield interval must let a macrotask scheduled alongside it
+    // run while the replay is still in flight.
+    const inner = new InMemoryCandleRepository();
+    await inner.save(
+      SYMBOL_ID,
+      Period.OneMinute,
+      Array.from({ length: 201 }, (_, i) => candle(i * MINUTE, 150)),
+    );
+    const replay = buildReplay(inner, [priceMarker()], [Period.OneMinute]);
+    let done = false;
+    const run = replay
+      .replay(params(0, 201 * MINUTE), strategy, profile, [Period.OneMinute])
+      .then(() => {
+        done = true;
+      });
+
+    const interleavedMidRun = await new Promise<boolean>((resolve) => {
+      setImmediate(() => resolve(!done));
+    });
+    await run;
+
+    expect(interleavedMidRun).toEqual(true);
+  });
 });

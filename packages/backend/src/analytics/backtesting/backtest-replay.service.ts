@@ -51,6 +51,18 @@ const defaultIndicatorServiceFactory: IndicatorServiceFactory = (registry, watch
 const DAY_MS = 86_400_000;
 
 /**
+ * Hand the event loop back every this many replayed candles.
+ *
+ * The replay reads entirely from the preloaded in-memory window, so its
+ * per-candle `await`s resolve on the microtask queue and never yield to the
+ * event loop's I/O phase — the whole run would otherwise block the loop
+ * end-to-end, so a concurrent `GET /backtests/:id` progress poll could not be
+ * serviced until the run finished (progress would jump 0 → 100). A periodic
+ * `setImmediate` yield lets the poll observe intermediate progress.
+ */
+const YIELD_EVERY_CANDLES = 200;
+
+/**
  * One stored candle tagged with the period it was sampled at, ready to be
  * ordered into the replay feed.
  */
@@ -253,6 +265,7 @@ export class BacktestReplayService implements BacktestReplayPort {
       }
     });
 
+    let sinceYield = 0;
     try {
       for (const item of feed) {
         if (hooks.isCancelled?.()) {
@@ -267,6 +280,13 @@ export class BacktestReplayService implements BacktestReplayPort {
         await wired.drain();
         executor.processStep(item.candle, stepEvents.splice(0));
         hooks.onProgress?.(progressAt(item, params, totalDays));
+        // Yield the event loop periodically so a concurrent progress poll is
+        // served mid-run (the in-memory replay otherwise only awaits microtasks).
+        sinceYield += 1;
+        if (sinceYield >= YIELD_EVERY_CANDLES) {
+          sinceYield = 0;
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
       }
     } finally {
       unsubscribe();
