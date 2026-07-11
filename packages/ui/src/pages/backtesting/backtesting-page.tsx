@@ -885,16 +885,17 @@ function RunProgress({
   return (
     <Flex direction="column" gap="3" aria-label="Backtest progress">
       <Progress value={percent} aria-label="Run progress" />
-      <Text size="2" color="gray">
-        {completed ? 'Run complete' : run ? `Running — ${percent}%` : 'Starting run…'}
+      <Text size="2" color="gray" align="center">
+        {completed ? 'Run complete' : run ? `${percent}%` : 'Starting run…'}
       </Text>
       {completed ? (
-        <Button type="button" onClick={onDismiss}>
+        <Button type="button" style={{ width: '8rem', alignSelf: 'center' }} onClick={onDismiss}>
           New run
         </Button>
       ) : (
         <Button
           type="button"
+          style={{ width: '8rem', alignSelf: 'center' }}
           color="red"
           variant="soft"
           loading={cancel.isPending}
@@ -925,7 +926,7 @@ function RunInProgress({
 }): ReactNode {
   return (
     <Card className="h-full">
-      <Flex direction="column" justify="center" align="start" gap="4" className="h-full" p="6">
+      <Flex direction="column" justify="center" align="center" gap="4" className="h-full" p="6">
         <Heading size="4">Backtest in progress</Heading>
         <div className="w-full max-w-md">
           <RunProgress run={run} runId={runId} onDismiss={onDismiss} />

@@ -260,14 +260,14 @@ describe('BacktestingPage run flow', () => {
     await screen.findByRole('button', { name: 'Alpha' });
 
     await selectStrategyAndRun(user);
-    await screen.findByText('Running — 50%');
+    await screen.findByText('50%');
 
     const bar = screen.getByRole('group', { name: 'Backtesting actions' });
     expect({
       symbolLocked: within(bar).getByRole('button', { name: BTC.id }).hasAttribute('disabled'),
       profileLocked: within(bar).getByRole('button', { name: 'Alpha' }).hasAttribute('disabled'),
       progressbar: screen.getByRole('progressbar', { name: 'Run progress' }) !== null,
-      progressText: screen.getByText('Running — 50%') !== null,
+      progressText: screen.getByText('50%') !== null,
     }).toEqual({
       symbolLocked: true,
       profileLocked: true,
@@ -282,7 +282,7 @@ describe('BacktestingPage run flow', () => {
     await screen.findByRole('button', { name: 'Alpha' });
 
     await selectStrategyAndRun(user);
-    await screen.findByText('Running — 50%');
+    await screen.findByText('50%');
 
     expect({
       inProgress: screen.getByRole('heading', { name: 'Backtest in progress' }) !== null,
@@ -316,7 +316,7 @@ describe('BacktestingPage run flow', () => {
     await screen.findByRole('button', { name: 'Alpha' });
 
     await selectStrategyAndRun(user);
-    await screen.findByText('Running — 50%');
+    await screen.findByText('50%');
 
     const bar = screen.getByRole('group', { name: 'Backtesting actions' });
     expect(
@@ -330,7 +330,7 @@ describe('BacktestingPage run flow', () => {
     await screen.findByRole('button', { name: 'Alpha' });
 
     await selectStrategyAndRun(user);
-    await screen.findByText('Running — 50%');
+    await screen.findByText('50%');
 
     // A running run shows "Cancel run", so no /New/ button should exist — the
     // strategy New action is hidden.
@@ -343,7 +343,7 @@ describe('BacktestingPage run flow', () => {
     await screen.findByRole('button', { name: 'Alpha' });
 
     await selectStrategyAndRun(user);
-    await screen.findByText('Running — 50%');
+    await screen.findByText('50%');
 
     // The run finishes: the next poll reports completion, and the page flips into
     // the loaded (completed) view — the chart and result tabs render from there.
@@ -367,7 +367,7 @@ describe('BacktestingPage run flow', () => {
     await screen.findByRole('button', { name: 'Alpha' });
 
     await selectStrategyAndRun(user);
-    await screen.findByText('Running — 50%');
+    await screen.findByText('50%');
     await user.click(screen.getByRole('button', { name: 'Cancel run' }));
 
     await waitFor(() => expect(deleted).toEqual(['b-1']));
@@ -383,9 +383,9 @@ describe('BacktestingPage run flow', () => {
     renderPage();
 
     const bar = await screen.findByRole('group', { name: 'Backtesting actions' });
-    await screen.findByText('Running — 50%');
+    await screen.findByText('50%');
     expect({
-      progress: screen.getByText('Running — 50%') !== null,
+      progress: screen.getByText('50%') !== null,
       symbolLocked: within(bar).getByRole('button', { name: BTC.id }).hasAttribute('disabled'),
     }).toEqual({ progress: true, symbolLocked: true });
   });
@@ -408,7 +408,7 @@ describe('BacktestingPage run flow', () => {
     await screen.findByRole('button', { name: 'Alpha' });
 
     await selectStrategyAndRun(user);
-    await screen.findByText('Running — 50%');
+    await screen.findByText('50%');
 
     expect(document.title).toEqual('crypto:BTCUSDT 50% +25.00 - lametrader');
   });
