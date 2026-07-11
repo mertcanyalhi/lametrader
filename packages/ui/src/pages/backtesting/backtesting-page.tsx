@@ -82,14 +82,9 @@ const log = getLogger('backtesting-page');
 /** Milliseconds in one day — turns a run's `elapsedDays` into a frontier time. */
 const MS_PER_DAY = 86_400_000;
 
-/** Format an epoch-ms instant as a UTC `YYYY-MM-DD` calendar date (window bounds). */
-function utcDate(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10);
-}
-
-/** Format an epoch-ms instant as UTC `YYYY-MM-DD HH:mm` (minute precision reads cleanly). */
-function utcMinute(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 16).replace('T', ' ');
+/** Format an epoch-ms instant as UTC `YYYY-MM-DD HH:mm:ss` (window bounds and run times). */
+function utcDateTime(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
 }
 
 /**
@@ -617,11 +612,11 @@ function RunMetaList({ backtest }: { backtest: Backtest }): ReactNode {
         </DataList.Item>
         <DataList.Item>
           <DataList.Label>Start date</DataList.Label>
-          <DataList.Value>{utcDate(backtest.params.start)}</DataList.Value>
+          <DataList.Value>{utcDateTime(backtest.params.start)}</DataList.Value>
         </DataList.Item>
         <DataList.Item>
           <DataList.Label>End date</DataList.Label>
-          <DataList.Value>{utcDate(backtest.params.end)}</DataList.Value>
+          <DataList.Value>{utcDateTime(backtest.params.end)}</DataList.Value>
         </DataList.Item>
         <DataList.Item>
           <DataList.Label>Capital</DataList.Label>
@@ -629,13 +624,13 @@ function RunMetaList({ backtest }: { backtest: Backtest }): ReactNode {
         </DataList.Item>
         <DataList.Item>
           <DataList.Label>Ran at</DataList.Label>
-          <DataList.Value>{utcMinute(backtest.createdAt)}</DataList.Value>
+          <DataList.Value>{utcDateTime(backtest.createdAt)}</DataList.Value>
         </DataList.Item>
         {backtest.completedAt !== undefined ? (
           <DataList.Item>
             <DataList.Label>Completed at</DataList.Label>
             <DataList.Value>
-              {utcMinute(backtest.completedAt)} (
+              {utcDateTime(backtest.completedAt)} (
               {formatDuration(backtest.completedAt - backtest.createdAt, 'second')})
             </DataList.Value>
           </DataList.Item>

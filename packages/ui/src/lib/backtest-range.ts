@@ -96,3 +96,36 @@ export function presetRange(preset: PresetRange, now: number): RangeBounds {
   const span = TRAILING_SPAN_MS[preset] ?? 0;
   return { from: now - span, to: now };
 }
+
+/**
+ * A local `Date` whose wall-clock fields mirror the **UTC** fields of `ms`.
+ *
+ * `react-date-range` only speaks local-time `Date`s, but the window bounds are
+ * stored and displayed in UTC. Feeding the calendar this shifted `Date` makes it
+ * render (and let the user pick) the UTC calendar day, not the browser's local
+ * one — so picking July 1 in UTC+3 no longer stores June 30. Pair with
+ * {@link pickerDateToUtcMs} on the way back out; the two round-trip to the second.
+ */
+export function utcMsToPickerDate(ms: number): Date {
+  const d = new Date(ms);
+  return new Date(
+    d.getUTCFullYear(),
+    d.getUTCMonth(),
+    d.getUTCDate(),
+    d.getUTCHours(),
+    d.getUTCMinutes(),
+    d.getUTCSeconds(),
+  );
+}
+
+/** Inverse of {@link utcMsToPickerDate}: read a picker `Date`'s local fields as a UTC epoch. */
+export function pickerDateToUtcMs(date: Date): number {
+  return Date.UTC(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    date.getHours(),
+    date.getMinutes(),
+    date.getSeconds(),
+  );
+}

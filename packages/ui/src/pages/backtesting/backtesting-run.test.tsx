@@ -380,7 +380,7 @@ describe('BacktestingPage run flow', () => {
     await screen.findByLabelText('Summary', undefined, { timeout: 5_000 });
     expect({
       label: screen.getByText('Completed at') !== null,
-      value: screen.getByText('1970-01-01 00:05 (5m 3s)') !== null,
+      value: screen.getByText('1970-01-01 00:05:03 (5m 3s)') !== null,
     }).toEqual({ label: true, value: true });
   });
 

@@ -184,8 +184,9 @@ function SummaryTab({
 /**
  * The Trades tab: one sortable, paginated row per closed trade (entry/exit times,
  * holding duration, buy/sell prices, per-trade P/L amount and ROI %, and exit
- * reason), with the open position pinned as the final row on the last page — its
- * exit columns blank and its P/L flagged unrealized.
+ * reason), with the open position pinned as the first row on the first page — its
+ * exit columns blank and its P/L flagged unrealized — so the still-open trade is
+ * visible without paging to the end.
  */
 function TradesTab({
   trades,
@@ -208,7 +209,7 @@ function TradesTab({
   const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const page = Math.min(pageIndex, pageCount - 1);
   const pageTrades = sorted.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
-  const showOpen = openPosition !== undefined && page === pageCount - 1;
+  const showOpen = openPosition !== undefined && page === 0;
 
   function toggleSort(key: SortKey): void {
     if (key === sortKey) {
@@ -253,22 +254,6 @@ function TradesTab({
           </Table.Row>
         </Table.Header>
         <Table.Body>
-          {pageTrades.map((trade) => (
-            <Table.Row key={`${trade.entryTs}-${trade.exitTs}`}>
-              <Table.Cell>{formatTradeTime(trade.entryTs)}</Table.Cell>
-              <Table.Cell>{formatTradeTime(trade.exitTs)}</Table.Cell>
-              <Table.Cell>{formatDuration(trade.exitTs - trade.entryTs)}</Table.Cell>
-              <Table.Cell>{formatPrice(trade.entryPrice)}</Table.Cell>
-              <Table.Cell>{formatPrice(trade.exitPrice)}</Table.Cell>
-              <Table.Cell>
-                <Text color={signTone(trade.pnl)}>{formatChange(trade.pnl)}</Text>
-              </Table.Cell>
-              <Table.Cell>
-                <Text color={signTone(trade.roiPct)}>{formatPercent(trade.roiPct)}</Text>
-              </Table.Cell>
-              <Table.Cell>{exitReasonLabel(trade.exitReason)}</Table.Cell>
-            </Table.Row>
-          ))}
           {showOpen && openPosition ? (
             <Table.Row>
               <Table.Cell>{formatTradeTime(openPosition.entryTs)}</Table.Cell>
@@ -290,6 +275,22 @@ function TradesTab({
               <Table.Cell>Open</Table.Cell>
             </Table.Row>
           ) : null}
+          {pageTrades.map((trade) => (
+            <Table.Row key={`${trade.entryTs}-${trade.exitTs}`}>
+              <Table.Cell>{formatTradeTime(trade.entryTs)}</Table.Cell>
+              <Table.Cell>{formatTradeTime(trade.exitTs)}</Table.Cell>
+              <Table.Cell>{formatDuration(trade.exitTs - trade.entryTs)}</Table.Cell>
+              <Table.Cell>{formatPrice(trade.entryPrice)}</Table.Cell>
+              <Table.Cell>{formatPrice(trade.exitPrice)}</Table.Cell>
+              <Table.Cell>
+                <Text color={signTone(trade.pnl)}>{formatChange(trade.pnl)}</Text>
+              </Table.Cell>
+              <Table.Cell>
+                <Text color={signTone(trade.roiPct)}>{formatPercent(trade.roiPct)}</Text>
+              </Table.Cell>
+              <Table.Cell>{exitReasonLabel(trade.exitReason)}</Table.Cell>
+            </Table.Row>
+          ))}
         </Table.Body>
       </Table.Root>
       {pageCount > 1 ? (
