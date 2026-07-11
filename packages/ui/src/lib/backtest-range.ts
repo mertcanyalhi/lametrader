@@ -129,3 +129,18 @@ export function pickerDateToUtcMs(date: Date): number {
     date.getSeconds(),
   );
 }
+
+/**
+ * The end of the UTC day *containing* `ms` (its last whole second, `23:59:59`),
+ * capped at `now` — so a window whose end day is today stops at the present instant
+ * rather than running to a future end-of-day. Used for a run window's `to` so the
+ * range covers the *whole* selected end day, not just its opening midnight.
+ *
+ * Floors `ms` to its UTC midnight first, so re-applying an already-end-of-day value
+ * is idempotent (it doesn't drift forward a day each time the picker reopens).
+ */
+export function endOfUtcDay(ms: number, now: number): number {
+  const d = new Date(ms);
+  const dayStart = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  return Math.min(dayStart + MS_PER_DAY - 1000, now);
+}

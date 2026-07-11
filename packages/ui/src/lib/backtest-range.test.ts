@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BacktestRange,
+  endOfUtcDay,
   pickerDateToUtcMs,
   presetRange,
   RANGE_OPTIONS,
@@ -118,5 +119,23 @@ describe('UTC ↔ picker-date conversion', () => {
   it('round-trips a UTC epoch through the picker Date and back to the second', () => {
     const ms = Date.UTC(2024, 6, 1, 13, 45, 30);
     expect(pickerDateToUtcMs(utcMsToPickerDate(ms))).toEqual(ms);
+  });
+});
+
+describe('endOfUtcDay', () => {
+  it('extends a past end day to its last whole UTC second', () => {
+    expect(endOfUtcDay(Date.UTC(2024, 6, 3), Date.UTC(2024, 6, 10))).toEqual(
+      Date.UTC(2024, 6, 3, 23, 59, 59),
+    );
+  });
+
+  it('caps the end at now when the end day is today', () => {
+    const now = Date.UTC(2024, 6, 3, 14, 30, 0);
+    expect(endOfUtcDay(Date.UTC(2024, 6, 3), now)).toEqual(now);
+  });
+
+  it('is idempotent — an already end-of-day value does not drift forward', () => {
+    const endOfDay = Date.UTC(2024, 6, 3, 23, 59, 59);
+    expect(endOfUtcDay(endOfDay, Date.UTC(2024, 6, 10))).toEqual(endOfDay);
   });
 });
