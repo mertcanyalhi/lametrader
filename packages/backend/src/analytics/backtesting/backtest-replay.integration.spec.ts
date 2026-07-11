@@ -1,3 +1,4 @@
+import type { CandleRepository } from '@lametrader/core';
 import {
   ActionKind,
   type BacktestParams,
@@ -24,9 +25,32 @@ import {
 import { InMemoryCandleRepository } from '../../market/persistence/in-memory-candle.repository.js';
 import { InMemoryWatchlistRepository } from '../../market/persistence/in-memory-watchlist.repository.js';
 import { defaultIndicators } from '../indicators/default-indicators.js';
-import { IndicatorService } from '../indicators/indicator.service.js';
 import { InMemoryRuleRepository } from '../rules/in-memory-rule.repository.js';
 import { BacktestReplayService } from './backtest-replay.service.js';
+
+/** A {@link CandleRepository} decorator counting every candle-store read. */
+class CountingCandleRepository implements CandleRepository {
+  reads = 0;
+  constructor(private readonly inner: CandleRepository) {}
+  range(symbolId: string, period: Period, from: number, to: number, limit?: number) {
+    this.reads += 1;
+    return this.inner.range(symbolId, period, from, to, limit);
+  }
+  latestN(symbolId: string, period: Period, n: number, before?: number) {
+    this.reads += 1;
+    return this.inner.latestN(symbolId, period, n, before);
+  }
+  latest(symbolId: string, period: Period) {
+    this.reads += 1;
+    return this.inner.latest(symbolId, period);
+  }
+  save(symbolId: string, period: Period, candles: Candle[]) {
+    return this.inner.save(symbolId, period, candles);
+  }
+  deleteSymbol(symbolId: string) {
+    return this.inner.deleteSymbol(symbolId);
+  }
+}
 
 const SYMBOL_ID = 'crypto:BTCUSDT';
 const MINUTE = 60_000;
@@ -97,14 +121,53 @@ const strategy: BacktestStrategy = {
   updatedAt: 0,
 };
 
-/** Build a replay over in-memory stores; the indicator service is unused by these rules. */
-function buildReplay(candles: InMemoryCandleRepository, rules: Rule[], periods: Period[]) {
+/** Build a replay over in-memory stores; the indicator registry is unused by these rules. */
+function buildReplay(candles: CandleRepository, rules: Rule[], periods: Period[]) {
   const watchlist = new InMemoryWatchlistRepository([watched(periods)]);
-  const indicators = new IndicatorService(defaultIndicators(), watchlist, candles, {
-    onState: () => {},
-  });
   const ruleRepo = new InMemoryRuleRepository(rules);
-  return new BacktestReplayService(candles, ruleRepo, watchlist, indicators);
+  return new BacktestReplayService(candles, ruleRepo, watchlist, defaultIndicators());
+}
+
+/** A `Price > 100` rule firing every candle — its evaluation pages the bar series. */
+const priceMarker = (): Rule =>
+  rule({
+    profileId: 'prof-1',
+    name: 'price marker',
+    scope: { kind: RuleScopeKind.Symbol, symbolId: SYMBOL_ID },
+    condition: {
+      kind: ConditionNodeKind.Leaf,
+      leaf: {
+        family: LeafConditionFamily.Comparison,
+        operator: ComparisonOperator.Gt,
+        left: { kind: OperandKind.Price },
+        right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 100 } },
+      },
+    },
+    trigger: { kind: TriggerKind.EveryTime },
+    expiration: null,
+    actions: [
+      {
+        kind: ActionKind.SetSymbolState,
+        key: 'fired',
+        value: { type: StateValueType.Bool, value: true },
+      },
+    ],
+    enabled: true,
+    order: 1,
+  });
+
+/** Run a 1m replay over `count` in-range candles and return how many candle-store reads it made. */
+async function countReadsForRun(count: number): Promise<number> {
+  const inner = new InMemoryCandleRepository();
+  await inner.save(
+    SYMBOL_ID,
+    Period.OneMinute,
+    Array.from({ length: count }, (_, i) => candle(i * MINUTE, 150)),
+  );
+  const counting = new CountingCandleRepository(inner);
+  const replay = buildReplay(counting, [priceMarker()], [Period.OneMinute]);
+  await replay.replay(params(0, count * MINUTE), strategy, profile, [Period.OneMinute]);
+  return counting.reads;
 }
 
 describe('BacktestReplayService replay', () => {
@@ -233,45 +296,13 @@ describe('BacktestReplayService replay', () => {
     );
   });
 
-  it('invokes onStep once per fed candle in completion order with the candle and progress', async () => {
-    const candles = new InMemoryCandleRepository();
-    // Same tie as the ordering test: a 1h bar at t=0 and a 1m bar at t=59m both
-    // complete at t=1h, so onStep must fire finest-first (the 1m before the 1h).
-    await candles.save(SYMBOL_ID, Period.OneHour, [candle(0, 150)]);
-    await candles.save(SYMBOL_ID, Period.OneMinute, [candle(59 * MINUTE, 150)]);
-    const replay = buildReplay(candles, [], [Period.OneHour, Period.OneMinute]);
-    const steps: Array<{ period: Period; time: number; elapsedDays: number; totalDays: number }> =
-      [];
+  it('reads the candle store a fixed number of times regardless of how many candles it replays', async () => {
+    // A short and a long run over the same series both read the store only for
+    // the one-off preload (per period: one range + one below-floor probe) — the
+    // drains issue no per-candle round-trips (ADR-0022).
+    const fewReads = await countReadsForRun(3);
+    const manyReads = await countReadsForRun(60);
 
-    await replay.replay(
-      params(0, HOUR + 1),
-      strategy,
-      profile,
-      [Period.OneHour, Period.OneMinute],
-      {
-        onStep: (step) =>
-          steps.push({
-            period: step.candle.period,
-            time: step.candle.candle.time,
-            elapsedDays: step.progress.elapsedDays,
-            totalDays: step.progress.totalDays,
-          }),
-      },
-    );
-
-    expect(steps).toEqual([
-      {
-        period: Period.OneMinute,
-        time: 59 * MINUTE,
-        elapsedDays: HOUR / 86_400_000,
-        totalDays: (HOUR + 1) / 86_400_000,
-      },
-      {
-        period: Period.OneHour,
-        time: 0,
-        elapsedDays: HOUR / 86_400_000,
-        totalDays: (HOUR + 1) / 86_400_000,
-      },
-    ]);
+    expect({ fewReads, manyReads }).toEqual({ fewReads: 2, manyReads: 2 });
   });
 });

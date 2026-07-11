@@ -26,11 +26,10 @@ import { InMemoryWatchlistRepository } from '../../market/persistence/in-memory-
 import { defaultIndicators } from '../indicators/default-indicators.js';
 import { IndicatorService } from '../indicators/indicator.service.js';
 import { InMemoryRuleRepository } from '../rules/in-memory-rule.repository.js';
-import { BacktestReplayService } from './backtest-replay.service.js';
+import { BacktestReplayService, type IndicatorServiceFactory } from './backtest-replay.service.js';
 
 const SYMBOL_ID = 'crypto:BTCUSDT';
 const PERIOD = Period.OneMinute;
-const MINUTE = 60_000;
 
 /** The one SMA instance every fanned trigger event of the replayed candle reads. */
 const SMA_INSTANCE_ID = 'sma-3-inst';
@@ -150,15 +149,26 @@ function buildRecordingReplay(
   computeCalls: Parameters<IndicatorService['compute']>[];
 } {
   const watchlist = new InMemoryWatchlistRepository([watched]);
-  const realService = new IndicatorService(defaultIndicators(), watchlist, candles);
   const computeCalls: Parameters<IndicatorService['compute']>[] = [];
-  const recordingService: IndicatorService = Object.create(realService);
-  recordingService.compute = (...args: Parameters<IndicatorService['compute']>) => {
-    computeCalls.push(args);
-    return realService.compute(...args);
+  // The replay builds its indicator service over the preloaded window; the
+  // factory wraps that service so a test still observes every `compute`.
+  const factory: IndicatorServiceFactory = (registry, wl, windowed) => {
+    const realService = new IndicatorService(registry, wl, windowed, { onState: () => {} });
+    const recordingService: IndicatorService = Object.create(realService);
+    recordingService.compute = (...args: Parameters<IndicatorService['compute']>) => {
+      computeCalls.push(args);
+      return realService.compute(...args);
+    };
+    return recordingService;
   };
   const ruleRepo = new InMemoryRuleRepository(rules);
-  const replay = new BacktestReplayService(candles, ruleRepo, watchlist, recordingService);
+  const replay = new BacktestReplayService(
+    candles,
+    ruleRepo,
+    watchlist,
+    defaultIndicators(),
+    factory,
+  );
   return { replay, computeCalls };
 }
 

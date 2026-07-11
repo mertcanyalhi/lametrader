@@ -7,8 +7,8 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "start": "node dist/main.js",
-    "start:dev": "tsc-watch --onSuccess \"node dist/main.js\"",
+    "start": "node --max-old-space-size=4096 dist/main.js",
+    "start:dev": "tsc-watch --onSuccess \"node --max-old-space-size=4096 dist/main.js\"",
     "test": "jest --selectProjects unit",
     "test:e2e": "jest --selectProjects e2e --runInBand --forceExit"
   },

@@ -57,7 +57,7 @@ import {
   useBacktestRun,
 } from '../../lib/hooks/use-backtest-run.js';
 import { useConfig } from '../../lib/hooks/use-config.js';
-import { useLoadedBacktest } from '../../lib/hooks/use-loaded-backtest.js';
+import { type LoadedBacktestView, useLoadedBacktest } from '../../lib/hooks/use-loaded-backtest.js';
 import { getLogger } from '../../lib/log.js';
 import { finestFinerPeriod } from '../../lib/periods.js';
 import { useSelectedProfile } from '../../lib/selected-profile-context.js';
@@ -115,12 +115,14 @@ export function BacktestingPage(): ReactNode {
 /**
  * The page's split layout plus its selected-context and run state.
  *
- * The layout owns the run lifecycle: {@link useBacktestRun} streams the active
- * run's frames, the pickers lock while a run is active, and the chart fills from
- * the run's incremental candles. On first load it reattaches to any run already
- * in flight (surviving a navigation away): the running-backtest discovery query
- * seeds `activeRun` once, and the stream's snapshot restores progress + results
- * while REST catches the chart up.
+ * The layout owns the run lifecycle: {@link useBacktestRun} polls the active
+ * run's progress and the pickers lock while a run is active. A live run is
+ * progress-only — the chart and result tabs render from the loaded (completed)
+ * path, so during a run they stay empty and a finished run flips into the loaded
+ * view (see the completion effect below). On first load it reattaches to any run
+ * already in flight (surviving a navigation away): the running-backtest discovery
+ * query seeds `activeRun` once, and polling resumes from the run's current
+ * progress.
  */
 function BacktestingLayout({
   symbols,
@@ -188,7 +190,7 @@ function BacktestingLayout({
     if (hydrated || runningQuery.isPending) return;
     const running = runningQuery.data?.[0];
     if (running) {
-      setActiveRun({ id: running.id, reattach: true });
+      setActiveRun({ id: running.id });
       setActiveBacktest(running);
       setSymbolId(running.params.symbolId);
       setPeriod(running.params.period);
@@ -226,34 +228,38 @@ function BacktestingLayout({
 
   const run = useBacktestRun(activeRun);
   const loadedView = useLoadedBacktest(loaded);
-  // A run and a loaded backtest are mutually exclusive, so at most one view is
-  // ever non-null; the live run takes precedence while it is active.
-  const view = run ?? loadedView;
+  // The chart + result tabs render only from the loaded (completed) path. A live
+  // run is progress-only (`loadedView` is null while it polls), so `view` is null
+  // during a run — the chart shows its placeholder and no results render — and a
+  // finished run flips into the loaded view (see the completion effect below).
+  const view: LoadedBacktestView | null = loadedView;
   const { theme } = useTheme();
   const locked = activeRun !== null || loaded !== null;
-  // The picker's `period` drives the chart, always. A run/loaded view feeds its
-  // live/replayed candles only while the picker sits on the run's own period.
-  // Switch the picker elsewhere and the chart shows that period's stored candles
-  // over the SAME replay window (a run produces data at one period only) — see
-  // `OffPeriodBacktestChart`. This keeps the picker live during a run and leaves
-  // nothing to snap back when the run ends.
+  // The picker's `period` drives the chart, always. A loaded view feeds its
+  // replayed candles only while the picker sits on the run's own period. Switch
+  // the picker elsewhere and the chart shows that period's stored candles over
+  // the SAME window (a run produces data at one period only) — see
+  // `OffPeriodBacktestChart`.
   const onRunPeriod = view !== null && period === view.params.period;
-  // The replay frontier: how far the run has advanced through its window. A live
-  // run reports `elapsedDays`; a loaded (completed) view reports it fully elapsed,
-  // so this is its `end`. Bounds the off-period chart so it never reveals bars
-  // past the cursor.
+  // The replay frontier: how far the run advanced through its window. A loaded
+  // (completed) view reports it fully elapsed, so this is its `end`, and the
+  // off-period chart renders the whole window.
   const frontier = view
     ? Math.min(view.params.end, view.params.start + view.progress.elapsedDays * MS_PER_DAY)
     : 0;
 
-  // When a run finishes, refresh the saved-backtests list so the just-persisted
-  // backtest is there once the page returns to idle.
-  const runCompleted = run?.status === BacktestStatus.Completed;
+  // A finished run flips into the loaded (completed) view: hand the polled
+  // document to the loaded-backtest path, clear the active run, and refresh the
+  // saved-backtests list so the just-persisted backtest is there. The page then
+  // renders the finished run through the normal LoadedRunPanel, whose Close
+  // control returns to idle.
   useEffect(() => {
-    if (runCompleted) {
-      queryClient.invalidateQueries({ queryKey: COMPLETED_BACKTESTS_QUERY_KEY });
-    }
-  }, [runCompleted, queryClient]);
+    if (run?.status !== BacktestStatus.Completed) return;
+    setLoaded(run.backtest);
+    setActiveRun(null);
+    setActiveBacktest(null);
+    queryClient.invalidateQueries({ queryKey: COMPLETED_BACKTESTS_QUERY_KEY });
+  }, [run?.status, run?.backtest, queryClient]);
 
   // Reload a saved backtest into the finished-run view without starting a run:
   // align the (now locked) pickers to its stored symbol / period.
@@ -331,6 +337,7 @@ function BacktestingLayout({
             onRunWindowChange={setRunWindow}
             strategyId={strategyId}
             onStrategyIdChange={setStrategyId}
+            run={run}
             view={view}
             runId={activeRun?.id ?? null}
             activeBacktest={activeBacktest}
@@ -339,7 +346,7 @@ function BacktestingLayout({
             onStarted={(backtest) => {
               setLoaded(null);
               setActiveBacktest(backtest);
-              setActiveRun({ id: backtest.id, reattach: false });
+              setActiveRun({ id: backtest.id });
             }}
             onDismiss={() => {
               setActiveRun(null);
@@ -548,7 +555,7 @@ function LoadedRunPanel({
   onClose,
 }: {
   loaded: Backtest;
-  view: BacktestRunView | null;
+  view: LoadedBacktestView | null;
   onClose: () => void;
 }): ReactNode {
   return (
@@ -711,8 +718,9 @@ function formatThreshold(threshold: BacktestThreshold): string {
  * form). The saved-backtests list now lives in the bottom bar's "Previous runs"
  * modal ({@link PreviousRunsDialog}), not inline here.
  *
- * The results tabs (Summary / Trades / Daily P&L) render from the unified `view`
- * — the live run while it streams, or the reloaded backtest once one is loaded.
+ * The results tabs (Summary / Trades / Daily P&L) render from the loaded `view`
+ * — a reloaded backtest, or the just-finished run once it flips into the loaded
+ * path. A live run is progress-only, so `view` is null while it polls.
  */
 function BacktestPanel({
   symbolId,
@@ -722,6 +730,7 @@ function BacktestPanel({
   onRunWindowChange,
   strategyId,
   onStrategyIdChange,
+  run,
   view,
   runId,
   activeBacktest,
@@ -738,7 +747,10 @@ function BacktestPanel({
   onRunWindowChange: (bounds: RangeBounds) => void;
   strategyId: string | null;
   onStrategyIdChange: (id: string | null) => void;
-  view: BacktestRunView | null;
+  /** The active run's polled progress view, driving the progress bar. */
+  run: BacktestRunView | null;
+  /** The loaded (completed) view, backing the chart + result tabs. */
+  view: LoadedBacktestView | null;
   runId: string | null;
   /** The active run's document, for its metadata while it streams. */
   activeBacktest: Backtest | null;
@@ -790,7 +802,7 @@ function BacktestPanel({
               </section>
             ) : null}
             <section aria-label="Backtest run">
-              <RunProgress run={view} runId={runId} onDismiss={onDismiss} />
+              <RunProgress run={run} runId={runId} onDismiss={onDismiss} />
             </section>
             {view ? <ResultsSection view={view} /> : null}
           </>
@@ -800,8 +812,8 @@ function BacktestPanel({
   );
 }
 
-/** The Summary / Trades / Daily P&L tabs over the unified run view. */
-function ResultsSection({ view }: { view: BacktestRunView }): ReactNode {
+/** The Summary / Trades / Daily P&L tabs over the loaded run view. */
+function ResultsSection({ view }: { view: LoadedBacktestView }): ReactNode {
   return (
     <section aria-label="Backtest results">
       <Heading size="3" mb="2">
@@ -822,7 +834,7 @@ function ResultsSection({ view }: { view: BacktestRunView }): ReactNode {
  */
 function BacktestDocumentTitle({ run }: { run: BacktestRunView }): ReactNode {
   const percent = run.status === BacktestStatus.Completed ? 100 : progressPercent(run);
-  const title = `${run.params.symbolId} ${percent}% ${formatChange(run.summary.totalPnl)} - lametrader`;
+  const title = `${run.backtest.params.symbolId} ${percent}% ${formatChange(run.backtest.summary.totalPnl)} - lametrader`;
   // Capture the pre-run title once (mount) and restore it on unmount — the run
   // component unmounts in place when the run is dismissed, so restoring the last
   // title instead would leave the tab stuck on a finished run's line.

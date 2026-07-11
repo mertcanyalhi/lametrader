@@ -2,8 +2,6 @@
 import {
   type Backtest,
   BacktestExitReason,
-  type BacktestFrame,
-  BacktestFrameKind,
   BacktestStatus,
   type Candle,
   Period,
@@ -15,7 +13,7 @@ import {
 import { Theme } from '@radix-ui/themes';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createElement as h } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -61,20 +59,6 @@ vi.mock('../../src/pages/chart/candle-chart.js', () => ({
 vi.mock('../../src/pages/backtesting/daily-pnl-chart.js', () => ({
   DailyPnlChart: ({ bars }: { bars: unknown[] }) =>
     h('div', { 'data-testid': 'daily-pnl-chart' }, `${bars.length} bars`),
-}));
-
-// The run stream stands in for the per-run WebSocket: capture the frame handler
-// so the test drives the run to completion by pushing snapshot + delta frames.
-const socket = vi.hoisted(() => ({ onFrame: null as null | ((frame: BacktestFrame) => void) }));
-vi.mock('../../src/lib/ws/json-socket.js', () => ({
-  openJsonSocket: (_path: string, handlers: { onFrame: (frame: BacktestFrame) => void }) => {
-    socket.onFrame = handlers.onFrame;
-    return {
-      close: () => {
-        socket.onFrame = null;
-      },
-    };
-  },
 }));
 
 const BTC = {
@@ -157,18 +141,29 @@ function candle(time: number, close: number): Candle {
  * asserts the finished-run view (summary, trades, daily P&L) renders the same,
  * with no run started.
  *
- * Backed by a stateful in-memory fake of the REST API (the completed backtest is
- * persisted when the run's final frame lands, as the server would) plus a
- * controllable stand-in for the per-run stream.
+ * The run publishes no stream (ADR-0022): the run's completion comes from polling
+ * `GET /backtests/:id`, and both the just-finished run and the reloaded one render
+ * through the same loaded path. Backed by a stateful in-memory fake of the REST
+ * API (the completed backtest is persisted when the run finishes, as the server
+ * would).
  */
 describe('backtesting saved-reload flow (e2e)', () => {
   let strategies: Array<Record<string, unknown>>;
   let completed: Backtest[];
+  // The mutable `GET /backtests/:id` poll document, flipped from running to
+  // completed to drive the run to completion.
+  let pollStatus: BacktestStatus;
+  let pollProgress: { elapsedDays: number; totalDays: number };
+  let pollTrades: unknown[];
+  let pollSummary: typeof EMPTY_SUMMARY;
 
   beforeEach(() => {
     strategies = [];
     completed = [];
-    socket.onFrame = null;
+    pollStatus = BacktestStatus.Running;
+    pollProgress = { elapsedDays: 1, totalDays: 2 };
+    pollTrades = [];
+    pollSummary = EMPTY_SUMMARY;
     const fetchSpy = vi.fn(async (url: string, init?: RequestInit) => {
       const method = init?.method ?? 'GET';
       const target = String(url);
@@ -224,6 +219,25 @@ describe('backtesting saved-reload flow (e2e)', () => {
       if (target.includes('/config'))
         return json({ periods: [Period.OneHour], defaultPeriod: Period.OneHour }, 200);
       if (target.includes('/profiles')) return json([ALPHA], 200);
+      // The progress poll: `GET /backtests/:id` (no query, no sub-resource).
+      if (/\/backtests\/[^/?]+$/.test(target)) {
+        return json(
+          {
+            id: 'b-1',
+            name: 'Saved run',
+            status: pollStatus,
+            createdAt: 1,
+            updatedAt: 1,
+            params: PARAMS,
+            strategyId: 's-1',
+            strategy: strategies[0],
+            trades: pollTrades,
+            summary: pollSummary,
+            progress: pollProgress,
+          },
+          200,
+        );
+      }
       throw new Error(`unexpected fetch: ${method} ${target}`);
     });
     globalThis.fetch = fetchSpy as unknown as typeof fetch;
@@ -257,12 +271,6 @@ describe('backtesting saved-reload flow (e2e)', () => {
     );
   }
 
-  function push(frame: BacktestFrame): void {
-    act(() => {
-      socket.onFrame?.(frame);
-    });
-  }
-
   it('runs a backtest, reloads the page, and loads the saved result with the same rendering', async () => {
     const user = userEvent.setup();
     renderPage();
@@ -281,29 +289,18 @@ describe('backtesting saved-reload flow (e2e)', () => {
 
     await waitFor(() => expect(strategies.length).toBe(1));
     await user.click(screen.getByRole('button', { name: 'Run backtest' }));
-    await waitFor(() => expect(socket.onFrame).not.toBeNull());
+    await screen.findByText('Running — 50%');
 
-    // Drive the run to completion; the final frame carries the closed trade.
-    push({
-      kind: BacktestFrameKind.Snapshot,
-      status: BacktestStatus.Running,
-      progress: { elapsedDays: 0, totalDays: 2 },
-      params: PARAMS,
-      trades: [],
-      summary: EMPTY_SUMMARY,
-      events: [],
-    });
-    push({
-      kind: BacktestFrameKind.Delta,
-      status: BacktestStatus.Completed,
-      progress: { elapsedDays: 2, totalDays: 2 },
-      candles: [{ period: Period.OneHour, candle: candle(1_000, 100) }],
-      events: [],
-      trades: [TRADE],
-      summary: FINAL_SUMMARY,
-      openPosition: undefined,
-    });
-    expect(screen.getByText('Run complete')).toBeInTheDocument();
+    // The run finishes: the next poll reports completion, and the page flips into
+    // the loaded view rendering the closed trade.
+    pollStatus = BacktestStatus.Completed;
+    pollProgress = { elapsedDays: 2, totalDays: 2 };
+    pollTrades = [TRADE];
+    pollSummary = FINAL_SUMMARY;
+    const finishedSummary = await screen.findByLabelText('Summary', undefined, { timeout: 10_000 });
+    expect(within(finishedSummary).getByText('Total P/L').previousElementSibling?.textContent).toBe(
+      '+19.00',
+    );
 
     // The server persists the completed backtest; make it reloadable.
     completed = [
@@ -323,7 +320,6 @@ describe('backtesting saved-reload flow (e2e)', () => {
 
     // Reload the page: a fresh mount + empty query cache, as a browser reload.
     cleanup();
-    socket.onFrame = null;
     renderPage();
     await screen.findByRole('button', { name: 'Alpha' });
 

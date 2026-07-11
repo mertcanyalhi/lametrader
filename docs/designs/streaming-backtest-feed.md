@@ -1,6 +1,6 @@
 # Streaming candle feed with a bounded lookback buffer for backtest replay
 
-- Status: proposal (design doc, not an ADR)
+- Status: superseded by ADR-0022 (in-memory preload replaces the sliding-window streaming direction; the run stream was removed) — see issue #565
 - Scope: `BacktestReplayService` and the candle-feed / lookback plumbing it drives
 
 ## Problem

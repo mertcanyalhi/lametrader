@@ -16,7 +16,8 @@
       "skipFiles": ["<node_internals>/**"],
       "env": {
         "LOG_LEVEL": "trace",
-        "LOG_PRETTY": "true"
+        "LOG_PRETTY": "true",
+        "NODE_OPTIONS": "--max-old-space-size=4096"
       }
     }
   ]
