@@ -78,6 +78,7 @@ Computed over **closed trades only**; the open position is reported separately a
 
 - Long-only, one position at a time, all-in compounding with fractional quantity.
 - Entry: while flat, an entry-signal transition buys at the close of the candle whose processing produced the `StateSet`; entry signals while a position is open are ignored.
+- A fill is realized when its bar closes, so `entryTs` / `exitTs` are the bar's **close** instant (`time + periodMillis(period)`), not its open `time`.
 - Entry sizing is cash-constrained including commission: `notional = (equity − fixed) / (1 + rate/100)`, `quantity = notional / entryPrice`.
 - Exit-signal transitions sell the whole position at the producing candle's close.
 - Profit target and stop loss are checked against **every processed candle's** high/low (the finest period naturally triggers first); the fill price is the level itself.

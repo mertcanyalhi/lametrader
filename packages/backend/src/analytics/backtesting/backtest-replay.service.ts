@@ -278,7 +278,11 @@ export class BacktestReplayService implements BacktestReplayPort {
           final: true,
         });
         await wired.drain();
-        executor.processStep(item.candle, stepEvents.splice(0));
+        executor.processStep(
+          item.candle,
+          stepEvents.splice(0),
+          item.candle.time + periodMillis(item.period),
+        );
         hooks.onProgress?.(progressAt(item, params, totalDays));
         // Yield the event loop periodically so a concurrent progress poll is
         // served mid-run (the in-memory replay otherwise only awaits microtasks).

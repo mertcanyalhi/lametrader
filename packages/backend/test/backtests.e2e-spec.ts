@@ -252,8 +252,8 @@ describe('backtests API (e2e)', () => {
       strategyName: 'E2E Breakout',
       trades: [
         {
-          entryTs: START,
-          exitTs: MID,
+          entryTs: START + MINUTE,
+          exitTs: MID + MINUTE,
           entryPrice: LOW_PRICE,
           exitPrice: LOW_PRICE * 1.5,
           quantity: 100,

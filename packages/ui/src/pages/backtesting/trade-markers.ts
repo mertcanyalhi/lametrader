@@ -1,4 +1,9 @@
-import type { BacktestOpenPosition, BacktestTrade } from '@lametrader/core';
+import {
+  type BacktestOpenPosition,
+  type BacktestTrade,
+  type Period,
+  periodMillis,
+} from '@lametrader/core';
 import type { SeriesMarker, Time } from 'lightweight-charts';
 import { formatPrice } from '../../lib/format.js';
 import { Theme } from '../../lib/theme.types.js';
@@ -23,22 +28,30 @@ const { upColor: BUY_COLOR, downColor: SELL_COLOR } = chartColors(Theme.Dark);
  * `@ <fill price>`. The result is sorted ascending by `time`, as the
  * `createSeriesMarkers` plugin requires.
  *
+ * A fill's `entryTs` / `exitTs` is the producing bar's **close** instant, which
+ * equals the *next* bar's open time — so a raw marker snaps one bar late. Each
+ * marker is shifted back by one `period` to the producing bar's open time, where
+ * the chart keys that bar, putting the arrow on the bar the fill happened on.
+ *
  * Times are converted from epoch ms to the chart's second-resolution scale.
  *
  * @param trades - the run's closed trades, in any order.
+ * @param period - the run's period; the bar width the fill instants are shifted back by.
  * @param openPosition - the position still open at the replay's end, if any.
  */
 export function buildTradeMarkers(
   trades: readonly BacktestTrade[],
+  period: Period,
   openPosition?: BacktestOpenPosition,
 ): SeriesMarker<Time>[] {
+  const barMs = periodMillis(period);
   const markers: SeriesMarker<Time>[] = [];
   for (const trade of trades) {
-    markers.push(entryMarker(trade.entryTs, trade.entryPrice));
-    markers.push(exitMarker(trade.exitTs, trade.exitPrice));
+    markers.push(entryMarker(trade.entryTs - barMs, trade.entryPrice));
+    markers.push(exitMarker(trade.exitTs - barMs, trade.exitPrice));
   }
   if (openPosition) {
-    markers.push(entryMarker(openPosition.entryTs, openPosition.entryPrice));
+    markers.push(entryMarker(openPosition.entryTs - barMs, openPosition.entryPrice));
   }
   markers.sort((a, b) => (a.time as number) - (b.time as number));
   return markers;

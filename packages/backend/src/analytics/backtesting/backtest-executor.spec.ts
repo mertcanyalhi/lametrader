@@ -51,6 +51,17 @@ const entrySignal: BacktestSignal = { key: 'long', value: bool(true) };
 /** A strategy over the shared entry signal plus the given exit definition. */
 const strategyWith = (exit: BacktestStrategyExit) => ({ entry: { signal: entrySignal }, exit });
 
+/**
+ * Feed one bar through the executor, stamping its fills at the bar's **close**
+ * instant — its open `time` plus a fixed 100ms bar — so `entryTs` / `exitTs`
+ * assert against the close, not the open `time`.
+ */
+const step = (
+  executor: BacktestExecutor,
+  bar: Candle,
+  events: readonly RuleEventEntry[] = [],
+): void => executor.processStep(bar, events, bar.time + 100);
+
 /** Zero commission — clean sizing. */
 const noCommission: BacktestCommission = {};
 
@@ -61,12 +72,12 @@ describe('BacktestExecutor entry and sizing', () => {
       { initialCapital: 1020, commission: { rate: 2 } },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
 
     expect(executor.result()).toEqual({
       trades: [],
       openPosition: {
-        entryTs: 1000,
+        entryTs: 1100,
         entryPrice: 100,
         quantity: 10,
         entryCommission: 20,
@@ -85,16 +96,13 @@ describe('BacktestExecutor entry and sizing', () => {
       },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(flat(2000, 200), [
-      stateSet('long', bool(false)),
-      stateSet('long', bool(true)),
-    ]);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, flat(2000, 200), [stateSet('long', bool(false)), stateSet('long', bool(true))]);
 
     expect(executor.result()).toEqual({
       trades: [],
       openPosition: {
-        entryTs: 1000,
+        entryTs: 1100,
         entryPrice: 100,
         quantity: 100,
         entryCommission: 0,
@@ -110,15 +118,15 @@ describe('BacktestExecutor entry and sizing', () => {
       { initialCapital: 10_000, commission: noCommission },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(candle(2000, 100, 120, 100, 100), []);
-    executor.processStep(flat(3000, 100), [stateSet('long', bool(true))]);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, candle(2000, 100, 120, 100, 100), []);
+    step(executor, flat(3000, 100), [stateSet('long', bool(true))]);
 
     expect(executor.result()).toEqual({
       trades: [
         {
-          entryTs: 1000,
-          exitTs: 2000,
+          entryTs: 1100,
+          exitTs: 2100,
           entryPrice: 100,
           exitPrice: 110,
           quantity: 100,
@@ -131,8 +139,8 @@ describe('BacktestExecutor entry and sizing', () => {
       summary: summarizeTrades(
         [
           {
-            entryTs: 1000,
-            exitTs: 2000,
+            entryTs: 1100,
+            exitTs: 2100,
             entryPrice: 100,
             exitPrice: 110,
             quantity: 100,
@@ -158,13 +166,13 @@ describe('BacktestExecutor exits', () => {
       },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(flat(2000, 130), [stateSet('short', bool(true))]);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, flat(2000, 130), [stateSet('short', bool(true))]);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 130,
         quantity: 100,
@@ -182,13 +190,13 @@ describe('BacktestExecutor exits', () => {
       { initialCapital: 10_000, commission: noCommission },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(candle(2000, 110, 125, 105, 110), []);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, candle(2000, 110, 125, 105, 110), []);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 120,
         quantity: 100,
@@ -206,13 +214,13 @@ describe('BacktestExecutor exits', () => {
       { initialCapital: 10_000, commission: noCommission },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(candle(2000, 120, 130, 110, 120), []);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, candle(2000, 120, 130, 110, 120), []);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 125,
         quantity: 100,
@@ -230,13 +238,13 @@ describe('BacktestExecutor exits', () => {
       { initialCapital: 10_000, commission: noCommission },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(candle(2000, 100, 100, 75, 100), []);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, candle(2000, 100, 100, 75, 100), []);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 80,
         quantity: 100,
@@ -254,13 +262,13 @@ describe('BacktestExecutor exits', () => {
       { initialCapital: 10_000, commission: noCommission },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(candle(2000, 100, 100, 85, 100), []);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, candle(2000, 100, 100, 85, 100), []);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 90,
         quantity: 100,
@@ -278,13 +286,13 @@ describe('BacktestExecutor exits', () => {
       { initialCapital: 10_000, commission: noCommission },
     );
 
-    executor.processStep(candle(1000, 100, 100, 50, 100), [stateSet('long', bool(true))]);
-    executor.processStep(candle(2000, 100, 100, 90, 100), []);
+    step(executor, candle(1000, 100, 100, 50, 100), [stateSet('long', bool(true))]);
+    step(executor, candle(2000, 100, 100, 90, 100), []);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 95,
         quantity: 100,
@@ -305,13 +313,13 @@ describe('BacktestExecutor exits', () => {
       { initialCapital: 10_000, commission: noCommission },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(candle(2000, 100, 120, 80, 100), []);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, candle(2000, 100, 120, 80, 100), []);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 90,
         quantity: 100,
@@ -334,13 +342,13 @@ describe('BacktestExecutor commissions and lifecycle', () => {
       },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(flat(2000, 200), [stateSet('short', bool(true))]);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, flat(2000, 200), [stateSet('short', bool(true))]);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 200,
         quantity: 10,
@@ -361,15 +369,12 @@ describe('BacktestExecutor commissions and lifecycle', () => {
       },
     );
 
-    executor.processStep(flat(1000, 100), [
-      stateSet('long', bool(true)),
-      stateSet('short', bool(true)),
-    ]);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true)), stateSet('short', bool(true))]);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 1000,
+        entryTs: 1100,
+        exitTs: 1100,
         entryPrice: 100,
         exitPrice: 100,
         quantity: 10,
@@ -390,13 +395,13 @@ describe('BacktestExecutor commissions and lifecycle', () => {
       },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(flat(2000, 150), []);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, flat(2000, 150), []);
 
     expect(executor.result()).toEqual({
       trades: [],
       openPosition: {
-        entryTs: 1000,
+        entryTs: 1100,
         entryPrice: 100,
         quantity: 100,
         entryCommission: 0,
@@ -412,18 +417,15 @@ describe('BacktestExecutor commissions and lifecycle', () => {
       { initialCapital: 10_000, commission: noCommission },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(candle(2000, 100, 250, 100, 100), []);
-    executor.processStep(flat(3000, 100), [
-      stateSet('long', bool(false)),
-      stateSet('long', bool(true)),
-    ]);
-    executor.processStep(candle(4000, 100, 250, 100, 100), []);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, candle(2000, 100, 250, 100, 100), []);
+    step(executor, flat(3000, 100), [stateSet('long', bool(false)), stateSet('long', bool(true))]);
+    step(executor, candle(4000, 100, 250, 100, 100), []);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 200,
         quantity: 100,
@@ -433,8 +435,8 @@ describe('BacktestExecutor commissions and lifecycle', () => {
         exitReason: BacktestExitReason.ProfitTarget,
       },
       {
-        entryTs: 3000,
-        exitTs: 4000,
+        entryTs: 3100,
+        exitTs: 4100,
         entryPrice: 100,
         exitPrice: 200,
         quantity: 200,

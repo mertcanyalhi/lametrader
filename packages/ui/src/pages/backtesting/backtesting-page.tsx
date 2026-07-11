@@ -293,7 +293,7 @@ function BacktestingLayout({
   // state overlays — sourced from the run frames while live, or the persisted
   // document plus its windowed events once a saved backtest is loaded.
   const tradeMarkers = useMemo(
-    () => (view ? buildTradeMarkers(view.trades, view.openPosition) : []),
+    () => (view ? buildTradeMarkers(view.trades, view.params.period, view.openPosition) : []),
     [view],
   );
   const runStateOverlays = useMemo(
