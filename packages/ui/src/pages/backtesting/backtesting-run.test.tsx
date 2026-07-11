@@ -276,6 +276,25 @@ describe('BacktestingPage run flow', () => {
     });
   });
 
+  it('shows "Backtest in progress" in the chart region while a run polls, not the idle placeholder', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: 'Alpha' });
+
+    await selectStrategyAndRun(user);
+    await screen.findByText('Running — 50%');
+
+    expect({
+      inProgress: screen.getByRole('heading', { name: 'Backtest in progress' }) !== null,
+      idlePlaceholderGone: screen.queryByText('No backtest yet') === null,
+      cancel: screen.getByRole('button', { name: 'Cancel run' }) !== null,
+    }).toEqual({
+      inProgress: true,
+      idlePlaceholderGone: true,
+      cancel: true,
+    });
+  });
+
   it("shows the started run's metadata (strategy, window, run time) while it polls", async () => {
     const user = userEvent.setup();
     renderPage();

@@ -270,6 +270,13 @@ function BacktestingLayout({
     setPeriod(backtest.params.period);
   }
 
+  // Cancel / dismiss the active run and return the page to idle — shared by the
+  // in-progress chart panel's Cancel control.
+  function dismissRun(): void {
+    setActiveRun(null);
+    setActiveBacktest(null);
+  }
+
   const selected = symbols.find((symbol) => symbol.id === symbolId) ?? null;
   const watchedPeriods = selected?.periods ?? [];
 
@@ -324,6 +331,8 @@ function BacktestingLayout({
               eventMarkers={tradeMarkers}
               stateOverlays={showRuleEvents ? runStateOverlays : []}
             />
+          ) : activeRun !== null ? (
+            <RunInProgress run={run} runId={activeRun.id} onDismiss={dismissRun} />
           ) : (
             <ChartPlaceholder />
           )}
@@ -337,7 +346,6 @@ function BacktestingLayout({
             onRunWindowChange={setRunWindow}
             strategyId={strategyId}
             onStrategyIdChange={setStrategyId}
-            run={run}
             view={view}
             runId={activeRun?.id ?? null}
             activeBacktest={activeBacktest}
@@ -347,10 +355,6 @@ function BacktestingLayout({
               setLoaded(null);
               setActiveBacktest(backtest);
               setActiveRun({ id: backtest.id });
-            }}
-            onDismiss={() => {
-              setActiveRun(null);
-              setActiveBacktest(null);
             }}
             onCloseLoaded={() => setLoaded(null)}
           />
@@ -730,14 +734,12 @@ function BacktestPanel({
   onRunWindowChange,
   strategyId,
   onStrategyIdChange,
-  run,
   view,
   runId,
   activeBacktest,
   loaded,
   locked,
   onStarted,
-  onDismiss,
   onCloseLoaded,
 }: {
   symbolId: string;
@@ -747,18 +749,15 @@ function BacktestPanel({
   onRunWindowChange: (bounds: RangeBounds) => void;
   strategyId: string | null;
   onStrategyIdChange: (id: string | null) => void;
-  /** The active run's polled progress view, driving the progress bar. */
-  run: BacktestRunView | null;
   /** The loaded (completed) view, backing the chart + result tabs. */
   view: LoadedBacktestView | null;
   runId: string | null;
-  /** The active run's document, for its metadata while it streams. */
+  /** The active run's document, for its metadata while it runs. */
   activeBacktest: Backtest | null;
   loaded: Backtest | null;
   /** A run is active (or a saved backtest is loaded); strategy actions lock. */
   locked: boolean;
   onStarted: (backtest: Backtest) => void;
-  onDismiss: () => void;
   onCloseLoaded: () => void;
 }): ReactNode {
   if (loaded !== null) {
@@ -795,15 +794,13 @@ function BacktestPanel({
         ) : (
           <>
             <Heading size="3">Active run</Heading>
-            {/* A run's own details, mirroring the saved-run view. */}
+            {/* A run's own details, mirroring the saved-run view. The progress bar
+                and Cancel control live in the chart region ({@link RunInProgress}). */}
             {activeBacktest ? (
               <section aria-label="Run details">
                 <RunMetaList backtest={activeBacktest} />
               </section>
             ) : null}
-            <section aria-label="Backtest run">
-              <RunProgress run={run} runId={runId} onDismiss={onDismiss} />
-            </section>
             {view ? <ResultsSection view={view} /> : null}
           </>
         )}
@@ -907,6 +904,34 @@ function RunProgress({
         </Button>
       )}
     </Flex>
+  );
+}
+
+/**
+ * The chart region while a run is in flight: a "Backtest in progress" heading
+ * with the run's progress bar and Cancel control (moved here from the right
+ * panel), so the trader watches progress in the main area rather than beside it.
+ * A live run is progress-only — the chart itself renders only once the run
+ * completes and flips into the loaded view.
+ */
+function RunInProgress({
+  run,
+  runId,
+  onDismiss,
+}: {
+  run: BacktestRunView | null;
+  runId: string;
+  onDismiss: () => void;
+}): ReactNode {
+  return (
+    <Card className="h-full">
+      <Flex direction="column" justify="center" align="start" gap="4" className="h-full" p="6">
+        <Heading size="4">Backtest in progress</Heading>
+        <div className="w-full max-w-md">
+          <RunProgress run={run} runId={runId} onDismiss={onDismiss} />
+        </div>
+      </Flex>
+    </Card>
   );
 }
 
