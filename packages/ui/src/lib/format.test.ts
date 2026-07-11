@@ -149,6 +149,20 @@ describe('formatDuration', () => {
       daysHours: '2d 2h',
     });
   });
+
+  it("keeps second granularity when finest is 'second'", () => {
+    expect({
+      subSecond: formatDuration(500, 'second'),
+      seconds: formatDuration(30_000, 'second'),
+      minuteSeconds: formatDuration(5 * 60_000 + 3_000, 'second'),
+      hourMinutes: formatDuration(80 * 60_000, 'second'),
+    }).toEqual({
+      subSecond: '<1s',
+      seconds: '30s',
+      minuteSeconds: '5m 3s',
+      hourMinutes: '1h 20m',
+    });
+  });
 });
 
 describe('formatTimestamp', () => {

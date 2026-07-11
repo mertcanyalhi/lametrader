@@ -224,9 +224,9 @@ describe('BacktestingPage run flow', () => {
       status: pollStatus,
       createdAt: 1,
       updatedAt: 1,
-      // A finished run carries an immutable completedAt; here 5 minutes after
-      // createdAt, so the details' Duration reads "5m".
-      ...(pollStatus === BacktestStatus.Completed ? { completedAt: 1 + 5 * 60_000 } : {}),
+      // A finished run carries an immutable completedAt; here 5m 3s after
+      // createdAt, so the details' duration reads "5m 3s".
+      ...(pollStatus === BacktestStatus.Completed ? { completedAt: 1 + 5 * 60_000 + 3_000 } : {}),
       params: PARAMS,
       strategyId: 's-1',
       strategy: STRATEGY,
@@ -364,7 +364,7 @@ describe('BacktestingPage run flow', () => {
     expect(within(screen.getByLabelText('Trades')).getByText('Profit target')).toBeInTheDocument();
   });
 
-  it('shows "Completed at" and the run Duration in the details once the run finishes', async () => {
+  it('shows "Completed at" with the timestamp and run duration once the run finishes', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole('button', { name: 'Alpha' });
@@ -379,12 +379,12 @@ describe('BacktestingPage run flow', () => {
 
     await screen.findByLabelText('Summary', undefined, { timeout: 5_000 });
     expect({
-      completedAt: screen.getByText('Completed at') !== null,
-      duration: screen.getByText('5m') !== null,
-    }).toEqual({ completedAt: true, duration: true });
+      label: screen.getByText('Completed at') !== null,
+      value: screen.getByText('1970-01-01 00:05 (5m 3s)') !== null,
+    }).toEqual({ label: true, value: true });
   });
 
-  it('omits "Completed at" and Duration while the run is still running', async () => {
+  it('omits the "Completed at" row while the run is still running', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole('button', { name: 'Alpha' });
@@ -392,10 +392,7 @@ describe('BacktestingPage run flow', () => {
     await selectStrategyAndRun(user);
     await screen.findByText('50%');
 
-    expect({
-      completedAt: screen.queryByText('Completed at'),
-      duration: screen.queryByText('Duration'),
-    }).toEqual({ completedAt: null, duration: null });
+    expect(screen.queryByText('Completed at')).toEqual(null);
   });
 
   it('cancels a running run, discarding it and returning to idle', async () => {

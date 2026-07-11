@@ -103,21 +103,26 @@ const DURATION_UNITS = [
   { key: 'days', suffix: 'd' },
   { key: 'hours', suffix: 'h' },
   { key: 'minutes', suffix: 'm' },
+  { key: 'seconds', suffix: 's' },
 ] as const;
 
 /**
- * Format an elapsed span (in ms) as compact human-readable text for the Trades
- * table's Duration column and the "Avg period in trade" summary metric — e.g.
- * `48m`, `1h 20m`, `2d 2h`. The two most-significant non-zero units are shown
- * (broken out by date-fns' `intervalToDuration`), so a holding period reads at a
- * glance without a trailing tail of smaller units. Sub-minute noise is dropped
- * (backtest spans are candle-aligned to the minute); anything under a minute
- * renders as `"<1m"`.
+ * Format an elapsed span (in ms) as compact human-readable text — e.g. `48m`,
+ * `1h 20m`, `2d 2h`. The two most-significant non-zero units are shown (broken
+ * out by date-fns' `intervalToDuration`), so a span reads at a glance without a
+ * trailing tail of smaller units.
+ *
+ * `finest` sets the smallest unit kept. The default `'minute'` drops sub-minute
+ * noise (holding periods are candle-aligned to the minute) — anything under a
+ * minute renders `"<1m"`. `'second'` keeps second granularity for a run's
+ * wall-clock duration (e.g. `5m 3s`, `30s`) — anything under a second renders
+ * `"<1s"`.
  */
-export function formatDuration(ms: number): string {
-  const minutes = Math.floor(ms / 60_000);
-  if (minutes <= 0) return '<1m';
-  const duration = intervalToDuration({ start: 0, end: minutes * 60_000 });
+export function formatDuration(ms: number, finest: 'minute' | 'second' = 'minute'): string {
+  const step = finest === 'second' ? 1000 : 60_000;
+  const count = Math.floor(ms / step);
+  if (count <= 0) return finest === 'second' ? '<1s' : '<1m';
+  const duration = intervalToDuration({ start: 0, end: count * step });
   return DURATION_UNITS.filter(({ key }) => (duration[key] ?? 0) > 0)
     .slice(0, 2)
     .map(({ key, suffix }) => `${duration[key]}${suffix}`)

@@ -632,18 +632,13 @@ function RunMetaList({ backtest }: { backtest: Backtest }): ReactNode {
           <DataList.Value>{utcMinute(backtest.createdAt)}</DataList.Value>
         </DataList.Item>
         {backtest.completedAt !== undefined ? (
-          <>
-            <DataList.Item>
-              <DataList.Label>Completed at</DataList.Label>
-              <DataList.Value>{utcMinute(backtest.completedAt)}</DataList.Value>
-            </DataList.Item>
-            <DataList.Item>
-              <DataList.Label>Duration</DataList.Label>
-              <DataList.Value>
-                {formatDuration(backtest.completedAt - backtest.createdAt)}
-              </DataList.Value>
-            </DataList.Item>
-          </>
+          <DataList.Item>
+            <DataList.Label>Completed at</DataList.Label>
+            <DataList.Value>
+              {utcMinute(backtest.completedAt)} (
+              {formatDuration(backtest.completedAt - backtest.createdAt, 'second')})
+            </DataList.Value>
+          </DataList.Item>
         ) : null}
       </DataList.Root>
       <StrategyViewDialog

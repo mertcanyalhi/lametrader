@@ -16,6 +16,10 @@ displayed duration stays correct for the life of the saved run.
   `updatedAt`.
 - The Mongoose repository round-trips `completedAt`, dropping the key when absent (matching
   the `openPosition` pattern), so pre-existing documents without it read back cleanly.
-- The run-details list renders a "Completed at" row (the `completedAt` timestamp) and a
-  "Duration" row (`completedAt − createdAt` via `formatDuration`) whenever `completedAt` is
-  present, and omits both rows when it is absent.
+- The run-details list renders a single "Completed at" row reading
+  `${timestamp} (${duration})` — the `completedAt` instant and the run's wall-clock duration
+  (`completedAt − createdAt` via `formatDuration`) — whenever `completedAt` is present, and
+  omits the row when it is absent.
+- `formatDuration` gains an opt-in `finest: 'second'` mode (e.g. `5m 3s`, `30s`, `<1s`) that
+  the run duration uses; the default `'minute'` mode is unchanged, so the Trades table and
+  "Avg period in trade" metric keep dropping sub-minute noise.
