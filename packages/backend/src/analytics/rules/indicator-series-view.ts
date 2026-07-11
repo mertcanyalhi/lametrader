@@ -193,6 +193,10 @@ export class PagedIndicatorSeriesView implements SeriesView {
  * The rules engine projects numeric indicator fields (SMA, VWMA value, …); a
  * future bool/enum field would extend this match. Returns `null` for `null`
  * (warm-up) and for shapes not yet projected (e.g. an enum `signal` string).
+ *
+ * The bool/enum extension — and the matching `latest`-side fallback that
+ * `resolveLatest` still lacks (its `prev` counterpart is `getPrevIndicator`) —
+ * is tracked in #562.
  */
 function toStateValue(raw: unknown): StateValue | null {
   if (typeof raw === 'number' && Number.isFinite(raw)) {

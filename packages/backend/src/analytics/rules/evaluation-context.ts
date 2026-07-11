@@ -57,6 +57,10 @@ export interface EvaluationContextDeps {
    * (Bool / Enum state-keys aren't projected into the in-memory series store).
    * When the key IS numeric, the context derives `prev` from the second-newest
    * point on `indicatorStore.series` instead.
+   *
+   * Note the asymmetry: there is no `latest`-side counterpart yet, so a
+   * non-numeric `IndicatorRef` resolves `prev` here but always resolves
+   * `latest` to `null` (#562).
    */
   getPrevIndicator?(instanceId: string, stateKey: string): StateValue | null;
   /**
