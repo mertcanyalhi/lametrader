@@ -168,6 +168,12 @@ export interface Backtest {
   createdAt: number;
   /** Last-update time, epoch milliseconds. */
   updatedAt: number;
+  /**
+   * Completion time, epoch milliseconds — stamped once when the run flips
+   * `Running → Completed` and never changed afterward (a later rename bumps
+   * `updatedAt`, not this). Absent while the run is still `Running`.
+   */
+  completedAt?: number;
   /** The immutable run inputs. */
   params: BacktestParams;
   /** The source strategy's id (may no longer resolve). */

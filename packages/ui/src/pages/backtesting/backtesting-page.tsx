@@ -42,7 +42,7 @@ import {
   setStoredBacktestSymbolId,
   setStoredBacktestWindow,
 } from '../../lib/backtest-selection.js';
-import { formatChange, formatPrice } from '../../lib/format.js';
+import { formatChange, formatDuration, formatPrice } from '../../lib/format.js';
 import { useBacktestStrategies } from '../../lib/hooks/backtest-strategies.js';
 import {
   COMPLETED_BACKTESTS_QUERY_KEY,
@@ -631,6 +631,20 @@ function RunMetaList({ backtest }: { backtest: Backtest }): ReactNode {
           <DataList.Label>Ran at</DataList.Label>
           <DataList.Value>{utcMinute(backtest.createdAt)}</DataList.Value>
         </DataList.Item>
+        {backtest.completedAt !== undefined ? (
+          <>
+            <DataList.Item>
+              <DataList.Label>Completed at</DataList.Label>
+              <DataList.Value>{utcMinute(backtest.completedAt)}</DataList.Value>
+            </DataList.Item>
+            <DataList.Item>
+              <DataList.Label>Duration</DataList.Label>
+              <DataList.Value>
+                {formatDuration(backtest.completedAt - backtest.createdAt)}
+              </DataList.Value>
+            </DataList.Item>
+          </>
+        ) : null}
       </DataList.Root>
       <StrategyViewDialog
         strategy={backtest.strategy}

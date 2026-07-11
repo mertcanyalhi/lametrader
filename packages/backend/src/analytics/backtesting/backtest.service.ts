@@ -299,10 +299,12 @@ export class BacktestService {
         this.clearActive(active);
         return;
       }
+      const finishedAt = this.now();
       const completed: Backtest = {
         ...active.backtest,
         status: BacktestStatus.Completed,
-        updatedAt: this.now(),
+        updatedAt: finishedAt,
+        completedAt: finishedAt,
         trades: result.trades,
         ...(result.openPosition === undefined ? {} : { openPosition: result.openPosition }),
         summary: result.summary,

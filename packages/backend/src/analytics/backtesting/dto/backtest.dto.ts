@@ -129,6 +129,10 @@ export class BacktestDto {
   @ApiProperty()
   updatedAt!: number;
 
+  /** Completion time, epoch milliseconds — present only once the run has completed. */
+  @ApiPropertyOptional()
+  completedAt?: number;
+
   /** The immutable run inputs. */
   @ApiProperty({ type: BacktestParamsDto })
   params!: BacktestParamsDto;

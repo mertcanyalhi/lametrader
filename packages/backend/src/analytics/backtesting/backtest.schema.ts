@@ -41,6 +41,10 @@ export class BacktestDoc {
   @Prop({ type: Number, required: true })
   updatedAt!: number;
 
+  /** Completion time, epoch milliseconds — stamped once at completion. */
+  @Prop({ type: Number, required: false })
+  completedAt?: number;
+
   /** The immutable run inputs. `Mixed` — nested params + commission. */
   @Prop({ type: MongooseSchema.Types.Mixed, required: true })
   params!: BacktestParams;
