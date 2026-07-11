@@ -1,0 +1,12 @@
+# Code owners for lametrader.
+#
+# An owner listed here is auto-requested for review on matching paths, and — with
+# "Require review from Code Owners" enabled on the `main` ruleset — an owner's
+# approval is required before a matching PR can merge.
+#
+# GitHub constraint: a PR's author can never approve their own PR, code owner or
+# not, and no setting changes that. To let an owner merge their own PRs without a
+# second reviewer, add them to the ruleset's Bypass list — not via "self-approval".
+
+# Default owner for everything in the repo.
+* @mertcanyalhi

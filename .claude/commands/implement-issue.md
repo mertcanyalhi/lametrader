@@ -1,5 +1,5 @@
 ---
-description: Work a set of issues end-to-end via a workflow — one at a time, /implement → verify → PR → poll CI → merge.
+description: Work a set of issues end-to-end via a workflow — one at a time, /implement (opens the PR) → verify → poll CI → squash-merge.
 argument-hint: <parent-issue-number> | <issue-number>...
 ---
 
@@ -17,8 +17,7 @@ The `#` prefix is optional in either form.
 
 ## Reference
 
-- `/implement` — the per-issue work skill (TDD ceremony, spec → red → green → refactor → e2e → gate).
-- `/ship` — the per-change commit gate (`check:full` + DoD + one conventional commit).
+- `/implement` — the per-issue work skill: the TDD ceremony (spec → red → green → refactor → e2e → gate) **plus** the whole commit-to-PR lifecycle — granular green commits, the draft PR, subscribe, and the ready-for-review flip at the gate. It opens the single PR; don't re-open one around it. Its `--no-merge` flag leaves the actual merge to this orchestrator.
 - `/interview` — relentless clarification, one question at a time.
 
 ## Process
@@ -41,23 +40,19 @@ Each iteration spawns one `agent(...)` with `agentType: 'claude'` (full-tool age
 Self-contained brief — every agent gets the same instructions, parameterised by issue number:
 
 1. **Read the issue.** Full body, comments, acceptance criteria.
-2. **Branch.** Create / check out the branch named in the issue's "Git Development Branch Requirements" section if present; otherwise `<type>/<kebab-summary>` per `CLAUDE.md`.
-3. **Implement.** Invoke `/implement` with the issue's task. Lazy ladder per the skill's own rules.
-4. **Verify the acceptance criteria.** Re-read the issue and walk every `[ ]` bullet. If any criterion isn't met, fix it before moving on. Do not check items off in the issue — that's the merge's job.
-5. **Ship.** Invoke `/ship` to gate (`check:full`) and commit on the branch.
-6. **Push** the branch (`git push -u origin <branch>`).
-7. **Open the PR** with `mcp__github__create_pull_request`. Title: `<type>: <short summary> (closes #N)`. Body summarises what shipped + how it satisfies each acceptance criterion.
-8. **Subscribe** to PR activity (`mcp__github__subscribe_pr_activity`) so CI failures wake the agent.
-9. **Poll CI** every 60 seconds via `mcp__github__pull_request_read` (status checks). Continue while pending; stop on success or terminal failure.
-10. **On green:** merge with `mcp__github__merge_pull_request` (squash). Return `{ issueNumber, prNumber, merged: true }`.
-11. **On red:** investigate the failing check, push a fix, re-poll. After **3** unsuccessful fix rounds, return `{ issueNumber, prNumber, merged: false, reason: "<diagnosis>" }` and let the loop move on.
+2. **Branch.** If the issue's "Git Development Branch Requirements" section names a branch, create / check it out first; otherwise let `/implement` apply `<type>/<kebab-summary>` per `CLAUDE.md`.
+3. **Implement + open the PR.** Invoke `/implement <the issue's task> --no-merge`. `/implement` runs the full ceremony and owns the commit-to-PR lifecycle — granular green commits, the draft PR, subscribe, and the ready-for-review flip at the gate. `--no-merge` suppresses its merge prompt (a workflow can't stop to ask) and leaves the actual merge to this orchestrator, which controls when the next issue starts. `/implement` opens the PR titled `<type>: <short summary>`; once it returns, make sure the PR closes the issue — if its body doesn't already say `closes #N`, add it via `mcp__github__update_pull_request`. Do not ship, push, or open a second PR yourself — `/implement` already did.
+4. **Verify the acceptance criteria.** Re-read the issue and walk every `[ ]` bullet. If any criterion isn't met, fix it on the branch (commit + push) before moving on. Do not check items off in the issue — that's the merge's job.
+5. **Poll CI** every 60 seconds via `mcp__github__pull_request_read` (status checks). Continue while pending; stop on success or terminal failure.
+6. **On green:** squash-merge with `mcp__github__merge_pull_request`. Return `{ issueNumber, prNumber, merged: true }`.
+7. **On red:** investigate the failing check, push a fix, re-poll. After **3** unsuccessful fix rounds, return `{ issueNumber, prNumber, merged: false, reason: "<diagnosis>" }` and let the loop move on.
 
 ### 4. Hard rules every per-issue agent inherits
 
 - **No guessing.** If the issue has an ambiguous acceptance criterion, a missing decision, or a design call that two reasonable readers would split on, **stop and invoke `/interview`** to surface the question to the human. Do not pick a plausible interpretation and proceed.
 - **No `--no-verify`**, no skipping hooks, no destructive git operations.
 - **No spec-skipping.** `/implement` runs the full spec ceremony; do not fall back to `/implement-lazy` unless the issue explicitly says fast-track.
-- **One issue = one branch = one PR.** Never reuse a branch across issues.
+- **One issue = one branch = one PR.** `/implement` opens that single PR; never open a second around it, and never reuse a branch across issues.
 - **Pass any shared parent context verbatim** in every agent's prompt — that's the architectural baseline they don't have time to re-derive.
 
 ### 5. Return value
