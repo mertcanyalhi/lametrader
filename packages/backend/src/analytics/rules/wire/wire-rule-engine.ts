@@ -7,6 +7,7 @@ import {
   type GlobalStateChangedEvent,
   type IndicatorStateEvent,
   type Notifier,
+  periodMillis,
   type RuleEvent,
   type RuleEventEntry,
   RuleEventType,
@@ -105,6 +106,17 @@ export interface WiredRuleEngine {
 export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEngine> {
   const lookups = new LiveEvaluationLookups(deps.state);
   await warmLookupsFromPersistedState(lookups, deps);
+
+  // Finest watched period per symbol (as `periodMillis`), the gate for which
+  // candle mints a tick (below). Seeded from the watchlist at wire-up — which
+  // completes before the poll loop starts — so a symbol's finest period is
+  // known *before* its first candle is observed, not learned from whichever
+  // period happens to poll first.
+  const finestWatchedMs = new Map<string, number>();
+  for (const symbol of await deps.watchlist.list()) {
+    if (symbol.periods.length === 0) continue;
+    finestWatchedMs.set(symbol.id, Math.min(...symbol.periods.map(periodMillis)));
+  }
   const actions = new ActionRunner(deps.state, deps.notifier, lookups);
   const dispatcher = new TriggerDispatcher({
     rules: deps.rules,
@@ -212,6 +224,23 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
   // candle's bar-lifecycle events, so per-tick triggers (Once / EveryTime /
   // OncePerBar) evaluate on every poll and a `BarOpened` clears its OncePerBar
   // latch before the tick that may re-fire it.
+  //
+  // A symbol has one current price, best represented by its finest-granularity
+  // poll. So only the finest period a symbol is polled at mints a tick; a
+  // coarser period's poll (same current price, coarser cadence, a bar-start ts)
+  // contributes its bar-lifecycle events but no tick, avoiding redundant per-
+  // tick fires with a stale ts on multi-period symbols.
+  //
+  // The finest period comes from `finestWatchedMs` (seeded from the watchlist
+  // above), and self-corrects downward from the candles actually fed: a candle
+  // proves its period is watched, so a period added at runtime (below the
+  // seeded finest) is picked up the moment its first candle arrives.
+  //
+  // ponytail: removing a symbol's finest watched period mid-run starves its
+  // ticks until restart — the map only ratchets down, never up, with no
+  // watchlist-change signal to reset it. Upgrade path: reset the entry on a
+  // watchlist edit if live period-removal ever needs to take effect without a
+  // restart.
   const barBatch: EvaluationTriggerEvent[] = [];
   const barBridge = new BarLifecycleBridge((event) => barBatch.push(event));
   const rawHandleCandle = barBridge.handleCandle.bind(barBridge);
@@ -219,18 +248,25 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
   wrappedBarBridge.handleCandle = (candle: CandleEvent): void => {
     barBatch.length = 0;
     rawHandleCandle(candle);
-    const tick: TickEvent = {
-      kind: EvaluationTriggerKind.Tick,
-      ts: candle.candle.time,
-      symbolId: candle.id,
-      price: candle.candle.close,
-    };
+    const thisMs = periodMillis(candle.period);
+    const seeded = finestWatchedMs.get(candle.id);
+    const finestMs = seeded === undefined ? thisMs : Math.min(seeded, thisMs);
+    finestWatchedMs.set(candle.id, finestMs);
+    const events: EvaluationTriggerEvent[] = [...barBatch];
+    if (thisMs === finestMs) {
+      events.push({
+        kind: EvaluationTriggerKind.Tick,
+        ts: candle.candle.time,
+        symbolId: candle.id,
+        price: candle.candle.close,
+      } satisfies TickEvent);
+    }
     serializer.enqueue({
       symbolId: candle.id,
       record: () => {
         lookups.recordCandle(candle);
       },
-      events: [...barBatch, tick],
+      events,
     });
   };
 

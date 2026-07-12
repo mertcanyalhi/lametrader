@@ -171,10 +171,12 @@ async function countReadsForRun(count: number): Promise<number> {
 }
 
 describe('BacktestReplayService replay', () => {
-  it('feeds all active periods in completion order, ties finest-period-first (recorded event order)', async () => {
+  it('feeds all active periods in completion order but ticks only the finest, so a coarser bar completing on the same boundary does not re-fire an EveryTime rule', async () => {
     const candles = new InMemoryCandleRepository();
-    // A 1h bar at t=0 and a 1m bar at t=59m both complete at t=1h — a tie the
-    // feed must break finest-first, so the 1m fire is recorded before the 1h.
+    // A 1h bar at t=0 and a 1m bar at t=59m both complete at t=1h. The finest
+    // observed period (1m) mints the tick; the 1h bar feeds its bar-lifecycle
+    // events but no tick, mirroring live — so the EveryTime rule fires once,
+    // from the 1m tick, not once per period.
     await candles.save(SYMBOL_ID, Period.OneHour, [candle(0, 150)]);
     await candles.save(SYMBOL_ID, Period.OneMinute, [candle(59 * MINUTE, 150)]);
     const everyTick = rule({
@@ -212,7 +214,7 @@ describe('BacktestReplayService replay', () => {
     const stateSetTs = result.events
       .filter((e) => e.type === RuleEventType.StateSet)
       .map((e) => e.ts);
-    expect(stateSetTs).toEqual([59 * MINUTE, 0]);
+    expect(stateSetTs).toEqual([59 * MINUTE]);
   });
 
   it('records a NotificationSent event without delivering it', async () => {
