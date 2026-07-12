@@ -224,14 +224,16 @@ export class FormingBarSeriesView implements SeriesView {
   }
 
   /**
-   * Latest point with `ts <= queryTs`. The forming bar's `ts` is its window
-   * open (`<= queryTs`), so when the window has fine candles it qualifies and
-   * wins; otherwise the closed tail answers.
+   * Latest point with `ts <= queryTs`, consistent with {@link backwardWalk}:
+   * the only synthesized point is the current window's forming bar (`ts` = its
+   * window open). It answers when it exists and `queryTs` reaches it; otherwise
+   * — including any `queryTs` in an earlier, already-closed window — the closed
+   * tail answers, so a resample in the past returns the closed bar `backwardWalk`
+   * would yield, never a partial roll-up of a bygone window.
    */
   async asOf(queryTs: number): Promise<SeriesPoint | null> {
-    const cap = Math.min(queryTs, this.before - 1);
-    const forming = await this.formingAt(cap);
-    if (forming.value !== null) {
+    const forming = await this.formingAt(this.before - 1);
+    if (forming.value !== null && queryTs >= forming.windowStart) {
       return {
         ts: forming.windowStart,
         value: { type: StateValueType.Number, value: forming.value },

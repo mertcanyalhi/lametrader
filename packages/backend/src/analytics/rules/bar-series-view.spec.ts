@@ -260,4 +260,23 @@ describe('FormingBarSeriesView', () => {
       asOf: { ts: 0, value: num(5) },
     });
   });
+
+  it('resamples a past, already-closed window to its closed bar — never a partial roll-up — so asOf agrees with backwardWalk', async () => {
+    const repo = new InMemoryCandleRepository();
+    await repo.save(SYMBOL, Period.OneHour, [candle(0, 5)]); // closed hour-0 bar
+    await repo.save(SYMBOL, Period.OneMinute, [candle(HOUR, 100), candle(HOUR + MIN, 200)]); // forming hour 1
+    const view = new FormingBarSeriesView(
+      repo,
+      SYMBOL,
+      Period.OneHour,
+      Period.OneMinute,
+      'close',
+      HOUR + MIN + 1,
+    );
+
+    // 30m sits in the closed hour-0 window; backwardWalk yields the hour-0 bar
+    // (ts=0) at/below it, so asOf(30m) must return that same closed bar, not the
+    // hour-1 forming roll-up and not null.
+    expect(await view.asOf(30 * MIN)).toEqual({ ts: 0, value: num(5) });
+  });
 });
