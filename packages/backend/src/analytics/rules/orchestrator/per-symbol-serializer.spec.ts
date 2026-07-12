@@ -1,5 +1,6 @@
 import { type EvaluationTriggerEvent, EvaluationTriggerKind } from '@lametrader/core';
 
+import { _resetLogRoot, _resetLogScopes } from '../engine-log.js';
 import { createPerSymbolSerializer } from './per-symbol-serializer.js';
 
 /** Build a Tick event on `symbolId` for the serializer's keying test. */
@@ -26,6 +27,41 @@ function microtask(): Promise<void> {
 }
 
 describe('createPerSymbolSerializer', () => {
+  afterEach(() => {
+    _resetLogRoot();
+    _resetLogScopes([]);
+  });
+
+  it('logs an unhandled process error and keeps the symbol chain alive for the next event', async () => {
+    const records: Record<string, unknown>[] = [];
+    _resetLogRoot({
+      write: (line) => {
+        records.push(JSON.parse(line));
+      },
+    });
+    const processed: string[] = [];
+    const serializer = createPerSymbolSerializer<EvaluationTriggerEvent>(async (event) => {
+      if (event.ts === 1) throw new Error('boom');
+      processed.push(`${event.symbolId}@${event.ts}`);
+    });
+
+    serializer.enqueue(tick('AAPL', 1)); // throws
+    serializer.enqueue(tick('AAPL', 2)); // must still run
+    await serializer.drain();
+
+    const logged = records
+      .filter((r) => r.scope === 'engine.rules.serializer')
+      .map((r) => ({
+        msg: r.msg,
+        symbolId: r.symbolId,
+        errMessage: (r.err as { message: string }).message,
+      }));
+    expect({ processed, logged }).toEqual({
+      processed: ['AAPL@2'],
+      logged: [{ msg: 'per_symbol_process_unhandled', symbolId: 'AAPL', errMessage: 'boom' }],
+    });
+  });
+
   it('runs successive events for the same symbol sequentially while symbol-less events share one global chain, and drain() resolves once every chain settles', async () => {
     const observed: string[] = [];
     const release: Array<() => void> = [];

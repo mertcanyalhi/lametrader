@@ -1,3 +1,10 @@
+import { getLogger } from '../engine-log.js';
+
+/**
+ * Scope-bound logger for the per-symbol serializer, under `engine.rules.*`.
+ */
+const log = getLogger('engine.rules.serializer');
+
 /**
  * An event with an optional `symbolId` — the discriminator the per-symbol
  * serializer keys on.
@@ -39,9 +46,14 @@ export function createPerSymbolSerializer<E extends KeyedEvent>(
     const prev = chains.get(key) ?? Promise.resolve();
     const next = prev
       .then(() => process(event))
-      .catch(() => {
-        // Defense in depth — keep the chain resolvable so the next event for
-        // the same symbol still runs if `process` somehow throws.
+      .catch((err) => {
+        // `process` is contracted to handle its own errors, so reaching here is
+        // unexpected — log it. Defense in depth: swallow it anyway to keep the
+        // chain resolvable so the next event for `key` still runs.
+        log.error(
+          { err: { message: err instanceof Error ? err.message : String(err) }, symbolId: key },
+          'per_symbol_process_unhandled',
+        );
       });
     chains.set(key, next);
     void next.finally(() => {
