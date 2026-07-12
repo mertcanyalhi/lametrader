@@ -99,6 +99,13 @@ export function runBacktestRepositoryContract(
     expect(await repo.get('b1')).toEqual(backtest('b1'));
   });
 
+  it('save then get round-trips completedAt when present', async () => {
+    const repo = await make();
+    const completed: Backtest = { ...backtest('b1'), completedAt: 3000 };
+    await repo.save(completed);
+    expect(await repo.get('b1')).toEqual(completed);
+  });
+
   it('save then get round-trips an open position when present', async () => {
     const repo = await make();
     await repo.save(backtest('b1', 'b1', true));

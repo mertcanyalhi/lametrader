@@ -96,3 +96,51 @@ export function presetRange(preset: PresetRange, now: number): RangeBounds {
   const span = TRAILING_SPAN_MS[preset] ?? 0;
   return { from: now - span, to: now };
 }
+
+/**
+ * A local `Date` whose wall-clock fields mirror the **UTC** fields of `ms`.
+ *
+ * `react-date-range` only speaks local-time `Date`s, but the window bounds are
+ * stored and displayed in UTC. Feeding the calendar this shifted `Date` makes it
+ * render (and let the user pick) the UTC calendar day, not the browser's local
+ * one — so picking July 1 in UTC+3 no longer stores June 30. Pair with
+ * {@link pickerDateToUtcMs} on the way back out; the two round-trip to the second.
+ */
+export function utcMsToPickerDate(ms: number): Date {
+  const d = new Date(ms);
+  return new Date(
+    d.getUTCFullYear(),
+    d.getUTCMonth(),
+    d.getUTCDate(),
+    d.getUTCHours(),
+    d.getUTCMinutes(),
+    d.getUTCSeconds(),
+  );
+}
+
+/** Inverse of {@link utcMsToPickerDate}: read a picker `Date`'s local fields as a UTC epoch. */
+export function pickerDateToUtcMs(date: Date): number {
+  return Date.UTC(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    date.getHours(),
+    date.getMinutes(),
+    date.getSeconds(),
+  );
+}
+
+/**
+ * The end of the UTC day *containing* `ms` (its last whole second, `23:59:59`),
+ * capped at `now` — so a window whose end day is today stops at the present instant
+ * rather than running to a future end-of-day. Used for a run window's `to` so the
+ * range covers the *whole* selected end day, not just its opening midnight.
+ *
+ * Floors `ms` to its UTC midnight first, so re-applying an already-end-of-day value
+ * is idempotent (it doesn't drift forward a day each time the picker reopens).
+ */
+export function endOfUtcDay(ms: number, now: number): number {
+  const d = new Date(ms);
+  const dayStart = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  return Math.min(dayStart + MS_PER_DAY - 1000, now);
+}

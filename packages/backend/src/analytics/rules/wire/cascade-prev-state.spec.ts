@@ -84,13 +84,13 @@ describe('cascadePrevLookups', () => {
       kind: EvaluationTriggerKind.BarOpened,
       ts: 1_000,
       symbolId: 'AAPL',
-      period: Period.M1,
+      period: Period.OneMinute,
     });
     const barClosed = cascadePrevLookups({
       kind: EvaluationTriggerKind.BarClosed,
       ts: 1_000,
       symbolId: 'AAPL',
-      period: Period.M1,
+      period: Period.OneMinute,
     });
     const timer = cascadePrevLookups({
       kind: EvaluationTriggerKind.Timer,
@@ -146,7 +146,7 @@ describe('wireRuleEngine cascade ChangesTo / ChangesFrom (regression #433)', () 
     eventLog = new InMemoryEventLog(() => 0);
     state = new InMemoryStateRepository();
     watchlist = new InMemoryWatchlistRepository();
-    await watchlist.add({ id: 'AAPL', periods: [Period.M1] });
+    await watchlist.add({ id: 'AAPL', periods: [Period.OneMinute] });
     notifier = new InMemoryNotifier(['main']);
     candles = new InMemoryCandleRepository();
     indicatorStore = new IndicatorSeriesStore();

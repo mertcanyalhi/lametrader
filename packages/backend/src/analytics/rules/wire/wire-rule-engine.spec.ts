@@ -120,6 +120,168 @@ describe('wireRuleEngine', () => {
     });
   });
 
+  it('does not synthesize a tick for a coarser-period candle once the symbol has a finer observed period, so an EveryTime rule fires only on the finest period', async () => {
+    // A symbol is polled at both 1m and 1d. The tick — the current price — is
+    // the finest available data, so only the 1m candle mints a tick; the 1d
+    // poll (same current price, coarser cadence, bar-start ts) contributes its
+    // bar-lifecycle events but no tick. An EveryTime rule (tick-cadence) must
+    // therefore fire once, from the 1m tick, not twice.
+    const ruleId = 'r-finest';
+    await rules.save({
+      id: ruleId,
+      profileId: 'profile-1',
+      name: 'price > 100 every time',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'AAPL' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.Comparison,
+          operator: ComparisonOperator.Gt,
+          left: { kind: OperandKind.Price },
+          right: {
+            kind: OperandKind.Literal,
+            value: { type: StateValueType.Number, value: 100 },
+          },
+        },
+      },
+      trigger: { kind: TriggerKind.EveryTime },
+      expiration: null,
+      actions: [
+        {
+          kind: ActionKind.SetSymbolState,
+          key: 'hit',
+          value: { type: StateValueType.Bool, value: true },
+        },
+      ],
+      enabled: true,
+      order: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    });
+
+    const wired = await wireRuleEngine({
+      rules,
+      oncePerBarLatch: new InMemoryOncePerBarLatchStore(),
+      state,
+      watchlist,
+      eventLog,
+      notifier,
+      candleRepository: candles,
+      indicatorStore,
+    });
+
+    // Arrange: a 1m candle establishes 1m as the finest observed period (and
+    // fires the rule once from its tick).
+    wired.barBridge.handleCandle({
+      id: 'AAPL',
+      period: Period.OneMinute,
+      candle: { time: 60_000, open: 101, high: 101, low: 101, close: 101, volume: 10 },
+      final: false,
+    });
+    await wired.drain();
+
+    // Act: a 1d candle for the same symbol — coarser than the observed 1m.
+    wired.barBridge.handleCandle({
+      id: 'AAPL',
+      period: Period.OneDay,
+      candle: { time: 0, open: 102, high: 102, low: 102, close: 102, volume: 10 },
+      final: false,
+    });
+    await wired.drain();
+
+    // Only the 1m tick fired the rule; the 1d poll minted no tick.
+    const fires = (await eventLog.ruleEvents(ruleId)).filter((e) => e.type === RuleEventType.Fired);
+    expect(fires).toEqual([
+      {
+        type: RuleEventType.Fired,
+        ts: 60_000,
+        firedAt: 0,
+        ruleId,
+        symbolId: 'AAPL',
+        context: {
+          inboundEvent: {
+            kind: EvaluationTriggerKind.Tick,
+            ts: 60_000,
+            symbolId: 'AAPL',
+            price: 101,
+          },
+          lookupSnapshot: {
+            current: 101,
+            open: null,
+            high: null,
+            low: null,
+            close: null,
+            volume: null,
+          },
+        },
+      },
+    ]);
+  });
+
+  it('does not synthesize a tick for a coarser-period candle that arrives before any finer candle, because the finest watched period is seeded from the watchlist at wire-up', async () => {
+    // The reported bug: at startup nothing has been observed yet, so a coarse
+    // period polling first (before the finer period's first candle) would mint
+    // a tick. Seeding the finest watched period from the watchlist prevents it:
+    // MULTI is watched at [1m, 1d], so a 1d candle arriving first mints no tick.
+    await watchlist.add({ id: 'MULTI', periods: [Period.OneMinute, Period.OneDay] });
+    const ruleId = 'r-seed';
+    await rules.save({
+      id: ruleId,
+      profileId: 'profile-1',
+      name: 'price > 100 every time',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: 'MULTI' },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.Comparison,
+          operator: ComparisonOperator.Gt,
+          left: { kind: OperandKind.Price },
+          right: {
+            kind: OperandKind.Literal,
+            value: { type: StateValueType.Number, value: 100 },
+          },
+        },
+      },
+      trigger: { kind: TriggerKind.EveryTime },
+      expiration: null,
+      actions: [
+        {
+          kind: ActionKind.SetSymbolState,
+          key: 'hit',
+          value: { type: StateValueType.Bool, value: true },
+        },
+      ],
+      enabled: true,
+      order: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    });
+
+    const wired = await wireRuleEngine({
+      rules,
+      oncePerBarLatch: new InMemoryOncePerBarLatchStore(),
+      state,
+      watchlist,
+      eventLog,
+      notifier,
+      candleRepository: candles,
+      indicatorStore,
+    });
+
+    // A 1d candle is the very first candle observed for MULTI.
+    wired.barBridge.handleCandle({
+      id: 'MULTI',
+      period: Period.OneDay,
+      candle: { time: 0, open: 150, high: 150, low: 150, close: 150, volume: 10 },
+      final: false,
+    });
+    await wired.drain();
+
+    // The coarse candle minted no tick, so the EveryTime rule never fired.
+    expect(await eventLog.ruleEvents(ruleId)).toEqual([]);
+    expect(await state.getSymbolState('profile-1', 'MULTI', 'hit')).toBeNull();
+  });
+
   it('logs the error and appends an Error rule-event entry on the symbol log when the orchestrator throws (regression #431)', async () => {
     const captured: string[] = [];
     const sink = {

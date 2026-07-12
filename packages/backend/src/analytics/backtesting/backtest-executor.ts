@@ -129,13 +129,14 @@ export class BacktestExecutor {
    *
    * @param candle - the candle just processed, in completion order.
    * @param events - the symbol-scoped run events this candle produced, in emission order.
+   * @param closeTime - the candle's close instant (`time + periodMillis(period)`), epoch ms — a fill is realized when the bar closes, so entries/exits are stamped with it rather than the bar's open `time`.
    */
-  processStep(candle: Candle, events: readonly RuleEventEntry[]): void {
+  processStep(candle: Candle, events: readonly RuleEventEntry[], closeTime: number): void {
     this.lastClose = candle.close;
     if (this.position !== null) {
       const level = this.levelExit(candle, this.position);
       if (level !== null) {
-        this.closePosition(candle.time, level.price, level.reason);
+        this.closePosition(closeTime, level.price, level.reason);
       }
     }
     for (const event of events) {
@@ -150,10 +151,10 @@ export class BacktestExecutor {
           this.exit.signal !== undefined &&
           signalMatches(this.exit.signal, event.key, event.value)
         ) {
-          this.closePosition(candle.time, candle.close, BacktestExitReason.Signal);
+          this.closePosition(closeTime, candle.close, BacktestExitReason.Signal);
         }
       } else if (signalMatches(this.entrySignal, event.key, event.value)) {
-        this.openPosition(candle.time, candle.close);
+        this.openPosition(closeTime, candle.close);
       }
     }
   }
@@ -251,6 +252,13 @@ export class BacktestExecutor {
     });
     this.equity += pnl;
     this.position = null;
+    // Re-arm edge detection for the next round trip. A level exit (stop-loss /
+    // profit-target) closes without any state key changing, so without this the
+    // entry key stays stuck at its entry value and a still-active entry signal
+    // never re-fires; symmetrically a persistent exit signal would be stuck for
+    // the next position. Clearing on close makes both the re-entry and the next
+    // exit trigger on the first observation while their gate is relevant again.
+    this.lastValues.clear();
   }
 
   /**

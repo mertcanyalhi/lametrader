@@ -7,6 +7,8 @@ import {
   type GlobalStateChangedEvent,
   type IndicatorStateEvent,
   type Notifier,
+  type Period,
+  periodMillis,
   type RuleEvent,
   type RuleEventEntry,
   RuleEventType,
@@ -17,12 +19,16 @@ import {
   type TickEvent,
   type WatchlistRepository,
 } from '@lametrader/core';
-import { type BarAxis, FallbackSeriesView } from '../bar-series-view.js';
+import { type BarAxis, FallbackSeriesView, FormingBarSeriesView } from '../bar-series-view.js';
 import { BarLifecycleBridge, IndicatorCascadeBridge } from '../bridges/index.js';
 import { TriggerDispatcher } from '../dispatch/dispatcher.js';
 import type { OncePerBarLatchStore } from '../dispatch/once-per-bar-latch.types.js';
 import { getLogger } from '../engine-log.js';
-import { buildBarSeriesPagers, buildEvaluationContext } from '../evaluation-context.js';
+import {
+  barSeriesKey,
+  buildBarSeriesPagers,
+  buildEvaluationContext,
+} from '../evaluation-context.js';
 import { createIndicatorComputeCache } from '../indicator-compute-cache.js';
 import type { IndicatorSeriesStore } from '../indicator-series-store.js';
 import { ActionRunner } from '../orchestrator/action-runner.js';
@@ -65,6 +71,14 @@ export interface RuleEngineDeps {
   candleRepository: CandleRepository;
   /** In-memory indicator series store; shared with the indicator service. */
   indicatorStore: IndicatorSeriesStore;
+  /**
+   * Backtest-only opt-in: synthesize a **forming** bar for each coarse period
+   * from the finest observed finer period, so a coarse-period operand tracks
+   * intrabar instead of reading the last closed bar (see
+   * {@link import('../bar-series-view.js').FormingBarSeriesView}). Off (live
+   * semantics: coarse bars appear only on close) unless the replay sets it.
+   */
+  formIntrabarCoarseBars?: boolean;
 }
 
 /**
@@ -105,6 +119,17 @@ export interface WiredRuleEngine {
 export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEngine> {
   const lookups = new LiveEvaluationLookups(deps.state);
   await warmLookupsFromPersistedState(lookups, deps);
+
+  // Finest watched period per symbol (as `periodMillis`), the gate for which
+  // candle mints a tick (below). Seeded from the watchlist at wire-up — which
+  // completes before the poll loop starts — so a symbol's finest period is
+  // known *before* its first candle is observed, not learned from whichever
+  // period happens to poll first.
+  const finestWatchedMs = new Map<string, number>();
+  for (const symbol of await deps.watchlist.list()) {
+    if (symbol.periods.length === 0) continue;
+    finestWatchedMs.set(symbol.id, Math.min(...symbol.periods.map(periodMillis)));
+  }
   const actions = new ActionRunner(deps.state, deps.notifier, lookups);
   const dispatcher = new TriggerDispatcher({
     rules: deps.rules,
@@ -136,6 +161,7 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
         firingSymbolId,
         event.ts,
         lookups,
+        deps.formIntrabarCoarseBars ?? false,
       );
       return buildEvaluationContext({
         symbolId: firingSymbolId,
@@ -211,6 +237,23 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
   // candle's bar-lifecycle events, so per-tick triggers (Once / EveryTime /
   // OncePerBar) evaluate on every poll and a `BarOpened` clears its OncePerBar
   // latch before the tick that may re-fire it.
+  //
+  // A symbol has one current price, best represented by its finest-granularity
+  // poll. So only the finest period a symbol is polled at mints a tick; a
+  // coarser period's poll (same current price, coarser cadence, a bar-start ts)
+  // contributes its bar-lifecycle events but no tick, avoiding redundant per-
+  // tick fires with a stale ts on multi-period symbols.
+  //
+  // The finest period comes from `finestWatchedMs` (seeded from the watchlist
+  // above), and self-corrects downward from the candles actually fed: a candle
+  // proves its period is watched, so a period added at runtime (below the
+  // seeded finest) is picked up the moment its first candle arrives.
+  //
+  // ponytail: removing a symbol's finest watched period mid-run starves its
+  // ticks until restart — the map only ratchets down, never up, with no
+  // watchlist-change signal to reset it. Upgrade path: reset the entry on a
+  // watchlist edit if live period-removal ever needs to take effect without a
+  // restart.
   const barBatch: EvaluationTriggerEvent[] = [];
   const barBridge = new BarLifecycleBridge((event) => barBatch.push(event));
   const rawHandleCandle = barBridge.handleCandle.bind(barBridge);
@@ -218,18 +261,25 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
   wrappedBarBridge.handleCandle = (candle: CandleEvent): void => {
     barBatch.length = 0;
     rawHandleCandle(candle);
-    const tick: TickEvent = {
-      kind: EvaluationTriggerKind.Tick,
-      ts: candle.candle.time,
-      symbolId: candle.id,
-      price: candle.candle.close,
-    };
+    const thisMs = periodMillis(candle.period);
+    const seeded = finestWatchedMs.get(candle.id);
+    const finestMs = seeded === undefined ? thisMs : Math.min(seeded, thisMs);
+    finestWatchedMs.set(candle.id, finestMs);
+    const events: EvaluationTriggerEvent[] = [...barBatch];
+    if (thisMs === finestMs) {
+      events.push({
+        kind: EvaluationTriggerKind.Tick,
+        ts: candle.candle.time,
+        symbolId: candle.id,
+        price: candle.candle.close,
+      } satisfies TickEvent);
+    }
     serializer.enqueue({
       symbolId: candle.id,
       record: () => {
         lookups.recordCandle(candle);
       },
-      events: [...barBatch, tick],
+      events,
     });
   };
 
@@ -324,14 +374,37 @@ function buildLiveBarSeries(
   symbolId: string,
   upperTs: number,
   lookups: LiveEvaluationLookups,
+  formIntrabarCoarseBars = false,
 ): ReadonlyMap<string, SeriesView> {
   const mirror = lookups.bookSeriesFor(symbolId);
   const merged = new Map<string, SeriesView>(mirror);
-  const required = lookups
-    .observedPeriods(symbolId)
-    .flatMap((period) => BAR_AXES.map((axis) => ({ period, axis })));
+  const observed = lookups.observedPeriods(symbolId);
+  const required = observed.flatMap((period) => BAR_AXES.map((axis) => ({ period, axis })));
   const pagers = buildBarSeriesPagers(candleRepository, symbolId, upperTs + 1, required);
-  for (const [key, pager] of pagers) {
+  // The finest observed period feeds every coarser period's forming bar (only
+  // when the caller opted in; live keeps close-only coarse bars).
+  const finest = observed.reduce<Period | undefined>(
+    (a, b) => (a === undefined || periodMillis(b) < periodMillis(a) ? b : a),
+    undefined,
+  );
+  for (const { period, axis } of required) {
+    const key = barSeriesKey(period, axis);
+    const pager = pagers.get(key);
+    if (pager === undefined) continue;
+    // A coarse period with a strictly finer observed period gets a forming bar
+    // synthesized from that finer period; its own PagedBarSeriesView serves the
+    // closed tail internally, so the plain pager is superseded here.
+    if (
+      formIntrabarCoarseBars &&
+      finest !== undefined &&
+      periodMillis(period) > periodMillis(finest)
+    ) {
+      merged.set(
+        key,
+        new FormingBarSeriesView(candleRepository, symbolId, period, finest, axis, upperTs + 1),
+      );
+      continue;
+    }
     const fallback = mirror.get(key);
     merged.set(key, fallback ? new FallbackSeriesView(pager, fallback) : pager);
   }

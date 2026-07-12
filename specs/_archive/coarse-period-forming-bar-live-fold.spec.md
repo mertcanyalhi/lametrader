@@ -1,3 +1,5 @@
+> **Archived.** The live-chart-during-run behaviour this spec described was removed when backtesting moved to an in-memory replay with a poll-for-result UI (ADR-0022, issue #565). Kept for history.
+
 # Live forming bar of a coarser charted period folds finer stream frames
 
 When the charted period is coarser than the finest streaming period, the forming

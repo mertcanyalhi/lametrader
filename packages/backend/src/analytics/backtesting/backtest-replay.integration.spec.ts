@@ -1,3 +1,4 @@
+import type { CandleRepository } from '@lametrader/core';
 import {
   ActionKind,
   type BacktestParams,
@@ -24,9 +25,32 @@ import {
 import { InMemoryCandleRepository } from '../../market/persistence/in-memory-candle.repository.js';
 import { InMemoryWatchlistRepository } from '../../market/persistence/in-memory-watchlist.repository.js';
 import { defaultIndicators } from '../indicators/default-indicators.js';
-import { IndicatorService } from '../indicators/indicator.service.js';
 import { InMemoryRuleRepository } from '../rules/in-memory-rule.repository.js';
 import { BacktestReplayService } from './backtest-replay.service.js';
+
+/** A {@link CandleRepository} decorator counting every candle-store read. */
+class CountingCandleRepository implements CandleRepository {
+  reads = 0;
+  constructor(private readonly inner: CandleRepository) {}
+  range(symbolId: string, period: Period, from: number, to: number, limit?: number) {
+    this.reads += 1;
+    return this.inner.range(symbolId, period, from, to, limit);
+  }
+  latestN(symbolId: string, period: Period, n: number, before?: number) {
+    this.reads += 1;
+    return this.inner.latestN(symbolId, period, n, before);
+  }
+  latest(symbolId: string, period: Period) {
+    this.reads += 1;
+    return this.inner.latest(symbolId, period);
+  }
+  save(symbolId: string, period: Period, candles: Candle[]) {
+    return this.inner.save(symbolId, period, candles);
+  }
+  deleteSymbol(symbolId: string) {
+    return this.inner.deleteSymbol(symbolId);
+  }
+}
 
 const SYMBOL_ID = 'crypto:BTCUSDT';
 const MINUTE = 60_000;
@@ -97,21 +121,62 @@ const strategy: BacktestStrategy = {
   updatedAt: 0,
 };
 
-/** Build a replay over in-memory stores; the indicator service is unused by these rules. */
-function buildReplay(candles: InMemoryCandleRepository, rules: Rule[], periods: Period[]) {
+/** Build a replay over in-memory stores; the indicator registry is unused by these rules. */
+function buildReplay(candles: CandleRepository, rules: Rule[], periods: Period[]) {
   const watchlist = new InMemoryWatchlistRepository([watched(periods)]);
-  const indicators = new IndicatorService(defaultIndicators(), watchlist, candles, {
-    onState: () => {},
-  });
   const ruleRepo = new InMemoryRuleRepository(rules);
-  return new BacktestReplayService(candles, ruleRepo, watchlist, indicators);
+  return new BacktestReplayService(candles, ruleRepo, watchlist, defaultIndicators());
+}
+
+/** A `Price > 100` rule firing every candle — its evaluation pages the bar series. */
+const priceMarker = (): Rule =>
+  rule({
+    profileId: 'prof-1',
+    name: 'price marker',
+    scope: { kind: RuleScopeKind.Symbol, symbolId: SYMBOL_ID },
+    condition: {
+      kind: ConditionNodeKind.Leaf,
+      leaf: {
+        family: LeafConditionFamily.Comparison,
+        operator: ComparisonOperator.Gt,
+        left: { kind: OperandKind.Price },
+        right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 100 } },
+      },
+    },
+    trigger: { kind: TriggerKind.EveryTime },
+    expiration: null,
+    actions: [
+      {
+        kind: ActionKind.SetSymbolState,
+        key: 'fired',
+        value: { type: StateValueType.Bool, value: true },
+      },
+    ],
+    enabled: true,
+    order: 1,
+  });
+
+/** Run a 1m replay over `count` in-range candles and return how many candle-store reads it made. */
+async function countReadsForRun(count: number): Promise<number> {
+  const inner = new InMemoryCandleRepository();
+  await inner.save(
+    SYMBOL_ID,
+    Period.OneMinute,
+    Array.from({ length: count }, (_, i) => candle(i * MINUTE, 150)),
+  );
+  const counting = new CountingCandleRepository(inner);
+  const replay = buildReplay(counting, [priceMarker()], [Period.OneMinute]);
+  await replay.replay(params(0, count * MINUTE), strategy, profile, [Period.OneMinute]);
+  return counting.reads;
 }
 
 describe('BacktestReplayService replay', () => {
-  it('feeds all active periods in completion order, ties finest-period-first (recorded event order)', async () => {
+  it('feeds all active periods in completion order but ticks only the finest, so a coarser bar completing on the same boundary does not re-fire an EveryTime rule', async () => {
     const candles = new InMemoryCandleRepository();
-    // A 1h bar at t=0 and a 1m bar at t=59m both complete at t=1h — a tie the
-    // feed must break finest-first, so the 1m fire is recorded before the 1h.
+    // A 1h bar at t=0 and a 1m bar at t=59m both complete at t=1h. The finest
+    // observed period (1m) mints the tick; the 1h bar feeds its bar-lifecycle
+    // events but no tick, mirroring live — so the EveryTime rule fires once,
+    // from the 1m tick, not once per period.
     await candles.save(SYMBOL_ID, Period.OneHour, [candle(0, 150)]);
     await candles.save(SYMBOL_ID, Period.OneMinute, [candle(59 * MINUTE, 150)]);
     const everyTick = rule({
@@ -149,7 +214,57 @@ describe('BacktestReplayService replay', () => {
     const stateSetTs = result.events
       .filter((e) => e.type === RuleEventType.StateSet)
       .map((e) => e.ts);
-    expect(stateSetTs).toEqual([59 * MINUTE, 0]);
+    expect(stateSetTs).toEqual([59 * MINUTE]);
+  });
+
+  it('fires a coarse-period rule intrabar from the forming bar rolled up from the finer candles seen so far', async () => {
+    const candles = new InMemoryCandleRepository();
+    // Hour 0 closes at 100 (below the threshold). Hour 1 has no closed 1h bar
+    // yet; its two 1m candles rise from 100 to 200. A rule on the 1h Close vs 150
+    // must fire on the 1m tick at which the forming hour's close first crosses
+    // 150 — intrabar — not wait for the hour to close.
+    await candles.save(SYMBOL_ID, Period.OneHour, [candle(0, 100)]);
+    await candles.save(SYMBOL_ID, Period.OneMinute, [
+      candle(60 * MINUTE, 100),
+      candle(61 * MINUTE, 200),
+    ]);
+    const closeAboveHour = rule({
+      profileId: 'prof-1',
+      name: 'hourly close breakout',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: SYMBOL_ID },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.Comparison,
+          operator: ComparisonOperator.Gt,
+          left: { kind: OperandKind.Close },
+          right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 150 } },
+          interval: Period.OneHour,
+        },
+      },
+      trigger: { kind: TriggerKind.EveryTime },
+      expiration: null,
+      actions: [
+        {
+          kind: ActionKind.SetSymbolState,
+          key: 'broke',
+          value: { type: StateValueType.Bool, value: true },
+        },
+      ],
+      enabled: true,
+      order: 1,
+    });
+    const replay = buildReplay(candles, [closeAboveHour], [Period.OneHour, Period.OneMinute]);
+
+    const result = await replay.replay(params(0, 2 * HOUR), strategy, profile, [
+      Period.OneHour,
+      Period.OneMinute,
+    ]);
+
+    const stateSetTs = result.events
+      .filter((e) => e.type === RuleEventType.StateSet)
+      .map((e) => e.ts);
+    expect(stateSetTs).toEqual([61 * MINUTE]);
   });
 
   it('records a NotificationSent event without delivering it', async () => {
@@ -233,45 +348,41 @@ describe('BacktestReplayService replay', () => {
     );
   });
 
-  it('invokes onStep once per fed candle in completion order with the candle and progress', async () => {
-    const candles = new InMemoryCandleRepository();
-    // Same tie as the ordering test: a 1h bar at t=0 and a 1m bar at t=59m both
-    // complete at t=1h, so onStep must fire finest-first (the 1m before the 1h).
-    await candles.save(SYMBOL_ID, Period.OneHour, [candle(0, 150)]);
-    await candles.save(SYMBOL_ID, Period.OneMinute, [candle(59 * MINUTE, 150)]);
-    const replay = buildReplay(candles, [], [Period.OneHour, Period.OneMinute]);
-    const steps: Array<{ period: Period; time: number; elapsedDays: number; totalDays: number }> =
-      [];
+  it('reads the candle store a fixed number of times regardless of how many candles it replays', async () => {
+    // A short and a long run over the same series both read the store only for
+    // the one-off preload (per period: one range + one below-floor probe) — the
+    // drains issue no per-candle round-trips (ADR-0022).
+    const fewReads = await countReadsForRun(3);
+    const manyReads = await countReadsForRun(60);
 
-    await replay.replay(
-      params(0, HOUR + 1),
-      strategy,
-      profile,
-      [Period.OneHour, Period.OneMinute],
-      {
-        onStep: (step) =>
-          steps.push({
-            period: step.candle.period,
-            time: step.candle.candle.time,
-            elapsedDays: step.progress.elapsedDays,
-            totalDays: step.progress.totalDays,
-          }),
-      },
+    expect({ fewReads, manyReads }).toEqual({ fewReads: 2, manyReads: 2 });
+  });
+
+  it('yields the event loop during the replay so a concurrent poll runs before it finishes', async () => {
+    // The in-memory replay only awaits microtasks, so without a periodic yield it
+    // blocks the loop end-to-end and a concurrent `GET /backtests/:id` progress
+    // read cannot run until the run completes (progress jumps 0 → 100). A feed
+    // longer than the yield interval must let a macrotask scheduled alongside it
+    // run while the replay is still in flight.
+    const inner = new InMemoryCandleRepository();
+    await inner.save(
+      SYMBOL_ID,
+      Period.OneMinute,
+      Array.from({ length: 201 }, (_, i) => candle(i * MINUTE, 150)),
     );
+    const replay = buildReplay(inner, [priceMarker()], [Period.OneMinute]);
+    let done = false;
+    const run = replay
+      .replay(params(0, 201 * MINUTE), strategy, profile, [Period.OneMinute])
+      .then(() => {
+        done = true;
+      });
 
-    expect(steps).toEqual([
-      {
-        period: Period.OneMinute,
-        time: 59 * MINUTE,
-        elapsedDays: HOUR / 86_400_000,
-        totalDays: (HOUR + 1) / 86_400_000,
-      },
-      {
-        period: Period.OneHour,
-        time: 0,
-        elapsedDays: HOUR / 86_400_000,
-        totalDays: (HOUR + 1) / 86_400_000,
-      },
-    ]);
+    const interleavedMidRun = await new Promise<boolean>((resolve) => {
+      setImmediate(() => resolve(!done));
+    });
+    await run;
+
+    expect(interleavedMidRun).toEqual(true);
   });
 });

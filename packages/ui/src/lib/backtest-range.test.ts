@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { BacktestRange, presetRange, RANGE_OPTIONS } from './backtest-range.js';
+import {
+  BacktestRange,
+  endOfUtcDay,
+  pickerDateToUtcMs,
+  presetRange,
+  RANGE_OPTIONS,
+  utcMsToPickerDate,
+} from './backtest-range.js';
 
 /** Milliseconds in one day. */
 const MS_PER_DAY = 86_400_000;
@@ -93,5 +100,42 @@ describe('presetRange', () => {
       from: NOW - 365 * MS_PER_DAY,
       to: NOW,
     });
+  });
+});
+
+describe('UTC ↔ picker-date conversion', () => {
+  it('mirrors a UTC epoch as the picker Date local calendar day (timezone-independent)', () => {
+    const date = utcMsToPickerDate(Date.UTC(2024, 6, 1, 13, 45, 30));
+    expect({
+      year: date.getFullYear(),
+      month: date.getMonth(),
+      day: date.getDate(),
+      hours: date.getHours(),
+      minutes: date.getMinutes(),
+      seconds: date.getSeconds(),
+    }).toEqual({ year: 2024, month: 6, day: 1, hours: 13, minutes: 45, seconds: 30 });
+  });
+
+  it('round-trips a UTC epoch through the picker Date and back to the second', () => {
+    const ms = Date.UTC(2024, 6, 1, 13, 45, 30);
+    expect(pickerDateToUtcMs(utcMsToPickerDate(ms))).toEqual(ms);
+  });
+});
+
+describe('endOfUtcDay', () => {
+  it('extends a past end day to its last whole UTC second', () => {
+    expect(endOfUtcDay(Date.UTC(2024, 6, 3), Date.UTC(2024, 6, 10))).toEqual(
+      Date.UTC(2024, 6, 3, 23, 59, 59),
+    );
+  });
+
+  it('caps the end at now when the end day is today', () => {
+    const now = Date.UTC(2024, 6, 3, 14, 30, 0);
+    expect(endOfUtcDay(Date.UTC(2024, 6, 3), now)).toEqual(now);
+  });
+
+  it('is idempotent — an already end-of-day value does not drift forward', () => {
+    const endOfDay = Date.UTC(2024, 6, 3, 23, 59, 59);
+    expect(endOfUtcDay(endOfDay, Date.UTC(2024, 6, 10))).toEqual(endOfDay);
   });
 });

@@ -181,8 +181,10 @@ describe('backtests API (e2e)', () => {
     });
     const candles = app.get<CandleRepository>(CANDLE_REPOSITORY);
     // Price steps 100 → 200 at MID: the entry signal fires on the first candle
-    // (100), and the +50 % profit target (level 150) fills on the first candle
-    // after the step, yielding exactly one closed trade.
+    // (100) and the +50 % profit target (level 150) fills on the first candle
+    // after the step — one closed trade. The `Price > 50` signal is still active,
+    // so it re-arms on that close and re-enters at 200, a position that then stays
+    // open to the end (its +50 % target of 300 is never reached).
     await candles.save(
       SYMBOL_ID,
       Period.OneMinute,
@@ -252,8 +254,8 @@ describe('backtests API (e2e)', () => {
       strategyName: 'E2E Breakout',
       trades: [
         {
-          entryTs: START,
-          exitTs: MID,
+          entryTs: START + MINUTE,
+          exitTs: MID + MINUTE,
           entryPrice: LOW_PRICE,
           exitPrice: LOW_PRICE * 1.5,
           quantity: 100,
@@ -263,7 +265,13 @@ describe('backtests API (e2e)', () => {
           exitReason: 'profitTarget',
         },
       ],
-      openPosition: undefined,
+      openPosition: {
+        entryTs: MID + MINUTE,
+        entryPrice: HIGH_PRICE,
+        quantity: 75,
+        entryCommission: 0,
+        unrealizedPnl: 0,
+      },
       summary: {
         totalPnl: 5000,
         roiPct: 50,

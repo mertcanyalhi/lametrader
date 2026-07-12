@@ -427,10 +427,11 @@ export function CandleChart({
       chart,
       candle,
       overlays: stateOverlays,
+      period,
       lineMap: stateLineRef.current,
       markersMap: stateMarkersRef.current,
     });
-  }, [stateOverlays, chartVersion]);
+  }, [stateOverlays, period, chartVersion]);
 
   // Mirror the `overlays[]` prop into per-state-descriptor series, diffing the
   // current set against the previous one. `chartVersion` bumps after each chart
@@ -1006,10 +1007,11 @@ function syncStateOverlays(args: {
   chart: IChartApi;
   candle: ISeriesApi<'Candlestick'>;
   overlays: ReadonlyArray<StateOverlay>;
+  period: Period;
   lineMap: Map<string, ISeriesApi<'Line'>>;
   markersMap: Map<string, ISeriesMarkersPluginApi<Time>>;
 }): void {
-  const { chart, candle, overlays, lineMap, markersMap } = args;
+  const { chart, candle, overlays, period, lineMap, markersMap } = args;
   const liveKeys = new Set(overlays.map((overlay) => overlay.key));
   for (const [key, series] of [...lineMap.entries()]) {
     if (!liveKeys.has(key)) {
@@ -1036,9 +1038,11 @@ function syncStateOverlays(args: {
       } else {
         series.applyOptions({ visible: overlay.visible });
       }
-      series.setData(overlay.visible ? stateOverlayToLineData(overlay.entries) : []);
+      series.setData(overlay.visible ? stateOverlayToLineData(overlay.entries, period) : []);
     } else {
-      const markers = overlay.visible ? stateOverlayToMarkers(overlay.entries, overlay.color) : [];
+      const markers = overlay.visible
+        ? stateOverlayToMarkers(overlay.entries, overlay.color, period)
+        : [];
       const plugin = markersMap.get(overlay.key);
       if (!plugin) {
         markersMap.set(overlay.key, createSeriesMarkers(candle, markers));

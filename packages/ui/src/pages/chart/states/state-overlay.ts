@@ -1,4 +1,4 @@
-import { type StateValue, StateValueType } from '@lametrader/core';
+import { type Period, periodMillis, type StateValue, StateValueType } from '@lametrader/core';
 import type {
   LineData,
   SeriesMarker,
@@ -7,6 +7,21 @@ import type {
   WhitespaceData,
 } from 'lightweight-charts';
 import type { SymbolStateTimeSeriesEntry } from '../../../lib/hooks/state.js';
+
+/**
+ * Floor an epoch-ms instant to the open of the `period` bar that contains it,
+ * returned in chart seconds.
+ *
+ * An event's `ts` is a tick instant (e.g. 11:40 on a 1m tick); on a coarser
+ * chart it belongs to the bar it falls *inside* — the 11:00 bar on a 1h chart,
+ * not 12:00. `lightweight-charts` snaps an off-grid marker time to the
+ * *nearest* bar (11:40 is closer to 12:00), so we floor to the containing bar
+ * ourselves before handing it a time.
+ */
+function barOpenSeconds(ts: number, period: Period): UTCTimestamp {
+  const ms = periodMillis(period);
+  return ((Math.floor(ts / ms) * ms) / 1000) as UTCTimestamp;
+}
 
 /**
  * One state-key overlay as the chart consumes it — symbol-scoped, keyed by
@@ -50,14 +65,21 @@ export interface StateOverlay {
  */
 export function stateOverlayToLineData(
   entries: ReadonlyArray<SymbolStateTimeSeriesEntry>,
+  period: Period,
 ): Array<LineData<Time> | WhitespaceData<Time>> {
-  return entries.map((entry) => {
-    const time = (entry.ts / 1000) as UTCTimestamp;
-    if (entry.value !== null && entry.value.type === StateValueType.Number) {
-      return { time, value: entry.value.value };
-    }
-    return { time };
-  });
+  // Floor each entry to its containing bar; when several changes land in one
+  // bar the last wins (the bar renders the value in force at its close), which
+  // also keeps the strictly-ascending unique times `setData` requires.
+  const byBar = new Map<number, LineData<Time> | WhitespaceData<Time>>();
+  for (const entry of entries) {
+    const time = barOpenSeconds(entry.ts, period);
+    const point: LineData<Time> | WhitespaceData<Time> =
+      entry.value !== null && entry.value.type === StateValueType.Number
+        ? { time, value: entry.value.value }
+        : { time };
+    byBar.set(time as number, point);
+  }
+  return [...byBar.values()];
 }
 
 /**
@@ -74,9 +96,10 @@ export function stateOverlayToLineData(
 export function stateOverlayToMarkers(
   entries: ReadonlyArray<SymbolStateTimeSeriesEntry>,
   color: string,
+  period: Period,
 ): SeriesMarker<Time>[] {
   return entries.map((entry) => {
-    const time = (entry.ts / 1000) as UTCTimestamp;
+    const time = barOpenSeconds(entry.ts, period);
     if (entry.value === null) {
       return {
         time,

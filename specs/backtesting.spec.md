@@ -1,7 +1,7 @@
 # Spec: backtesting (single symbol)
 
 - Status: approved
-- Touches: `core` (backtesting types), `backend` (`analytics/backtesting` subsystem: strategy store, backtest store, backtest-event store, run service over an isolated rule engine, controllers, per-run stream gateway), `ui` (`/backtesting` page, hooks, strategy editor dialog).
+- Touches: `core` (backtesting types), `backend` (`analytics/backtesting` subsystem: strategy store, backtest store, backtest-event store, run service over an isolated rule engine that replays from an in-memory preloaded candle window, controllers), `ui` (`/backtesting` page, hooks, strategy editor dialog).
 
 ## Goal
 
@@ -69,13 +69,16 @@ Computed over **closed trades only**; the open position is reported separately a
 - The feed is every stored candle of **all of the symbol's active periods** (`WatchedSymbol.periods`) within `[start, end)`, each fed as a final `CandleEvent` through the same bar bridge → orchestrator path as live.
 - Candles are ordered by **completion time** (`time + periodMillis(period)`); ties are broken finest-period-first.
   A candle exists only once it has closed, so a coarse bar can never leak its range before its hours have played out.
-- Rule/indicator lookbacks before `start` resolve on demand from the stored candle history; there is no fixed warm-up window.
+- Before the replay, the run **preloads a bounded candle window into an in-memory repository**: per active period, `[start − maxLookback(period) × periodMillis(period), end)`, where `maxLookback(period) = maxIndicatorWarmup + maxMovingLookbackBars + 64` (a per-period over-approximation from the profile's indicator instances and `Moving` leaves, plus a one-page margin).
+- The engine, indicator series store, and a run-local indicator service read only this in-memory repo, so the replay issues **no per-candle candle-store round-trips** (ADR-0022).
+- The in-memory repo is a performance layer, not a correctness authority: any read it cannot fully satisfy from its resident window **falls through to the shared candle store**. This keeps the unbounded `Crossing` / `Channel` walk-past-flats operators correct regardless of the preload size.
 - Progress is `elapsed replay days / total days` of `[start, end]`.
 
 ### Trading model
 
 - Long-only, one position at a time, all-in compounding with fractional quantity.
 - Entry: while flat, an entry-signal transition buys at the close of the candle whose processing produced the `StateSet`; entry signals while a position is open are ignored.
+- A fill is realized when its bar closes, so `entryTs` / `exitTs` are the bar's **close** instant (`time + periodMillis(period)`), not its open `time`.
 - Entry sizing is cash-constrained including commission: `notional = (equity − fixed) / (1 + rate/100)`, `quantity = notional / entryPrice`.
 - Exit-signal transitions sell the whole position at the producing candle's close.
 - Profit target and stop loss are checked against **every processed candle's** high/low (the finest period naturally triggers first); the fill price is the level itself.
@@ -91,7 +94,7 @@ Computed over **closed trades only**; the open position is reported separately a
 - A run is a server-side job: it survives the client navigating away and auto-saves on completion.
 - One run may be active at a time; starting a second is a conflict (409).
 - Cancelling (or a run error) discards the run entirely; nothing partial is persisted.
-- Stream frames are batched (flush every ~100 ms or every N candles); the replay runs as fast as the engine goes, with no artificial pacing.
+- The run publishes no stream; progress is exposed on the running job and read by the client via `GET /backtests/:id` polling (ADR-0022).
 - Jobs are in-memory: a server restart loses the active run (same stance as backfill jobs).
 
 ## Validation (run start, all → 400 unless noted)
@@ -118,14 +121,7 @@ Computed over **closed trades only**; the open position is reported separately a
 - `GET /backtests/:id` → running: params + progress snapshot; completed: the full saved result.
 - `PATCH /backtests/:id` → rename; **400** while running.
 - `DELETE /backtests/:id` → running: cancel + discard; completed: delete + cascade events; **204** either way.
-- `GET /backtests/:id/events?from&to&limit` → windowed run events (same shape as the live rule-events window); **400** while running (the stream's snapshot + deltas serve events for an in-flight run).
-- `WS /backtests/:id/stream` → raw `ws` on the HTTP upgrade, matching only its own URL (coexisting with `/stream` and the backfill sockets).
-
-### Stream protocol
-
-- On subscribe the server sends one **snapshot** frame: `status`, `progress`, `params`, trades so far, running summary, `openPosition?`, and events so far (candles are not included — the client reads the candle store over REST when reattaching).
-- Then batched **delta** frames: `progress`, new candles for **every active period** (the client renders the charted period and folds finer candles into the forming run-period bar so it advances intra-bar), new events, new trades, updated summary.
-- The final frame carries `status: Completed`; the persisted backtest keeps the same id.
+- `GET /backtests/:id/events?from&to&limit` → windowed run events (same shape as the live rule-events window); **400** while running (an in-flight run's events are persisted only on completion).
 
 ## UI — the `/backtesting` page
 
@@ -135,7 +131,7 @@ Computed over **closed trades only**; the open position is reported separately a
 - Strategy editor dialog: Entry section (Signal checkbox + key/value), Exit section (Signal, Profit, Stop loss checkboxes), threshold kind dropdowns with info-icon tooltips explaining Fixed vs Percentage.
 - The state-key selector reuses the rules-editor machinery: find-or-create combobox seeded from the selected symbol's `GET /symbols/:id/state-keys`, known keys adopt their catalog type, unknown keys declare one; the value widget follows the type (string → text or enum-select, bool → checkbox, number → numeric).
 - During a run (or with a loaded backtest) the symbol / profile / period pickers are locked; loading a saved backtest sets the chart to its stored period.
-- The chart is the reused `CandleChart`: candles fill incrementally from the frames (the client picks the charted period and folds finer candles into the forming run-period bar), state overlays render from the run's events, and the run's trades draw entry/exit markers.
+- During a run the panel shows only a **progress bar** (plus the run's metadata); the chart, trades, summary, and daily-P&L render once the run reaches `Completed`, through the same path a saved backtest loads through (result + candles + windowed events over REST). The chart is the reused `CandleChart`: state overlays render from the run's events, and its trades draw entry/exit markers.
 - Trades tab: entry/exit timestamps, buy/sell price, P/L, ROI %, exit reason; the open position renders as the last row with exit columns empty and its P/L marked unrealized.
 - Daily P&L tab: a `lightweight-charts` `HistogramSeries` of per-day P/L (a trade's whole P/L lands on its **exit day**, bucketed in UTC), with the summary block below (number of trades, winners/losers, average ROI per trade, total P/L, average days in trade).
 
@@ -162,8 +158,10 @@ Computed over **closed trades only**; the open position is reported separately a
 - [ ] A run feeds all active periods' candles in completion-time order, ties finest-first (asserted via the recorded event order).
 - [ ] A run writes nothing to the live state repository or live event log, and sends no notification.
 - [ ] `NotificationSent` events from the profile's rules are recorded in the run's event log without a send.
-- [ ] A rule lookback reaching before `start` resolves from stored history (a signal on the first in-range candle computes correctly).
-- [ ] Progress frames report elapsed-days / total-days.
+- [ ] A run preloads `[start − maxLookback(period), end)` per active period and completes with **no per-candle candle-store round-trips** (asserted via a read-counting store — reads stay constant as the replayed candle count grows).
+- [ ] A lookback reaching **below** the preloaded floor falls through to the shared store and returns the correct data (a signal on the first in-range candle whose lookback reaches before `start` computes correctly; the read-through delegation is asserted at the repository level).
+- [ ] `maxLookback` = `maxIndicatorWarmup + maxMovingLookbackBars + 64` per period (a `Crossing` / `Channel` leaf contributes nothing — it is fallback-covered).
+- [ ] Progress is reported on the running job and readable via `GET /backtests/:id`.
 
 ### Trading model
 
@@ -200,24 +198,18 @@ Computed over **closed trades only**; the open position is reported separately a
 - [ ] Editing the source strategy after a run leaves the saved backtest's snapshot unchanged.
 - [ ] The backtest and backtest-event repository contract suites pass against both fakes and Mongoose adapters.
 
-### Stream
-
-- [ ] Subscribing to a running backtest first delivers a snapshot frame (progress, trades so far, summary, events so far).
-- [ ] Delta frames carry new candles for every active period, events, trades, and the updated summary, batched.
-- [ ] The final frame reports `Completed` and the backtest is immediately fetchable at the same id.
-
 ### UI
 
 - [ ] The strategy editor requires the entry signal and at least one exit mechanism before saving.
 - [ ] The state-key combobox seeds from the selected symbol's catalog and the value widget follows the key's type (text / enum-select / checkbox / numeric).
-- [ ] Starting a run locks the pickers, shows the progress bar, and fills chart candles and results incrementally from frames.
+- [ ] Starting a run locks the pickers and shows a progress bar; the chart and results render once the run completes, through the loaded-backtest path.
 - [ ] The trades table renders closed trades with exit reasons and the open position as an unrealized final row.
 - [ ] The Daily P&L tab renders the histogram plus the summary block.
 - [ ] Loading a saved backtest restores the chart (stored period), trade markers, state overlays, and all three result tabs without a run.
 
 ## End-to-end expectation
 
-Backend e2e (Testcontainers Mongo): seed a watched symbol with candles across two periods and a profile whose rule sets a state key; create a strategy keyed to that state change; `POST /backtests`; subscribe the run's WS and collect frames until `Completed`; assert the persisted backtest's trades, summary, and windowed events over HTTP.
+Backend e2e (Testcontainers Mongo): seed a watched symbol with candles across two periods and a profile whose rule sets a state key; create a strategy keyed to that state change; `POST /backtests`; poll `GET /backtests/:id` until `Completed`; assert the persisted backtest's trades, summary, and windowed events over HTTP.
 Critical failure mode: a second `POST /backtests` during the run returns 409, and `DELETE /backtests/:id` mid-run cancels without persisting anything.
 
 UI e2e: drive the `/backtesting` page — create a strategy, run it, watch progress reach completion, and assert the summary, trades table, and daily P&L render; then reload the saved backtest and assert the same results render without a run.

@@ -148,25 +148,25 @@ describe('ResultsTabs', () => {
     expect(screen.queryByText('Open position (unrealized)')).toBeNull();
   });
 
-  it('renders closed trades with exit reasons and the open position as an unrealized final row', async () => {
+  it('renders the open position as an unrealized first row above the closed trades', async () => {
     const user = userEvent.setup();
     renderTabs({ trades: TRADES, summary: SUMMARY, openPosition: OPEN_POSITION });
     await user.click(screen.getByRole('tab', { name: /Trades/ }));
 
     const rows = within(screen.getByLabelText('Trades')).getAllByRole('row');
     expect({
+      openReason: within(rows[1] as HTMLElement).getByText('Open').textContent,
+      openUnrealized: within(rows[1] as HTMLElement).getByText('unrealized').textContent,
+      openPnl: within(rows[1] as HTMLElement).getByText('+4.00') !== null,
       closedReasons: [
-        within(rows[1] as HTMLElement).getByText('Stop loss').textContent,
-        within(rows[2] as HTMLElement).getByText('Profit target').textContent,
+        within(rows[2] as HTMLElement).getByText('Stop loss').textContent,
+        within(rows[3] as HTMLElement).getByText('Profit target').textContent,
       ],
-      openReason: within(rows[3] as HTMLElement).getByText('Open').textContent,
-      openUnrealized: within(rows[3] as HTMLElement).getByText('unrealized').textContent,
-      openPnl: within(rows[3] as HTMLElement).getByText('+4.00') !== null,
     }).toEqual({
-      closedReasons: ['Stop loss', 'Profit target'],
       openReason: 'Open',
       openUnrealized: 'unrealized',
       openPnl: true,
+      closedReasons: ['Stop loss', 'Profit target'],
     });
   });
 

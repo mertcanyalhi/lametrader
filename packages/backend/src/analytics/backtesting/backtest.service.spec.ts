@@ -169,6 +169,7 @@ const completed = (overrides: Partial<Backtest> = {}): Backtest => ({
   status: BacktestStatus.Completed,
   createdAt: NOW,
   updatedAt: NOW,
+  completedAt: NOW,
   params: runParams(),
   strategyId: 'strat-1',
   strategy: strategy(),
@@ -465,6 +466,17 @@ describe('BacktestService rename', () => {
     const { service, ready } = build({ backtests: [completed()] });
     await ready;
     expect(await service.rename('bt-1', 'My run')).toEqual(completed({ name: 'My run' }));
+  });
+
+  it('leaves completedAt unchanged while bumping updatedAt on rename', async () => {
+    const earlier = NOW - 5 * 60_000;
+    const { service, ready } = build({
+      backtests: [completed({ createdAt: earlier, updatedAt: earlier, completedAt: earlier })],
+    });
+    await ready;
+    expect(await service.rename('bt-1', 'My run')).toEqual(
+      completed({ name: 'My run', createdAt: earlier, updatedAt: NOW, completedAt: earlier }),
+    );
   });
 
   it('rejects renaming a running backtest with a 400 domain error', async () => {

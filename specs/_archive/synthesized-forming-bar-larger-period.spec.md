@@ -1,3 +1,5 @@
+> **Archived.** The live-chart-during-run behaviour this spec described was removed when backtesting moved to an in-memory replay with a poll-for-result UI (ADR-0022, issue #565). Kept for history.
+
 # Spec: synthesize the forming bar of a larger period from smaller-period stream data
 
 - Status: implemented

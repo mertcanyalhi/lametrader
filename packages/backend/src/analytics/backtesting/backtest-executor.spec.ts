@@ -51,6 +51,17 @@ const entrySignal: BacktestSignal = { key: 'long', value: bool(true) };
 /** A strategy over the shared entry signal plus the given exit definition. */
 const strategyWith = (exit: BacktestStrategyExit) => ({ entry: { signal: entrySignal }, exit });
 
+/**
+ * Feed one bar through the executor, stamping its fills at the bar's **close**
+ * instant — its open `time` plus a fixed 100ms bar — so `entryTs` / `exitTs`
+ * assert against the close, not the open `time`.
+ */
+const step = (
+  executor: BacktestExecutor,
+  bar: Candle,
+  events: readonly RuleEventEntry[] = [],
+): void => executor.processStep(bar, events, bar.time + 100);
+
 /** Zero commission — clean sizing. */
 const noCommission: BacktestCommission = {};
 
@@ -61,12 +72,12 @@ describe('BacktestExecutor entry and sizing', () => {
       { initialCapital: 1020, commission: { rate: 2 } },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
 
     expect(executor.result()).toEqual({
       trades: [],
       openPosition: {
-        entryTs: 1000,
+        entryTs: 1100,
         entryPrice: 100,
         quantity: 10,
         entryCommission: 20,
@@ -85,16 +96,13 @@ describe('BacktestExecutor entry and sizing', () => {
       },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(flat(2000, 200), [
-      stateSet('long', bool(false)),
-      stateSet('long', bool(true)),
-    ]);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, flat(2000, 200), [stateSet('long', bool(false)), stateSet('long', bool(true))]);
 
     expect(executor.result()).toEqual({
       trades: [],
       openPosition: {
-        entryTs: 1000,
+        entryTs: 1100,
         entryPrice: 100,
         quantity: 100,
         entryCommission: 0,
@@ -104,47 +112,131 @@ describe('BacktestExecutor entry and sizing', () => {
     });
   });
 
-  it('does not re-enter on a repeated state set to the same value (edge, not level)', () => {
+  it('re-enters after a level exit when the entry signal is re-emitted while flat (the edge is re-armed on close)', () => {
+    // A profit-target exit closes without any state key changing. The entry key
+    // is therefore still `true` after the exit, so re-arming edge detection on
+    // close is what lets the re-emitted `long=true` open a fresh position.
     const executor = new BacktestExecutor(
       strategyWith({ profitTarget: { kind: BacktestThresholdKind.Fixed, amount: 10 } }),
       { initialCapital: 10_000, commission: noCommission },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(candle(2000, 100, 120, 100, 100), []);
-    executor.processStep(flat(3000, 100), [stateSet('long', bool(true))]);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, candle(2000, 100, 120, 100, 100), []);
+    step(executor, flat(3000, 100), [stateSet('long', bool(true))]);
+
+    const firstTrade: BacktestTrade = {
+      entryTs: 1100,
+      exitTs: 2100,
+      entryPrice: 100,
+      exitPrice: 110,
+      quantity: 100,
+      commission: 0,
+      pnl: 1000,
+      roiPct: 10,
+      exitReason: BacktestExitReason.ProfitTarget,
+    };
+    expect(executor.result()).toEqual({
+      trades: [firstTrade],
+      openPosition: {
+        entryTs: 3100,
+        entryPrice: 100,
+        quantity: 110,
+        entryCommission: 0,
+        unrealizedPnl: 0,
+      },
+      summary: summarizeTrades([firstTrade], 10_000),
+    });
+  });
+
+  it('re-enters after a stop-loss when the entry signal is still active on a later flat bar', () => {
+    const executor = new BacktestExecutor(
+      strategyWith({ stopLoss: { kind: BacktestThresholdKind.Percentage, amount: 5 } }),
+      { initialCapital: 10_000, commission: noCommission },
+    );
+
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]); // BUY @100
+    step(executor, candle(2000, 100, 100, 90, 92)); // low 90 < stop 95 -> SELL @95
+    step(executor, flat(3000, 100), [stateSet('long', bool(true))]); // re-enter while flat
+
+    const stopped: BacktestTrade = {
+      entryTs: 1100,
+      exitTs: 2100,
+      entryPrice: 100,
+      exitPrice: 95,
+      quantity: 100,
+      commission: 0,
+      pnl: -500,
+      roiPct: -5,
+      exitReason: BacktestExitReason.StopLoss,
+    };
+    expect(executor.result()).toEqual({
+      trades: [stopped],
+      openPosition: {
+        entryTs: 3100,
+        entryPrice: 100,
+        quantity: 95,
+        entryCommission: 0,
+        unrealizedPnl: 0,
+      },
+      summary: summarizeTrades([stopped], 10_000),
+    });
+  });
+
+  it('still ignores a repeated entry signal within the same open position (edge dedup while holding)', () => {
+    // The re-arm is on close only; while a position is open the flat-guard plus
+    // edge dedup keep a re-emitted entry signal from doing anything.
+    const executor = new BacktestExecutor(
+      strategyWith({ profitTarget: { kind: BacktestThresholdKind.Fixed, amount: 1000 } }),
+      { initialCapital: 10_000, commission: noCommission },
+    );
+
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, flat(2000, 100), [stateSet('long', bool(true))]);
+    step(executor, flat(3000, 100), [stateSet('long', bool(true))]);
 
     expect(executor.result()).toEqual({
-      trades: [
-        {
-          entryTs: 1000,
-          exitTs: 2000,
-          entryPrice: 100,
-          exitPrice: 110,
-          quantity: 100,
-          commission: 0,
-          pnl: 1000,
-          roiPct: 10,
-          exitReason: BacktestExitReason.ProfitTarget,
-        },
-      ],
-      summary: summarizeTrades(
-        [
-          {
-            entryTs: 1000,
-            exitTs: 2000,
-            entryPrice: 100,
-            exitPrice: 110,
-            quantity: 100,
-            commission: 0,
-            pnl: 1000,
-            roiPct: 10,
-            exitReason: BacktestExitReason.ProfitTarget,
-          },
-        ],
-        10_000,
-      ),
+      trades: [],
+      openPosition: {
+        entryTs: 1100,
+        entryPrice: 100,
+        quantity: 100,
+        entryCommission: 0,
+        unrealizedPnl: 0,
+      },
+      summary: summarizeTrades([], 10_000),
     });
+  });
+
+  it('re-arms a persistent exit signal across a round trip so the next position still exits on it', () => {
+    // Exit signal is on a different key (`flat`) than entry (`long`), so the
+    // exit value can persist across the round trip. Entry re-arm is taken out of
+    // the picture by cycling `long` down-then-up; only the never-cycled `flat`
+    // key depends on the close re-arming edge detection.
+    const executor = new BacktestExecutor(
+      strategyWith({ signal: { key: 'flat', value: bool(true) } }),
+      { initialCapital: 10_000, commission: noCommission },
+    );
+
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]); // BUY
+    step(executor, flat(2000, 100), [stateSet('flat', bool(true))]); // SELL (signal)
+    step(executor, flat(3000, 100), [stateSet('long', bool(false))]); // cycle entry down
+    step(executor, flat(4000, 100), [stateSet('long', bool(true))]); // BUY again (fresh edge)
+    step(executor, flat(5000, 100), [stateSet('flat', bool(true))]); // SELL again — only if re-armed
+
+    const trade = (entryTs: number, exitTs: number): BacktestTrade => ({
+      entryTs,
+      exitTs,
+      entryPrice: 100,
+      exitPrice: 100,
+      quantity: 100,
+      commission: 0,
+      pnl: 0,
+      roiPct: 0,
+      exitReason: BacktestExitReason.Signal,
+    });
+    const trades = [trade(1100, 2100), trade(4100, 5100)];
+    expect(executor.result()).toEqual({ trades, summary: summarizeTrades(trades, 10_000) });
   });
 });
 
@@ -158,13 +250,13 @@ describe('BacktestExecutor exits', () => {
       },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(flat(2000, 130), [stateSet('short', bool(true))]);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, flat(2000, 130), [stateSet('short', bool(true))]);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 130,
         quantity: 100,
@@ -182,13 +274,13 @@ describe('BacktestExecutor exits', () => {
       { initialCapital: 10_000, commission: noCommission },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(candle(2000, 110, 125, 105, 110), []);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, candle(2000, 110, 125, 105, 110), []);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 120,
         quantity: 100,
@@ -206,13 +298,13 @@ describe('BacktestExecutor exits', () => {
       { initialCapital: 10_000, commission: noCommission },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(candle(2000, 120, 130, 110, 120), []);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, candle(2000, 120, 130, 110, 120), []);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 125,
         quantity: 100,
@@ -230,13 +322,13 @@ describe('BacktestExecutor exits', () => {
       { initialCapital: 10_000, commission: noCommission },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(candle(2000, 100, 100, 75, 100), []);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, candle(2000, 100, 100, 75, 100), []);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 80,
         quantity: 100,
@@ -254,13 +346,13 @@ describe('BacktestExecutor exits', () => {
       { initialCapital: 10_000, commission: noCommission },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(candle(2000, 100, 100, 85, 100), []);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, candle(2000, 100, 100, 85, 100), []);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 90,
         quantity: 100,
@@ -278,13 +370,13 @@ describe('BacktestExecutor exits', () => {
       { initialCapital: 10_000, commission: noCommission },
     );
 
-    executor.processStep(candle(1000, 100, 100, 50, 100), [stateSet('long', bool(true))]);
-    executor.processStep(candle(2000, 100, 100, 90, 100), []);
+    step(executor, candle(1000, 100, 100, 50, 100), [stateSet('long', bool(true))]);
+    step(executor, candle(2000, 100, 100, 90, 100), []);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 95,
         quantity: 100,
@@ -305,13 +397,13 @@ describe('BacktestExecutor exits', () => {
       { initialCapital: 10_000, commission: noCommission },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(candle(2000, 100, 120, 80, 100), []);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, candle(2000, 100, 120, 80, 100), []);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 90,
         quantity: 100,
@@ -334,13 +426,13 @@ describe('BacktestExecutor commissions and lifecycle', () => {
       },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(flat(2000, 200), [stateSet('short', bool(true))]);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, flat(2000, 200), [stateSet('short', bool(true))]);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 200,
         quantity: 10,
@@ -361,15 +453,12 @@ describe('BacktestExecutor commissions and lifecycle', () => {
       },
     );
 
-    executor.processStep(flat(1000, 100), [
-      stateSet('long', bool(true)),
-      stateSet('short', bool(true)),
-    ]);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true)), stateSet('short', bool(true))]);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 1000,
+        entryTs: 1100,
+        exitTs: 1100,
         entryPrice: 100,
         exitPrice: 100,
         quantity: 10,
@@ -390,13 +479,13 @@ describe('BacktestExecutor commissions and lifecycle', () => {
       },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(flat(2000, 150), []);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, flat(2000, 150), []);
 
     expect(executor.result()).toEqual({
       trades: [],
       openPosition: {
-        entryTs: 1000,
+        entryTs: 1100,
         entryPrice: 100,
         quantity: 100,
         entryCommission: 0,
@@ -412,18 +501,15 @@ describe('BacktestExecutor commissions and lifecycle', () => {
       { initialCapital: 10_000, commission: noCommission },
     );
 
-    executor.processStep(flat(1000, 100), [stateSet('long', bool(true))]);
-    executor.processStep(candle(2000, 100, 250, 100, 100), []);
-    executor.processStep(flat(3000, 100), [
-      stateSet('long', bool(false)),
-      stateSet('long', bool(true)),
-    ]);
-    executor.processStep(candle(4000, 100, 250, 100, 100), []);
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, candle(2000, 100, 250, 100, 100), []);
+    step(executor, flat(3000, 100), [stateSet('long', bool(false)), stateSet('long', bool(true))]);
+    step(executor, candle(4000, 100, 250, 100, 100), []);
 
     expect(executor.result().trades).toEqual([
       {
-        entryTs: 1000,
-        exitTs: 2000,
+        entryTs: 1100,
+        exitTs: 2100,
         entryPrice: 100,
         exitPrice: 200,
         quantity: 100,
@@ -433,8 +519,8 @@ describe('BacktestExecutor commissions and lifecycle', () => {
         exitReason: BacktestExitReason.ProfitTarget,
       },
       {
-        entryTs: 3000,
-        exitTs: 4000,
+        entryTs: 3100,
+        exitTs: 4100,
         entryPrice: 100,
         exitPrice: 200,
         quantity: 200,

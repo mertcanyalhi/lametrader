@@ -7,24 +7,51 @@ import 'react-date-range/dist/theme/default.css';
 import './period-picker.css';
 import {
   BacktestRange,
+  endOfUtcDay,
   type PresetRange,
+  pickerDateToUtcMs,
   presetRange,
   RANGE_OPTIONS,
   type RangeBounds,
+  utcMsToPickerDate,
 } from '../../lib/backtest-range.js';
 
-/** Format an epoch ms as a short human date for the picker's trigger label. */
+/** Format an epoch ms as a short human date (in UTC) for the picker's trigger label. */
 function toTriggerLabel(ms: number): string {
   return new Date(ms).toLocaleDateString(undefined, {
+    timeZone: 'UTC',
     year: 'numeric',
     month: 'short',
     day: 'numeric',
   });
 }
 
-/** Build the `react-date-range` selection object the calendar binds to. */
+/**
+ * Whether a picker `Date` is a bare calendar day (midnight, no time-of-day).
+ * `react-date-range` reports a day the user clicks on the calendar as local
+ * midnight, whereas a preset embeds a real instant (`now`); this tells the two
+ * apart so only a hand-picked end day is extended to end-of-day.
+ */
+function isBareDay(date: Date): boolean {
+  return (
+    date.getHours() === 0 &&
+    date.getMinutes() === 0 &&
+    date.getSeconds() === 0 &&
+    date.getMilliseconds() === 0
+  );
+}
+
+/**
+ * Build the `react-date-range` selection object the calendar binds to, shifting
+ * the UTC bounds into the local-`Date` space the library reads (see
+ * {@link utcMsToPickerDate}) so the calendar shows the UTC days.
+ */
 function toSelection(bounds: RangeBounds): Range {
-  return { startDate: new Date(bounds.from), endDate: new Date(bounds.to), key: 'selection' };
+  return {
+    startDate: utcMsToPickerDate(bounds.from),
+    endDate: utcMsToPickerDate(bounds.to),
+    key: 'selection',
+  };
 }
 
 /**
@@ -37,7 +64,7 @@ const PRESET_STATIC_RANGES = createStaticRanges(
     label: option.label,
     range: () => {
       const { from, to } = presetRange(option.value as PresetRange, Date.now());
-      return { startDate: new Date(from), endDate: new Date(to) };
+      return { startDate: utcMsToPickerDate(from), endDate: utcMsToPickerDate(to) };
     },
   })),
 );
@@ -71,10 +98,20 @@ export function PeriodPicker({
     setOpen(next);
   }
 
-  /** Commit the draft's concrete bounds to the parent and close. */
+  /**
+   * Commit the draft's concrete bounds to the parent and close. The start is the
+   * picked start-day's UTC midnight. A bare end day picked on the calendar lands on
+   * midnight, so it is extended to cover the *whole* selected UTC day (its last
+   * second), capped at now when that day is today. A preset's end carries a real
+   * instant (`now`), so it passes through unchanged and keeps its exact span.
+   */
   function handleApply(): void {
-    const from = draft.startDate?.getTime() ?? value.from;
-    const to = draft.endDate?.getTime() ?? value.to;
+    const from = draft.startDate ? pickerDateToUtcMs(draft.startDate) : value.from;
+    let to = value.to;
+    if (draft.endDate) {
+      const endMs = pickerDateToUtcMs(draft.endDate);
+      to = isBareDay(draft.endDate) ? endOfUtcDay(endMs, Date.now()) : endMs;
+    }
     onChange({ from, to });
     setOpen(false);
   }
