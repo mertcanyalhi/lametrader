@@ -14,6 +14,7 @@ import { Test } from '@nestjs/testing';
 import type { Model } from 'mongoose';
 import request from 'supertest';
 import { movingAverage } from '../src/analytics/indicators/sma.js';
+import { supertrend } from '../src/analytics/indicators/supertrend.js';
 import { volumeWeightedMovingAverage } from '../src/analytics/indicators/vwma.js';
 import { AppModule } from '../src/app.module.js';
 import { CANDLE_REPOSITORY } from '../src/market/interfaces/candle-repository.token.js';
@@ -113,7 +114,16 @@ describe('indicators API (e2e)', () => {
       byKey: {
         sma: movingAverage.definition,
         vwma: volumeWeightedMovingAverage.definition,
+        supertrend: supertrend.definition,
       },
+    });
+  });
+
+  it('GET /indicators/supertrend returns the Supertrend definition', async () => {
+    const res = await request(app.getHttpServer()).get('/indicators/supertrend');
+    expect({ status: res.status, body: res.body }).toEqual({
+      status: 200,
+      body: supertrend.definition,
     });
   });
 
@@ -173,6 +183,28 @@ describe('indicators API (e2e)', () => {
       indicatorKey: body.indicatorKey,
       hasBuySignal: buySignals.length >= 1,
     }).toEqual({ status: 200, indicatorKey: 'vwma', hasBuySignal: true });
+  });
+
+  it('GET /symbols/:id/indicators/supertrend computes the warm Supertrend series over real Mongo candles', async () => {
+    // closes [10, 8, 6, 10, 14] with flat bars → TR [0, 2, 2, 4, 4]; RMA ATR(2) = [_, 1, 1.5, 2.75, 3.375].
+    const res = await request(app.getHttpServer()).get(
+      `/symbols/${BTC.id}/indicators/supertrend?period=1h&atrPeriod=2&multiplier=1&atrMethod=rma&source=close`,
+    );
+    expect({ status: res.status, body: res.body }).toEqual({
+      status: 200,
+      body: {
+        indicatorKey: 'supertrend',
+        version: 1,
+        period: '1h',
+        state: [
+          { time: 0, value: null, trend: null, signal: null },
+          { time: 1, value: expect.closeTo(7, 6), trend: 'up', signal: null },
+          { time: 2, value: expect.closeTo(7.5, 6), trend: 'down', signal: 'sell' },
+          { time: 3, value: expect.closeTo(7.25, 6), trend: 'up', signal: 'buy' },
+          { time: 4, value: expect.closeTo(10.625, 6), trend: 'up', signal: null },
+        ],
+      },
+    });
   });
 
   it('GET /symbols/:id/indicators/:key returns 400 on an asset-class mismatch (FX + vwma)', async () => {
