@@ -112,7 +112,10 @@ describe('BacktestExecutor entry and sizing', () => {
     });
   });
 
-  it('does not re-enter on a repeated state set to the same value (edge, not level)', () => {
+  it('re-enters after a level exit when the entry signal is re-emitted while flat (the edge is re-armed on close)', () => {
+    // A profit-target exit closes without any state key changing. The entry key
+    // is therefore still `true` after the exit, so re-arming edge detection on
+    // close is what lets the re-emitted `long=true` open a fresh position.
     const executor = new BacktestExecutor(
       strategyWith({ profitTarget: { kind: BacktestThresholdKind.Fixed, amount: 10 } }),
       { initialCapital: 10_000, commission: noCommission },
@@ -122,37 +125,118 @@ describe('BacktestExecutor entry and sizing', () => {
     step(executor, candle(2000, 100, 120, 100, 100), []);
     step(executor, flat(3000, 100), [stateSet('long', bool(true))]);
 
+    const firstTrade: BacktestTrade = {
+      entryTs: 1100,
+      exitTs: 2100,
+      entryPrice: 100,
+      exitPrice: 110,
+      quantity: 100,
+      commission: 0,
+      pnl: 1000,
+      roiPct: 10,
+      exitReason: BacktestExitReason.ProfitTarget,
+    };
     expect(executor.result()).toEqual({
-      trades: [
-        {
-          entryTs: 1100,
-          exitTs: 2100,
-          entryPrice: 100,
-          exitPrice: 110,
-          quantity: 100,
-          commission: 0,
-          pnl: 1000,
-          roiPct: 10,
-          exitReason: BacktestExitReason.ProfitTarget,
-        },
-      ],
-      summary: summarizeTrades(
-        [
-          {
-            entryTs: 1100,
-            exitTs: 2100,
-            entryPrice: 100,
-            exitPrice: 110,
-            quantity: 100,
-            commission: 0,
-            pnl: 1000,
-            roiPct: 10,
-            exitReason: BacktestExitReason.ProfitTarget,
-          },
-        ],
-        10_000,
-      ),
+      trades: [firstTrade],
+      openPosition: {
+        entryTs: 3100,
+        entryPrice: 100,
+        quantity: 110,
+        entryCommission: 0,
+        unrealizedPnl: 0,
+      },
+      summary: summarizeTrades([firstTrade], 10_000),
     });
+  });
+
+  it('re-enters after a stop-loss when the entry signal is still active on a later flat bar', () => {
+    const executor = new BacktestExecutor(
+      strategyWith({ stopLoss: { kind: BacktestThresholdKind.Percentage, amount: 5 } }),
+      { initialCapital: 10_000, commission: noCommission },
+    );
+
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]); // BUY @100
+    step(executor, candle(2000, 100, 100, 90, 92)); // low 90 < stop 95 -> SELL @95
+    step(executor, flat(3000, 100), [stateSet('long', bool(true))]); // re-enter while flat
+
+    const stopped: BacktestTrade = {
+      entryTs: 1100,
+      exitTs: 2100,
+      entryPrice: 100,
+      exitPrice: 95,
+      quantity: 100,
+      commission: 0,
+      pnl: -500,
+      roiPct: -5,
+      exitReason: BacktestExitReason.StopLoss,
+    };
+    expect(executor.result()).toEqual({
+      trades: [stopped],
+      openPosition: {
+        entryTs: 3100,
+        entryPrice: 100,
+        quantity: 95,
+        entryCommission: 0,
+        unrealizedPnl: 0,
+      },
+      summary: summarizeTrades([stopped], 10_000),
+    });
+  });
+
+  it('still ignores a repeated entry signal within the same open position (edge dedup while holding)', () => {
+    // The re-arm is on close only; while a position is open the flat-guard plus
+    // edge dedup keep a re-emitted entry signal from doing anything.
+    const executor = new BacktestExecutor(
+      strategyWith({ profitTarget: { kind: BacktestThresholdKind.Fixed, amount: 1000 } }),
+      { initialCapital: 10_000, commission: noCommission },
+    );
+
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]);
+    step(executor, flat(2000, 100), [stateSet('long', bool(true))]);
+    step(executor, flat(3000, 100), [stateSet('long', bool(true))]);
+
+    expect(executor.result()).toEqual({
+      trades: [],
+      openPosition: {
+        entryTs: 1100,
+        entryPrice: 100,
+        quantity: 100,
+        entryCommission: 0,
+        unrealizedPnl: 0,
+      },
+      summary: summarizeTrades([], 10_000),
+    });
+  });
+
+  it('re-arms a persistent exit signal across a round trip so the next position still exits on it', () => {
+    // Exit signal is on a different key (`flat`) than entry (`long`), so the
+    // exit value can persist across the round trip. Entry re-arm is taken out of
+    // the picture by cycling `long` down-then-up; only the never-cycled `flat`
+    // key depends on the close re-arming edge detection.
+    const executor = new BacktestExecutor(
+      strategyWith({ signal: { key: 'flat', value: bool(true) } }),
+      { initialCapital: 10_000, commission: noCommission },
+    );
+
+    step(executor, flat(1000, 100), [stateSet('long', bool(true))]); // BUY
+    step(executor, flat(2000, 100), [stateSet('flat', bool(true))]); // SELL (signal)
+    step(executor, flat(3000, 100), [stateSet('long', bool(false))]); // cycle entry down
+    step(executor, flat(4000, 100), [stateSet('long', bool(true))]); // BUY again (fresh edge)
+    step(executor, flat(5000, 100), [stateSet('flat', bool(true))]); // SELL again — only if re-armed
+
+    const trade = (entryTs: number, exitTs: number): BacktestTrade => ({
+      entryTs,
+      exitTs,
+      entryPrice: 100,
+      exitPrice: 100,
+      quantity: 100,
+      commission: 0,
+      pnl: 0,
+      roiPct: 0,
+      exitReason: BacktestExitReason.Signal,
+    });
+    const trades = [trade(1100, 2100), trade(4100, 5100)];
+    expect(executor.result()).toEqual({ trades, summary: summarizeTrades(trades, 10_000) });
   });
 });
 

@@ -252,6 +252,13 @@ export class BacktestExecutor {
     });
     this.equity += pnl;
     this.position = null;
+    // Re-arm edge detection for the next round trip. A level exit (stop-loss /
+    // profit-target) closes without any state key changing, so without this the
+    // entry key stays stuck at its entry value and a still-active entry signal
+    // never re-fires; symmetrically a persistent exit signal would be stuck for
+    // the next position. Clearing on close makes both the re-entry and the next
+    // exit trigger on the first observation while their gate is relevant again.
+    this.lastValues.clear();
   }
 
   /**
