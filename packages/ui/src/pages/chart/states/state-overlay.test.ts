@@ -1,50 +1,67 @@
-import { StateValueType } from '@lametrader/core';
+import { Period, StateValueType } from '@lametrader/core';
 import { describe, expect, it } from 'vitest';
 import { stateOverlayToLineData, stateOverlayToMarkers } from './state-overlay.js';
 
 describe('stateOverlayToLineData', () => {
-  it('maps each StateSet entry (numeric) to a {time, value} sample and StateRemoved to a whitespace gap', () => {
-    const data = stateOverlayToLineData([
-      { ts: 1_000, value: { type: StateValueType.Number, value: 1 } },
-      { ts: 2_000, value: { type: StateValueType.Number, value: 2 } },
-      { ts: 3_000, value: null },
-    ]);
+  it('floors each entry to its containing 1h bar-open (in seconds) and maps StateRemoved to a whitespace gap', () => {
+    // 11:10 and 11:40 both fall in the 11:00 bar; 12:20 in the 12:00 bar.
+    const elevenTen = Date.UTC(2026, 6, 12, 11, 10);
+    const elevenForty = Date.UTC(2026, 6, 12, 11, 40);
+    const twelveTwenty = Date.UTC(2026, 6, 12, 12, 20);
+    const elevenOpen = Date.UTC(2026, 6, 12, 11, 0) / 1000;
+    const twelveOpen = Date.UTC(2026, 6, 12, 12, 0) / 1000;
 
-    expect(data).toEqual([{ time: 1, value: 1 }, { time: 2, value: 2 }, { time: 3 }]);
+    const data = stateOverlayToLineData(
+      [
+        { ts: elevenTen, value: { type: StateValueType.Number, value: 1 } },
+        { ts: elevenForty, value: { type: StateValueType.Number, value: 2 } },
+        { ts: twelveTwenty, value: null },
+      ],
+      Period.OneHour,
+    );
+
+    // Both 11:xx entries collapse onto the 11:00 bar, last (value 2) winning.
+    expect(data).toEqual([{ time: elevenOpen, value: 2 }, { time: twelveOpen }]);
   });
 
   it('returns a whitespace gap for non-numeric entries to defend against value-type drift', () => {
-    const data = stateOverlayToLineData([
-      { ts: 1_000, value: { type: StateValueType.String, value: 'buy' } },
-    ]);
+    const data = stateOverlayToLineData(
+      [{ ts: 90_000, value: { type: StateValueType.String, value: 'buy' } }],
+      Period.OneMinute,
+    );
 
-    expect(data).toEqual([{ time: 1 }]);
+    // 90_000 ms floors to the 60_000 ms (60 s) bar-open on a 1m chart.
+    expect(data).toEqual([{ time: 60 }]);
   });
 });
 
 describe('stateOverlayToMarkers', () => {
-  it('maps each StateSet entry to a belowBar arrowUp marker with the value stringified', () => {
+  it('floors each StateSet entry to its bar-open and renders a belowBar arrowUp with the value stringified', () => {
+    const elevenForty = Date.UTC(2026, 6, 12, 11, 40);
+    const twelveTwenty = Date.UTC(2026, 6, 12, 12, 20);
+    const elevenOpen = Date.UTC(2026, 6, 12, 11, 0) / 1000;
+    const twelveOpen = Date.UTC(2026, 6, 12, 12, 0) / 1000;
+
     const markers = stateOverlayToMarkers(
       [
-        { ts: 1_000, value: { type: StateValueType.String, value: 'buy' } },
-        { ts: 2_000, value: { type: StateValueType.Bool, value: true } },
-        { ts: 3_000, value: { type: StateValueType.String, value: 'risk-on' } },
+        { ts: elevenForty, value: { type: StateValueType.String, value: 'buy' } },
+        { ts: twelveTwenty, value: { type: StateValueType.Bool, value: true } },
       ],
       '#abc',
+      Period.OneHour,
     );
 
     expect(markers).toEqual([
-      { time: 1, position: 'belowBar', color: '#abc', shape: 'arrowUp', text: 'buy' },
-      { time: 2, position: 'belowBar', color: '#abc', shape: 'arrowUp', text: 'true' },
-      { time: 3, position: 'belowBar', color: '#abc', shape: 'arrowUp', text: 'risk-on' },
+      { time: elevenOpen, position: 'belowBar', color: '#abc', shape: 'arrowUp', text: 'buy' },
+      { time: twelveOpen, position: 'belowBar', color: '#abc', shape: 'arrowUp', text: 'true' },
     ]);
   });
 
-  it('maps a StateRemoved entry to an inBar circle marker labeled with `×`', () => {
-    const markers = stateOverlayToMarkers([{ ts: 5_000, value: null }], '#xyz');
+  it('maps a StateRemoved entry to an inBar circle marker labeled with `×` at its bar-open', () => {
+    const markers = stateOverlayToMarkers([{ ts: 90_000, value: null }], '#xyz', Period.OneMinute);
 
     expect(markers).toEqual([
-      { time: 5, position: 'inBar', color: '#xyz', shape: 'circle', text: '×' },
+      { time: 60, position: 'inBar', color: '#xyz', shape: 'circle', text: '×' },
     ]);
   });
 });
