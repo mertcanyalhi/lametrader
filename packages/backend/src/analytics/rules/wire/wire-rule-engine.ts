@@ -7,6 +7,7 @@ import {
   type GlobalStateChangedEvent,
   type IndicatorStateEvent,
   type Notifier,
+  type Period,
   periodMillis,
   type RuleEvent,
   type RuleEventEntry,
@@ -18,12 +19,16 @@ import {
   type TickEvent,
   type WatchlistRepository,
 } from '@lametrader/core';
-import { type BarAxis, FallbackSeriesView } from '../bar-series-view.js';
+import { type BarAxis, FallbackSeriesView, FormingBarSeriesView } from '../bar-series-view.js';
 import { BarLifecycleBridge, IndicatorCascadeBridge } from '../bridges/index.js';
 import { TriggerDispatcher } from '../dispatch/dispatcher.js';
 import type { OncePerBarLatchStore } from '../dispatch/once-per-bar-latch.types.js';
 import { getLogger } from '../engine-log.js';
-import { buildBarSeriesPagers, buildEvaluationContext } from '../evaluation-context.js';
+import {
+  barSeriesKey,
+  buildBarSeriesPagers,
+  buildEvaluationContext,
+} from '../evaluation-context.js';
 import { createIndicatorComputeCache } from '../indicator-compute-cache.js';
 import type { IndicatorSeriesStore } from '../indicator-series-store.js';
 import { ActionRunner } from '../orchestrator/action-runner.js';
@@ -66,6 +71,14 @@ export interface RuleEngineDeps {
   candleRepository: CandleRepository;
   /** In-memory indicator series store; shared with the indicator service. */
   indicatorStore: IndicatorSeriesStore;
+  /**
+   * Backtest-only opt-in: synthesize a **forming** bar for each coarse period
+   * from the finest observed finer period, so a coarse-period operand tracks
+   * intrabar instead of reading the last closed bar (see
+   * {@link import('../bar-series-view.js').FormingBarSeriesView}). Off (live
+   * semantics: coarse bars appear only on close) unless the replay sets it.
+   */
+  formIntrabarCoarseBars?: boolean;
 }
 
 /**
@@ -148,6 +161,7 @@ export async function wireRuleEngine(deps: RuleEngineDeps): Promise<WiredRuleEng
         firingSymbolId,
         event.ts,
         lookups,
+        deps.formIntrabarCoarseBars ?? false,
       );
       return buildEvaluationContext({
         symbolId: firingSymbolId,
@@ -361,14 +375,37 @@ function buildLiveBarSeries(
   symbolId: string,
   upperTs: number,
   lookups: LiveEvaluationLookups,
+  formIntrabarCoarseBars = false,
 ): ReadonlyMap<string, SeriesView> {
   const mirror = lookups.bookSeriesFor(symbolId);
   const merged = new Map<string, SeriesView>(mirror);
-  const required = lookups
-    .observedPeriods(symbolId)
-    .flatMap((period) => BAR_AXES.map((axis) => ({ period, axis })));
+  const observed = lookups.observedPeriods(symbolId);
+  const required = observed.flatMap((period) => BAR_AXES.map((axis) => ({ period, axis })));
   const pagers = buildBarSeriesPagers(candleRepository, symbolId, upperTs + 1, required);
-  for (const [key, pager] of pagers) {
+  // The finest observed period feeds every coarser period's forming bar (only
+  // when the caller opted in; live keeps close-only coarse bars).
+  const finest = observed.reduce<Period | undefined>(
+    (a, b) => (a === undefined || periodMillis(b) < periodMillis(a) ? b : a),
+    undefined,
+  );
+  for (const { period, axis } of required) {
+    const key = barSeriesKey(period, axis);
+    const pager = pagers.get(key);
+    if (pager === undefined) continue;
+    // A coarse period with a strictly finer observed period gets a forming bar
+    // synthesized from that finer period; its own PagedBarSeriesView serves the
+    // closed tail internally, so the plain pager is superseded here.
+    if (
+      formIntrabarCoarseBars &&
+      finest !== undefined &&
+      periodMillis(period) > periodMillis(finest)
+    ) {
+      merged.set(
+        key,
+        new FormingBarSeriesView(candleRepository, symbolId, period, finest, axis, upperTs + 1),
+      );
+      continue;
+    }
     const fallback = mirror.get(key);
     merged.set(key, fallback ? new FallbackSeriesView(pager, fallback) : pager);
   }

@@ -1,7 +1,7 @@
 import { type Candle, Period, type StateValue, StateValueType, SymbolType } from '@lametrader/core';
 
 import { InMemoryCandleRepository } from '../../market/persistence/in-memory-candle.repository.js';
-import { FallbackSeriesView, PagedBarSeriesView } from './bar-series-view.js';
+import { FallbackSeriesView, FormingBarSeriesView, PagedBarSeriesView } from './bar-series-view.js';
 import { ArraySeriesView } from './indicator-series-store.js';
 import type { SeriesPoint } from './series.types.js';
 
@@ -178,6 +178,86 @@ describe('FallbackSeriesView', () => {
       walked: [{ ts: 5000, value: num(50) }],
       asOfHit: { ts: 5000, value: num(50) },
       asOfMiss: null,
+    });
+  });
+});
+
+const HOUR = 3_600_000;
+const MIN = 60_000;
+
+describe('FormingBarSeriesView', () => {
+  it('synthesizes the forming coarse bar from the fine candles in the current, not-yet-closed window', async () => {
+    const repo = new InMemoryCandleRepository();
+    // Three 1m candles inside hour 1 (window [HOUR, 2*HOUR)); no closed 1h bar yet for it.
+    await repo.save(SYMBOL, Period.OneMinute, [
+      candle(HOUR, 10),
+      candle(HOUR + MIN, 20),
+      candle(HOUR + 2 * MIN, 30),
+    ]);
+    const axes = ['open', 'high', 'low', 'close', 'volume'] as const;
+
+    const forming = Object.fromEntries(
+      await Promise.all(
+        axes.map(async (axis) => [
+          axis,
+          await new FormingBarSeriesView(
+            repo,
+            SYMBOL,
+            Period.OneHour,
+            Period.OneMinute,
+            axis,
+            HOUR + 2 * MIN + 1,
+          ).asOf(Number.MAX_SAFE_INTEGER),
+        ]),
+      ),
+    );
+
+    expect(forming).toEqual({
+      open: { ts: HOUR, value: num(9.5) }, // oldest fine open (10 - 0.5)
+      high: { ts: HOUR, value: num(31) }, // max fine high (30 + 1)
+      low: { ts: HOUR, value: num(9) }, // min fine low (10 - 1)
+      close: { ts: HOUR, value: num(30) }, // newest fine close
+      volume: { ts: HOUR, value: num(600) }, // sum of fine volumes (10+20+30)*10
+    });
+  });
+
+  it('layers the forming bar as the newest point on top of the closed coarse history behind it', async () => {
+    const repo = new InMemoryCandleRepository();
+    await repo.save(SYMBOL, Period.OneHour, [candle(0, 5)]); // closed hour-0 bar
+    await repo.save(SYMBOL, Period.OneMinute, [candle(HOUR, 10), candle(HOUR + MIN, 30)]);
+    const view = new FormingBarSeriesView(
+      repo,
+      SYMBOL,
+      Period.OneHour,
+      Period.OneMinute,
+      'close',
+      HOUR + MIN + 1,
+    );
+
+    expect(await collect(view.backwardWalk())).toEqual([
+      { ts: HOUR, value: num(30) }, // forming hour-1 bar, newest
+      { ts: 0, value: num(5) }, // closed hour-0 bar behind it
+    ]);
+  });
+
+  it('reads the last closed coarse bar when the current window has no fine candles yet', async () => {
+    const repo = new InMemoryCandleRepository();
+    await repo.save(SYMBOL, Period.OneHour, [candle(0, 5)]); // only closed history exists
+    const view = new FormingBarSeriesView(
+      repo,
+      SYMBOL,
+      Period.OneHour,
+      Period.OneMinute,
+      'close',
+      HOUR + MIN + 1,
+    );
+
+    expect({
+      walked: await collect(view.backwardWalk()),
+      asOf: await view.asOf(Number.MAX_SAFE_INTEGER),
+    }).toEqual({
+      walked: [{ ts: 0, value: num(5) }],
+      asOf: { ts: 0, value: num(5) },
     });
   });
 });

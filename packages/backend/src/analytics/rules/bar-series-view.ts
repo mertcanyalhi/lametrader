@@ -1,4 +1,10 @@
-import { type Candle, type CandleRepository, type Period, StateValueType } from '@lametrader/core';
+import {
+  type Candle,
+  type CandleRepository,
+  type Period,
+  periodMillis,
+  StateValueType,
+} from '@lametrader/core';
 
 import type { SeriesPoint, SeriesView } from './series.types.js';
 
@@ -154,6 +160,169 @@ export class FallbackSeriesView implements SeriesView {
     if (any) return null;
     return this.fallback.asOf(queryTs);
   }
+}
+
+/**
+ * A {@link SeriesView} for a coarse `period` that layers a **forming** bar —
+ * synthesized on the fly from the `finePeriod` candles inside the current,
+ * not-yet-closed coarse window — on top of the closed coarse bars behind it.
+ *
+ * The engine only ever sees a coarse bar once it has closed (the backtest feed
+ * withholds it until its completion time; live polling persists it on close).
+ * Between closes a coarse-period operand therefore reads the *previous* closed
+ * bar. This view instead rolls the finer candles observed so far in the current
+ * window up into a synthetic bar so a coarse operand tracks intrabar, exactly as
+ * a real forming bar would:
+ *
+ * - `open` = the oldest fine candle's open in the window,
+ * - `close` = the newest fine candle's close,
+ * - `high` / `low` = the window extremes,
+ * - `volume` = the window sum (null when the asset carries no volume, e.g. FX).
+ *
+ * The forming point's `ts` is the window's open time. Closed history is served
+ * by an inner {@link PagedBarSeriesView} bounded strictly below that window
+ * open, so the synthetic bar and the stored bars never overlap.
+ *
+ * Unlike {@link FallbackSeriesView} (which stands in only when the primary is
+ * *empty*), this always prepends the forming bar as the newest point — layering,
+ * not fallback — so it keeps working once closed coarse history exists.
+ */
+export class FormingBarSeriesView implements SeriesView {
+  /**
+   * @param repo - candle repository read for both the fine window and the closed tail.
+   * @param symbolId - symbol whose candles this view projects.
+   * @param period - the coarse bar period the forming bar is synthesized for.
+   * @param finePeriod - the finer period rolled up into the forming bar
+   *   (must divide `period` and actually be stored for `symbolId`).
+   * @param axis - OHLCV axis projected out of each candle.
+   * @param before - exclusive upper bound: no candle with `time >= before` is read.
+   * @param pageSize - candles fetched per page; defaults to {@link BAR_SERIES_PAGE_SIZE}.
+   */
+  constructor(
+    private readonly repo: CandleRepository,
+    private readonly symbolId: string,
+    private readonly period: Period,
+    private readonly finePeriod: Period,
+    private readonly axis: BarAxis,
+    private readonly before: number,
+    private readonly pageSize: number = BAR_SERIES_PAGE_SIZE,
+  ) {}
+
+  /**
+   * Yield the forming bar (when the current window holds any fine candle),
+   * newest, then delegate to the closed coarse tail below the window open.
+   */
+  async *backwardWalk(): AsyncIterableIterator<SeriesPoint> {
+    const forming = await this.formingAt(this.before - 1);
+    if (forming.value !== null) {
+      yield {
+        ts: forming.windowStart,
+        value: { type: StateValueType.Number, value: forming.value },
+      };
+    }
+    yield* this.closedTail(forming.windowStart).backwardWalk();
+  }
+
+  /**
+   * Latest point with `ts <= queryTs`. The forming bar's `ts` is its window
+   * open (`<= queryTs`), so when the window has fine candles it qualifies and
+   * wins; otherwise the closed tail answers.
+   */
+  async asOf(queryTs: number): Promise<SeriesPoint | null> {
+    const cap = Math.min(queryTs, this.before - 1);
+    const forming = await this.formingAt(cap);
+    if (forming.value !== null) {
+      return {
+        ts: forming.windowStart,
+        value: { type: StateValueType.Number, value: forming.value },
+      };
+    }
+    return this.closedTail(forming.windowStart).asOf(queryTs);
+  }
+
+  /**
+   * Aggregate the `finePeriod` candles in the coarse window containing `cap`
+   * (inclusive) into this view's axis value, plus that window's open time.
+   * `value` is null when the window holds no fine candle carrying the axis.
+   */
+  private async formingAt(cap: number): Promise<{ windowStart: number; value: number | null }> {
+    const coarseMs = periodMillis(this.period);
+    const windowStart = Math.floor(cap / coarseMs) * coarseMs;
+    const window: Candle[] = [];
+    let cursor = cap + 1;
+    while (true) {
+      const page = await this.repo.latestN(this.symbolId, this.finePeriod, this.pageSize, cursor);
+      if (page.length === 0) break;
+      let crossed = false;
+      for (const c of page) {
+        if (c.time < windowStart) {
+          crossed = true;
+          break;
+        }
+        window.push(c);
+      }
+      const oldest = page[page.length - 1];
+      if (crossed || page.length < this.pageSize || oldest === undefined) break;
+      cursor = oldest.time;
+    }
+    return { windowStart, value: aggregateAxis(window, this.axis) };
+  }
+
+  /** The closed coarse bars strictly below the current window open. */
+  private closedTail(windowStart: number): PagedBarSeriesView {
+    return new PagedBarSeriesView(
+      this.repo,
+      this.symbolId,
+      this.period,
+      this.axis,
+      windowStart,
+      this.pageSize,
+    );
+  }
+}
+
+/**
+ * Roll one OHLCV axis across a window's fine candles (newest-first) up into the
+ * forming coarse bar's value for that axis: open = oldest, close = newest,
+ * high/low = extremes, volume = sum. Null when no candle in the window carries
+ * the axis (e.g. `volume` on FX).
+ */
+function aggregateAxis(newestFirst: readonly Candle[], axis: BarAxis): number | null {
+  let any = false;
+  let acc =
+    axis === 'high' ? Number.NEGATIVE_INFINITY : axis === 'low' ? Number.POSITIVE_INFINITY : 0;
+  let open = 0;
+  let close = 0;
+  let closeSet = false;
+  for (const candle of newestFirst) {
+    const v = readAxis(candle, axis);
+    if (v === null) continue;
+    any = true;
+    switch (axis) {
+      case 'high':
+        acc = Math.max(acc, v);
+        break;
+      case 'low':
+        acc = Math.min(acc, v);
+        break;
+      case 'volume':
+        acc += v;
+        break;
+      case 'close':
+        if (!closeSet) {
+          close = v;
+          closeSet = true;
+        }
+        break;
+      case 'open':
+        open = v; // newest-first walk: the last write is the oldest candle
+        break;
+    }
+  }
+  if (!any) return null;
+  if (axis === 'close') return close;
+  if (axis === 'open') return open;
+  return acc;
 }
 
 /**

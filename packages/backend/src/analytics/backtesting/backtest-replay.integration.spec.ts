@@ -217,6 +217,56 @@ describe('BacktestReplayService replay', () => {
     expect(stateSetTs).toEqual([59 * MINUTE]);
   });
 
+  it('fires a coarse-period rule intrabar from the forming bar rolled up from the finer candles seen so far', async () => {
+    const candles = new InMemoryCandleRepository();
+    // Hour 0 closes at 100 (below the threshold). Hour 1 has no closed 1h bar
+    // yet; its two 1m candles rise from 100 to 200. A rule on the 1h Close vs 150
+    // must fire on the 1m tick at which the forming hour's close first crosses
+    // 150 — intrabar — not wait for the hour to close.
+    await candles.save(SYMBOL_ID, Period.OneHour, [candle(0, 100)]);
+    await candles.save(SYMBOL_ID, Period.OneMinute, [
+      candle(60 * MINUTE, 100),
+      candle(61 * MINUTE, 200),
+    ]);
+    const closeAboveHour = rule({
+      profileId: 'prof-1',
+      name: 'hourly close breakout',
+      scope: { kind: RuleScopeKind.Symbol, symbolId: SYMBOL_ID },
+      condition: {
+        kind: ConditionNodeKind.Leaf,
+        leaf: {
+          family: LeafConditionFamily.Comparison,
+          operator: ComparisonOperator.Gt,
+          left: { kind: OperandKind.Close },
+          right: { kind: OperandKind.Literal, value: { type: StateValueType.Number, value: 150 } },
+          interval: Period.OneHour,
+        },
+      },
+      trigger: { kind: TriggerKind.EveryTime },
+      expiration: null,
+      actions: [
+        {
+          kind: ActionKind.SetSymbolState,
+          key: 'broke',
+          value: { type: StateValueType.Bool, value: true },
+        },
+      ],
+      enabled: true,
+      order: 1,
+    });
+    const replay = buildReplay(candles, [closeAboveHour], [Period.OneHour, Period.OneMinute]);
+
+    const result = await replay.replay(params(0, 2 * HOUR), strategy, profile, [
+      Period.OneHour,
+      Period.OneMinute,
+    ]);
+
+    const stateSetTs = result.events
+      .filter((e) => e.type === RuleEventType.StateSet)
+      .map((e) => e.ts);
+    expect(stateSetTs).toEqual([61 * MINUTE]);
+  });
+
   it('records a NotificationSent event without delivering it', async () => {
     const candles = new InMemoryCandleRepository();
     await candles.save(SYMBOL_ID, Period.OneMinute, [candle(0, 150)]);

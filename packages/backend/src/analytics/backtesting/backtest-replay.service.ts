@@ -250,6 +250,10 @@ export class BacktestReplayService implements BacktestReplayPort {
       eventLog,
       candleRepository: candles,
       indicatorStore,
+      // Backtest replays the finest period intrabar, so let a coarse-period
+      // operand track the forming bar rolled up from those finer candles rather
+      // than reading the last closed coarse bar (live keeps close-only bars).
+      formIntrabarCoarseBars: true,
     });
 
     const executor = new BacktestExecutor(strategy, {
