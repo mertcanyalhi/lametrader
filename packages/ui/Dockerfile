@@ -21,7 +21,7 @@ RUN npm ci
 RUN npm run build -w @lametrader/core
 RUN npm run build -w @lametrader/ui
 
-FROM nginx:1.31.2-alpine AS run
+FROM nginx:1.31.4-alpine AS run
 COPY packages/ui/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/packages/ui/dist /usr/share/nginx/html
 EXPOSE 8080
