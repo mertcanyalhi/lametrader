@@ -35,13 +35,13 @@
   },
   "devDependencies": {
     "@nestjs/testing": "^11.1.27",
-    "@swc/core": "^1.15.43",
+    "@swc/core": "^1.16.2",
     "@swc/jest": "^0.2.39",
-    "@testcontainers/mongodb": "^12.0.4",
+    "@testcontainers/mongodb": "^12.1.0",
     "@types/jest": "^30.0.0",
-    "@types/supertest": "^7.2.0",
+    "@types/supertest": "^7.2.1",
     "@types/ws": "^8.18.1",
-    "jest": "^30.4.2",
+    "jest": "^30.5.2",
     "supertest": "^7.2.2",
     "tsc-watch": "^7.2.1"
   }
